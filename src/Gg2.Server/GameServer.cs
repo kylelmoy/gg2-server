@@ -311,6 +311,20 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     /// </remarks>
     private int _mapChangeCountdown = -1;
 
+    /// <summary>
+    /// A meshed map change has been scheduled and has not landed yet.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The other half of "a change is already pending here", and only a
+    /// mesh needs it.</b> A standalone server is guarded by
+    /// <c>WorldState.MapChanging</c>, which survives in its own world; in a mesh
+    /// the node overwrites the world every tick, so nothing in the world can
+    /// carry the fact. The countdown covers the ten seconds before the change is
+    /// scheduled and this covers the <c>MeshSession.CommandLead</c> ticks after,
+    /// while the world still says the round is decided. <c>MeshRotationTests</c>.
+    /// </remarks>
+    private bool _meshChangeScheduled;
+
     /// <summary>The map now loaded, and the one the rotation moves on from.</summary>
     private string _currentMap = string.Empty;
 

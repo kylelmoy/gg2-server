@@ -200,9 +200,20 @@ public sealed partial class GameServer
         // deciding would pick from their own shuffled rotations and schedule two
         // different maps, and the guard below cannot stop it: _world.MapChanging
         // is written to a world the node overwrites every tick, so in a mesh it
-        // never sticks. The local countdown is what says a change is already
-        // pending here.
-        var mayDecide = _mesh is null || (_mesh.Listening && _mapChangeCountdown < 0);
+        // never sticks. This server's own bookkeeping is what says a change is
+        // already pending here.
+        //
+        // ⛔ AND IT IS TWO THINGS, not one. The countdown covers the ten seconds
+        // before the change is scheduled; _meshChangeScheduled covers the
+        // CommandLead ticks between scheduling it and it landing, during which
+        // the countdown is back to -1 and the world — which the node has not
+        // reset yet — still says the round is decided. Without the second half
+        // the round ends twice and the extra decision silently consumes a
+        // rotation entry that is never played, because the map actually loaded
+        // comes back from the command rather than from _nextMap.
+        // MeshRotationTests.
+        var mayDecide = _mesh is null
+            || (_mesh.Listening && _mapChangeCountdown < 0 && !_meshChangeScheduled);
 
         if (mayDecide && _world.RoundDecided && !_world.MapChanging)
         {
@@ -242,6 +253,12 @@ public sealed partial class GameServer
         if (_mesh is not null)
         {
             _mesh.Schedule(MeshCommand.ChangeMap(_nextArea), _nextMap);
+
+            // ⚠️ Cleared where the change is APPLIED, not on a timer. If the
+            // command never lands the map never changes, which is loud; the
+            // alternative is a retry that decides again and puts this file back
+            // where it started.
+            _meshChangeScheduled = true;
             return;
         }
 
@@ -265,6 +282,10 @@ public sealed partial class GameServer
 
     private void PerformMapChange(int atTick)
     {
+        // The change is happening, so nothing is pending any more. Here rather
+        // than at the meshed drain site because this is the one place both the
+        // standalone and the meshed path apply a change.
+        _meshChangeScheduled = false;
 
         // ⛔ DO NOT reset from the node's world at atTick instead of the live
         // one. It looks like the fix for the provisional-world divergence
