@@ -282,4 +282,95 @@ public sealed class HumanDatasetTests : IDisposable
 
         Assert.Contains("action_heads\thorizontal,jump,down,fire,aim_delta,zoom", manifest, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// A class chosen before a rotation is the class the rows after it observe,
+    /// and the manifest says the reconstruction agreed with the recording.
+    /// </summary>
+    /// <remarks>
+    /// <b>The fleet's shape, end to end.</b> A player keeps its class across a
+    /// map change and re-picks only its team, so the new segment names the
+    /// class once, in its preamble, ahead of the rotation's teed
+    /// <c>CHANGE_MAP</c>. A replay that dropped the roster on that message
+    /// rebuilt this soldier as a scout — every row after the rotation carried
+    /// the wrong class, and 71 of the fleet's first 149 traces did. The drift
+    /// lines are what show it: a wrong class spawns at the wrong max hp, and
+    /// the hp column counts it.
+    /// </remarks>
+    [Fact]
+    public void AClassSurvivesARotationIntoTheRows()
+    {
+        const string second = "ctf_2dfort";
+
+        using (var harness = new ServerHarness(o =>
+        {
+            o.Map = Map;
+            o.RecordingDirectory = Traces;
+        }))
+        {
+            var client = harness.JoinClient("a-person");
+            client.SendChangeTeam(Team.Red);
+            client.SendChangeClass(PlayerClass.Soldier);
+            harness.Tick(60);
+
+            Assert.True(harness.Server.RequestMapChange(second), "the map change was refused");
+            harness.Tick(330);
+
+            // The team only: a map change puts everyone on spectator and keeps
+            // the class, and a person rejoining a team does not re-pick it.
+            client.SendChangeTeam(Team.Red);
+
+            for (var tick = 0; tick < 240; tick++)
+            {
+                client.SendInputState(new PlayerInput
+                {
+                    Keys = tick % 20 < 10 ? PlayerKeys.Right : PlayerKeys.Left,
+                    AimDistance = 100,
+                });
+
+                harness.Tick();
+            }
+
+            harness.Server.Dispose();
+        }
+
+        // By map, not by name: both segments can open in the same second, and
+        // the timestamp then leaves the map name to decide the order.
+        string[] traces =
+        [
+            .. Directory.EnumerateFiles(Traces, "*.trace")
+                .OrderBy(t => Path.GetFileName(t).Contains(second, StringComparison.Ordinal)),
+        ];
+        Assert.Equal(2, traces.Length);
+        Assert.Contains(second, Path.GetFileName(traces[1]), StringComparison.Ordinal);
+
+        var report = HumanDataset.Build(traces, Options());
+
+        Assert.Equal(2, report.Drift.Count);
+        foreach (var drift in report.Drift)
+            Assert.DoesNotContain(drift.Mismatches, m => m.Field == "hp");
+
+        var observation = NpyFile.ReadArray(
+            File.ReadAllBytes(Path.Combine(Output, "observation.npy")));
+        var trace = NpyFile.ReadArray(File.ReadAllBytes(Path.Combine(Output, "trace.npy")));
+
+        var afterRotation = 0;
+        for (var row = 0; row < trace.Values.Length; row++)
+        {
+            if (trace.Values[row] != 1)
+                continue;
+
+            afterRotation++;
+
+            // The class one-hot opens the self block.
+            var at = row * observation.Columns;
+            Assert.Equal(1f, observation.Values[at + (int)PlayerClass.Soldier]);
+            Assert.Equal(0f, observation.Values[at + (int)PlayerClass.Scout]);
+        }
+
+        Assert.True(afterRotation > 0, "no rows were recorded after the rotation");
+
+        var manifest = File.ReadAllText(Path.Combine(Output, "manifest.txt"));
+        Assert.Equal(2, manifest.Split('\n').Count(l => l.StartsWith("drift\t", StringComparison.Ordinal)));
+    }
 }

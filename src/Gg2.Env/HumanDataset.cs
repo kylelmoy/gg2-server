@@ -30,7 +30,8 @@ namespace Gg2.Env;
 /// inputs — but "should" is the word doing the work, and a reconstruction that
 /// had quietly drifted would produce observations of a world no player ever saw.
 /// Open-loop puts the recorded positions back every seventh tick, and the drift
-/// measured against them is reported beside the rows rather than discarded.
+/// measured against them is written to the manifest as one <c>drift</c> line
+/// per trace, and summarised on the run's own output, rather than discarded.
 /// </para>
 /// </remarks>
 public static class HumanDataset
@@ -87,6 +88,19 @@ public static class HumanDataset
         /// <summary>Traces refused, with the reason, and never silently dropped.</summary>
         public required IReadOnlyList<string> Refused { get; init; }
 
+        /// <summary>Each read trace's open-loop drift against its own recording.</summary>
+        public required IReadOnlyList<DriftReport> Drift { get; init; }
+
+        /// <summary>
+        /// The share of one trace's comparisons that disagreed on hp.
+        /// </summary>
+        /// <remarks>
+        /// Not the total mismatch count, which is dominated by one-wire-unit
+        /// position rounding and reads as alarming on a healthy corpus.
+        /// </remarks>
+        public static double HpShare(DriftReport drift) =>
+            drift.Comparisons == 0 ? 0 : (double)HpMismatches(drift) / drift.Comparisons;
+
         public override string ToString()
         {
             var text = new StringBuilder();
@@ -101,6 +115,19 @@ public static class HumanDataset
                 text.Append(CultureInfo.InvariantCulture,
                     $"; {Saturated} ({share:0.0}%) turns exceeded the " +
                     $"{ActionDecoder.MaxTurnDegreesPerDecision:0}deg cap");
+            }
+
+            if (Drift.Count > 0)
+            {
+                // On the summary line, not only in the manifest: nobody opens a
+                // manifest after a run that printed a row count and exited 0.
+                var worstHp = Drift.MaxBy(HpShare)!;
+                var worstXy = Drift.MaxBy(d => Math.Max(d.PercentileXError(99), d.PercentileYError(99)))!;
+
+                text.Append(CultureInfo.InvariantCulture,
+                    $"\n  drift: worst hp mismatch share {100 * HpShare(worstHp):0.0}% in {worstHp.TraceName}; " +
+                    $"worst p99 position error {worstXy.PercentileXError(99)}/{worstXy.PercentileYError(99)} " +
+                    $"wire units (x/y, 5 = one pixel) in {worstXy.TraceName}");
             }
 
             foreach (var refusal in Refused)
@@ -143,6 +170,7 @@ public static class HumanDataset
         var rows = new List<Row>();
         var refused = new List<string>();
         var sources = new List<string>();
+        var drift = new List<DriftReport>();
 
         var skipped = 0;
 
@@ -150,8 +178,9 @@ public static class HumanDataset
         {
             try
             {
-                skipped += Extract(traces[i], i, options, observations, rows);
+                skipped += Extract(traces[i], i, options, observations, rows, out var report);
                 sources.Add(Describe(traces[i]));
+                drift.Add(report);
             }
             catch (Exception e) when (e is ProtocolException or IOException or InvalidDataException)
             {
@@ -169,7 +198,7 @@ public static class HumanDataset
                 saturated++;
         }
 
-        Write(options.Output, observations, rows, sources, refused, options);
+        Write(options.Output, observations, rows, sources, drift, refused, options);
 
         return new Report
         {
@@ -178,6 +207,7 @@ public static class HumanDataset
             Skipped = skipped,
             Saturated = saturated,
             Refused = refused,
+            Drift = drift,
         };
     }
 
@@ -187,7 +217,8 @@ public static class HumanDataset
         int index,
         Options options,
         List<float> observations,
-        List<Row> rows)
+        List<Row> rows,
+        out DriftReport drift)
     {
         var trace = Trace.Decode(File.ReadAllBytes(path));
 
@@ -265,7 +296,7 @@ public static class HumanDataset
         // reconstruction that the manifest reports, and truncating a
         // half-hour recording at its first disagreement would silently shrink
         // the corpus rather than describe it.
-        replayer.Replay(
+        drift = replayer.Replay(
             Path.GetFileName(path), trace.Header.Map, ticks,
             ReplayMode.OpenLoop, stopAtFirstBadTick: false);
 
@@ -384,11 +415,38 @@ public static class HumanDataset
             $"{trace.Header.RecordedUtc:u}");
     }
 
+    /// <summary>One trace's open-loop drift, as a manifest line.</summary>
+    /// <remarks>
+    /// <b>The hp column is the one that catches a wrong reconstruction.</b>
+    /// Open-loop re-seats positions every seventh tick, so a character replayed
+    /// as the wrong class still tracks to within a few pixels — but it spawns
+    /// with the wrong max hp, and that mismatch persists for its whole life.
+    /// Position errors are in wire units, a fifth of a pixel.
+    /// </remarks>
+    private static string DescribeDrift(DriftReport report) =>
+        string.Create(CultureInfo.InvariantCulture,
+            $"{report.TraceName}\t{report.Comparisons}\t{report.Mismatches.Count}\t{HpMismatches(report)}\t" +
+            $"{report.Resyncs}\t{report.PercentileXError(99)}\t{report.PercentileYError(99)}\t" +
+            $"{report.MaxXError}\t{report.MaxYError}");
+
+    private static int HpMismatches(DriftReport report)
+    {
+        var hp = 0;
+        foreach (var mismatch in report.Mismatches)
+        {
+            if (mismatch.Field == "hp")
+                hp++;
+        }
+
+        return hp;
+    }
+
     private static void Write(
         string output,
         List<float> observations,
         List<Row> rows,
         List<string> sources,
+        List<DriftReport> drift,
         List<string> refused,
         Options options)
     {
@@ -443,7 +501,7 @@ public static class HumanDataset
 
         File.WriteAllText(
             Path.Combine(output, "manifest.txt"),
-            Manifest(count, width, sources, refused, options));
+            Manifest(count, width, sources, drift, refused, options));
     }
 
     private static void Save(string directory, string name, Action<Stream> write)
@@ -466,6 +524,7 @@ public static class HumanDataset
         int rows,
         int width,
         List<string> sources,
+        List<DriftReport> drift,
         List<string> refused,
         Options options)
     {
@@ -488,6 +547,13 @@ public static class HumanDataset
 
         foreach (var source in sources)
             text.Append(CultureInfo.InvariantCulture, $"trace\t{source}\n");
+
+        text.Append(
+            "drift_columns\ttrace,comparisons,mismatches,hp_mismatches,resyncs," +
+            "dx_p99,dy_p99,dx_max,dy_max\n");
+
+        foreach (var report in drift)
+            text.Append(CultureInfo.InvariantCulture, $"drift\t{DescribeDrift(report)}\n");
 
         foreach (var refusal in refused)
             text.Append(CultureInfo.InvariantCulture, $"refused\t{refusal}\n");

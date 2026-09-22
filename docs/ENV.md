@@ -49,12 +49,25 @@ Output, one `.npy` per column, all `N` rows in the same order:
 | `saturated.npy` | `uint8` | whether that turn exceeded the per-decision cap |
 | `participant.npy` | `uint8` | 1 human, 2 bot |
 | `slot.npy`, `tick.npy`, `trace.npy`, `life.npy` | | where the row came from; `life` cuts sequences at a death |
-| `manifest.txt` | | `SIM_UUID`, layout version, action-encoding constants, and every trace read or refused |
+| `manifest.txt` | | `SIM_UUID`, layout version, action-encoding constants, every trace read or refused, and one `drift` line per trace (columns named by `drift_columns`) |
 
 The observation is captured after the tick's roster and spawn events and
 before its inputs are consumed, so a row pairs an action with the state that
 caused it rather than the state it produced. A one-tick slip there is
 undetectable downstream and every consumer would train on it.
+
+**The `drift` lines say whether the reconstruction is the world the players saw.**
+Each trace is replayed open-loop against its own recording, and the manifest
+records the comparisons, the mismatches, how many of them are hp, and the p99 and
+max position error in wire units (a fifth of a pixel); the run's summary line
+names the worst trace. Positions are re-seated every seventh tick, so a slot
+replayed as the wrong class still tracks within a few pixels. What gives it away
+is `hp_mismatches`, since it spawns with the wrong max hp. Most mismatches of
+any kind are one-wire-unit rounding, so the raw mismatch count means little.
+Measured on the fleet's 149 traces at `SIM_UUID` `f10afbdadc795d77`: hp share
+of comparisons median 2.7%, worst 7.5%, worst p99 position error 23 units. With
+the roster dropped at a map change, 24 traces went over 10% (worst 47%) and the
+worst p99 was 91. A trace over about 10% is describing a different game.
 
 `turn_degrees` and `saturated` exist because the aim head is the one lossy
 column: a mouse is unbounded and the head is not. The saturation rate over a

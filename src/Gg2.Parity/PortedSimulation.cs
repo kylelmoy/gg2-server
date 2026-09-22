@@ -190,7 +190,27 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
         // Kept so a spawning tick can be handed a narrowed spawn point list;
         // see SeedIndependentSpawnPoints.
         _level = level;
+
+        // ⚠️ The roster survives a map change and the world does not. A player
+        // keeps its class across a rotation (Rounds.ResetForNewMap touches only
+        // team and respawn), and the server's own recordings depend on that:
+        // a segment's preamble names every class BEFORE the rotation's
+        // CHANGE_MAP is teed in behind it, so wiping the players here replays
+        // everybody who did not re-pick as a scout — wrong width, speed and
+        // max hp for the whole segment. Team and class are all a replay reads.
+        var players = _state.Players;
+        var hasPlayer = _state.HasPlayer;
         _state = default;
+
+        for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+        {
+            if (!hasPlayer[slot])
+                continue;
+
+            EnsurePlayer(slot);
+            _state.Players[slot].Class = players[slot].Class;
+            _state.Players[slot].Team = players[slot].Team;
+        }
 
         // Both briefcases on their bases, exactly as basicRoomSetup leaves them
         // — the state cannot hold the map, so this is where the base positions
