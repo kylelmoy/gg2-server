@@ -860,6 +860,13 @@ releasing a full ~6,296 events. It is always the TOP slot, because a join takes
 the highest free place; it hits whichever node admitted the player, listener or
 joiner alike; and the owning node reports `owned` one short while it happens.
 
+⛔ **That fix holds, and that measurement is loopback.** A second way to reach
+the same dead frontier survives it, needs a link with latency to appear at all,
+and comes from the two nodes disagreeing about who owns a slot rather than from
+the submit span — 4 of 40 runs at `GG2_MESH_DELAY_TICKS=3`, against 0 of 60 with
+no delay. See "What is NOT built", item 2. **A `0 of N` for this fault means
+nothing unless the link had a delay.**
+
 ⚠️ **A slot past the end of the input span submits a DEFAULT input** — pressing
 nothing — because a player with no roster entry has no input source yet. That is
 exactly what someone who has just appeared is doing, and it is what lets the
@@ -900,6 +907,35 @@ A lag that is merely large is normal; a `confirmed` that does not move is not.
 window — past that the ring has recycled and the mask reads 0, which is
 indistinguishable from "nothing is blocking".
 
+## Measuring a mesh
+
+`tools/soak/meshsoak.sh <out> <seconds> <clients-per-side> [round-minutes] [bots]
+[delay-ticks]` runs two nodes with synthetic players on both and prints the two
+numbers a run is judged on.
+
+⛔ **The sixth argument is not optional for anything about a rebuild.** Both
+nodes share one machine over loopback with Nagle off, so with no delay a frame
+arrives inside the tick it was sent — and the asymmetry every rebuild fault
+comes from is the two nodes swapping at different wall-clock moments. 3 is
+transatlantic. At 0, two faults that fail 9 of 40 runs fail 0 of 60.
+
+⛔ **Read `agreed N/M` and `events released` as two signals.** A run can be
+perfect on either while failing the other. `agreed` frozen with the total also
+frozen means comparison STOPPED, not that the nodes disagree; `agreed` frozen
+while the total climbs is real disagreement. `events released` is meaningless
+without the run length beside it — about 6,290 is healthy at 200s.
+
+⚠️ **The rotation must be CTF maps.** `Rounds.Step` returns before the
+time-limit decision for every other gamemode, so a rotation with one KotH map in
+it changes to that map once and then never ends a round again.
+
+⚠️ **Nothing else runs on the machine during a soak** — not a build, not the
+suite, not a second soak. Contention has corrupted whole batches.
+
+⚠️ **Set the run count from the base rate before the batch, and never pool arms
+that differ by a code change.** At the measured 22% a batch of 20 is the minimum
+that says anything.
+
 ## What is NOT built
 
 A client can join a meshed server, pick a team, play and leave; a meshed server
@@ -913,19 +949,47 @@ the other. What is still missing:
    a question about a person watching a screen, and no measurement here answers
    it. `docs/TRAPS-LIVEGAME.md` and a playtest — and it is the only thing left
    that a test in this repo cannot settle.
-2. **A residual divergence across a map change.** Carrying the schedule took
-   that rate from 63% to 20%, and it stops there: **1 of 20** runs with map
-   changes on still parted (`agreed 140/209`), against 0 of 20 for the
-   confirmation wedge in the same batch.
-   ⛔ **It is a SEPARATE fault from the wedge, and the submit-bound fix does not
-   clear it.** That run released a full 6,296 events — nothing stalled — while
-   its worlds disagreed 69 times. The guess that one fix would cover both is
-   measured and wrong.
+2. **Two faults at a map change, and both need a link with latency to appear.**
+   With `GG2_MESH_DELAY_TICKS=3` — a transatlantic link — **9 of 40** runs
+   faulted: the divergence in 8 (20%) and the confirmation wedge in 4 (10%),
+   overlapping in 2. The same build over loopback gave **0 of 60** across three
+   arms.
+
+   ⛔ **Every earlier verdict here was a loopback number.** The wedge's "0 of
+   40" and the divergence's "0 of 20" were measured on a link that delivers a
+   frame inside the tick it was sent, which is not the link this design is for
+   and is the shortest the gap between the two nodes' swaps ever gets. The
+   divergence never went away; nothing could see it. A mesh measurement without
+   a delay says nothing.
+
+   **Root cause of the wedge: the two nodes disagree about who owns a slot.**
+   Caught at onset by the per-tick alarm, at the first rebuild of two separate
+   runs:
+
+       joiner   (origin 1): slot 3 is origin 0, "la0"
+       listener (origin 0): slot 3 is origin 1, "jb5"
+
+   Each names the other as the owner, so neither submits an input for it, the
+   slot is never heard from, and `IsCertain` waits on it for the rest of the
+   match. Confirmation stops at `atTick + 1` and event release stops with it —
+   `confirmed 2090 (tick-9)`, rebuild at 2111, then `confirmed 2112` for the
+   remaining 4,000 ticks. The same shape recurs at the second rebuild on slot 5.
+
+   ⚠️ **The mismatch explains both faults, in opposite directions.** A slot
+   NEITHER node claims is driven by nobody and wedges confirmation; a slot BOTH
+   claim is driven by two different players at once and parts the worlds. That
+   is a hypothesis about the divergence and is not yet measured — the ownership
+   disagreement itself is.
+
    ⚠️ **Read agreement and event release as two signals, never one verdict.** A
    run can be perfect on either while failing the other, and the two faults are
    only distinguishable that way.
-   ⚠️ 1 of 20 against the earlier 2 of 10 is not evidence the rate fell; both
-   are too small. At this frequency twenty runs is the minimum worth reporting.
+
+   ⛔ **Not the inputs.** Carrying the input ledger across a rebuild was written
+   and measured again with latency on the theory that inputs would be booked
+   ahead of the rebuild tick. It carries zero, at every rebuild: a rebuild runs
+   with `atTick == Node.Tick`, and a peer sends inputs for the tick it is on,
+   which delay pushes further into this node's past and never into its future.
 3. **More than two nodes.** `MeshSession.Origin` is `Listening ? 0 : 1` and
    `MeshLink` holds one socket, so the topology is two by construction. The data
    model would take more — `_slotOrigin` is a byte per slot — but node identity
