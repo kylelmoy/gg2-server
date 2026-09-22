@@ -407,20 +407,20 @@ public sealed class MeshSession : IDisposable
                 players++;
         }
 
-        // ⛔ THE INPUTS SURVIVE THE REBUILD TOO, and for the same reason the
-        // assignments do: a map change replaces the node, not the match. The
-        // peer sends a tick's inputs ONCE — so an input already received for a
-        // tick at or after the rebuild is gone for good if the replacement does
-        // not inherit it, and the new node then guesses that tick with nothing
-        // able to correct it.
+        // ⛔ THE INPUTS DO NOT SURVIVE THE REBUILD, AND MUST NOT BE MADE TO.
+        // The replacement node's input ring starts empty and that is correct: an
+        // input is only ever submitted for a tick already reached, so at the
+        // moment of a swap there are none booked beyond it to lose. A version of
+        // this that carried them reported carrying ZERO on 10 runs of 10 and
+        // moved no measurement. Do not add it back on the symmetry with the
+        // commands below — the asymmetry is the whole reason the command carry
+        // works.
         //
-        // ⚠️ The two nodes discard DIFFERENT inputs without this. They rebuild at
-        // the same TICK but at different wall-clock moments, so each has
-        // received a different amount of the other's traffic by the time it
-        // swaps — which turns a shared, harmless gap into two nodes resuming an
-        // identical world from different facts. Measured: the rebuild origins
-        // are byte-identical on both nodes in every run, seed included, and the
-        // nodes still diverged in 4 runs of 9. docs/MESH.md.
+        // ⚠️ MeshNode.Submit DOES accept a tick up to MaxRollbackTicks ahead, so
+        // the ring can hold a future input in principle. It does not happen in
+        // practice, and that is a measurement rather than an invariant: if a
+        // link ever sends ahead of its own tick, re-measure before trusting this.
+        //
         // ⛔ THE SCHEDULE SURVIVES THE REBUILD. A command is always registered
         // for a tick CommandLead ahead of where the nodes are, so at any moment
         // there are commands booked for ticks that have not happened yet — and a

@@ -66,11 +66,29 @@ fi
 # The joiner ignores its own --bots: only the listener fills (MeshFillsBots).
 common="--players 40 --multi-client-limit 0 --connect-rate 0 --bots $bots"
 
+# ⛔ A ROTATION, or the round end is not a map CHANGE. ServerOptions.MapRotation
+# is empty by default and NextMapInRotation then returns the map already
+# loaded, so without this every rebuild reopens the same map: same collision
+# world, same spawn points, warmest possible OpenMap. Measured — 60 of 60
+# rebuilds across a 20-run batch were ctf_truefort -> ctf_truefort.
+#
+# ⚠️ That matters because the asymmetry every rebuild fault has come from is the
+# WALL-CLOCK gap between the two nodes' swaps: they rebuild at the same tick at
+# different moments, so each has taken in a different amount of the peer's
+# traffic. Reopening a cached map is the shortest that gap ever gets.
+#
+# Four maps, four gamemodes, deliberately different sizes. --shuffle defaults to
+# None so both nodes walk the same order, and the chosen map travels in the
+# ChangeMap command anyway.
+rotation="ctf_truefort,koth_valley,cp_egypt,ctf_2dfort"
+common="$common --rotation $rotation"
+
 if [ "$minutes" != "0" ]; then
   common="$common --time-limit $minutes"
 fi
 
 echo "meshsoak: ${secs}s, $clients clients a side, ${minutes}min rounds, $bots bots -> $out"
+echo "meshsoak: rotation $rotation"
 
 # ⛔ The listener first. The joiner now waits for it (Mesh.ConnectPatienceSeconds),
 # so this order is no longer load-bearing — but starting it first still saves
@@ -134,5 +152,13 @@ done
 
 echo
 echo "=== map changes ==="
+# ⚠️ The DISTINCT count first. A rebuild that reopened the same map exercises the
+# node swap but not a map load, and the run then says nothing about the gap
+# between the two nodes' swaps — which is the thing a rotation is here to widen.
+# One distinct map means the rotation did not move, whatever the count says.
+for side in listener joiner; do
+  echo "  $side distinct maps: $(grep -h 'now playing' "$out/$side.log" \
+    | sed 's/.*now playing //' | awk '{print $1}' | sort -u | tr '\n' ' ')"
+done
 grep -h 'now playing' "$out/listener.log" | sed 's/^/  listener /' || true
 grep -h 'now playing' "$out/joiner.log"   | sed 's/^/  joiner   /' || true
