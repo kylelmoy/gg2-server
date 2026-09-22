@@ -18,6 +18,8 @@
 # So: seconds / minutes is roughly how many map changes a run gets. Ask for at
 # least four to observe three.
 #
+# ⛔ And it only works on a CTF map — see the rotation below.
+#
 # ⚠️ A CLEAN SHORT RUN MEANS NOTHING HERE. Every mesh defect found so far was
 # invisible below eight clients a side, below a map change, or both — and one
 # needed THREE map changes, because the first rebuild was clean and the second
@@ -77,10 +79,18 @@ common="--players 40 --multi-client-limit 0 --connect-rate 0 --bots $bots"
 # different moments, so each has taken in a different amount of the peer's
 # traffic. Reopening a cached map is the shortest that gap ever gets.
 #
-# Four maps, four gamemodes, deliberately different sizes. --shuffle defaults to
-# None so both nodes walk the same order, and the chosen map travels in the
-# ChangeMap command anyway.
-rotation="ctf_truefort,koth_valley,cp_egypt,ctf_2dfort"
+# ⛔ CAPTURE THE FLAG ONLY, and that is not a preference. Rounds.Step returns
+# before the time-limit decision for any other gamemode — KotH instead burns its
+# timer only while the hill is OWNED AND QUIET, which under this load never
+# happens, and an Arena or CP round has its own ending. So a rotation with one
+# non-CTF map in it changes to that map and then stops changing: measured, a
+# four-gamemode rotation gave ONE rebuild a run against this instrument's three,
+# because the run reached koth_valley and the round never ended again.
+#
+# Four CTF maps, deliberately different sizes so the OpenMap gap varies.
+# --shuffle defaults to None so both nodes walk the same order, and the chosen
+# map travels in the ChangeMap command anyway.
+rotation="ctf_truefort,ctf_orange,ctf_2dfort,ctf_conflict"
 common="$common --rotation $rotation"
 
 if [ "$minutes" != "0" ]; then
