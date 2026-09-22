@@ -114,27 +114,82 @@ public sealed class MeshLink : IDisposable
     private readonly List<byte> _pending = [];
     private readonly ArrayBufferWriter<byte> _out = new();
 
+    /// <summary>
+    /// Frames written but not yet sent, one entry per tick, when
+    /// <see cref="_delayTicks"/> is set.
+    /// </summary>
+    private readonly Queue<byte[]> _delayed = new();
+
     private TcpClient? _tcp;
     private NetworkStream? _stream;
 
-    private MeshLink(TcpListener? listener, TcpClient? tcp)
+    /// <summary>
+    /// How many ticks to hold an outgoing frame for, from
+    /// <c>GG2_MESH_DELAY_TICKS</c>. Zero, and absent, mean send at once.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>A DIAGNOSTIC, and deliberately not a server setting.</b> Nobody
+    /// operating a mesh wants their link made slower. This exists so a soak with
+    /// both nodes on one machine can represent the link the design is FOR:
+    /// loopback with Nagle off delivers a frame inside the same tick, and the
+    /// mesh exists to span an ocean — <see cref="MeshOptions.MaxRollbackTicks"/>
+    /// puts one way across the Atlantic at two or three ticks.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Ticks rather than milliseconds</b>, so a test can assert it without
+    /// sleeping and so it is stated in the unit the rest of this project's
+    /// latency figures use. One tick is 33.3ms.
+    /// </para>
+    /// <para>
+    /// Off, nothing is queued and nothing is copied, so the send path is the one
+    /// it has always been.
+    /// </para>
+    /// </remarks>
+    private readonly int _delayTicks;
+
+    private MeshLink(TcpListener? listener, TcpClient? tcp, int delayTicks)
     {
         _listener = listener;
+        _delayTicks = Math.Max(0, delayTicks);
         Attach(tcp);
     }
 
+    /// <summary>
+    /// The delay a soak asks for through <c>GG2_MESH_DELAY_TICKS</c>, or zero.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Read here and passed in, never read inside the link.</b> A type that
+    /// consults the environment in its own constructor cannot be tested without
+    /// setting a process-wide variable, which leaks into whatever else is
+    /// running. Anything unparseable or below one reads as off rather than as an
+    /// error — a mistyped diagnostic must not stop a server starting.
+    /// </remarks>
+    public static int DelayTicksFromEnvironment() =>
+        ParseDelayTicks(Environment.GetEnvironmentVariable("GG2_MESH_DELAY_TICKS"));
+
+    /// <summary>
+    /// What a <c>GG2_MESH_DELAY_TICKS</c> value means, split out so it can be
+    /// tested without setting a variable this whole process would see.
+    /// </summary>
+    public static int ParseDelayTicks(string? value) =>
+        int.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var ticks)
+        && ticks > 0
+            ? ticks
+            : 0;
+
     /// <summary>Waits for a peer to connect, without blocking a tick.</summary>
-    public static MeshLink Listen(IPAddress address, int port)
+    public static MeshLink Listen(IPAddress address, int port, int delayTicks = 0)
     {
         var listener = new TcpListener(address, port);
         listener.Start();
 
-        return new MeshLink(listener, null);
+        return new MeshLink(listener, null, delayTicks);
     }
 
     /// <summary>Connects to a peer that is already listening.</summary>
-    public static MeshLink Connect(string host, int port) =>
-        Connect(host, port, TimeSpan.Zero, null);
+    public static MeshLink Connect(string host, int port, int delayTicks = 0) =>
+        Connect(host, port, TimeSpan.Zero, null, delayTicks);
 
     /// <summary>
     /// Connects to a peer, waiting up to <paramref name="patience"/> for one to
@@ -158,7 +213,8 @@ public sealed class MeshLink : IDisposable
     /// so.
     /// </para>
     /// </remarks>
-    public static MeshLink Connect(string host, int port, TimeSpan patience, Action<string>? waiting)
+    public static MeshLink Connect(
+        string host, int port, TimeSpan patience, Action<string>? waiting, int delayTicks = 0)
     {
         // Monotonic, because this is a duration and the wall clock can step.
         var until = Stopwatch.GetTimestamp() + (long)(patience.TotalSeconds * Stopwatch.Frequency);
@@ -172,7 +228,7 @@ public sealed class MeshLink : IDisposable
             {
                 tcp.Connect(host, port);
 
-                return new MeshLink(null, tcp);
+                return new MeshLink(null, tcp, delayTicks);
             }
             catch (SocketException e) when (
                 e.SocketErrorCode is SocketError.ConnectionRefused or SocketError.TimedOut
@@ -406,6 +462,7 @@ public sealed class MeshLink : IDisposable
             // the peer's rollback window, so every one of them would be refused
             // as too late. A peer that joins late starts from now.
             _out.Clear();
+            _delayed.Clear();
             return;
         }
 
@@ -660,21 +717,52 @@ public sealed class MeshLink : IDisposable
 
     private void Flush()
     {
+        if (_delayTicks > 0)
+        {
+            FlushDelayed();
+            return;
+        }
+
         if (_out.WrittenCount == 0)
             return;
 
+        Send(_out.WrittenSpan);
+        _out.Clear();
+    }
+
+    /// <summary>
+    /// Sends the frame written <see cref="_delayTicks"/> ticks ago, and queues
+    /// this tick's.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>An empty tick is queued too.</b> The queue's length is how many
+    /// ticks are in flight, so skipping the ticks with nothing to say would make
+    /// a quiet moment shorten the delay for whatever came next.
+    /// </remarks>
+    private void FlushDelayed()
+    {
+        _delayed.Enqueue(_out.WrittenCount == 0 ? [] : _out.WrittenSpan.ToArray());
+        _out.Clear();
+
+        if (_delayed.Count <= _delayTicks)
+            return;
+
+        var due = _delayed.Dequeue();
+
+        if (due.Length > 0)
+            Send(due);
+    }
+
+    private void Send(ReadOnlySpan<byte> frame)
+    {
         try
         {
-            _stream!.Write(_out.WrittenSpan);
+            _stream!.Write(frame);
             Stats = Stats with { FramesSent = Stats.FramesSent + 1 };
         }
         catch (Exception e) when (e is IOException or SocketException or ObjectDisposedException)
         {
             Drop();
-        }
-        finally
-        {
-            _out.Clear();
         }
     }
 
@@ -704,6 +792,11 @@ public sealed class MeshLink : IDisposable
         _tcp = null;
         _pending.Clear();
         _out.Clear();
+
+        // With a delay set, whatever was still in flight belongs to a
+        // connection that no longer exists. A peer reconnecting must not be
+        // handed the last few ticks of the previous one.
+        _delayed.Clear();
     }
 
     private int ReadInt(int at) =>

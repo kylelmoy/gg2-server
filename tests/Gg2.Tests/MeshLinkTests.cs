@@ -447,4 +447,101 @@ public sealed class MeshLinkTests
             $"a refusal took {started.ElapsedMilliseconds}ms against a "
                 + $"{ceiling.TotalMilliseconds:F0}ms ceiling, so something retried");
     }
+
+    /// <summary>
+    /// ⛔ A delayed link holds a frame, and an undelayed one beside it does not.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The undelayed arm is the whole test.</b> Asserting that nothing
+    /// arrived proves nothing on its own — a poll that was simply too short
+    /// looks identical — so the control sends the same frame over an immediate
+    /// link and has to receive it inside the SAME polling budget the delayed one
+    /// is found empty in.
+    /// </para>
+    /// <para>
+    /// ⚠️ The delay is counted in <c>Service</c> calls, which is what a tick is
+    /// on this path. That is what makes it assertable without a sleep deciding
+    /// the answer.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ADelayedLinkHoldsAFrameAndAnImmediateOneDoesNot()
+    {
+        ReferenceTree.RequireAvailable();
+
+        const int delay = 3;
+
+        var slow = MeshLink.Listen(IPAddress.Loopback, 0);
+        using var _ = slow;
+        var slowPeer = MeshLink.Connect("127.0.0.1", slow.Port, delay);
+        using var __ = slowPeer;
+
+        var quick = MeshLink.Listen(IPAddress.Loopback, 0);
+        using var ___ = quick;
+        var quickPeer = MeshLink.Connect("127.0.0.1", quick.Port);
+        using var ____ = quickPeer;
+
+        var node = new MeshNode(Collision(), World());
+        var input = new PlayerInput(PlayerKeys.Left, 900, 40);
+
+        slowPeer.SendInputs(7, [1], [input]);
+        quickPeer.SendInputs(7, [1], [input]);
+
+        // One Service each is one tick. The immediate link has sent by the end
+        // of it; the delayed one has only queued.
+        slowPeer.Service(node);
+        quickPeer.Service(node);
+
+        Drain(quick, node, until: () => quick.Stats.InputsReceived > 0);
+        Drain(slow, node, until: () => slow.Stats.InputsReceived > 0);
+
+        Assert.Equal(1, quick.Stats.InputsReceived);
+        Assert.Equal(0, slow.Stats.InputsReceived);
+
+        // Ticks two and three: still held, still nothing.
+        for (var tick = 1; tick < delay; tick++)
+        {
+            slowPeer.Service(node);
+            Drain(slow, node, until: () => slow.Stats.InputsReceived > 0);
+
+            Assert.Equal(0, slow.Stats.InputsReceived);
+        }
+
+        // The fourth releases the frame written on the first.
+        slowPeer.Service(node);
+        Drain(slow, node, until: () => slow.Stats.InputsReceived > 0);
+
+        Assert.Equal(1, slow.Stats.InputsReceived);
+    }
+
+    /// <summary>
+    /// Polls one end until it has what it is waiting for, or long enough that
+    /// not having it means something.
+    /// </summary>
+    private static void Drain(MeshLink link, MeshNode node, Func<bool> until)
+    {
+        for (var i = 0; i < 40 && !until(); i++)
+        {
+            link.Service(node);
+            Thread.Sleep(5);
+        }
+    }
+
+    /// <summary>
+    /// ⚠️ A mistyped diagnostic reads as OFF, never as an error: a server that
+    /// refused to start over it would be a worse failure than the one it is
+    /// guarding against.
+    /// </summary>
+    [Theory]
+    [InlineData("3", 3)]
+    [InlineData("1", 1)]
+    [InlineData("0", 0)]
+    [InlineData("-2", 0)]
+    [InlineData("", 0)]
+    [InlineData(null, 0)]
+    [InlineData("three", 0)]
+    [InlineData("2.5", 0)]
+    public void ADelayValueThatMakesNoSenseIsOff(string? value, int expected) =>
+        Assert.Equal(expected, MeshLink.ParseDelayTicks(value));
 }

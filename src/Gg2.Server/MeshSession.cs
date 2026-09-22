@@ -610,12 +610,27 @@ public sealed class MeshSession : IDisposable
 
         var listening = options.MeshConnect.Length == 0;
 
+        // ⚠️ A soak on one machine has a link faster than any real one. This is
+        // how it borrows the latency the design is for; it is off unless asked
+        // for, and it is said out loud because a run measured through a delayed
+        // link and reported as if it were not would be worse than no run.
+        var delayTicks = MeshLink.DelayTicksFromEnvironment();
+
+        if (delayTicks > 0)
+        {
+            log.Info(
+                $"mesh: GG2_MESH_DELAY_TICKS={delayTicks} - every frame this node "
+                + $"sends is held {delayTicks} tick(s) ({delayTicks * 100 / 3}ms). "
+                + "DIAGNOSTIC; a real deployment does not set this.");
+        }
+
         var link = listening
-            ? MeshLink.Listen(System.Net.IPAddress.Any, options.MeshListenPort)
+            ? MeshLink.Listen(System.Net.IPAddress.Any, options.MeshListenPort, delayTicks)
             : Connect(
                 options.MeshConnect,
                 TimeSpan.FromSeconds(Math.Max(0, options.MeshConnectPatienceSeconds)),
-                log);
+                log,
+                delayTicks);
 
         return new MeshSession(
             link,
@@ -649,7 +664,8 @@ public sealed class MeshSession : IDisposable
         return 0;
     }
 
-    private static MeshLink Connect(string target, TimeSpan patience, IServerLog log)
+    private static MeshLink Connect(
+        string target, TimeSpan patience, IServerLog log, int delayTicks)
     {
         var colon = target.LastIndexOf(':');
 
@@ -660,7 +676,8 @@ public sealed class MeshSession : IDisposable
             target[..colon],
             int.Parse(target[(colon + 1)..], System.Globalization.CultureInfo.InvariantCulture),
             patience,
-            log.Info);
+            log.Info,
+            delayTicks);
     }
 
     /// <summary>

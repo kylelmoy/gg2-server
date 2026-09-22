@@ -32,6 +32,19 @@ clients="${3:?}"
 minutes="${4:-1}"
 bots="${5:-6}"
 
+# ⛔ THE SIXTH ARGUMENT IS THE LINK, and without it this soak measures a mesh
+# that does not exist. Both nodes are on one machine over loopback with Nagle
+# off, so a frame arrives inside the tick it was sent; the design is for a link
+# across an ocean, which MeshOptions.MaxRollbackTicks puts at two or three ticks
+# one way. Every rebuild fault found so far came from the two nodes swapping at
+# different WALL-CLOCK moments, and loopback is the shortest that gap ever gets.
+#
+# 2 or 3 is transatlantic. 0 is loopback, which is what every earlier batch in
+# this project measured.
+delay="${6:-0}"
+
+export GG2_MESH_DELAY_TICKS="$delay"
+
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 server="$root/src/Gg2.Host/bin/Release/net10.0/gg2-server.exe"
 players="$root/tools/soak/bin/Release/net10.0/soak-players.exe"
@@ -99,6 +112,7 @@ fi
 
 echo "meshsoak: ${secs}s, $clients clients a side, ${minutes}min rounds, $bots bots -> $out"
 echo "meshsoak: rotation $rotation"
+echo "meshsoak: link delay ${delay} tick(s) each way$([ "$delay" = 0 ] && echo ' (LOOPBACK - not the link this design is for)')"
 
 # ⛔ The listener first. The joiner now waits for it (Mesh.ConnectPatienceSeconds),
 # so this order is no longer load-bearing — but starting it first still saves
