@@ -2,7 +2,7 @@
 
   <!-- The bot layer. Depends on Gg2.Simulation for the seam (IInputSource,
        WorldView) and on Gg2.Maps for the geometry a nav graph is built over;
-       it does NOT depend on Gg2.Server, because the whole
+       it does NOT depend on Gg2.Server, because docs/ARCHITECTURE.md's whole
        claim about the seam is that bot logic is testable without a server, a
        socket or a client.
 

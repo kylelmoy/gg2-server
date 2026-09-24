@@ -8,7 +8,7 @@ namespace Gg2.Host;
 /// <c>docs/CONFIG.md</c>, "Many servers, one configuration".
 /// </summary>
 /// <remarks>
-/// A subcommand for the reason <c>navgen</c> is: it serves no
+/// A subcommand for the reason <c>eval</c> and <c>navgen</c> are: it serves no
 /// game and shares none of the server's options. It runs on the operator's
 /// machine; <c>scripts/deploy.sh --config</c> calls <c>render</c>.
 /// </remarks>

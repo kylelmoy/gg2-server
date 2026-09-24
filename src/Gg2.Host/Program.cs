@@ -52,9 +52,36 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        // `gg2-server eval ...` plays bot matches instead of serving one —
+        // phase 8's exit criterion. A subcommand rather than a flag, because it
+        // shares almost none of the server's options and every one it did share
+        // would have to mean the same thing in both.
+        if (args.Length > 0 && args[0] == "eval")
+        {
+            var rest = args[1..];
+
+            if (rest.Contains("--help") || rest.Contains("-h"))
+            {
+                Evaluate.PrintUsage();
+                return 0;
+            }
+
+            try
+            {
+                return Evaluate.Run(rest);
+            }
+            catch (Exception e) when (e is ArgumentException or FormatException or IOException)
+            {
+                Console.Error.WriteLine(e.Message);
+                Console.Error.WriteLine();
+                Evaluate.PrintUsage();
+                return 2;
+            }
+        }
+
         // `gg2-server navgen ...` builds the bot nav graphs instead of serving.
-        // A subcommand rather than a flag: it shares almost none of the
-        // server's options, and the ones it looks like it shares (--maps,
+        // A subcommand for the same reason `eval` is one: it shares almost none
+        // of the server's options, and the ones it looks like it shares (--maps,
         // --botnav/--out) would have to mean the same thing in both.
         if (args.Length > 0 && args[0] == "navgen")
         {

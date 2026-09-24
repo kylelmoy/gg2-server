@@ -56,6 +56,49 @@ public sealed class HeadlessMatchTests
         return (Map(name), NavCache.Load(ReferenceTree.NavCacheDirectory, name, 1));
     }
 
+    /// <summary>
+    /// The load-bearing test: the same batch on one thread and on eight gives
+    /// the same array, element for element.
+    /// </summary>
+    /// <remarks>
+    /// Whole results, not a summary: a runner that appended instead of writing
+    /// to <c>results[i]</c> would give the right win counts in the wrong order,
+    /// and a test that only compared win rates would pass on it.
+    /// </remarks>
+    [Fact]
+    public void ABatchGivesTheSameAnswersOnOneThreadAndOnEight()
+    {
+        ReferenceTree.RequireAvailable();
+
+        var (map, nav) = Navigable();
+
+        var sequential = MatchRunner.Run(Short, count: 6, map, nav, threads: 1);
+        var parallel = MatchRunner.Run(Short, count: 6, map, nav, threads: 8);
+
+        Assert.Equal(sequential, parallel);
+    }
+
+    /// <summary>
+    /// And the matches in a batch actually differ, so the test above is not
+    /// satisfied by six identical matches.
+    /// </summary>
+    /// <remarks>
+    /// Without this, a runner that ignored the index and played the same
+    /// match six times would pass every determinism assertion here perfectly.
+    /// </remarks>
+    [Fact]
+    public void MatchesInABatchAreNotAllTheSameMatch()
+    {
+        ReferenceTree.RequireAvailable();
+
+        var (map, nav) = Navigable();
+        var results = MatchRunner.Run(Short, count: 6, map, nav, threads: 1);
+
+        Assert.True(
+            results.Distinct().Count() > 1,
+            "every match in the batch came out identical, so the seed is not reaching them");
+    }
+
     /// <summary>One seed, one match, however many times it is played.</summary>
     [Fact]
     public void AMatchIsReproducibleFromItsSeed()
@@ -447,4 +490,53 @@ public sealed class HeadlessMatchTests
         Assert.True(match.State.RedCaps > 0, "six uncontested bots captured nothing at all");
     }
 
+    /// <summary>The summary reports draws and unfinished matches rather than folding them away.</summary>
+    /// <remarks>
+    /// A bot change that makes capturing worse shows up FIRST as more
+    /// unfinished matches. A summary that only counted red against blue would
+    /// hide it, and the win rate would drift for a reason nobody could find.
+    /// </remarks>
+    [Fact]
+    public void TheSummaryKeepsDrawsAndUnfinishedMatchesSeparate()
+    {
+        MatchResult[] results =
+        [
+            new(MatchOutcome.Decided, Team.Red, 5, 0, 100, 0),
+            new(MatchOutcome.Decided, Team.Blue, 0, 5, 200, 0),
+            new(MatchOutcome.Decided, Team.Spectator, 1, 1, 300, 0),
+            new(MatchOutcome.Exhausted, Team.Spectator, 0, 0, 400, 0),
+        ];
+
+        var summary = MatchRunner.Summarise(results);
+
+        Assert.Equal(4, summary.Matches);
+        Assert.Equal(1, summary.RedWins);
+        Assert.Equal(1, summary.BlueWins);
+        Assert.Equal(1, summary.Draws);
+        Assert.Equal(1, summary.Exhausted);
+        Assert.Equal(1000, summary.TotalTicks);
+        Assert.Equal(250, summary.MeanTicks);
+    }
+
+    /// <summary>
+    /// Two batches with adjacent seeds are two different experiments.
+    /// </summary>
+    /// <remarks>
+    /// <c>seed + index</c> would make <c>{seed: 1, count: 100}</c> and
+    /// <c>{seed: 2, count: 100}</c> share 99 of their 100 matches, so a
+    /// "repeat with a different seed" would be almost the same measurement —
+    /// and the second batch would look like confirmation of the first.
+    /// </remarks>
+    [Fact]
+    public void AdjacentBatchSeedsDoNotOverlap()
+    {
+        ReferenceTree.RequireAvailable();
+
+        var (map, nav) = Navigable();
+
+        var first = MatchRunner.Run(Short with { Seed = 1 }, count: 4, map, nav);
+        var second = MatchRunner.Run(Short with { Seed = 2 }, count: 4, map, nav);
+
+        Assert.Empty(first.Intersect(second));
+    }
 }

@@ -206,4 +206,164 @@ public sealed class ScenarioWorldTests
         Assert.Equal(RunOnce(), RunOnce());
     }
 
+    /// <summary>
+    /// The runner measures damage, and a dummy with nothing driving it deals
+    /// none back.
+    /// </summary>
+    /// <remarks>
+    /// This is <c>soldier-holds-and-fires</c> run with the stupidest possible
+    /// source — hold the trigger, aim right — so what it gates is the harness:
+    /// the placement, the weapon following its owner, the tick loop, and the
+    /// damage arithmetic. The real scenario asserts <c>acquired</c> as well,
+    /// which needs a bot that picks targets; that half waits for item 4.
+    /// <para>
+    /// The control is the null source: with nobody pulling the trigger the same
+    /// scenario must measure exactly zero, or the number is coming from
+    /// somewhere other than the subject.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheRunnerMeasuresDamageAndZeroWithoutASource()
+    {
+        var scenario = Scenarios.ByName("soldier-holds-and-fires");
+        Assert.NotNull(scenario);
+
+        var firing = ScenarioRunner.Run(
+            scenario, Load(scenario.Map), new Holds(PlayerKeys.Attack));
+
+        Assert.True(firing.Damage > 0, "a soldier holding the trigger at a dummy 200px away dealt nothing");
+        Assert.Equal(scenario.Hold, firing.Ticks);
+
+        var idle = ScenarioRunner.Run(scenario, Load(scenario.Map), subject: null);
+
+        Assert.Equal(0, idle.Damage);
+        Assert.True(idle.Survived);
+    }
+
+    /// <summary>
+    /// A kill counts for the victim's whole hit-point bar.
+    /// </summary>
+    /// <remarks>
+    /// The arithmetic that makes a damage figure comparable across runs: without
+    /// it a scenario that <em>killed</em> its dummy measures less damage than
+    /// one that left it on a sliver, which inverts the thing being measured.
+    /// <para>
+    /// A scout rather than the heavy the real scenario uses, because 125 hit
+    /// points is inside what a soldier holding the trigger removes in the four
+    /// hundred ticks the scenario allows and 300 is not.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AKillCountsForTheWholeBar()
+    {
+        var duel = new Scenario(
+            name: "synthetic-kill-the-dummy",
+            map: "koth_valley",
+            about:
+                "Not a behaviour scenario: a held trigger against a dummy soft enough to die, "
+                + "so that the damage arithmetic has a gate covering a kill and not only a "
+                + "wound.",
+            playerClass: PlayerClass.Soldier,
+            team: Team.Red,
+            from: new ScenarioPoint(1880, 859),
+            hold: 400,
+            enemies: [new ScenarioEnemy(PlayerClass.Scout, new ScenarioPoint(2080, 859))]);
+
+        var world = Load(duel.Map);
+        var result = ScenarioRunner.Run(duel, world, new Holds(PlayerKeys.Attack));
+
+        Assert.False(world.State.Alive[2], "the dummy survived, so this gates nothing");
+        Assert.Equal(ClassStats.For(PlayerClass.Scout).MaxHp, result.Damage);
+    }
+
+    /// <summary>
+    /// A travel run reports arrival, and stops on the tick it arrives.
+    /// </summary>
+    /// <remarks>
+    /// Arrival is what a budget is <em>for</em>: "a leg that takes longer is a
+    /// fail even if it eventually arrives — 'gets there in the end' is how a bot
+    /// that re-plans in a loop looks from the outside." So the runner has to
+    /// stop early and report the tick, not run the budget out and check the
+    /// position afterwards.
+    /// <para>
+    /// The scenario here is synthetic and the source is a held key, because the
+    /// fourteen real ones need a bot. LEFT: red spawns on the <em>right</em>
+    /// of ctf_truefort and a scout holding RIGHT walks into the back of its own
+    /// base.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ATravelRunStopsOnArrivalAndReportsIt()
+    {
+        var walk = new Scenario(
+            name: "synthetic-walk-west",
+            map: "ctf_truefort",
+            about:
+                "Not a behaviour scenario: a held key over flat ground, so that the runner's "
+                + "arrival detection and its early stop have a gate that does not need a bot.",
+            playerClass: PlayerClass.Scout,
+            team: Team.Red,
+            from: new ScenarioPoint(1607, 456),
+            to: new ScenarioPoint(1450, 456),
+            budget: 400);
+
+        var arrived = ScenarioRunner.Run(walk, Load(walk.Map), new Holds(PlayerKeys.Left, 180));
+
+        Assert.True(arrived.Arrived, $"did not arrive; finished {arrived.GoalDistance:0.#}px away");
+        Assert.True(arrived.Ticks < walk.Budget, $"ran the whole budget ({arrived.Ticks} ticks)");
+        Assert.True(arrived.GoalDistance <= ScenarioRunner.ArrivalRadius);
+        Assert.True(arrived.Moved > 100, $"only moved {arrived.Moved:0.#}px");
+
+        // The control: standing still never arrives and burns the whole budget.
+        var still = ScenarioRunner.Run(walk, Load(walk.Map), subject: null);
+
+        Assert.False(still.Arrived);
+        Assert.Equal(walk.Budget, still.Ticks);
+        Assert.True(still.GoalDistance > ScenarioRunner.ArrivalRadius);
+    }
+
+    /// <summary>
+    /// A scenario's coordinates are snapped, and the snapped position is what is
+    /// placed.
+    /// </summary>
+    /// <remarks>
+    /// The reference's runner does the same and reports the snapped position,
+    /// because a raw coordinate usually does not resolve to a node.
+    /// <c>valley-shaft-crate-to-point</c>'s comment records the trap directly:
+    /// its <c>from</c> is deliberately <em>above</em> the crate, because the
+    /// search goes downward and a point level with the surface you mean resolves
+    /// to whatever is under it instead.
+    /// <para>
+    /// The assertion is on a scenario whose snapped x <em>differs</em> from
+    /// its raw one, which most do not: an anchor column is six pixels wide and
+    /// <c>valley-shaft-crate-to-point</c>'s 2250 lands exactly on a column
+    /// centre, so placing it raw and placing it snapped agree by coincidence and
+    /// gate nothing.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AScenarioIsPlacedAtItsSnappedPosition()
+    {
+        var scenario = Scenarios.ByName("soldier-holds-and-fires");
+        Assert.NotNull(scenario);
+
+        var world = Load(scenario.Map);
+        var snap = world.Snap(scenario.From.X, scenario.From.Y);
+
+        Assert.True(snap.Node >= 0);
+
+        // x only. The scenario's y is already a node's exact stand position —
+        // these coordinates were chosen by asking the reference's graph — so the
+        // snap leaves it alone and asserting it moved would fail for the right
+        // reason at the wrong place. The x is two pixels off a column centre,
+        // which is what makes it a gate.
+        Assert.NotEqual(scenario.From.X, snap.GoalX);
+
+        // Nothing driving it and a dummy for company, so it stands where it was
+        // put and the x it ends on is the x it was placed at.
+        ScenarioRunner.Run(scenario, world, subject: null);
+
+        // Slot 1 is the subject: the runner places it first.
+        Assert.Equal(snap.GoalX, world.State.Characters[1].X);
+    }
 }

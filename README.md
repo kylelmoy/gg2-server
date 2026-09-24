@@ -62,6 +62,9 @@ gg2-server --bots 12 --bot-mode policy `
   --policy checkpoints/tier2_pyro_rest3_s0.npz
 ```
 
+`dotnet publish` does not include `checkpoints/`, so copy that folder to the
+server yourself.
+
 ### Admin panel and analytics
 
 | Option | What |
@@ -76,7 +79,7 @@ gg2-server --bots 12 --bot-mode policy `
 dotnet publish src/Gg2.Host/Gg2.Host.csproj -c Release -r linux-x64 --self-contained false -o out/
 ```
 
-The published output includes the maps, nav graphs and checkpoints. Copy `out/` to the host
+The published output includes the maps and nav graphs. Copy `out/` to the host
 and run `gg2-server`. The server also runs on Windows.
 
 [DEPLOY.md](https://github.com/kylelmoy/gg2-server/blob/development/docs/DEPLOY.md) covers hardware sizing, a systemd unit,

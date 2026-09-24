@@ -3,22 +3,68 @@ bin/
 obj/
 *.user
 artifacts/
-TestResults/
 
-# Local recordings (--record) and captured traces
+# Local test data captured from the reference server
 traces/
 *.trace
 *.gg2trace
 
 # ...except the recordings the tests are built on. Those are oracles, not
-# scratch data: without this a fresh clone fails tests that pass on the machine
-# that recorded them.
+# scratch data: WeaponBlockTests and PhysicsParityTests assert they exist, so
+# without this a fresh clone fails two tests that pass on the machine that
+# recorded them. docs/PARITY.md says parity fixtures live with the tests and
+# run in CI; this is what makes that true.
 !tests/Gg2.Tests/Fixtures/*.trace
 
-# Fleet analytics collected by the operator's scripts. Player names; never commit.
+# Claude Code session automation: the hooks, settings.json and commands that
+# carry a handoff from one session to the next.
+#
+# ⚠️ The negation is load-bearing. ~/.gitignore_global excludes .claude/
+# wholesale, and git will not descend into an excluded DIRECTORY to find a
+# negated file inside it - so the directory has to be re-included first or
+# .claude/hooks/ is silently untracked and a fresh clone gets none of it.
+!.claude/
+
+# ...but handoffs stay out. They are disposable messages to the next session,
+# not documentation. See CLAUDE.md, "Where documentation goes".
+.claude/notes/
+
+# Machine-specific overrides, never team config.
+.claude/settings.local.json
+
+# The bot nav graphs at nav/ are CHECKED IN as of 2026-09-01, deliberately.
+#
+# They are gg2-nav-gen's output rather than this repo's source, which is the
+# usual argument for ignoring them -- and it loses to the fact that without them
+# a clone cannot run a bot, and regenerating them needs a Game Maker 8 build of
+# a fork that most people cloning this will never have. A generated artefact
+# whose generator is not reproducible from this repository is, in practice, a
+# source file.
+#
+# 34 MB on disk and ~1.2 MB packed: hex text compresses about 28:1, so the
+# objection that they would bloat the repository was measured and is wrong.
+#
+# They used to be read out of the reference tree's GM8 build directory, which
+# coupled the test suite to one particular checkout of a fork.
+# ReferenceTree.NavCacheDirectory looks at nav/, or at GG2_NAVCACHE.
+TestResults/
+
+# Fleet analytics collected by scripts/fleet-analytics.sh. Player names; never commit.
 deploy/analytics/
 
-# The operator's own host tooling (fleet deploy, build wrappers, tunnels). It is
-# specific to one set of hosts and not part of the project. Anchored with a
-# leading slash so a src/Something/scripts/ is not ignored by accident.
+# scripts/ is the OPERATOR's tooling, not the project's: the fleet deploy, the
+# Linux/Windows build wrappers, the fleet-state and analytics readers, and the
+# one-line admin-panel tunnels. It is specific to the three hosts this
+# repository's author personally runs, so it was untracked on 2026-09-15 and
+# left on disk. Nothing secret was in it -- every password is read from the
+# host's own gg2.ini and masked before it reaches a terminal -- so the history
+# was deliberately NOT rewritten; the files are simply no longer carried.
+#
+# docs/DEPLOY.md, CONFIG.md, WEBADMIN.md and ANALYTICS.md still describe these
+# scripts. That is on purpose: they document how the fleet is actually run, and
+# the layout they describe is reproducible without them.
+#
+# Anchored with a leading slash: a bare `scripts/` matches a directory of that
+# name at ANY depth, so a future src/Something/scripts/ would be ignored
+# silently and nothing would go red.
 /scripts/
