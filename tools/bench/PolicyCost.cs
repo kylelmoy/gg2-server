@@ -23,7 +23,7 @@ public static class PolicyCost
         // the weights were trained against — the shapes come from the checkpoint,
         // the cost comes from the shapes, and nothing here reads a behaviour.
         // Without this the mode cannot run at all against a stamp-invalid
-        // checkpoint (docs/ENV.md, "The checkpoint is a FIXTURE now"). Churn.cs
+        // checkpoint (gg2-rl/docs/ENV.md, "The checkpoint is a FIXTURE now"). Churn.cs
         // bypasses for a different reason and says so.
         var policy = PolicyNetwork.Load(npz, ignoreSimulationStamp: true);
         var raw = File.ReadAllBytes(observations);

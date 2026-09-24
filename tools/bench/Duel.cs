@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Gg2.Bots;
-using Gg2.Env;
 using Gg2.Protocol;
 using Gg2.Simulation;
 

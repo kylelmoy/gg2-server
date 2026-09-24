@@ -127,7 +127,7 @@ public sealed class PolicyMatchTests
     /// <b>The premise assertions are the point.</b> Without
     /// <c>PolicyTicks &gt; 0</c> every other assertion here passes on a hybrid
     /// whose engagement gate never fired — a scripted bot with extra steps, which
-    /// would win, lose and last exactly like one. <c>docs/ENV.md</c> records four
+    /// would win, lose and last exactly like one. <c>gg2-rl/docs/ENV.md</c> records four
     /// per-slot driver tests that passed with the driver ignored entirely.
     /// </remarks>
     [Theory]
@@ -174,7 +174,7 @@ public sealed class PolicyMatchTests
         // And not ALL bots either, because that is not true today and asserting
         // it would be asserting a fix nobody has made: measured over 864 bots,
         // 11 moved under 100px with the policy and 7 without, and the worst case
-        // in BOTH arms is a scripted bot. See docs/ENV.md.
+        // in BOTH arms is a scripted bot. See gg2-rl/docs/ENV.md.
         Assert.True(
             played.Moved >= played.Bots * 0.8,
             $"{map}: only {played.Moved} of {played.Bots} bots moved more than 100px");

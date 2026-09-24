@@ -152,11 +152,11 @@ These answered one question each and are unlikely to be run again. They are here
 because they were never in git and would otherwise be lost, not because they are
 maintained.
 
-`BENCH_ALLOC` `BENCH_CMP` `BENCH_COLD` `BENCH_DIGEST` `BENCH_DUEL` `BENCH_GEOM`
-`BENCH_LAT` `BENCH_OBS` `BENCH_RAY` `BENCH_RESET`
-`BENCH_TICK` — the `Gg2.Env` throughput and allocation work
-(`docs/BOTS.md`, "The environment seam"). `BENCH_LAT` takes `BENCH_NODELAY` and
-`BENCH_BUFFERED` to vary the socket. `BENCH_DKOTH` verified one bug
+`BENCH_CMP` `BENCH_COLD` `BENCH_DUEL` `BENCH_GEOM` `BENCH_OBS` `BENCH_RAY`
+`BENCH_RESET` `BENCH_TICK` — throughput and allocation work on the simulation
+under the training environment. The modes that drive `Gg2.Env` itself
+(the allocation probe, the batch digest, the socket latency run and the
+no-variable batch throughput run) live with it in `gg2-rl`, `env/bench`. `BENCH_DKOTH` verified one bug
 fix and is superseded by `BENCH_PERMAP`, which also takes `BENCH_CONFIRM` to
 re-run a cell.
 

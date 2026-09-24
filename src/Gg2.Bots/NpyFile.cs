@@ -11,7 +11,7 @@ namespace Gg2.Bots;
 /// <remarks>
 /// <b>Phase 4 needs a trained policy in this process</b>, and the artefact is
 /// whatever <c>numpy.savez</c> writes. Reading that format directly is the
-/// alternative to inventing one here — <c>docs/ENV.md</c>'s standing argument
+/// alternative to inventing one here — <c>gg2-rl/docs/ENV.md</c>'s standing argument
 /// against a weights format in this repo is that it would be **a second source of
 /// truth about what a checkpoint is**, and reading theirs keeps there being one.
 /// <para>

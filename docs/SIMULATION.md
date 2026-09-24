@@ -76,7 +76,7 @@ and every test in the process — both are deeply immutable, and the
 **A map edited on disk mid-process is not re-read** (`resources: null` forces a
 decode), and **a shared cache makes first-call properties order-dependent** —
 it turned `ObservationWriter`'s zero-allocation gate into a coin flip.
-`docs/ENV.md`, "the reset reload".
+`gg2-rl/gg2-rl/docs/ENV.md`, "the reset reload".
 
 ## Why any of this is a contract at all
 
@@ -1960,7 +1960,7 @@ reasoning has an expiry.** The stamp would not have caught it either way — its
 surface is chosen rather than swept, constants and tables rather than branch
 conditions — so the bump would have been a hand-made claim that every existing
 checkpoint is now dated. It was skipped because **the change cannot reach
-training**: nothing in `src/Gg2.Env` sets `SetupTimer` or `AttackDefend`, so both
+training**: nothing in `gg2-rl/env/Gg2.Env` sets `SetupTimer` or `AttackDefend`, so both
 sit at their `default(WorldState)` values and the branch is unreachable there, and
 `PolicyController.TrainedClasses` (Scout, Soldier, Sniper, Heavy) contains no
 Medic. **If an env or a duel ever arms a setup timer, or the policy is trained

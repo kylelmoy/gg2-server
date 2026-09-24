@@ -51,7 +51,7 @@ public sealed class MineJumpTests
 
         // A real spawn point, not a coordinate: an arbitrary point can land the
         // demoman inside terrain, sitting at terminal velocity going nowhere.
-        // Same lesson as docs/ENV.md's sampled placement.
+        // Same lesson as gg2-rl/docs/ENV.md's sampled placement.
         var slot = world.PlaceAtSpawn(PlayerClass.Demoman, Team.Red, 0);
 
         world.Drive(slot, null);

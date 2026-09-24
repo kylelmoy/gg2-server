@@ -55,7 +55,7 @@ public static class SimulationStamp
     /// The observation layout.
     /// </summary>
     /// <remarks>
-    /// The authority is <c>Gg2.Env.ObservationWriter</c>'s field order and its
+    /// The authority is <c>Gg2.Bots.ObservationWriter</c>'s field order and its
     /// own <c>LayoutVersion</c>, which this mirrors.
     /// <para>
     /// <b>Mirrored rather than referenced.</b> <c>Gg2.Simulation</c> does not

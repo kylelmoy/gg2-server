@@ -381,7 +381,7 @@ for a change to control flow (e.g. in `Movement.cs`) that is real physics but
 touches no constant, so nothing else on the stamp's surface would move for it.
 **Bump it when you knowingly change what the simulation does**; do not bump it
 for a refactor, and exempt a change only when it has been *demonstrated*
-unobservable rather than argued to be. `docs/ENV.md`, "the third hand-bumped
+unobservable rather than argued to be. `gg2-rl/gg2-rl/docs/ENV.md`, "the third hand-bumped
 number", has the rule and the exemption that was used.
 
 **Round-trip formatting, so a one-ULP change moves it** — `Gml.PointSix` and
@@ -414,7 +414,7 @@ optimisation to make once there is a measurement that justifies it.
 **Built and scoped.** Items 1, 2 and 6 — its three hard preconditions — all
 hold. Scope: duels only; v0 observation layout built to `gg2-rl/docs/DESIGN.md`'s
 sketch; action heads decoded server-side; rewards as components. Design is
-**`docs/ENV.md`**. Item 7's damage half — per-tick damage amounts via
+**`gg2-rl/gg2-rl/docs/ENV.md`**. Item 7's damage half — per-tick damage amounts via
 accumulators — was the one precondition gap found, and it is closed
 (see item 7).
 
@@ -508,7 +508,7 @@ expert iteration, and it arrives as weights behind a seam that already exists.
   behind an `IInputSource` (`HybridBot` driving a `PolicyController`) — a
   `Dense` loop and an argmax per head, no tensor library and no dependency.
 - **No training loop, replay buffer, or environment API. Those live outside the
-  server.** `src/Gg2.Env/` is a *seam* — a socket and an observation writer —
+  server.** `gg2-rl/env/Gg2.Env/` is a *seam* — a socket and an observation writer —
   not a trainer; the loop is `gg2-rl`'s.
 - **No end-to-end learned bot. The realistic target is a hybrid**: the scripted
   macro layer keeps objective selection, class choice and routing - roughly 2,000
@@ -519,7 +519,7 @@ expert iteration, and it arrives as weights behind a seam that already exists.
   the policy is most valuable holding about **7%** of ticks, and widening its
   window past ~150px *loses the objective* while still improving combat. **The
   narrow scope is not a cautious first step — it is the result.** `docs/BOTS.md`,
-  and `docs/ENV.md`, "Phase 4 re-measured".
+  and `gg2-rl/gg2-rl/docs/ENV.md`, "Phase 4 re-measured".
 - Nothing here changes the wire protocol or the simulation's observable
   behaviour. Every constraint above is on structure, not on what the game does.
 

@@ -227,7 +227,7 @@ public sealed class ScenarioWorld : DrivenWorld
     /// difference here is the two lines that do not run.
     /// <para>
     /// It exists because a caller that has no business knowing a map's geometry
-    /// should not have to invent coordinates. <c>docs/ENV.md</c> promised
+    /// should not have to invent coordinates. <c>gg2-rl/docs/ENV.md</c> promised
     /// "explicit positions <b>or sampled</b>" from the first draft and only the
     /// first half was built, so a duel on any map meant the trainer holding a
     /// coordinate table — a second source of truth about the maps, which is what

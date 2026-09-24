@@ -6,7 +6,7 @@ namespace Gg2.Tests;
 
 /// <summary>
 /// <see cref="TickEvents.DamageDealt"/> and <see cref="TickEvents.DamageTaken"/>
-/// — the dense signal <c>docs/ENV.md</c> names as its first prerequisite.
+/// — the dense signal <c>gg2-rl/docs/ENV.md</c> names as its first prerequisite.
 /// </summary>
 /// <remarks>
 /// <b>The rest of <see cref="TickEvents"/> carries the sparse events</b> — kills,
@@ -122,7 +122,7 @@ public sealed class DamageAccumulatorTests
     /// <b>Self-damage is taken and never dealt.</b>
     /// </summary>
     /// <remarks>
-    /// <c>docs/ENV.md</c>: "A rocket jump must not score positive reward." The
+    /// <c>gg2-rl/docs/ENV.md</c>: "A rocket jump must not score positive reward." The
     /// blast reaches its own shooter — that is the whole mechanic — so the
     /// victim's counter has to move while the dealer's does not, even though the
     /// two are the same slot.

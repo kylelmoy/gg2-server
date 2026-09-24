@@ -8,7 +8,7 @@ namespace Gg2.Bots;
 /// The v0 observation layout: egocentric, normalised, fixed-size.
 /// </summary>
 /// <remarks>
-/// <b><c>docs/ENV.md</c> step 3</b>, built to <c>gg2-rl/docs/DESIGN.md</c>'s
+/// <b><c>gg2-rl/docs/ENV.md</c> step 3</b>, built to <c>gg2-rl/docs/DESIGN.md</c>'s
 /// sketch. <b>This type is the authoritative field order</b> — the document
 /// describes the shape, the code decides it, and
 /// <see cref="LayoutVersion"/> is what a trainer checks.
@@ -507,7 +507,7 @@ public static class ObservationWriter
     private static void WriteGoal(
         in WorldView view, int slot, in CharacterState self, in AgentGoal goal, Span<float> o, ref int at)
     {
-        // docs/ENV.md's hybrid-boundary rule: a macro goal the policy has never
+        // gg2-rl/docs/ENV.md's hybrid-boundary rule: a macro goal the policy has never
         // seen cannot be introduced later without a layout bump and a retrain, so
         // this block is reserved for it and a constant column costs four floats.
         //

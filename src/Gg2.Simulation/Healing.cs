@@ -340,7 +340,7 @@ public static class Healing
             // "chosen, not swept" — constants and tables rather than branch
             // conditions — so a bump here would be a hand-made claim that every
             // existing checkpoint is now dated. Skipped because the change
-            // cannot reach training: nothing in src/Gg2.Env sets SetupTimer or
+            // cannot reach training: nothing in gg2-rl's Gg2.Env sets SetupTimer or
             // AttackDefend, so both sit at their default(WorldState) values and
             // this branch is unreachable there, and PolicyController's
             // TrainedClasses (Scout, Soldier, Sniper, Heavy) contains no Medic.

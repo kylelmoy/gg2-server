@@ -18,7 +18,7 @@ policy — is in progress.**
 | 6 | all eight gamemodes, round after round, every `FULL_UPDATE` field real | closed — a stock client has survived four gamemode changes in one session |
 | 7 | bots: the input seam, nav, A\*, the follower, combat, the objective layer, the population manager | closed, with a number |
 | 8 | unpaced ticking, the human-play recorder, the headless match runner, the control port | closed — 44 matches across all 22 maps in 3.3s, 3,548x real time |
-| 9 | a learned policy: `NpyFile`, `PolicyNetwork`, `HybridBot`, the `Gg2.Env` seam, `tools/bench/` | in progress — see below |
+| 9 | a learned policy: `NpyFile`, `PolicyNetwork`, `HybridBot`, the `Gg2.Env` seam (now in `gg2-rl`), `tools/bench/` | in progress — see below |
 
 **Every class is implemented.** All ten are armed: rockets, mines, healing
 beams, ubercharge, afterburn, the airblast, the sentry gun, the sniper's scope,
@@ -204,7 +204,7 @@ to improve deaths and the objective at once".
 The suite never waited for any of this: the shipped `ppo_final.npz` is a test
 **fixture** (real structure, a numpy oracle for the forward pass, untrained
 weights), and nothing here depends on `gg2-rl` doing anything.
-[`ENV.md`](ENV.md), "The checkpoint is a fixture"; [`BOTS.md`](BOTS.md), "a
+`gg2-rl/docs/ENV.md`, "The checkpoint is a fixture"; [`BOTS.md`](BOTS.md), "a
 policy is dated by the physics".
 
 ---

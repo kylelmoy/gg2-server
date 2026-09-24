@@ -827,7 +827,7 @@ public sealed class BotObjective
         {
             // NearestEnemies is ordered, so the first live one is the nearest.
             // It skips empty slots inside its own sweep, so this costs the same
-            // whatever the population — see docs/ENV.md's extraction measurement.
+            // whatever the population — see gg2-rl/docs/ENV.md's extraction measurement.
             Span<int> nearest = stackalloc int[4];
             var count = world.NearestEnemies(slot, nearest);
 

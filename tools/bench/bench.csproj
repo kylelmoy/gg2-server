@@ -18,7 +18,6 @@
          benchmark, and CI should not run one. Build it explicitly. -->
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/Gg2.Env/Gg2.Env.csproj" />
     <ProjectReference Include="../../src/Gg2.Bots/Gg2.Bots.csproj" />
     <ProjectReference Include="../../src/Gg2.Simulation/Gg2.Simulation.csproj" />
   </ItemGroup>

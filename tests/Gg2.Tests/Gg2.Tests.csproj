@@ -46,7 +46,6 @@
     <ProjectReference Include="..\..\src\Gg2.Simulation\Gg2.Simulation.csproj" />
     <ProjectReference Include="..\..\src\Gg2.Bots\Gg2.Bots.csproj" />
     <ProjectReference Include="..\..\src\Gg2.Nav\Gg2.Nav.csproj" />
-    <ProjectReference Include="..\..\src\Gg2.Env\Gg2.Env.csproj" />
 
     <!-- The command line itself. See CliCoverageTests. -->
     <ProjectReference Include="..\..\src\Gg2.Host\Gg2.Host.csproj" />

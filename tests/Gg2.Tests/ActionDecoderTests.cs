@@ -1,5 +1,4 @@
 using Gg2.Bots;
-using Gg2.Env;
 using Gg2.Protocol;
 
 namespace Gg2.Tests;
@@ -8,7 +7,7 @@ namespace Gg2.Tests;
 /// <see cref="ActionDecoder"/> — heads to <see cref="PlayerInput"/>.
 /// </summary>
 /// <remarks>
-/// <c>docs/ENV.md</c>'s gate list names three properties for this type, and all
+/// <c>gg2-rl/docs/ENV.md</c>'s gate list names three properties for this type, and all
 /// three are here because each one is a bug this project has already paid for
 /// somewhere else.
 /// </remarks>

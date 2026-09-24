@@ -1,5 +1,4 @@
 using Gg2.Bots;
-using Gg2.Env;
 using Gg2.Maps;
 using Gg2.Protocol;
 using Gg2.Simulation;
@@ -188,7 +187,7 @@ public sealed class ObservationRayFanTests
     /// <b>This is a regression test for a bug that passed twice before it
     /// failed.</b> <see cref="Walkmask.Clearance"/> was lazy at first, so the
     /// first <c>Write</c> on a map built the field and allocated
-    /// <c>Width * Height</c> bytes inside a method <c>docs/ENV.md</c> gates as
+    /// <c>Width * Height</c> bytes inside a method <c>gg2-rl/docs/ENV.md</c> gates as
     /// zero-allocation. Because the mask is shared through
     /// <c>ScenarioResources</c>, whether the field already existed depended on
     /// <b>which test had run first</b> — so

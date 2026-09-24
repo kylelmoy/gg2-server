@@ -325,7 +325,7 @@ public sealed class ShippedCheckpointTests
     /// <c>Drives</c> answers were perfect and whose weights never took the wheel
     /// would pass every one of them, and it would look exactly like the
     /// all-scripted arm — a complete, plausible bot playing a normal match. That
-    /// is <c>docs/ENV.md</c>'s four per-slot driver tests that passed with the
+    /// is <c>gg2-rl/docs/ENV.md</c>'s four per-slot driver tests that passed with the
     /// driver ignored entirely.
     /// <para>
     /// ⛔ <b>The class restriction is what attributes the ticks to a TIER.</b>

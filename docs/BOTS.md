@@ -59,7 +59,7 @@ near them", has the state rules that apply to everyone, bot work included.
 | the next-hop route table (CPD-Search) and the exact A\* heuristic — **ON by default**, `--no-nav-distances` | `NavDistances.cs`, `NavDistanceSet.cs`, `NavSearch.cs` | `NavDistancesTests`, `NavDistanceSetTests`, `NavSearchTests` |
 | the tables **on disk** — `nav/<key>.dist.gz`, next-hop only, cost rebuilt on load | `NavDistanceFile.cs`, `NavDistances.FromNextHops` | `NavDistanceFileTests` |
 | route dispersion: occupancy (on) and static lanes (measured, not adopted), `--no-bot-occupancy` | `BotLanes.cs`, `BotRoles.cs`, `ScriptedBot.cs` | `BotLanesTests`, `BotOccupancyFlagTests`, `RouteDiversityTests` |
-| the training environment seam | `src/Gg2.Env/` | `EnvProtocolTests` |
+| the training environment seam | `gg2-rl/env/Gg2.Env/`, in the `gg2-rl` repo | `EnvProtocolTests`, in `gg2-rl` |
 | **is the nav graph followable** — every edge of every shipped graph flown by a real bot, and whole routes sampled | `EdgeFlights.SweepAll`, `BENCH_FLIGHT` | `EdgeFlightTests` — the corpus tally pinned on **both** routing arms, plus the node census |
 | **can a body be where a node says** — 66.6% of nodes overlap the floor at `StandY`; all are free one pixel up | `EdgeFlights.StandingY` | `EdgeFlightTests.EveryShippedNodeCanHoldACharacter` |
 | the measurement instrument | `tools/bench/` | not in `Gg2.sln`; build explicitly |
@@ -86,7 +86,7 @@ drives rather than conditioning *what it pursues* — and that is what makes the
 untrained columns harmless. **A macro layer that conditions the policy needs a
 retrain first**, and would not look broken without one.
 
-Numbers, tables and scope: `docs/ENV.md`, "Phase 4 re-measured".
+Numbers, tables and scope: `gg2-rl/gg2-rl/docs/ENV.md`, "Phase 4 re-measured".
 
 ### The search controller (arm 3): where it stands
 
@@ -232,7 +232,7 @@ when it is not. What would show this has gone stale in the other direction is
 ⚠️ **`ppo_final.npz` is still the UNTRAINED forward-pass fixture** — its
 weights are a He-normal draw kept for `PolicyNetwork`'s arithmetic and nothing
 else, and it records no class set (seven metadata fields)
-(`tests/Gg2.Tests/PolicyFixture.cs`; `docs/ENV.md`, "The checkpoint is a
+(`tests/Gg2.Tests/PolicyFixture.cs`; `gg2-rl/gg2-rl/docs/ENV.md`, "The checkpoint is a
 FIXTURE, not a policy"). ⛔ **A checkpoint loading cleanly is still not
 evidence that it plays**, which is the opposite of the reassurance a green
 stamp usually gives, and nothing in the suite depends on `gg2-rl` producing
@@ -368,7 +368,7 @@ the loop supplies the factor.
 
 ⛔ **A duel has no arbiter, so nothing on this path reaches `gg2-rl`.**
 `Gg2.Env` references `Gg2.Protocol`, `Gg2.Maps`, `Gg2.Simulation` and
-`Gg2.Bots` — **not `Gg2.Server`** — and nothing in `src/Gg2.Env/` mentions
+`Gg2.Bots` — **not `Gg2.Server`** — and nothing in `gg2-rl/env/Gg2.Env/` mentions
 `IMicroArbiter` or `BotBrainSpec`. `HybridBot.Choose` short-circuits at
 `_arbiter is null`, `DecisionCostFor` is never called, and a duel cannot be
 moved by the cost model or the budget however wrong either is.
@@ -508,7 +508,7 @@ times here".
   not, so a before-and-after taken on two different operating systems is two
   experiments. `docs/SIMULATION.md`, "The same build on two machines".
 
-`tools/bench/README.md` has the modes. `docs/ENV.md`, "Phase 4 re-measured",
+`tools/bench/README.md` has the modes. `gg2-rl/gg2-rl/docs/ENV.md`, "Phase 4 re-measured",
 has the worked examples behind every bullet above.
 
 ### The three pinned end-to-end measurements
@@ -531,7 +531,7 @@ is checked.
 The sibling training project reads this repo's source directly for its drift
 gate. ⛔ **A pure refactor of anything it parses is a cross-repo event.** The
 full list of eight patterns across six files, and which three are fragile, is
-in `docs/ENV.md`, "So a pure refactor". The worst: `EnvServer.cs` reads the
+in `gg2-rl/gg2-rl/docs/ENV.md`, "So a pure refactor". The worst: `EnvServer.cs` reads the
 **order** of the reward block's serialisation calls, so **a formatter run over
 that method goes red with no semantic change**.
 
@@ -557,7 +557,7 @@ not invalidate a checkpoint, and a change to what an observation *means* does.
 | what a bot is allowed to SEE — the cloak, the spy | same — "the cloak is not the whole of what a bot cannot see". `BotVisibility.CanSee` is the one predicate; a candidate loop that tests `Cloak` itself has half the rule |
 | the objective layer | same, item 4g, plus "Dual King of the Hill is unwinnable by bots" |
 | the medic — who it beams, the attack/defend split | same — "The medic: who it beams, and the one role it never takes". ⛔ A full-health patient still charges the uber (2.5 during setup), so "never instead of somebody hurt" is the rule and "never" is not |
-| the env, the observation, the action space | `docs/ENV.md` |
+| the env, the observation, the action space | `gg2-rl/gg2-rl/docs/ENV.md` |
 | anything the client can observe | `docs/SIMULATION.md` — the contract |
 | a weapon, a projectile, a gamemode | `docs/TRAPS-SIMULATION.md` — the section for it |
 | the wire | `docs/PROTOCOL.md` |

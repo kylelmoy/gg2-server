@@ -233,7 +233,7 @@ public sealed class PolicyNetwork
         // so a synthetic eight-field checkpoint would test a pickle this session
         // hand-rolled rather than one the trainer writes. It belongs with the
         // change that reads field 7, using one of their real migrated files.
-        // docs/ENV.md; the ask is in gg2-rl's docs/CONTRACT.md, "AN ASK RAISED
+        // gg2-rl/docs/ENV.md; the ask is in gg2-rl's docs/CONTRACT.md, "AN ASK RAISED
         // 2026-09-06".
         if (meta.Length < 7)
             throw new InvalidDataException($"the metadata has {meta.Length} fields, expected at least 7");

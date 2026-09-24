@@ -82,7 +82,7 @@ public readonly record struct EnvAction
 /// </summary>
 /// <remarks>
 /// <b>The conversion is SERVER-SIDE, and that is a decision rather than a
-/// convenience</b> (<c>docs/ENV.md</c>, scope call 2). The action encoding
+/// convenience</b> (<c>gg2-rl/docs/ENV.md</c>, scope call 2). The action encoding
 /// version rides inside <c>SIM_UUID</c>, which implies this side owns it; the
 /// turn-rate cap is an honesty property that must not be re-implementable
 /// differently per trainer; and the delta needs the current aim, which only

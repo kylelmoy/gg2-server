@@ -356,7 +356,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
         // all: no re-target, no re-path, no spot ban, and its path state goes
         // stale the moment control comes back. A bot that meets enemies often
         // then stops pursuing the objective even between fights. Captures fell
-        // 20 to 7 over a hundred matches; docs/ENV.md has the arms.
+        // 20 to 7 over a hundred matches; gg2-rl/docs/ENV.md has the arms.
         //
         // Counted beside the poll it counts, in one place, so no mutation can
         // leave a counter reporting work that never happened — a counter separable

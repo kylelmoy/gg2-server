@@ -35,9 +35,9 @@ public class PortabilityTests
 {
     /// <summary>Every assembly a deployed server actually loads.</summary>
     /// <remarks>
-    /// <c>Gg2.Parity</c> and <c>Gg2.Env</c> are deliberately absent: they are
-    /// development tooling that never ships in the server's publish output, so a
-    /// platform dependency in one of them is not a deployment problem. Add an
+    /// <c>Gg2.Parity</c> is deliberately absent: it is development tooling that
+    /// never ships in the server's publish output, so a platform dependency in
+    /// it is not a deployment problem. Add an
     /// assembly here when it starts shipping, not when it starts existing.
     /// </remarks>
     private static Assembly[] ShippedAssemblies =>

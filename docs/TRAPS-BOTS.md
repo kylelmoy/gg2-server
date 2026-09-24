@@ -3331,7 +3331,7 @@ costing arcs against it: if it moves, every type-7 edge needs regenerating.
 ⚠️ **And the probe's first draft measured nothing at all**, because it placed the
 demoman at a hand-picked (500, 850) on `gg_debug` and put him inside terrain,
 where he sat at terminal velocity going nowhere. `PlaceAtSpawn` is what fixed it.
-**The same lesson as `docs/ENV.md`'s sampled placement, on the same day, in a
+**The same lesson as `gg2-rl/gg2-rl/docs/ENV.md`'s sampled placement, on the same day, in a
 second place** — a coordinate that looks reasonable is not a coordinate that is
 free.
 
@@ -4830,7 +4830,7 @@ worse), observation quality (beats 1-NN), state coverage (fixing it worked and c
 is left unexplained on purpose; neither lane has a fifth candidate and neither
 invented one.**
 
-⚠️ **The 7.2 there is ONE training run a side** — see `docs/ENV.md`, "every win
+⚠️ **The 7.2 there is ONE training run a side** — see `gg2-rl/gg2-rl/docs/ENV.md`, "every win
 rate above is ONE training run a side". The conclusion it supports survives the
 noise by fifty points; the 7.2 itself lives inside it.
 
@@ -4838,7 +4838,7 @@ noise by fifty points; the 7.2 itself lives inside it.
 
 Label-transfer from policy-visited states to their nearest control state
 retains **36%** (0.204 → 0.074): the states genuinely are meaningfully
-uncovered — the shadow slot's compounding-error rationale in `docs/ENV.md`
+uncovered — the shadow slot's compounding-error rationale in `gg2-rl/gg2-rl/docs/ENV.md`
 stands. An earlier retraction of that claim, based on raw Euclidean distance
 over the unnormalised 209-float observation (which weights every column
 equally where a policy does not), was itself wrong. **A correction inherits the
@@ -6599,7 +6599,7 @@ distance and says nothing about the cloak, so `ObservationWriter.WriteEnemies`
 hands a `PolicyNetwork` the position, velocity, class, hp and aim of a fully
 invisible spy — the opposite of the bug above, in the arm the scripted layer does
 not run. It is not fixed here because the observation is the env contract
-(`docs/ENV.md`): changing what those floats mean invalidates every checkpoint
+(`gg2-rl/gg2-rl/docs/ENV.md`): changing what those floats mean invalidates every checkpoint
 trained against them, and a policy is already DATED by the simulation. **It bites
 only where a checkpoint is driving** — `--bot-class-policy` is off unless
 configured, so a stock `--bots` server is entirely scripted and entirely subject

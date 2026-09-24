@@ -3314,7 +3314,7 @@ remember the wire's ×5. That is 22 px, not 110. **Divide before disbelieving.**
 
 ### ✅ The damage accumulators, and why the parameters are required
 
-`docs/ENV.md`'s first prerequisite — the half of
+`gg2-rl/gg2-rl/docs/ENV.md`'s first prerequisite — the half of
 `docs/BOTAI.md` item 7 that was never built. `TickEvents` carried kills, deaths,
 spawns and captures with attribution and **no per-tick damage amounts**.
 
