@@ -40,7 +40,7 @@ namespace Gg2.Bots;
 /// ground runs out.
 /// </para>
 /// </remarks>
-public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
+public sealed class ScriptedBot : IInputSource, ICommandSource
 {
 
     /// <summary>
@@ -592,10 +592,7 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     public bool SetGoal(double worldX, double worldY) =>
         _graph is not null && _follower.SetGoal(Path, worldX, worldY);
 
-    /// <summary>
-    /// Is a target held right now — <see cref="IScenarioSubject"/>'s half of a
-    /// combat scenario.
-    /// </summary>
+    /// <summary>Is a target held right now.</summary>
     public bool HasTarget => Combat.Target.Exists;
 
     /// <summary>

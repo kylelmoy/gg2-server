@@ -27,8 +27,8 @@ namespace Gg2.Bots;
 /// <para>
 /// <b>The <c>CollisionWorld</c> is deliberately not cached</b>, even though a
 /// scenario never writes to one. <c>CollisionWorld.SetCaptureZones</c> makes it
-/// mutable in principle, and <c>MatchRunner</c> and <c>HeadlessMatch</c> already
-/// record "not shared, because SetCaptureZones writes to it". Building one is
+/// mutable in principle, and <c>HeadlessMatch</c> already
+/// records "not shared, because SetCaptureZones writes to it". Building one is
 /// 0.009 ms against the 5.1 ms this class removes, so sharing it would buy 0.2%
 /// in exchange for a rule that has to hold everywhere for ever.
 /// </para>

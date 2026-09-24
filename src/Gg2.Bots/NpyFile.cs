@@ -46,9 +46,7 @@ public static class NpyFile
     /// <remarks>
     /// <b>Not a UTF-8 literal.</b> The first byte is 0x93, which a <c>u8</c>
     /// string encodes as the two bytes 0xC2 0x93 — a file that looks right in a
-    /// hex dump's ASCII column and that numpy refuses. Shared with
-    /// <see cref="NpyWriter"/> so the reader and the writer cannot disagree
-    /// about it.
+    /// hex dump's ASCII column and that numpy refuses.
     /// </remarks>
     internal static ReadOnlySpan<byte> Magic =>
         [0x93, (byte)'N', (byte)'U', (byte)'M', (byte)'P', (byte)'Y'];
@@ -132,7 +130,7 @@ public static class NpyFile
 
                 break;
 
-            // The integer dtypes NpyWriter emits for a dataset's index and
+            // The integer dtypes numpy writes for a dataset's index and
             // label columns. Widened into the float array the rest of this
             // reader speaks, which is exact for |u1 and — at 24 bits of
             // mantissa — for any <i4 below 16,777,216. A tick index is well

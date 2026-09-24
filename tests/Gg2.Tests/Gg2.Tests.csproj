@@ -26,8 +26,7 @@
 
       Nothing in the SERVER needs this. The starvation is the test harness's own
       parallelism, not something a deployment can do to itself: the tick loop is
-      a dedicated thread and the sockets are async I/O. docs/WEBADMIN.md, "why
-      the tests raise the ThreadPool floor".
+      a dedicated thread and the sockets are async I/O.
     -->
     <ThreadPoolMinThreads>128</ThreadPoolMinThreads>
   </PropertyGroup>

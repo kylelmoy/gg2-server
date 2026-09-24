@@ -1,9 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The only project with I/O in it. docs/ARCHITECTURE.md:
-       Gg2.Simulation must never reference this one. The dependency runs one
-       way, which is what keeps the simulation runnable with no server at all
-       and therefore replayable by Gg2.Parity. -->
+  <!-- The only project with I/O in it. Gg2.Simulation must never reference
+       this one. The dependency runs one way, which is what keeps the
+       simulation runnable with no server at all. -->
   <PropertyGroup>
     <RootNamespace>Gg2.Server</RootNamespace>
   </PropertyGroup>
@@ -20,7 +19,7 @@
       a config file and a socket to broadcast a join on. Gg2.Bots stays pure and
       gains nothing from this edge.
 
-      docs/ARCHITECTURE.md's one hard rule is that Gg2.Simulation must not
+      The one hard rule is that Gg2.Simulation must not
       reference Gg2.Server, and that is untouched.
     -->
     <ProjectReference Include="..\Gg2.Bots\Gg2.Bots.csproj" />
@@ -63,8 +62,8 @@
 
     <!--
       The analytics map's geometry: Natural Earth coastlines, country markers
-      and US states, already projected into a unit box. Public domain, generated
-      by tools/gen-geo-assets.js, and CHECKED IN rather than fetched at runtime —
+      and US states, already projected into a unit box. Public domain, and
+      CHECKED IN rather than fetched at runtime —
       the panel has to work on a machine with no route to the internet, which is
       the same argument that keeps everything above out of a CDN.
     -->

@@ -6,7 +6,7 @@
 
        This is what makes the parity harness and the bot iteration loop
        possible. If it breaks, the project loses its main advantage over the
-       GM8 server. See CLAUDE.md, "Non-negotiables". -->
+       GM8 server. -->
   <PropertyGroup>
     <RootNamespace>Gg2.Simulation</RootNamespace>
   </PropertyGroup>

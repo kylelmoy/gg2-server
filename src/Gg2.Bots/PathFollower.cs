@@ -167,7 +167,7 @@ public sealed partial class PathFollower
     /// <remarks>
     /// <b>A property rather than a parameter on <see cref="Step"/>, because a
     /// lane belongs to the bot and not to the tick.</b> Each bot owns its own
-    /// follower (<c>MatchRunner</c> says so explicitly), a lane is assigned once
+    /// follower, a lane is assigned once
     /// when the bot joins — <see cref="BotRoles.Lane"/> — and it must not change
     /// while the bot is walking: a bot that re-lanes mid-route is
     /// indistinguishable from one that cannot make up its mind, which is the same

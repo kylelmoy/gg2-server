@@ -58,7 +58,7 @@ public sealed class HeadlessMatch : DrivenWorld
         // works — but a batch must pass one in. All matches on a map share its
         // graph, so a per-match derivation is the same table computed `count`
         // times, and at a few hundred ms against a match's own ~0.6 s it would
-        // cost more than the heuristic saves. MatchRunner.Run hoists it.
+        // cost more than the heuristic saves.
         _distances = distances
             ?? (options.NavDistances && nav is not null ? NavDistanceSet.Derive(nav) : null);
 

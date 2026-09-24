@@ -563,8 +563,8 @@ internal static class CommandLine
                 // ⛔ A BEHAVIOUR switch, not a performance one. Off, a team's
                 // routes stop being pushed apart and match dispersion falls
                 // 0.785 -> 0.634 with nothing replacing it. What it buys is a
-                // live server that routes the way `eval` and every training
-                // rollout already do. ServerOptions.BotOccupancy.
+                // live server that routes the way every training rollout
+                // already does. ServerOptions.BotOccupancy.
                 case "--no-bot-occupancy":
                     options.BotOccupancy = false;
                     break;
@@ -1040,8 +1040,7 @@ internal static class CommandLine
                             slot until TCP gives up, ~15 minutes on Linux.
           --ban-file <path> keep operator bans here, so they survive a restart.
                             Without it a ban is in memory only. An address is
-                            NOT a person - see docs/HARDENING.md before relying
-                            on bans at all.
+                            NOT a person, so do not rely on bans alone.
           --connect-rate <n>
                             connections one address may open back to back before
                             it waits (default 10, 0 disables). NOT
@@ -1064,8 +1063,8 @@ internal static class CommandLine
           --config <path>   read a reference-format gg2.ini. EVERY setting this
                             server has can be set from it — the reference's
                             [Settings], [Server], [Maps] and [Classlimits], plus
-                            [Limits], [Log], [Nav], [Bots], [Web] and [Runtime];
-                            see docs/CONFIG.md. Applied BEFORE every flag, so a
+                            [Limits], [Log], [Nav], [Bots], [Web] and [Runtime].
+                            Applied BEFORE every flag, so a
                             flag always wins wherever it appears. Written back
                             only when the --web admin panel saves.
           --rotation <list|path>
@@ -1118,7 +1117,7 @@ internal static class CommandLine
                             (default: cores/3, capped at 8). Changes cost only,
                             never a decision.
           --policy <path>   the trained checkpoint (.npz) --bot-mode policy and
-                            --bot-mode tiered run - docs/BOTS.md arm 2. Given on
+                            --bot-mode tiered run. Given on
                             its own it selects policy mode. Given to a mode that
                             cannot consult it, it is REFUSED rather than ignored.
           --bot-arbiter <us>
@@ -1198,7 +1197,7 @@ internal static class CommandLine
                             source of route variety there is - without it a team
                             bunches up (dispersion 0.785 -> 0.634) and nothing
                             replaces it. What it buys is a live server that
-                            routes exactly as eval and the training rollouts do.
+                            routes exactly as the training rollouts do.
           --no-nav-distances
                             do not give A* the exact precomputed distances. Bots
                             fall back to the weighted straight-line heuristic,
@@ -1218,7 +1217,7 @@ internal static class CommandLine
                             as addresses. Shown in the panel's Analytics view.
           --geoip <path>    a MaxMind .mmdb to resolve addresses with, for the
                             analytics map (default: off). None ships with this
-                            server; docs/ANALYTICS.md names two free ones. A
+                            server; DB-IP Lite and MaxMind GeoLite2 are free. A
                             country-level database resolves no US states.
                             ⚠ Given without --analytics it is refused rather than
                             ignored: on its own it has nothing to resolve for.
@@ -1303,14 +1302,8 @@ internal static class CommandLine
         which is deliberate rather than an error.
 
         --record writes what every client saw, which already contains every
-        player's keys and aim on every tick — so a recording of a game with
-        people in it is training data as well as a parity fixture, and it is the
-        same format gg2-parity replays. It rolls a new file per map and caps
-        itself at a gigabyte. See docs/BOTAI.md item 3.
-
-        `gg2-server eval` plays bot matches across maps instead of serving one,
-        faster than real time and with nobody watching - phase 8's exit
-        criterion. See `gg2-server eval --help`.
+        player's keys and aim on every tick. It rolls a new file per map and
+        caps itself at a gigabyte.
 
         --control-port opens a line-of-JSON control surface on 127.0.0.1 only:
         read state, freeze, step N ticks, set the speed or the bot count, change
@@ -1318,7 +1311,7 @@ internal static class CommandLine
         asked for, because it executes commands against a live game.
 
         The world is simulated: characters, weapons, all eight gamemodes and the
-        map rotation. See docs/PLAN.md.
+        map rotation.
         """);
 
     /// <summary>
