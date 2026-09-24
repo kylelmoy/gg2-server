@@ -9,7 +9,15 @@ graphs are included, so a fresh clone runs with no other files.
 
 ## Quick start
 
-You need the **.NET 10 SDK**.
+Download the archive for your platform from
+[Releases](https://github.com/kylelmoy/gg2-server/releases), extract it, and run
+`gg2-server` (`gg2-server.exe` on Windows). It needs nothing else installed.
+
+```bash
+./gg2-server --map koth_valley --bots 12
+```
+
+To build from source instead, you need the **.NET 10 SDK**:
 
 ```powershell
 git clone https://github.com/kylelmoy/gg2-server.git
@@ -72,12 +80,17 @@ gg2-server --bots 12 --bot-mode policy `
 
 ## Deploying
 
+A release archive is ready to copy to a host as it is. To build one yourself:
+
 ```bash
 dotnet publish src/Gg2.Host/Gg2.Host.csproj -c Release -r linux-x64 --self-contained false -o out/
 ```
 
 The published output includes the maps, nav graphs and checkpoints. Copy `out/` to the host
 and run `gg2-server`. The server also runs on Windows.
+
+Pushing a tag named `v<version>` builds and tests both platforms and publishes a
+release (`.github/workflows/release.yml`).
 
 [`docs/DEPLOY.md`](docs/DEPLOY.md) covers hardware sizing, a systemd unit,
 shutting down with SIGTERM, and updating several hosts. Read
