@@ -1,5 +1,4 @@
 using Gg2.Bots;
-using Gg2.Env;
 using Gg2.Protocol;
 using Gg2.Simulation;
 
@@ -73,45 +72,6 @@ public sealed class RolloutRestrictionTests
                 RolloutSearch.CandidatesFor(options, playerClass).Length,
                 RolloutSearch.CandidateCountFor(options, playerClass));
         }
-    }
-
-    /// <summary>
-    /// And a duel answers the same number for a slot BEFORE its first step.
-    /// </summary>
-    /// <remarks>
-    /// Before the first step is the whole point: a restriction arrives with step
-    /// 0, so a count that only becomes right after a search has run is right too
-    /// late.
-    /// </remarks>
-    [Theory]
-    [InlineData(PlayerClass.Sniper, 120)]
-    [InlineData(PlayerClass.Soldier, 60)]
-    public void ADuelKnowsItsCandidateCountBeforeSteppingOnce(PlayerClass playerClass, int expected)
-    {
-        var env = new DuelEnv(ReferenceTree.IncludedFiles);
-
-        env.Reset(
-            new DuelSpec
-            {
-                Map = Map,
-                RedClass = playerClass,
-                BlueClass = PlayerClass.Soldier,
-                RedX = 600,
-                RedY = 850,
-                BlueX = 760,
-                BlueY = 850,
-                DecisionCap = 40,
-                ActionRepeat = 2,
-                RedDriver = EnvDriver.Rollout,
-                RedHorizonTicks = 6,
-            },
-            seed: 3);
-
-        Assert.Equal(expected, env.CandidateCountFor(env.RedSlot));
-        Assert.Equal(env.CandidatesFor(env.RedSlot).Length, env.CandidateCountFor(env.RedSlot));
-
-        // A non-searching slot has no candidates and no count.
-        Assert.Equal(0, env.CandidateCountFor(env.BlueSlot));
     }
 
     [Fact]

@@ -42,11 +42,9 @@
     <ProjectReference Include="..\..\src\Gg2.Protocol\Gg2.Protocol.csproj" />
     <ProjectReference Include="..\..\src\Gg2.Maps\Gg2.Maps.csproj" />
     <ProjectReference Include="..\..\src\Gg2.Server\Gg2.Server.csproj" />
-    <ProjectReference Include="..\..\src\Gg2.Parity\Gg2.Parity.csproj" />
     <ProjectReference Include="..\..\src\Gg2.Simulation\Gg2.Simulation.csproj" />
     <ProjectReference Include="..\..\src\Gg2.Bots\Gg2.Bots.csproj" />
     <ProjectReference Include="..\..\src\Gg2.Nav\Gg2.Nav.csproj" />
-    <ProjectReference Include="..\..\src\Gg2.Env\Gg2.Env.csproj" />
 
     <!-- The command line itself. See CliCoverageTests. -->
     <ProjectReference Include="..\..\src\Gg2.Host\Gg2.Host.csproj" />

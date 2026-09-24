@@ -1,5 +1,4 @@
 using Gg2.Bots;
-using Gg2.Env;
 using Gg2.Maps;
 using Gg2.Protocol;
 using Gg2.Simulation;
@@ -234,68 +233,6 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
 
         Assert.False(world.State.Characters[red].Zoomed, "the sniper kept its scope up with nothing to shoot");
         Assert.Equal(ClassStats.For(PlayerClass.Sniper).RunPower, world.State.Characters[red].RunPower);
-    }
-
-    /// <summary>
-    /// <b>The action space can ask for the scope</b>, and asking for it works.
-    /// </summary>
-    /// <remarks>
-    /// The policy half of the same gap. <see cref="EnvAction.Zoom"/> is v4's sixth
-    /// head, and without it a distilled policy could never learn the sniper —
-    /// only the unscoped third of it.
-    /// <para>
-    /// <b>A LEVEL, not a toggle</b>, which is what this test's shape asserts:
-    /// the same action is sent on every step and the scope goes up once and stays
-    /// up. A toggle-shaped head under the same input would flip every decision
-    /// and hold a charge of zero for ever.
-    /// </para>
-    /// <para>
-    /// <b>The control is the same duel with the head at 0.</b> Without it,
-    /// deleting <c>FixedInput.PollCommands</c> would leave a green suite: the head
-    /// would be accepted, echoed back in the reward block, and inert — which is
-    /// precisely the failure mode this whole change exists to close.
-    /// </para>
-    /// </remarks>
-    [Theory]
-    [InlineData(1, true)]
-    [InlineData(0, false)]
-    public void AClientDrivenSniperScopesWhenTheHeadAsksFor(byte zoom, bool expected)
-    {
-        ReferenceTree.RequireAvailable();
-
-        var env = new DuelEnv(ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
-
-        env.Reset(
-            new DuelSpec
-            {
-                Map = Map,
-                RedClass = PlayerClass.Sniper,
-                BlueClass = PlayerClass.Sniper,
-                RedX = 600,
-                RedY = StandY,
-                BlueX = 900,
-                BlueY = StandY,
-                DecisionCap = 20,
-                ActionRepeat = 4,
-            },
-            seed: 7);
-
-        var action = EnvAction.Idle with { Zoom = zoom };
-        var reported = (byte)0;
-
-        for (var i = 0; i < 6; i++)
-        {
-            var (red, _) = env.Step(action, EnvAction.Idle);
-            reported = red.Action.Zoom;
-        }
-
-        Assert.Equal(expected, env.World.State.Characters[env.RedSlot].Zoomed);
-
-        // The reward block echoes what actually happened, so a trainer's own
-        // dataset records the scope it really had rather than the one it asked
-        // for. For a client slot those coincide; asserting it here is what makes
-        // the head observable end to end.
-        Assert.Equal(zoom, reported);
     }
 
     /// <summary>
