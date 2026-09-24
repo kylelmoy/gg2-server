@@ -39,7 +39,7 @@ Then connect a GG2 client to `127.0.0.1:8190` (Join Game → Direct Connect).
 | `--welcome <text>` | | Message sent to each player who joins. |
 | `--plugins <list>` | | Server-sent plugins for clients to load, e.g. `chat`. |
 | `--lobby` | off | List the server publicly at ganggarrison.com. |
-| `--config <path>` | | Read settings from a reference-format `gg2.ini`. Every setting can be set there; a command-line flag always overrides the file. See [CONFIG.md](https://github.com/kylelmoy/gg2-server/blob/development/docs/CONFIG.md). |
+| `--config <path>` | | Read settings from a reference-format `gg2.ini`. Every setting can be set there; a command-line flag always overrides the file. See [`docs/CONFIG.md`](docs/CONFIG.md). |
 
 ### Bots
 
@@ -69,8 +69,8 @@ server yourself.
 
 | Option | What |
 |---|---|
-| `--web <port>` | Runs a browser admin panel: roster, live map, performance graphs, kick, and a settings page for the `--config` file. It binds `127.0.0.1` unless you pass `--web-bind`. Use `--web-password` to choose the password; otherwise one is generated and printed at startup. Add `--web-tls <pfx>` before exposing the panel. See [WEBADMIN.md](https://github.com/kylelmoy/gg2-server/blob/development/docs/WEBADMIN.md). |
-| `--analytics <path>` | Tracks unique players, playtime and peak concurrency across restarts. Addresses are stored only as salted hashes. Add `--geoip <path>` with a database you download yourself to show locations. See [ANALYTICS.md](https://github.com/kylelmoy/gg2-server/blob/development/docs/ANALYTICS.md). |
+| `--web <port>` | Runs a browser admin panel: roster, live map, performance graphs, kick, and a settings page for the `--config` file. It binds `127.0.0.1` unless you pass `--web-bind`. Use `--web-password` to choose the password; otherwise one is generated and printed at startup. Add `--web-tls <pfx>` before exposing the panel. See [`docs/WEBADMIN.md`](docs/WEBADMIN.md). |
+| `--analytics <path>` | Tracks unique players, playtime and peak concurrency across restarts. Addresses are stored only as salted hashes. Add `--geoip <path>` with a database you download yourself to show locations. See [`docs/ANALYTICS.md`](docs/ANALYTICS.md). |
 | `--tick-stats` | Logs a tick-timing histogram every 30 seconds. |
 
 ## Deploying
@@ -82,9 +82,9 @@ dotnet publish src/Gg2.Host/Gg2.Host.csproj -c Release -r linux-x64 --self-conta
 The published output includes the maps and nav graphs. Copy `out/` to the host
 and run `gg2-server`. The server also runs on Windows.
 
-[DEPLOY.md](https://github.com/kylelmoy/gg2-server/blob/development/docs/DEPLOY.md) covers hardware sizing, a systemd unit,
+[`docs/DEPLOY.md`](docs/DEPLOY.md) covers hardware sizing, a systemd unit,
 shutting down with SIGTERM, and updating several hosts. Read
-[HARDENING.md](https://github.com/kylelmoy/gg2-server/blob/development/docs/HARDENING.md) before putting the server on the public
+[`docs/HARDENING.md`](docs/HARDENING.md) before putting the server on the public
 internet.
 
 Never use `--speed` or `--control-port` on a server with clients connected. They

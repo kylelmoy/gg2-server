@@ -1,0 +1,390 @@
+using Gg2.Bots;
+using Gg2.Env;
+using Gg2.Maps;
+using Gg2.Protocol;
+using Gg2.Simulation;
+
+namespace Gg2.Tests;
+
+/// <summary>
+/// <see cref="ObservationWriter"/> — the v0 layout.
+/// </summary>
+/// <remarks>
+/// <c>docs/ENV.md</c>'s gates for this type: zero allocation, bounded values,
+/// and a length that matches the advertised one. All three are here, plus the
+/// two properties that would otherwise be silent — the mirrored version
+/// constant, and the buffer being cleared.
+/// </remarks>
+public sealed class ObservationWriterTests
+{
+    private const string Map = "gg_debug";
+
+    private static DuelEnv Env()
+    {
+        var env = new DuelEnv(ReferenceTree.IncludedFiles);
+
+        env.Reset(
+            new DuelSpec
+            {
+                Map = Map,
+                RedClass = PlayerClass.Soldier,
+                BlueClass = PlayerClass.Scout,
+                RedX = 600,
+                RedY = 850,
+                BlueX = 700,
+                BlueY = 850,
+                DecisionCap = 100,
+                ActionRepeat = 1,
+            },
+            seed: 5);
+
+        return env;
+    }
+
+    private static float[] Observe(DuelEnv env, int slot)
+    {
+        var buffer = new float[ObservationWriter.Length];
+        var view = new WorldView(in env.World.State, env.World.Collision);
+
+        ObservationWriter.Write(in view, slot, buffer);
+        return buffer;
+    }
+
+    /// <summary>
+    /// The layout version is mirrored in two places and the compiler cannot
+    /// hold them equal.
+    /// </summary>
+    /// <remarks>
+    /// <c>Gg2.Simulation</c> does not depend on <c>Gg2.Env</c> — the simulation
+    /// is the thing an env observes, not the other way round — so
+    /// <c>SimulationStamp.ObservationLayoutVersion</c> cannot reference
+    /// <see cref="ObservationWriter.LayoutVersion"/>. This test is the only
+    /// thing standing between a layout change and a stamp that did not move
+    /// with it, which is the exact failure the stamp exists to prevent.
+    /// </remarks>
+    [Fact]
+    public void TheStampMirrorsTheWritersLayoutVersion()
+    {
+        Assert.Equal(ObservationWriter.LayoutVersion, SimulationStamp.ObservationLayoutVersion);
+        Assert.Equal(ActionDecoder.AimBins, 15);
+    }
+
+    /// <summary>The advertised length is the length actually written.</summary>
+    /// <remarks>
+    /// Asserted by writing into an oversized buffer with a sentinel past the
+    /// end: a writer that overran would be caught, and one that under-filled
+    /// leaves the sentinel where the layout says data should be.
+    /// </remarks>
+    [Fact]
+    public void TheWriterFillsExactlyTheAdvertisedLength()
+    {
+        var env = Env();
+        var buffer = new float[ObservationWriter.Length + 4];
+
+        Array.Fill(buffer, float.NaN);
+
+        var view = new WorldView(in env.World.State, env.World.Collision);
+        ObservationWriter.Write(in view, env.RedSlot, buffer);
+
+        for (var i = 0; i < ObservationWriter.Length; i++)
+            Assert.False(float.IsNaN(buffer[i]), $"index {i} was never written");
+
+        for (var i = ObservationWriter.Length; i < buffer.Length; i++)
+            Assert.True(float.IsNaN(buffer[i]), $"index {i} is past the end and was written");
+    }
+
+    /// <summary>A short buffer is refused rather than half-filled.</summary>
+    [Fact]
+    public void AShortBufferIsRefused()
+    {
+        var env = Env();
+        var view = new WorldView(in env.World.State, env.World.Collision);
+        var buffer = new float[ObservationWriter.Length - 1];
+
+        try
+        {
+            ObservationWriter.Write(in view, env.RedSlot, buffer);
+            Assert.Fail("a short buffer should have been refused");
+        }
+        catch (ArgumentException)
+        {
+            // expected
+        }
+    }
+
+    /// <summary>
+    /// Every value is finite and inside a sane range.
+    /// </summary>
+    /// <remarks>
+    /// A NaN or an infinity in an observation poisons a whole training batch and
+    /// does it silently — the loss goes to NaN several thousand steps later and
+    /// the cause is nowhere near. The bound is generous rather than tight: the
+    /// point is to catch a division by a zero maximum or an unnormalised
+    /// coordinate, not to pin the scales.
+    /// </remarks>
+    [Fact]
+    public void EveryValueIsFiniteAndBounded()
+    {
+        var env = Env();
+
+        for (var step = 0; step < 20; step++)
+        {
+            foreach (var slot in new[] { env.RedSlot, env.BlueSlot })
+            {
+                var o = Observe(env, slot);
+
+                for (var i = 0; i < o.Length; i++)
+                {
+                    Assert.True(float.IsFinite(o[i]), $"index {i} was {o[i]} at step {step}");
+                    Assert.InRange(o[i], -50f, 50f);
+                }
+            }
+
+            env.Step(
+                new EnvAction { Horizontal = 2, Fire = 1, AimDelta = 9 },
+                new EnvAction { Horizontal = 1, Jump = 1, AimDelta = 4 });
+        }
+    }
+
+    /// <summary>
+    /// The buffer is cleared, so a reused one cannot show a stale enemy.
+    /// </summary>
+    /// <remarks>
+    /// Stale features are worse than absent ones: a presence flag of 0 beside a
+    /// stale position teaches the policy that the flag means nothing. This
+    /// writes a full observation, then writes a dead slot's over the top of it
+    /// and checks nothing survived.
+    /// </remarks>
+    [Fact]
+    public void TheBufferIsClearedBeforeWriting()
+    {
+        var env = Env();
+        var buffer = Observe(env, env.RedSlot);
+
+        Assert.Contains(buffer, v => v != 0f);
+
+        var view = new WorldView(in env.World.State, env.World.Collision);
+
+        // A slot with nobody in it: the observation must be all zeros, not the
+        // previous occupant's.
+        ObservationWriter.Write(in view, 20, buffer);
+
+        Assert.All(buffer, v => Assert.Equal(0f, v));
+    }
+
+    /// <summary>
+    /// The self block reads as the agent, and the enemy block as the other one.
+    /// </summary>
+    /// <remarks>
+    /// Spot-checked rather than pinned field by field: the field order is the
+    /// writer's own and pinning all of it here would be a copy that goes stale.
+    /// What is worth asserting is that the two blocks are not swapped, which is
+    /// the mistake that would otherwise train a policy to watch itself.
+    /// </remarks>
+    [Fact]
+    public void TheSelfBlockIsTheAgentAndTheEnemyBlockIsTheOther()
+    {
+        var env = Env();
+        var o = Observe(env, env.RedSlot);
+
+        // Self is a Soldier: its one-hot column is set and the Scout's is not.
+        Assert.Equal(1f, o[(int)PlayerClass.Soldier]);
+        Assert.Equal(0f, o[(int)PlayerClass.Scout]);
+
+        // Full health, and on the ground.
+        const int hp = ObservationWriter.ClassCount;
+        Assert.Equal(1f, o[hp], 3);
+
+        // The first enemy is present, is a Scout, and is to the right. Read off
+        // the writer's own constant rather than a copy of its sum, which is what
+        // this line used to be and which went stale the moment the self block
+        // grew a column.
+        var enemy = ObservationWriter.SelfBlock;
+
+        Assert.Equal(1f, o[enemy]);
+        Assert.True(o[enemy + 1] > 0, "blue is to the right of red, so relative x should be positive");
+        Assert.Equal(1f, o[enemy + 5 + (int)PlayerClass.Scout]);
+    }
+
+    /// <summary>
+    /// A dead or empty slot observes all zeros rather than throwing.
+    /// </summary>
+    [Fact]
+    public void AnEmptySlotObservesNothing()
+    {
+        var env = Env();
+        var o = Observe(env, 25);
+
+        Assert.All(o, v => Assert.Equal(0f, v));
+    }
+
+    /// <summary>
+    /// A Quote is refused rather than silently observed as no class.
+    /// </summary>
+    /// <remarks>
+    /// The one-hot is nine wide and the Quote is the tenth class, so encoding it
+    /// would set no column at all — indistinguishable from an empty slot. It is
+    /// a joke class a duel never selects, and refusing it loudly is what stops a
+    /// policy being trained on a lie if one ever appears.
+    /// </remarks>
+    [Fact]
+    public void AQuoteIsRefusedBecauseItHasNoColumn()
+    {
+        var env = Env();
+
+        env.World.State.Characters[env.RedSlot].Class = PlayerClass.Quote;
+
+        var buffer = new float[ObservationWriter.Length];
+
+        try
+        {
+            var view = new WorldView(in env.World.State, env.World.Collision);
+            ObservationWriter.Write(in view, env.RedSlot, buffer);
+            Assert.Fail("a Quote should have been refused");
+        }
+        catch (ArgumentException)
+        {
+            // expected
+        }
+    }
+
+    /// <summary>
+    /// Writing an observation allocates nothing.
+    /// </summary>
+    /// <remarks>
+    /// <c>docs/BOTAI.md</c> item 6: a feature vector is extracted for every
+    /// agent on every decision during training, so garbage here is garbage in
+    /// the hottest loop the project has. The nearest-K queries take stack
+    /// buffers for the same reason.
+    /// <para>
+    /// Measured the way <c>BotAiConstraintsTests</c> does it — a warm-up pass
+    /// first, because the first call through a code path JITs and that is not an
+    /// allocation the steady state makes.
+    /// </para>
+    /// <para>
+    /// The warm-up has to clear 300 calls, not just a handful: .NET promotes a
+    /// method to tier-1 after 30 calls, in the background, and if the promotion
+    /// lands inside the measured window the tiering machinery's own bookkeeping
+    /// gets counted as allocation. A bigger method takes longer to promote, so
+    /// the warm-up needs enough headroom that the rejit has already landed
+    /// before the measured loop starts.
+    /// </para>
+    /// <para>
+    /// The property itself holds independent of this measurement wrinkle:
+    /// 200,000 calls in a standalone process allocate zero, at tier-0 and at
+    /// tier-1 both. The assertion below is still <c>== 0</c>.
+    /// </para>
+    /// <para>
+    /// The promotion warm-up does not step the episode: branch coverage needs a
+    /// few steps, tier-1 needs a few hundred writes, and stepping enough times to
+    /// satisfy the latter would run past <c>DecisionCap</c> of 100. They are
+    /// separate loops because they want different things.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void WritingAnObservationAllocatesNothing()
+    {
+        var env = Env();
+        var buffer = new float[ObservationWriter.Length];
+
+        // Warm up every branch: with an enemy, with projectiles in the air.
+        for (var i = 0; i < 5; i++)
+        {
+            var warm = new WorldView(in env.World.State, env.World.Collision);
+            ObservationWriter.Write(in warm, env.RedSlot, buffer);
+            env.Step(new EnvAction { Fire = 1, AimDelta = ActionDecoder.AimCentreBin }, EnvAction.Idle);
+        }
+
+        // And past tier-1 promotion — 30 calls — without stepping. The episode
+        // has a decision cap of 100, so a warm-up that stepped this many times
+        // would run it out and throw. See the remarks.
+        for (var i = 0; i < 300; i++)
+        {
+            var warm = new WorldView(in env.World.State, env.World.Collision);
+            ObservationWriter.Write(in warm, env.RedSlot, buffer);
+        }
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+
+        for (var i = 0; i < 50; i++)
+        {
+            var view = new WorldView(in env.World.State, env.World.Collision);
+            ObservationWriter.Write(in view, env.RedSlot, buffer);
+        }
+
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+    }
+
+    /// <summary>
+    /// Every spawnable <see cref="ProjectileKind"/> reaches the observation as
+    /// exactly one set column — including <c>Stab</c>, which used not to.
+    /// </summary>
+    /// <remarks>
+    /// <b>The regression this pins was silent and unrecoverable downstream.</b>
+    /// <c>ProjectileKindCount</c> is 9 and <c>ProjectileKind</c> has ten members,
+    /// so encoding the raw enum value put <c>Stab = 9</c> off the end of a 9-wide
+    /// one-hot. <c>OneHot</c> bound-checks, so a spy's stab arrived as presence
+    /// <c>1.0</c> with an all-zero kind — indistinguishable from an encoder
+    /// failure — while the column for <c>None</c>, which never occurs, sat dead.
+    /// <b>Presence-without-a-kind is the shape to assert on</b>: counting set
+    /// columns catches it, and the length check that guards the rest of this
+    /// layout never could, because the vector stayed 209 wide throughout.
+    /// </remarks>
+    [Theory]
+    [InlineData(ProjectileKind.Shot)]
+    [InlineData(ProjectileKind.Rocket)]
+    [InlineData(ProjectileKind.Mine)]
+    [InlineData(ProjectileKind.Flame)]
+    [InlineData(ProjectileKind.Needle)]
+    [InlineData(ProjectileKind.Flare)]
+    [InlineData(ProjectileKind.Blade)]
+    [InlineData(ProjectileKind.Bubble)]
+    [InlineData(ProjectileKind.Stab)]
+    public void EverySpawnableProjectileKindGetsExactlyOneColumn(ProjectileKind kind)
+    {
+        var state = default(WorldState);
+        state.AddPlayer(0);
+        state.Players[0].Team = Team.Red;
+        state.Players[0].Class = PlayerClass.Scout;
+
+        // Fresh, never `new CharacterState()` — CLAUDE.md's WorldState rule.
+        var character = CharacterState.Fresh(PlayerClass.Scout, Team.Red);
+        character.X = 600;
+        character.Y = 850;
+        state.Characters[0] = character;
+        state.Alive[0] = true;
+
+        state.SpawnProjectile(new ProjectileState { Kind = kind, X = 610, Y = 850 });
+
+        var collision = new CollisionWorld(
+            LevelMap.FromPng("ctf_truefort", ReferenceTree.ReadMap("ctf_truefort")));
+
+        var view = new WorldView(in state, collision);
+
+        var o = new float[ObservationWriter.Length];
+        ObservationWriter.Write(in view, 0, o);
+
+        // Read off the writer's own constants, never a copy of their sums.
+        const int FirstProjectile =
+            ObservationWriter.SelfBlock + (ObservationWriter.Enemies * ObservationWriter.EnemyBlock);
+
+        const int KindAt = FirstProjectile + 1 + 2 + 2;
+
+        // Pinned so the block is located deliberately rather than by arithmetic
+        // that could drift. It sat at 59 when the bug was found and moved to 61
+        // when the self block gained the two refire columns in the same change —
+        // which is exactly why the derivation above no longer spells the sum out.
+        Assert.Equal(61, KindAt);
+
+        // Present at all, or everything below asserts nothing.
+        Assert.Equal(1f, o[FirstProjectile]);
+
+        var oneHot = o[KindAt..(KindAt + ObservationWriter.ProjectileKindCount)];
+
+        Assert.Equal(1, oneHot.Count(c => c == 1f));
+        Assert.Equal(ObservationWriter.ProjectileKindCount - 1, oneHot.Count(c => c == 0f));
+
+        // `None` has no column, so an enum value is one ahead of its index.
+        Assert.Equal(1f, oneHot[(int)kind - 1]);
+    }
+}
