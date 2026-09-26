@@ -21,17 +21,17 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The suite reads Constants.xml and the scripts from the GG2 source, so it
       # needs the same checkout the tests were written against.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: Gang-Garrison-2/Gang-Garrison-2
           ref: ea8d69511ee1a2f76bc8266bf890764f480c4993
           path: reference
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
@@ -47,9 +47,9 @@ jobs:
         rid: [linux-x64, win-x64]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
@@ -85,7 +85,7 @@ jobs:
             zip -qr "../$base.zip" gg2-server
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.rid }}
           path: gg2-server-*
@@ -98,7 +98,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
