@@ -18,6 +18,7 @@ deployment differs from a `dotnet run` out of the repository.
 | Nav ships with a publish | Nothing mechanical checks this — `dotnet publish` was inspected by hand; see "the nav graphs" |
 | A nav graph matches its map | `NavManifestTests`, with a mutated-walkmask arm and an entities-only arm |
 | CPU and memory cost | Measured on Windows, table below |
+| What a CLIENT experiences on 1 shared vCPU | Measured on a live 1 vCPU VPS, 1 to 24 connected clients, `tools/loadprobe`; "What a client actually experiences on one shared vCPU" below. Broadcast fan-out and bot characters, **not** 24 humans playing |
 | `--version` says which commit is running | `BuildInfoTests`, against the regex `scripts/deploy.sh` parses it with; `ControlPortTests.StateReportsTheRoster` for the `state` reply |
 | A deploy reaches the hosts and flips them | Done for real to three hosts, latest 2026-09-26, `a6a0156` to two Debian 12 and one Ubuntu 24.04. `--rollback` is still unrun; see "what a real deploy has and has not exercised" |
 | A stock client joins one | Done 2026-09-12, all three hosts — the handshake and the plugin gate only. **Not** evidence about trajectories; see the box above |
@@ -78,7 +79,11 @@ and 0.104 ms of process CPU (`docs/BOTS.md`).
 ### What to rent
 
 **Minimum: 1 vCPU, 1 GB RAM, 1 GB disk.** Genuinely enough for the default
-configuration at up to ~24 bots. CPU is nowhere near the bound.
+configuration at up to ~24 bots. CPU is nowhere near the bound, and that now
+holds with clients connected and not only in a bot-only benchmark: 24 clients
+against 24 bots on one shared vCPU leave the broadcast arrival percentiles
+indistinguishable from the one-client case, at under 2% of a core. The table is
+in "What a client actually experiences on one shared vCPU" below.
 
 **Recommended: 2 vCPU, 2 GB RAM** — and the reason is not the workload.
 
@@ -96,8 +101,64 @@ tables. Under 100 MB all in — the published directory itself is **~4.5 MB** (t
 the tables, plus their 1.62 MB — arithmetic, not a fresh publish),
 against 36 MB before the nav graphs were gzipped.
 
-**Network**: not measured. Size it after watching a real game rather than from a
-number in this file.
+**Network**: **115 KiB/s out at 24 connected clients** with 24 bots on the
+roster, or about 0.94 Mbit/s, measured on a 1 vCPU VPS. It is very close to
+linear in the client count — 4.2 KiB/s at one client — because each client is
+sent the whole roster every tick, so the figure to scale is
+`clients x roster`, not either alone. Inbound is negligible: a playing client
+sends an eight-byte `INPUTSTATE` a tick.
+
+### What a client actually experiences on one shared vCPU
+
+Measured 2026-09-26 on `gg2-us-west` — 1 vCPU KVM guest on a Ryzen 9 9900X,
+960 MB RAM, Debian 12, delisted for the run — with `tools/loadprobe`, sweeping 1
+to 24 connected clients against 24 bots on `ctf_truefort`, 90 seconds a step.
+Read `tools/loadprobe/README.md` before quoting any of it.
+
+| Clients | Broadcast arrival p50 / p99 / p99.9 | Server tick mean | Server CPU | Late ticks |
+|---|---|---|---|---|
+| 1 | 33.4 / 34.6 / 36.6 ms | 0.412 ms | 1.38% | 0 |
+| 10 | 33.5 / 34.0 / 38.1 ms | 0.436 ms | 1.51% | 0 |
+| 24 | 33.6 / 34.2 / 36.5 ms | 0.539 ms | 1.82% | 0 |
+
+**The percentiles do not move with load.** From 1 to 24 clients p50 stays within
+0.2 ms of the 33.3 ms contract and p99 within 0.6 ms of it; the server held 30.0
+ticks a second at every step and never missed a deadline. Per-client fan-out
+costs about **0.005 ms of tick** and CPU stays under 2% of one core, so the
+bound is not CPU at any size this configuration allows.
+
+**Steal did not materialise on this host**: 0.0–0.3% per step with a 2% worst
+second, and 0.13% over 18 days of uptime. That is the difference between a
+dedicated-CPU tier and the burstable tiers warned about above, and it is the
+number to re-check on a new provider before anything else — it is also the one
+that would invalidate this table, because none of the rest of it depends on the
+workload.
+
+Two things do reach a player, and neither is CPU:
+
+- **A round or map boundary costs every client one broadcast.** The tick that
+  reloads a map allocates enough to run 17–24 ms — still inside the 33.3 ms
+  budget, so it is not a late tick — and every connected client sees a single
+  ~51 ms gap at that instant, which is 33.3 plus the overrun. It is attributable
+  precisely because it hits every client in the same moment; it happens once per
+  round and is one missed dead-reckoning correction.
+- **Isolated 60–124 ms gaps are the internet, not the server.** They land on one
+  client at a time while the others are unaffected, at a rate of one or two per
+  client per 90 seconds on a 90 ms path, and the worst of them coincided with the
+  only TCP retransmit recorded on the host across the whole sweep. A server-side
+  pause cannot look like this, which is why the per-client breakdown is kept.
+
+**Memory is comfortable but not free**: resident grows with connected clients,
+96 MB at one to 129 MB at 24, against 960 MB total with 630 MB still available.
+A 1 GB box has room; a 512 MB box has not been measured.
+
+⚠️ **This measures broadcast fan-out and 24 bot characters, not 24 humans
+playing.** Probe clients are spectators, so they cost the server a roster entry
+and a send per tick and nothing else; a bot character costs more to simulate than
+a human one, which makes the simulation side of this pessimistic and the
+character count realistic. Sending `INPUTSTATE` from every client at 30 Hz adds
+**0.014 ms of tick and 0.01% of a core at 24 clients**, so the receive path is
+not what would change the answer.
 
 ### The one setting that changes the answer
 
