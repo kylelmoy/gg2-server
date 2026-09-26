@@ -19,7 +19,7 @@ deployment differs from a `dotnet run` out of the repository.
 | A nav graph matches its map | `NavManifestTests`, with a mutated-walkmask arm and an entities-only arm |
 | CPU and memory cost | Measured on Windows, table below |
 | `--version` says which commit is running | `BuildInfoTests`, against the regex `scripts/deploy.sh` parses it with; `ControlPortTests.StateReportsTheRoster` for the `state` reply |
-| A deploy reaches the hosts and flips them | Done for real to three hosts, latest 2026-09-12, `0d04911` to two Debian 12 and one Ubuntu 24.04. `--rollback` and the prune are still unrun; see "what a real deploy has and has not exercised" |
+| A deploy reaches the hosts and flips them | Done for real to three hosts, latest 2026-09-26, `a6a0156` to two Debian 12 and one Ubuntu 24.04. `--rollback` is still unrun; see "what a real deploy has and has not exercised" |
 | A stock client joins one | Done 2026-09-12, all three hosts — the handshake and the plugin gate only. **Not** evidence about trajectories; see the box above |
 
 **The binary runs on Linux.** First done 2026-09-08 on Ubuntu 24.04.4 LTS,
@@ -295,7 +295,7 @@ them.
 ### What a real deploy has and has not exercised
 
 First real deploy: 2026-09-08, `9daae8f` to one Ubuntu 24.04 host. Latest:
-2026-09-12, `0d04911` to three — two Debian 12 and that Ubuntu 24.04.
+2026-09-26, `a6a0156` to three — two Debian 12 and that Ubuntu 24.04.
 
 **Run and working**: the preflight, the tar stream, the unpack into `.incoming`,
 the `--version` probe on the target, the flip, the `systemctl restart`, the
@@ -305,9 +305,13 @@ against a staged publish, **multiple hosts in one invocation**, **recording
 sequential stop**: two hosts were named, the first refused the preflight for want
 of passwordless sudo, and the second was never contacted.
 
-**Not yet run by anything**: `--rollback`, which now has a target on exactly one
-host; the prune, which needs more than `--keep` releases and the most any host has
-is three; and `--keep-going`, still untested against a real failure.
+**The prune has run**, on all three hosts in the 2026-09-26 deploy. Each was
+holding six releases once `a6a0156` landed and each reported the same one removed
+(`5fe1930`); verified afterwards, every host holds exactly `--keep` five, with
+`current` -> `a6a0156` and `previous` -> `d1a8263` intact.
+
+**Not yet run by anything**: `--rollback`, which now has a target on every host;
+and `--keep-going`, still untested against a real failure.
 
 ⚠️ **A first deploy to a host is a migration, not an install, if anything is
 already there.** One host carried the flat pre-`--version` layout and needed its
