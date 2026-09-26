@@ -93,6 +93,41 @@ public static class LobbyRegistration
     public const int ServerIdLength = 16;
 
     /// <summary>
+    /// The <c>game_short</c> pair. This port, not stock GG2.
+    /// </summary>
+    /// <remarks>
+    /// The browser renders <c>game_short + " " + game_ver</c> as one column
+    /// (<c>LobbyController.events/Step.xml:84-93</c>), so the two pairs read
+    /// "gg2-svr v1.0.0" in the list and name the server software rather than
+    /// repeating a game every entry already shares.
+    /// <para>
+    /// <b>Neither pair affects compatibility or joinability</b>, so a stock
+    /// client still joins a server that sends these. The client decides both
+    /// from <c>protocol == 0</c>, a non-zero port and a matching
+    /// <c>protocol_id</c> and nothing else (the <c>server.compatible</c>
+    /// assignment, same file), and the lobby keys its entries off
+    /// <see cref="GameConstants.Gg2LobbyUuid"/> and the server id. What would
+    /// show otherwise is the entry vanishing from the real list while a
+    /// <c>--lobby</c> server with the reference's strings still appears.
+    /// </para>
+    /// </remarks>
+    public const string GameShortString = "gg2-svr";
+
+    /// <summary>
+    /// The <c>game_ver</c> pair: this server's version, not the game's.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="GameConstants.GameVersionString"/> stays what
+    /// <c>Constants.xml</c> says, because that constant is a transcription of
+    /// the reference and <c>ConstantsTests</c> holds it to it. What the lobby
+    /// wants here is which build is hosting, so this reads
+    /// <see cref="BuildInfo.Version"/> and cannot drift from the binary: the
+    /// release workflow stamps <c>-p:Version=</c> from the tag, and an untagged
+    /// build reads the csproj default.
+    /// </remarks>
+    public static string GameVersionString { get; } = "v" + BuildInfo.Version;
+
+    /// <summary>
     /// Message type "register", as a UUID.
     /// </summary>
     /// <remarks><c>sendLobbyRegistration.gml:12</c>, verbatim.</remarks>
@@ -200,8 +235,8 @@ public static class LobbyRegistration
 
         WriteKeyValue(packet, "name", info.ServerName);
         WriteKeyValue(packet, "game", GameConstants.GameNameString);
-        WriteKeyValue(packet, "game_short", "gg2");
-        WriteKeyValue(packet, "game_ver", GameConstants.GameVersionString);
+        WriteKeyValue(packet, "game_short", GameShortString);
+        WriteKeyValue(packet, "game_ver", GameVersionString);
         WriteKeyValue(packet, "game_url", GameConstants.GameUrlString);
         WriteKeyValue(packet, "map", info.Map);
 

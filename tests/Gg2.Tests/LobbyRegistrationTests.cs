@@ -167,8 +167,16 @@ public sealed class LobbyRegistrationTests
 
         Assert.Equal("My Server", Encoding.UTF8.GetString(pairs[0].Value));
         Assert.Equal("Gang Garrison 2", Encoding.UTF8.GetString(pairs[1].Value));
-        Assert.Equal("gg2", Encoding.UTF8.GetString(pairs[2].Value));
-        Assert.Equal("v2.9.2", Encoding.UTF8.GetString(pairs[3].Value));
+        Assert.Equal("gg2-svr", Encoding.UTF8.GetString(pairs[2].Value));
+
+        // game_ver is this server's version, not GG2's — the browser joins the
+        // two into "gg2-svr v1.0.0". It is read from the assembly, so what is
+        // asserted is its shape and that it is not the game's version; a literal
+        // here would be an edit every release has to remember.
+        var advertisedVersion = Encoding.UTF8.GetString(pairs[3].Value);
+        Assert.Matches(@"^v\d+\.\d+\.\d+", advertisedVersion);
+        Assert.NotEqual(GameConstants.GameVersionString, advertisedVersion);
+
         Assert.Equal("http://www.ganggarrison.com", Encoding.UTF8.GetString(pairs[4].Value));
         Assert.Equal("ctf_truefort", Encoding.UTF8.GetString(pairs[5].Value));
 
