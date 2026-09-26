@@ -21,7 +21,7 @@ deployment differs from a `dotnet run` out of the repository.
 | What a CLIENT experiences on 1 shared vCPU | Measured on a live 1 vCPU VPS, 1 to 24 connected clients, `tools/loadprobe`; "What a client actually experiences on one shared vCPU" below. Broadcast fan-out and bot characters, **not** 24 humans playing |
 | `--version` says which commit is running | `BuildInfoTests`, against the regex `scripts/deploy.sh` parses it with; `ControlPortTests.StateReportsTheRoster` for the `state` reply |
 | A deploy reaches the hosts and flips them | Done for real to four hosts — 2026-09-26, `654b853` to two Debian 12, one Debian 13 and one Ubuntu 24.04. `--rollback` is still unrun; see "what a real deploy has and has not exercised" |
-| A stock client joins one | Done 2026-09-12, the three hosts of the time — the handshake and the plugin gate only. **Not** evidence about trajectories; see the box above |
+| A stock client joins one | Done 2026-09-12 on the three hosts of the time and 2026-09-26 on the Debian 13 host, which also spawned, walked and died. **Not** evidence about trajectories; see the box above |
 
 **The binary runs on Linux.** First done 2026-09-08 on Ubuntu 24.04.4 LTS,
 x86-64, .NET 10.0.11, framework-dependent publish of `9daae8f` deployed by
@@ -36,14 +36,24 @@ the three hosts of the time running `0d04911` — two Debian 12, one Ubuntu 24.0
 The client reached each from the lobby listing, completed the handshake and picked
 a team. That also exercises the plugin gate: every host runs
 `ServerPluginsRequired=1`, so a client that could not load `chat_v2_pr` could not
-have joined at all. **The Debian 13 host has not been joined by a client** — it was
-provisioned after this and only `--status` and the panel have read it back.
+have joined at all.
 
-**What a Linux run still has not shown**: nobody has *played* on one. The join was
-not followed by sustained movement, so **there is still no evidence about
-trajectory parity from a Linux host** — that is the claim the client's own
+**The Debian 13 host was joined on 2026-09-26**, running `5e18741`, from Windows
+over the public internet — the handshake, the plugin gate, a team change, a
+spawned character, about 1,450 px of driven running, a death to a bot and a
+respawn, with the round clock advancing throughout. The client logged no error of
+its own. Two things a driven client needs against these hosts are in
+`docs/TRAPS-LIVEGAME.md`: the client's own `ServerPluginsPrompt` raises a modal
+the launcher cannot click, and a team request for the bigger side is refused in
+silence.
+
+**What a Linux run still has not shown**: nobody has *played* one properly, and
+the 2026-09-26 run does not change that. Movement was observed only in the
+client's own predicted state; **nothing compared it against the server's**, so
+**there is still no evidence about trajectory parity from a Linux host** — that is the claim the client's own
 re-simulation would falsify, and it is the one that matters, because the symptom
-is rubberbanding rather than an error anywhere. No round has been played to
+is rubberbanding rather than an error anywhere — and a snap of a few pixels is
+invisible to the eye that is not measuring for it. No round has been played to
 completion and no map change has happened under a connected client, so the
 rotation is unexercised on Linux too. The case-sensitivity, file-permission and
 `glibc`/`musl` classes of problem are narrowed rather than closed — two

@@ -49,6 +49,45 @@ dialogs, and saves a screenshot of each one, which is usually the whole
 explanation for a client that stopped working. Screen-capture the window by
 its `TRunnerForm` rect — `PrintWindow` returns black for GM8's renderer.
 
+### A plugins-required server stops a driven client with a modal
+
+A server running `ServerPluginsRequired=1` — every host in the fleet does —
+makes the client raise `show_message_ext` with "Download and join" / "Disconnect"
+before it joins (`Scripts/Client/ClientBeginStep.gml`, the `RESERVE_SLOT` case).
+The launcher cannot answer it: the buttons are not `TButton` children, so it
+force-closes the dialog, which is a `Disconnect`, and the client sits at the menu
+looking as though the server refused it. The log line is `M| (dialog had no
+readable text)` followed by `forced closed (no TButton child to click)`.
+
+`global.serverPluginsPrompt` gates the whole prompt and the plugins load anyway
+when the server requires them (`usePlugins = pluginsRequired ||
+!global.serverPluginsPrompt`), so the fix is one key in the CLIENT's
+`Source/build/gg2.ini` before launching:
+
+```ini
+[Settings]
+ServerPluginsPrompt=0
+```
+
+⚠️ The game rewrites that file on exit (`Scripts/Game/game_init.gml:163`), so
+back it up and restore it afterwards rather than trusting the edit to be
+temporary. Turning the prompt off skips a consent dialog, not the gate — a
+required plugin is still downloaded and loaded, so a join still proves the gate.
+
+### A team request for the bigger side is refused in silence
+
+`ClientPlayerChangeteam(TEAM_RED, …)` does nothing at all when red is the larger
+team — `GameServer.Commands.cs`'s `ExecuteChangeTeam` resolves through
+`PlayerCommands.ResolveRequestedTeam`, which returns nothing for the bigger team
+or the one the player is already on, and the reference behaves the same way. The
+client's own roster keeps reading `team=2` and there is no message anywhere.
+
+**Against a bot-filled server this is the normal case, not the edge case**: the
+population manager keeps both teams stocked, so one of them is always the bigger.
+Read the counts first and ask for the smaller side; `global.myself.team` is what
+says it worked, and `instance_exists(global.myself.object)` says the server handed
+out a character.
+
 ### `menuOpen` eats every movement key
 
 `gg2_input` does drive a stock client — what stops it is the team-select
@@ -63,7 +102,7 @@ never closed: the server hands out a character, the mask reaches the bridge
 instances are destroyed:
 
 ```
-gg2_eval: ClientPlayerChangeteam(TEAM_RED, global.serverSocket);
+gg2_eval: ClientPlayerChangeteam(<the smaller team>, global.serverSocket);
           socket_send(global.serverSocket);
 gg2_eval: with(TeamSelectController) instance_destroy();
           with(ClassSelectController) instance_destroy();
