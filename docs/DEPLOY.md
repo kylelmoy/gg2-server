@@ -20,8 +20,8 @@ deployment differs from a `dotnet run` out of the repository.
 | CPU and memory cost | Measured on Windows, table below |
 | What a CLIENT experiences on 1 shared vCPU | Measured on a live 1 vCPU VPS, 1 to 24 connected clients, `tools/loadprobe`; "What a client actually experiences on one shared vCPU" below. Broadcast fan-out and bot characters, **not** 24 humans playing |
 | `--version` says which commit is running | `BuildInfoTests`, against the regex `scripts/deploy.sh` parses it with; `ControlPortTests.StateReportsTheRoster` for the `state` reply |
-| A deploy reaches the hosts and flips them | Done for real to three hosts, latest 2026-09-26, `a6a0156` to two Debian 12 and one Ubuntu 24.04. `--rollback` is still unrun; see "what a real deploy has and has not exercised" |
-| A stock client joins one | Done 2026-09-12, all three hosts — the handshake and the plugin gate only. **Not** evidence about trajectories; see the box above |
+| A deploy reaches the hosts and flips them | Done for real to four hosts — 2026-09-26, `654b853` to two Debian 12, one Debian 13 and one Ubuntu 24.04. `--rollback` is still unrun; see "what a real deploy has and has not exercised" |
+| A stock client joins one | Done 2026-09-12, the three hosts of the time — the handshake and the plugin gate only. **Not** evidence about trajectories; see the box above |
 
 **The binary runs on Linux.** First done 2026-09-08 on Ubuntu 24.04.4 LTS,
 x86-64, .NET 10.0.11, framework-dependent publish of `9daae8f` deployed by
@@ -32,10 +32,12 @@ the invocation. `journalctl -u gg2 _SYSTEMD_INVOCATION_ID=<id> -p warning` is
 empty. SIGTERM and the graceful stop were exercised by the restart.
 
 **A stock GM8 client joins a Linux-hosted server.** First done 2026-09-12 against
-all three hosts running `0d04911` — two Debian 12, one Ubuntu 24.04. The client
-reached each from the lobby listing, completed the handshake and picked a team.
-That also exercises the plugin gate: all three run `ServerPluginsRequired=1`, so a
-client that could not load `chat_v2_pr` could not have joined at all.
+the three hosts of the time running `0d04911` — two Debian 12, one Ubuntu 24.04.
+The client reached each from the lobby listing, completed the handshake and picked
+a team. That also exercises the plugin gate: every host runs
+`ServerPluginsRequired=1`, so a client that could not load `chat_v2_pr` could not
+have joined at all. **The Debian 13 host has not been joined by a client** — it was
+provisioned after this and only `--status` and the panel have read it back.
 
 **What a Linux run still has not shown**: nobody has *played* on one. The join was
 not followed by sustained movement, so **there is still no evidence about
@@ -356,7 +358,9 @@ them.
 ### What a real deploy has and has not exercised
 
 First real deploy: 2026-09-08, `9daae8f` to one Ubuntu 24.04 host. Latest:
-2026-09-26, `a6a0156` to three — two Debian 12 and that Ubuntu 24.04.
+2026-09-26, `654b853` to four — two Debian 12, one Debian 13 and that Ubuntu
+24.04. The Debian 13 host is the only one whose first deploy was onto an empty
+release layout rather than over something already there.
 
 **Run and working**: the preflight, the tar stream, the unpack into `.incoming`,
 the `--version` probe on the target, the flip, the `systemctl restart`, the
@@ -366,7 +370,7 @@ against a staged publish, **multiple hosts in one invocation**, **recording
 sequential stop**: two hosts were named, the first refused the preflight for want
 of passwordless sudo, and the second was never contacted.
 
-**The prune has run**, on all three hosts in the 2026-09-26 deploy. Each was
+**The prune has run**, on the three hosts that were deployed in the 2026-09-26 `a6a0156` deploy. Each was
 holding six releases once `a6a0156` landed and each reported the same one removed
 (`5fe1930`); verified afterwards, every host holds exactly `--keep` five, with
 `current` -> `a6a0156` and `previous` -> `d1a8263` intact.

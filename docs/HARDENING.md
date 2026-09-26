@@ -243,6 +243,40 @@ absorbed at all.
   anything in this process, because it costs the kernel a hash lookup and costs
   this process an accept, an allocation and a roster walk.
 
+What the fleet runs: `ufw` with `DEFAULT_INPUT_POLICY=DROP` and two inbound
+rules, `22/tcp` and `8190/tcp`. The panel's 8191 is loopback-bound and
+deliberately has no rule, which a connect from off-box confirms rather than
+assumes.
+
+**`systemctl is-active ufw` does not answer whether the firewall is up.** The
+unit is `Type=oneshot` with `RemainAfterExit=yes` and the `ufw` CLI loads rules
+into the kernel itself, so a host whose rules are live and whose
+`/etc/ufw/ufw.conf` says `ENABLED=yes` still reports `inactive` until the unit
+runs at the next boot. `ufw status` and `ufw.conf` are what to read; the unit
+state is not evidence in either direction.
+
+**On Debian 12, the packaged `fail2ban` sshd jail cannot start on a host with
+no rsyslog.** `/etc/fail2ban/jail.d/defaults-debian.conf` is `[sshd] enabled =
+true` and nothing else, so `backend = auto` resolves to `/var/log/auth.log` —
+a file that never exists when logging is journald-only — and `fail2ban-server`
+exits 255 within 100 ms, before any jail starts. The service reads `enabled` in
+`systemctl list-unit-files` the whole time, which is how it goes unnoticed.
+Debian 13's drop-in sets `backend = systemd` itself and has no such problem. The
+fix is a `jail.local` naming the journal:
+
+```ini
+[sshd]
+backend = systemd
+journalmatch = _SYSTEMD_UNIT=ssh.service + _COMM=sshd
+```
+
+**Enable the firewall before restarting fail2ban, not after.** `ufw enable`
+rebuilds the tables, and fail2ban's bans are chains inserted into those same
+tables, so the ordering is a precaution against a jail that reports bans it is
+no longer enforcing. Not measured here - what would settle it is banning an
+address, running `ufw reload`, and asking `nft list ruleset` whether the
+`f2b-sshd` chain survived.
+
 ### The unit file
 
 `docs/DEPLOY.md` has the working unit. For an internet-facing deployment, add:
