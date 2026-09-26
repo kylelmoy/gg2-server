@@ -739,6 +739,21 @@ Not everything in the reference is load-bearing for a private headless server.
   back), measured 2026-09-07. `LobbyRegistrationTests` still asserts only that
   this port agrees with `sendLobbyRegistration.gml`; the service is a third
   party and no test contacts it.
+  **The announcement names this software, not the game.** The `game`,
+  `game_short`, `game_ver` and `game_url` pairs are this port's own strings
+  (`LobbyRegistration.GameNameString`, `GameUrlString`, and `BuildInfo.Version`)
+  and not the `Constants.xml` transcriptions that `ConstantsTests` pins, because
+  what a registration announces is which build is hosting. Two readers pick
+  different keys and both get "gg2-server v1.0.0": the in-client browser prefers
+  `game_short` and falls back to `game` (`LobbyController.events/Step.xml:83-93`),
+  while the lobby's web status page at `ganggarrison.com/lobby/status` renders
+  `game` as the link text of its Game column with `game_url` as the href. None of
+  the four affects compatibility or joinability — the client decides that from
+  `protocol == 0`, a non-zero port and a matching `protocol_id` alone — and
+  third-party server software does the same thing, the live list carrying entries
+  such as "Derpduck's Server Mod v2.9.2" pointing at a forum thread. What would
+  show it wrong is the entry vanishing from the real list while a `--lobby`
+  server sending the reference's strings still appears.
   **The cadence is REAL TIME, not a frame count**, and this port needs the
   distinction where the reference does not. The lobby drops an entry it has not
   heard from within under a minute — an announce seen in the list was gone from

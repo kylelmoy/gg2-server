@@ -93,17 +93,31 @@ public static class LobbyRegistration
     public const int ServerIdLength = 16;
 
     /// <summary>
-    /// The <c>game_short</c> pair. This port, not stock GG2.
+    /// The <c>game</c> and <c>game_short</c> pairs, which carry the same name.
+    /// This port, not stock GG2.
     /// </summary>
     /// <remarks>
-    /// The browser renders <c>game_short + " " + game_ver</c> as one column
-    /// (<c>LobbyController.events/Step.xml:84-93</c>), so the two pairs read
-    /// "gg2-svr v1.0.0" in the list and name the server software rather than
-    /// repeating a game every entry already shares.
+    /// Two readers pick different keys and both should say the same thing: the
+    /// in-client browser prefers <c>game_short</c> and falls back to <c>game</c>
+    /// (<c>LobbyController.events/Step.xml:83-93</c>), while the lobby's web
+    /// status page at <c>ganggarrison.com/lobby/status</c> renders <c>game</c> as
+    /// the link text of its Game column. Either way the column reads
+    /// "gg2-server v1.0.0" and names the server software rather than repeating a
+    /// game every entry in the list already shares.
     /// <para>
-    /// <b>Neither pair affects compatibility or joinability</b>, so a stock
-    /// client still joins a server that sends these. The client decides both
-    /// from <c>protocol == 0</c>, a non-zero port and a matching
+    /// <b>This is NOT <see cref="GameConstants.GameNameString"/>, and
+    /// <see cref="GameUrlString"/> is not
+    /// <see cref="GameConstants.GameUrlString"/>.</b> Those two are
+    /// transcriptions of <c>Constants.xml</c> that <c>ConstantsTests</c> holds to
+    /// the reference; what a registration announces is which software is
+    /// hosting, so the announcement owns its own strings. Third-party server
+    /// software does the same — the live list carries entries reading
+    /// "Derpduck's Server Mod v2.9.2" pointing at a forum thread.
+    /// </para>
+    /// <para>
+    /// <b>None of the three strings affects compatibility or joinability</b>, so
+    /// a stock client still joins a server that sends these. The client decides
+    /// both from <c>protocol == 0</c>, a non-zero port and a matching
     /// <c>protocol_id</c> and nothing else (the <c>server.compatible</c>
     /// assignment, same file), and the lobby keys its entries off
     /// <see cref="GameConstants.Gg2LobbyUuid"/> and the server id. What would
@@ -111,7 +125,18 @@ public static class LobbyRegistration
     /// <c>--lobby</c> server with the reference's strings still appears.
     /// </para>
     /// </remarks>
-    public const string GameShortString = "gg2-svr";
+    public const string GameNameString = "gg2-server";
+
+    /// <summary>
+    /// The <c>game_url</c> pair: where this server software comes from.
+    /// </summary>
+    /// <remarks>
+    /// The web status page makes its Game column a link to this value; the
+    /// client stores it in <c>server.infos</c> and draws nothing from it. It
+    /// points at this project, for the reason in
+    /// <see cref="GameNameString"/>'s remarks.
+    /// </remarks>
+    public const string GameUrlString = "https://github.com/kylelmoy/gg2-server";
 
     /// <summary>
     /// The <c>game_ver</c> pair: this server's version, not the game's.
@@ -234,10 +259,10 @@ public static class LobbyRegistration
         WriteUShort(packet, 7);
 
         WriteKeyValue(packet, "name", info.ServerName);
-        WriteKeyValue(packet, "game", GameConstants.GameNameString);
-        WriteKeyValue(packet, "game_short", GameShortString);
+        WriteKeyValue(packet, "game", GameNameString);
+        WriteKeyValue(packet, "game_short", GameNameString);
         WriteKeyValue(packet, "game_ver", GameVersionString);
-        WriteKeyValue(packet, "game_url", GameConstants.GameUrlString);
+        WriteKeyValue(packet, "game_url", GameUrlString);
         WriteKeyValue(packet, "map", info.Map);
 
         // sendLobbyRegistration.gml:33-36 — the same shape as writeKeyValue, but
