@@ -294,23 +294,30 @@ public sealed class KillBoxTests
     }
 
     /// <summary>
-    /// <b>And a box kill that somebody else took the credit for leaves it in
-    /// the pit</b> — the arm reads <c>lastDamageSource</c>, which the box
-    /// overwrote with <c>FINISHED_OFF</c>.
+    /// <b>A box kill that somebody else took the credit for sends the flag home
+    /// too</b>, which is a deliberate departure from the reference.
     /// </summary>
     /// <remarks>
-    /// The trap this is the control for: an arm written as "was this a box
-    /// death?" by asking the <em>box</em> rather than the source it wrote would
-    /// send the flag home here, and the reference does not.
+    /// Upstream the arm reads <c>lastDamageSource</c>, and a box that finds an
+    /// enemy's claim on the victim from the last <c>ASSIST_TIME</c> has
+    /// overwritten it with <c>FINISHED_OFF</c> — so an assisted pit death leaves
+    /// the briefcase at the bottom of the pit for thirty seconds and an
+    /// unassisted one sends it home. The port asks
+    /// <see cref="CharacterState.DiedToHazard"/>, which the box sets beside the
+    /// source, so both go home.
     /// <para>
-    /// It does <em>not</em> distinguish <c>lastDamageSource</c> from
-    /// <c>death.Source</c> — those are the same value, because
-    /// <c>Deaths.Resolve</c> copies the field verbatim. That swap is an
-    /// equivalent mutation and the audit records it as one.
+    /// <b>The premise is asserted, not assumed</b>: if the box ever stopped
+    /// handing the kill over, this would pass for the wrong reason and say
+    /// nothing about the departure it exists to pin.
+    /// </para>
+    /// <para>
+    /// <see cref="AnOrdinaryDeathLeavesTheFlagWhereItFell"/> is what stops this
+    /// passing for a port that always sends the flag home.
+    /// docs/TRAPS-SIMULATION.md, "Upstream bug fixes carried into the port".
     /// </para>
     /// </remarks>
     [Fact]
-    public void AStolenBoxKillStillLeavesTheFlagInThePit()
+    public void AStolenBoxKillAlsoSendsTheFlagHome()
     {
         var state = default(WorldState);
         Intel.Place(ref state, Level());
@@ -323,14 +330,36 @@ public sealed class KillBoxTests
 
         KillBoxes.CollisionStep(World, ref state, BoxAt(KillBoxKind.Pit));
 
-        // The premise: the box handed the kill over.
+        // The premise: the box handed the kill over, so the kill log says
+        // FINISHED_OFF and only DiedToHazard still names the box.
         Assert.Equal(DamageSource.FinishedOff, state.Characters[1].LastDamageSource);
+        Assert.True(state.Characters[1].DiedToHazard);
 
         var events = default(TickEvents);
         Deaths.Kill(ref state, 1, ref events, World);
 
-        Assert.Equal(X, state.BlueIntel.X);
-        Assert.NotEqual(state.BlueIntel.HomeX, state.BlueIntel.X);
+        Assert.True(state.BlueIntel.OnField);
+        Assert.Equal(state.BlueIntel.HomeX, state.BlueIntel.X);
+        Assert.Equal(state.BlueIntel.HomeY, state.BlueIntel.Y);
+    }
+
+    /// <summary>
+    /// The other control: an ordinary death does not set
+    /// <see cref="CharacterState.DiedToHazard"/>, so nothing but a box can
+    /// reach the return arm.
+    /// </summary>
+    [Fact]
+    public void AnOrdinaryDeathDoesNotCountAsAHazard()
+    {
+        var state = default(WorldState);
+        Put(ref state, 1);
+
+        Assert.False(state.Characters[1].DiedToHazard);
+
+        state.Characters[1].Hp = 0;
+        state.Characters[1].LastDamageSource = DamageSource.FinishedOffGib;
+
+        Assert.False(state.Characters[1].DiedToHazard);
     }
 
     // --- through a whole tick -------------------------------------------------

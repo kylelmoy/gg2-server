@@ -37,6 +37,56 @@ public sealed class HandshakeTests
         Assert.Empty(client.Received);
     }
 
+    /// <summary>
+    /// An over-long name from the config still greets a client, truncated.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The failure this closes is a server that starts, runs, and refuses
+    /// every client.</b> <c>HELLO</c> carries the name with a one-byte length and
+    /// <see cref="NetWriter.WriteString1"/> throws rather than write a length it
+    /// cannot represent, so the throw lands inside a join rather than at startup
+    /// — nothing wrong in the log, and nobody able to connect.
+    /// <c>game_init.gml:84</c> is the reference's own <c>string_copy(…, 1, 255)</c>
+    /// and this is that clamp, moved into
+    /// <see cref="ServerOptions.ServerName"/>'s setter so the flag, the config
+    /// file, the panel's save and the control port all get it.
+    /// <para>
+    /// The welcome message and the slot-0 player name reach the wire the same
+    /// way and are truncated for the same reason.
+    /// docs/TRAPS-SIMULATION.md, "Upstream bug fixes carried into the port".
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void GreetsAClientWhenTheConfiguredNameIsTooLongForTheWire()
+    {
+        var overlong = new string('n', 400);
+
+        using var harness = new ServerHarness(o =>
+        {
+            o.ServerName = overlong;
+            o.WelcomeMessage = overlong;
+            o.ServerPlayerName = overlong;
+        });
+
+        Assert.Equal(ServerOptions.MaxString1Length, harness.Server.Options.ServerName.Length);
+
+        var client = harness.Connect();
+
+        client.SendHello();
+        harness.TickUntil(() => client.Received.Count > 0, "the server greeting");
+
+        Assert.Equal(MessageType.Hello, client.TakeMessageType());
+        Assert.Equal(overlong[..ServerOptions.MaxString1Length], client.TakeString1());
+
+        // And all the way through a join, which is where the other two are
+        // written: slot 0's PLAYER_JOIN in the burst and the MESSAGE_STRING after
+        // it. A throw in either drops the connection instead.
+        var joiner = harness.JoinClient("joiner");
+        harness.TickUntil(() => harness.Server.RosterCount > 1, "the client to join");
+
+        Assert.False(joiner.IsClosed, "the join was dropped by an over-long string on the wire");
+    }
+
     [Fact]
     public void RejectsAWrongProtocolUuidAndDropsTheConnection()
     {

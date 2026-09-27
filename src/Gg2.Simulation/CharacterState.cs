@@ -548,6 +548,35 @@ public struct CharacterState
     /// <summary>Whether this character may pick the intel up right now.</summary>
     public bool CanGrabIntel;
 
+    /// <summary>
+    /// Whether one of the three killing boxes is what zeroed this character's
+    /// hit points — the question a carrier's briefcase is sent home on.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>This field does not exist in the reference and is the port's answer
+    /// to an upstream bug.</b> <c>Character.events/Destroy.xml:36</c> tests
+    /// <c>lastDamageSource in (KILL_BOX, FRAG_BOX, PITFALL)</c>, but a box that
+    /// finds somebody else's recent claim on the victim writes
+    /// <c>FINISHED_OFF</c> or <c>FINISHED_OFF_GIB</c> instead — so an assisted
+    /// pit death leaves the flag at the bottom of the pit on its thirty-second
+    /// timer, and an unassisted one sends it home. The kill log wants the
+    /// stolen source and the briefcase wants the box, so the two have to be
+    /// separate questions.
+    /// <para>
+    /// ⚠️ <b>Never cleared.</b> A box sets hit points to zero and the victim
+    /// dies in its own End Step in the same tick, so a character that has this
+    /// set does not outlive the tick — which is also true of the reference's own
+    /// <c>diedToHazard</c>. Nothing clears it because there is nothing to clear
+    /// it for; a healing path that could raise hit points back above zero after
+    /// a box touched them would make it stale, and none runs after
+    /// <see cref="KillBoxes.CollisionStep"/>.
+    /// </para>
+    /// <para>
+    /// docs/TRAPS-SIMULATION.md, "Upstream bug fixes carried into the port".
+    /// </para>
+    /// </remarks>
+    public bool DiedToHazard;
+
     /// <summary><c>alarm[1]</c>: ticks until it may again. On the wire as a short.</summary>
     public int IntelGrabTimer;
 

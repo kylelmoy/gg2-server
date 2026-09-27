@@ -1189,16 +1189,17 @@ blocks than its own loop count while the port writes exactly
 `ControlPointCount`. Every shipped map numbers contiguously. Worth knowing
 before anybody authors one.
 
-### A map-change countdown must move `CurrentMapArea` when it opens, not when it ends
+### A joiner inside the map-change countdown needs both areas, so it is sent both
 
 **`GameServerBeginStep.gml:74-92` moves `global.currentMapArea` when the
 countdown OPENS, ten seconds before the map changes** — `+= 1` on an area
 advance, `= 1` on a rotation — and only then writes the `MAP_END` that carries
-it. The port left `_match.CurrentMapArea` on the area being played until
-`OpenMap` ran at the end of the countdown, and `WriteJoinBurst`
-(`GameServer.Joining.cs:192`) hands that value to every joiner as its
-`JOIN_UPDATE` area. So a client that joined inside those ten seconds was told
-the area the server was **leaving**.
+it. `WriteJoinBurst` hands whatever that global holds to every joiner as its
+`JOIN_UPDATE` area, so upstream a client joining inside those ten seconds is
+told the area the server is about to open and sets up the wrong stage of the map
+everybody else is still playing. Leaving the value on the area being played
+instead is worse: then it is told the area the server is **leaving** and is
+never corrected.
 
 **`JOIN_UPDATE` and `MAP_END` are the only two places the wire ever states
 the area**, and this joiner is by definition too late for the `MAP_END`. Its
@@ -1215,29 +1216,51 @@ there is no later message that corrects it. Two things read it:
 **Stale at 1 across an advance, the joiner wipes teams the server keeps**, then
 reads a character for a slot it now holds as a spectator, and `Character`'s
 Create kills it with `unknown team ID: 2`. That is the open fatal's symptom
-exactly, and it is now reproduced in-process: with the fix reverted,
-`MultiAreaMapTests.AJoinerInTheMapChangeCountdownIsToldTheAreaItIsAboutToLoad`
+exactly, and it is reproducible in-process: with the area left on the running one
+and no `MAP_END` sent,
+`MultiAreaMapTests.AJoinerInTheMapChangeCountdownIsToldBothAreas`
 collects `InputState: slot 1 has a character, and this client has them as
 Spectator` from `MirrorClient.Impossible`. The inverse — stale at 3 across a
 rotation — keeps teams the server has cleared, which corrupts the scoreboard
 rather than killing anyone.
 
-Fixed by `GameServer.Maps.cs`'s `BeginMapChange`, which both doors now go
-through: `ServeRoundEnd` (the one production reaches) and `RequestMapChange`
-(the control port and the web admin). They were separate bodies, which is why
-the fix needs two gates:
+**So the joiner is told both numbers, each at the moment it is true.**
+`_match.CurrentMapArea` keeps naming the area being PLAYED for the whole
+countdown — which is what `JOIN_UPDATE` carries, so the joiner sets up the stage
+everybody else is on — and the area about to open lives in `_nextArea`, reaching
+this player through a `MAP_END` of its own that `CompleteJoin` sends after its
+`PLAYER_JOIN`. That is a deliberate departure from the reference, and the one
+place the port sends a message the reference would not:
+`docs/TRAPS-SIMULATION.md`, "Upstream bug fixes carried into the port", has the
+compatibility argument.
 
-- `AJoinerInTheMapChangeCountdownIsToldTheAreaItIsAboutToLoad` — the control
-  door, an advance, and the fatal direction.
+**The `MAP_END` must follow the joiner's own `PLAYER_JOIN`.** Its handler
+creates a `WinBanner`, whose Create reads `global.myself.team` unguarded, and
+`global.myself` is the `-1` `ClientCreate.gml:20` left until that `PLAYER_JOIN`
+lands; `-1` is `self` in GM8, so the wrong order kills the client before it
+draws a frame. `AssertMapEndFollowsOwnPlayerJoin` is the gate for the order, not
+just for the area.
+
+It also fixes a second thing the area alone never could: without a `MAP_END` the
+joiner spends the countdown with `global.mapchanging` false and `global.winners`
+unset, so no `WinBanner` runs and nothing humiliates its characters while the
+server holds every one of them frozen. Humiliation is nowhere on the wire — the
+client derives it from `MAP_END` alone.
+
+Both doors go through `GameServer.Maps.cs`'s `BeginMapChange`: `ServeRoundEnd`
+(the one production reaches) and `RequestMapChange` (the control port and the web
+admin). They were separate bodies once, which is why there are two gates:
+
+- `AJoinerInTheMapChangeCountdownIsToldBothAreas` — the control door, an
+  advance, and the fatal direction.
 - `ARoundEndingInTheCountdownTellsAJoinerTheAreaItRotatesTo` — the round-end
   door, a rotation off area 3, and the wipe in the other direction.
 
-Both mutation-checked, one door at a time: dropping the assignment from
-`BeginMapChange` fails exactly the first, and restoring the old area after the
-round-end call fails exactly the second. `TheServedAreaCountIsTheMapsNotTheSlices`
-was tightened in the same change — its wait was `CurrentMapArea == area`, which
-now comes true on the tick the change is *requested*, so it waits for `NextMap`
-to empty as well.
+Each asserts the server side (`CurrentMapArea` unmoved, `NextMapArea` set) and
+the client side (the mirror ends on the next area, by a `MAP_END` ordered after
+its own `PLAYER_JOIN`). `TheServedAreaCountIsTheMapsNotTheSlices` waits for
+`NextMap` to empty as well as for the area, because `CurrentMapArea` alone no
+longer distinguishes "requested" from "landed" in either direction.
 
 **This does not close the count dialog, and it is not a framing bug.**
 `GameModes.ShapeOf(cp_dirtbowl.ForArea(a))` is identical for a = 1, 2 and 3

@@ -1,5 +1,6 @@
 using Gg2.Maps;
 using Gg2.Protocol;
+using Gg2.Simulation;
 
 namespace Gg2.Tests;
 
@@ -49,6 +50,67 @@ public sealed class SpawnPointTests
         }
 
         Assert.True(seen > 200, $"only {seen} spawn points seen; the fixture looks wrong");
+    }
+
+    /// <summary>
+    /// A team with no spawn point at all does not get a character at (0,0), and
+    /// the spawn is tried again a second later rather than being dropped.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Upstream this places the character in the TOP-LEFT CORNER of the
+    /// map.</b> <c>PlayerSpawn.gml</c> reads
+    /// <c>ds_list_find_value(&lt;empty list&gt;, 0)</c>, which GM8 answers with 0
+    /// for both axes, and its own "this map does not contain valid spawn points"
+    /// guard cannot fire because <c>selectSpawnGroup</c> clamps the group to 0.
+    /// The port has never done that — <see cref="Timers"/>' spawn stage returns
+    /// on an empty list — but returning plainly spent the alarm, so the player was
+    /// stranded for the rest of the map with no character, no timer and nothing
+    /// in the log. This pins the re-arm, which is the other half.
+    /// <para>
+    /// Unreachable on all 22 shipped maps, every one of which places spawn points
+    /// for both teams — so the map here is a real one with one team's markers
+    /// removed, and the red player beside the blue one is the control that says
+    /// the map is otherwise fine.
+    /// docs/TRAPS-SIMULATION.md, "Upstream bug fixes carried into the port".
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ATeamWithNoSpawnPointIsRetriedRatherThanPlacedAtTheOrigin()
+    {
+        var full = LevelMap.FromPng("ctf_truefort", ReferenceTree.ReadMap("ctf_truefort")).ForArea(1);
+
+        // Every entity except blue's spawn markers. WithEntities is the harness
+        // seam LevelMap documents; nothing in the server uses it.
+        var withoutBlueSpawns = full.WithEntities(
+            [.. full.Entities.Where(e => !IsSpawnPoint(e.Type) || !e.Type.Contains("blue", StringComparison.OrdinalIgnoreCase))]);
+
+        var world = new CollisionWorld(withoutBlueSpawns);
+        var points = new SpawnPoints(withoutBlueSpawns);
+
+        Assert.Equal(0, points.Count(Team.Blue, 0));
+        Assert.True(points.Count(Team.Red, 0) > 0, "red's markers went too, so the control is gone");
+
+        var state = default(WorldState);
+        state.GameMode = GameModes.ShapeOf(withoutBlueSpawns).GameMode;
+
+        state.AddPlayer(1);
+        state.Players[1].Team = Team.Blue;
+        state.Players[1].Class = PlayerClass.Scout;
+        state.Players[1].RespawnTimer = 1;
+
+        state.AddPlayer(2);
+        state.Players[2].Team = Team.Red;
+        state.Players[2].Class = PlayerClass.Scout;
+        state.Players[2].RespawnTimer = 1;
+
+        var events = default(TickEvents);
+        MatchSimulation.Tick(world, ref state, [], ref events, points);
+
+        // The control: red spawned, so the tick really did reach the spawn stage.
+        Assert.True(state.IsAlive(2), "the red control did not spawn, so this test checks nothing");
+
+        Assert.False(state.IsAlive(1), "blue was given a character with nowhere to put it");
+        Assert.Equal(30, state.Players[1].RespawnTimer);
     }
 
     /// <summary>The eight entity types that are spawn points, and no others.</summary>

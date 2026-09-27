@@ -198,6 +198,13 @@ public sealed class WireStageTests
         carrier.X = 2280;
         carrier.Y = 200;
         carrier.CarryingIntel = true;
+
+        // ⚠️ DiedToHazard is what opens the return arm, not the damage source —
+        // the two are separate questions in this port because a box that hands
+        // the kill over writes FINISHED_OFF into the source. The source is set
+        // beside it so the character is the shape a real pit death produces.
+        // See CharacterState.DiedToHazard.
+        carrier.DiedToHazard = true;
         carrier.LastDamageSource = DamageSource.Pitfall;
         carrier.Hp = 0;
 

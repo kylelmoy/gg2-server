@@ -4036,3 +4036,97 @@ the bot measurements count deaths their own way.
 micro-driven ticks across the roster. With `--bot-engages-bots`, `engage:
 anyone` — micro-driven ticks appear. Both report balanced kills and deaths, and
 a bot that died kept the kill it had.
+
+### Upstream bug fixes carried into the port
+
+Reviewed on 2026-09-26 against the 24 fix branches on
+`github.com/kylelmoy/Gang-Garrison-2` — a GG2 fork that triaged upstream GitHub
+issues and wrote a branch per fix. Each was read for whether this port has the
+same defect, and six changed code here. **The reference is still the
+specification everywhere else**; these are the exceptions, and each one is
+marked as a deliberate departure at the line it lives on.
+
+The rule applied: a fix lands only if a stock GM8 client is told about the
+result through a message it already handles, or cannot see the difference at
+all. A fix that would make the server and the client simulate different
+outcomes with nothing on the wire to reconcile them does not land, however
+correct it is.
+
+#### The six that landed
+
+| What | Where | Why a stock client is fine with it |
+|---|---|---|
+| An assisted hazard death leaves the flag in the pit | `CharacterState.DiedToHazard`, set in `KillBoxes.CollisionStep`, read in `Deaths.Kill` | The whole arm is host-only upstream too (`if (global.isHost ...)`), and the clients are told by the `RETURN_INTEL` it broadcasts. |
+| Afterburn kills a character on the tick it becomes invulnerable | `Afterburn.BeginStep` | `End Step.xml:34` is `if(global.isHost && hp<=0)`, so no client kills a character itself, and hit points are on the wire in every `QUICK_UPDATE`. |
+| A key tapped between two updates is dropped | `NetworkInputSource.TakeEdges`, applied in `GameServer.Tick`, relayed in `GameServer.TryGetCharacter` | The key byte's width and meaning are unchanged; the client reads one tick of a held key, which is what happened. |
+| A joiner inside the map-change countdown sets up the wrong stage | `GameServer.BeginMapChange` and `GameServer.CompleteJoin` | `MAP_END` is a message every stock client already handles, sent with the same four values every other client got. |
+| A server name or welcome message over 255 characters | `ServerOptions.ServerName` and the two strings beside it | Nothing reaches the wire that did not before; the alternative was a throw inside every join. |
+| A team with no spawn point strands its players | `Timers.PlayerSpawn` | Nothing is sent either way. The player does not appear, and asks again a second later. |
+
+Each of the first four is separately gated, and the gates are written to fail
+for the right reason: `KillBoxTests.AStolenBoxKillAlsoSendsTheFlagHome` asserts
+the premise — that the box handed the kill over — before the consequence;
+`FlamethrowerTests.AnUberedCharacterTakesNoAfterburn` runs the same character
+un-ubered as a control; `InputReachesTheWireTests` has one test per half of the
+tap fix plus a `Down` control; `MultiAreaMapTests` asserts the server keeps the
+running area **and** that the joiner's `MAP_END` arrives after its own
+`PLAYER_JOIN`.
+
+Three details worth not re-deriving:
+
+- **The tap fix is not a nicety, and the port was worse than the reference.**
+  A client sends one `INPUTSTATE` per virtual tick, so two arrive in one server
+  tick whenever packets coalesce — ordinary over the internet — and up to ten
+  are read per player per tick (`ClientCommands.PerTickLimit`). The reference
+  runs `event_user(1)` per input (`processClientCommands.gml:315`), so each
+  one's edge lands in `pressedKeys` and the server acts on the tap; this port
+  kept only `NetworkInputSource.Latest`, so the press was never seen at all,
+  and a tapped stab, jump or airblast happened nowhere. The relay half is the
+  fork's, and `Down` is the one key excluded from it: every other key reaches
+  the simulation through `downOrPressedKeys` or a pressed-edge test, so the
+  server did act on the tap, while `Down` is read as held only and relaying it
+  would drop clients through a platform the server kept them on.
+- **`MAP_END` after `PLAYER_JOIN`, never before.** Its handler creates a
+  `WinBanner`, whose Create reads `global.myself.team` with no guard, and
+  `global.myself` is the `-1` that `ClientCreate.gml:20` left until this
+  player's own `PLAYER_JOIN` lands. `-1` is `self` in GM8, so the wrong order
+  kills the client before it draws a frame.
+- **The area cannot be corrected without the `MAP_END`.** Telling a joiner the
+  running area and nothing else freezes its `global.currentMapArea` at that
+  value for the whole connection, and stale at 1 across an advance it runs
+  `ClientBeginStep.gml:511-544`'s team wipe that the server does not. The two
+  halves are one fix.
+
+#### Not affected, and why — so nobody re-derives it
+
+| Fork fix | Why this port does not have it |
+|---|---|
+| Sentry hp packed under the built flag (`built*$80 + min(127,hp)`), where a negative hp borrows from bit 7 and clears the flag | Unreachable in both codebases. The state update is written at the top of the tick (`GameServer.WriteStateUpdate`, matching `GameServerBeginStep`), and a sentry whose hit points reached zero or below is destroyed in `Sentries.EndStep` in the same tick that took them there. **What would make it reachable:** moving the update below `Sentries.EndStep`, or adding a damage path that runs after it. Then clamp, as the fork does. |
+| `BUILD_SENTRY` coordinates written to `global.serializeBuffer` | `ServerMessages.BuildSentry` writes all seven bytes to one writer. The fork's finding is that the reference's two buffers are *not* always aliased — `serializeBuffer` points at a joining player's socket for a tick after `ServerJoinUpdate` — which is a reference bug this port cannot express. |
+| Autobalance drops the wrong team's intel | `TeamBalance.Switch` flips `player.Team` before clearing the character, exactly as the reference does, but `Intel.Drop` reads `character.Team` where `doEventDropIntel` reads `player.team`. The character's copy is still the pre-switch team, so the port already drops what the clients drop. **Do not "correct" the drop to read the player's team for fidelity** — that is what introduces the bug. |
+| Minegun mine count read out of `lobbed` while destroying mines | A client-side deserialiser. The port writes the count from the projectile pool and never rebuilds mines from the wire. |
+| Spy knife re-arm not delta-scaled (`alarm[2] = 18`) | The port is fixed at 30 Hz, where `global.delta_factor` is 1 and `18` and `18 / delta_factor` are the same number. A 60 fps *client* still disagrees with this server about when a stab re-arms, and nothing server-side can fix that: the stab decision is made on every machine from unsynced weapon state, and making it host-authoritative needs a stab event the protocol does not have. |
+| Spawn at (0,0) when a team has no spawn points | `Timers.PlayerSpawn` has always returned on an empty list rather than reading index 0 of one. Only the re-arm half was missing; see above. |
+| Map rotation shuffled in place and never restored | The reference's is a global that outlives a hosting session inside one process. This is a process that exits. |
+| Autobalance notice names the wrong player | The name is on the host's own `Balancer` instance, which is presentation. `BALANCE`'s notice form carries no name at all — see `ServerMessages.BalanceNotice`. |
+| A client that lacks the next map reconnects to download it and loses its slot | The client half is not this port's, and the server half already works: `JoiningConnection` serves `DOWNLOAD_MAP` before `RESERVE_SLOT` and without taking a slot, so the fork's fixed client keeps its place. |
+| Client stops parsing on an unknown class or a wrong player count; recent-message diagnostics | Client-side robustness. The port refuses an undefined class on the way in (`Enum.IsDefined` in the `PLAYER_CHANGECLASS` case), so it cannot emit one. **The port's own reader does not make the player-count comparison** the fixed client does; that blind spot is `MirrorClient.CheckSpawnable`'s remark and `docs/PARITY.md`'s, and this review did not change it. |
+| Captured-point effects replayed on a joining client's `FULL_UPDATE`; four-legged stabbing spy; sentry drawn folded; sentry gibs' collision mask; weapon shells during humiliation; Golden Weapon overlays at Christmas | Drawing, particles and client-side deserialisation. None of it exists here. |
+| A client that disconnects is noticed late — the fixed client sends `PLAYER_LEAVE` first | The server half already works: `MessageType.PlayerLeave` closes the connection in `GameServer.Handle`, and during a handshake `JoiningConnection` closes on it as an unexpected command. Either way the seat is freed at once. |
+| Orphaned sentry turret after `built` goes back to 0 | A client-side symptom of build progress diverging between machines. The port's sentry has no separate turret instance to orphan: `SentryState.HasTurret` is a field on the sentry. |
+
+#### Deliberately not implemented
+
+**A shot that ends its step inside a wall still misses a target standing right
+in front of it.** `move_all_bullets` destroys the shot before its collision
+events run, and at 30 Hz a Revolver shot travels 21 px a step — more than a
+sentry is tall. The fork walks the path back to the last free point and stops
+the shot there when an enemy is standing on it.
+
+Not carried across, and this is the line the other six do not cross: a client
+simulates every shot itself from `WEAPON_FIRE` and destroys it at the wall the
+same way. A server that registered the hit anyway would deal damage no client
+predicted, with nothing on the wire saying where it came from — a hit that
+happens on the server and nowhere else. It is also a change to hit registration
+rather than to a bug's consequences, which is the distinction `CLAUDE.md`'s rule
+turns on.

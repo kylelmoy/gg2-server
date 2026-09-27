@@ -184,6 +184,125 @@ public sealed class InputReachesTheWireTests
             + "runs inside MatchSimulation.Tick, which is AFTER it.");
     }
 
+    /// <summary>
+    /// A key pressed and released again before the tick reads either input is
+    /// still acted on, and is still relayed.
+    /// </summary>
+    /// <remarks>
+    /// <b>Two <c>INPUTSTATE</c>s in one tick is not a contrived case.</b> A
+    /// client sends one per virtual tick (<c>PlayerControl</c>'s Begin Step,
+    /// under <c>global.run_virtual_ticks</c>), so a delayed packet arriving
+    /// beside the next one puts two in the same server tick, and up to ten are
+    /// read per player per tick (<c>ClientCommands.PerTickLimit</c>). The key is
+    /// then in no <c>keyState</c> the tick ever looks at.
+    /// <para>
+    /// ⛔ <b>The reference does act on it</b>, because
+    /// <c>processClientCommands.gml:315</c> runs <c>event_user(1)</c> per input
+    /// rather than per tick, so each one's edge lands in <c>pressedKeys</c>. A
+    /// port keeping only the last input would drop the press entirely — a spy's
+    /// tapped stab, a tapped jump and a tapped airblast happening on neither the
+    /// server nor any client. See <see cref="NetworkInputSource.TakeEdges"/>.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>And it does not relay it</b>, which is the second half: the server
+    /// taunts and no client sees the key, so every client draws and simulates a
+    /// character that is not frozen while the server holds it still. This port
+    /// relays the tapped bit as held for exactly that one update.
+    /// </para>
+    /// <para>
+    /// <see cref="PlayerKeys.Taunt"/> is the probe because a taunt is decided on
+    /// the pressed edge alone and is observable on both sides — the server
+    /// through <see cref="GameServer.IsTaunting"/>, the client through the key
+    /// byte it is sent. docs/TRAPS-SIMULATION.md, "Upstream bug fixes carried
+    /// into the port".
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AKeyTappedBetweenTwoUpdatesIsActedOnAndRelayed()
+    {
+        using var harness = new ServerHarness(options => options.Map = Map);
+
+        var client = harness.JoinClient("tapper");
+        harness.TickUntil(() => harness.Server.RosterCount > 1, "the client joined");
+
+        client.SendChangeTeam(Team.Red);
+        client.SendChangeClass(PlayerClass.Soldier);
+        harness.TickUntil(() => harness.Server.IsAlive(1), "the client spawned", 400);
+
+        PlayerClass[] classes = [harness.Server.ClassOf(0), harness.Server.ClassOf(1)];
+
+        // Settle with nothing held. The baseline matters twice over: a character
+        // that was already taunting would make the assertion below vacuous.
+        client.SendInputState(new PlayerInput { Keys = PlayerKeys.None });
+        harness.Tick(4);
+        client.Take(client.Received.Count);
+
+        Assert.False(harness.Server.IsTaunting(1), "the baseline was already taunting");
+
+        // The tap: both inputs are queued before the server reads either, so the
+        // tick sees TAUNT in no keyState at all.
+        client.SendInputState(new PlayerInput { Keys = PlayerKeys.Taunt });
+        client.SendInputState(new PlayerInput { Keys = PlayerKeys.None });
+        harness.Tick(1);
+
+        Assert.True(
+            harness.Server.IsTaunting(1),
+            "the server did not act on a key the client pressed and released between two of "
+            + "its own updates. The reference does (processClientCommands.gml:315 runs "
+            + "event_user(1) per INPUTSTATE), so this is input the port threw away.");
+
+        var relayed = WireKeys(client, classes, 1);
+        Assert.True(relayed is not null, "no state update was decoded on the tapped tick");
+
+        Assert.True(
+            relayed!.Value.HasFlag(PlayerKeys.Taunt),
+            "the server acted on the tap and relayed a keystate without it, so every client "
+            + "simulates a character that is not frozen while the server holds it still. "
+            + "See GameServer.TryGetCharacter.");
+    }
+
+    /// <summary>
+    /// The control: <see cref="PlayerKeys.Down"/> is the one key a tap of is NOT
+    /// relayed.
+    /// </summary>
+    /// <remarks>
+    /// The server reads it as held only — no <c>downOrPressedKeys</c> arm and no
+    /// pressed-edge test — so a tap of it changed nothing on the server, and a
+    /// client told it was held for a tick would drop the character through a
+    /// dropdown platform the server kept it on. Without this the relay reads as
+    /// "pass the tapped bits through", which is one key too many.
+    /// </remarks>
+    [Fact]
+    public void ATappedDownKeyIsNotRelayed()
+    {
+        using var harness = new ServerHarness(options => options.Map = Map);
+
+        var client = harness.JoinClient("tapper");
+        harness.TickUntil(() => harness.Server.RosterCount > 1, "the client joined");
+
+        client.SendChangeTeam(Team.Red);
+        client.SendChangeClass(PlayerClass.Soldier);
+        harness.TickUntil(() => harness.Server.IsAlive(1), "the client spawned", 400);
+
+        PlayerClass[] classes = [harness.Server.ClassOf(0), harness.Server.ClassOf(1)];
+
+        client.SendInputState(new PlayerInput { Keys = PlayerKeys.None });
+        harness.Tick(4);
+        client.Take(client.Received.Count);
+
+        client.SendInputState(new PlayerInput { Keys = PlayerKeys.Down });
+        client.SendInputState(new PlayerInput { Keys = PlayerKeys.None });
+        harness.Tick(1);
+
+        var relayed = WireKeys(client, classes, 1);
+        Assert.True(relayed is not null, "no state update was decoded on the tapped tick");
+
+        Assert.False(
+            relayed!.Value.HasFlag(PlayerKeys.Down),
+            "a tapped DOWN was relayed as held. The server does not read its pressed edge, so "
+            + "this adds a key the server never acted on and drops clients through platforms.");
+    }
+
     /// <summary>An input source that presses whatever it is told to.</summary>
     private sealed class HeldKey : IInputSource
     {

@@ -550,6 +550,36 @@ public sealed partial class GameServer
 
         client.SkipBroadcastBytes = _broadcast.WrittenSpan.Length;
 
+        // 6. ⛔ AND IF THE ROUND IS ALREADY OVER, THIS PLAYER'S OWN MAP_END —
+        //    AFTER the PLAYER_JOIN above, never before it.
+        //
+        //    Everybody else was sent MAP_END when the round ended; this player
+        //    was not connected yet, and MAP_END is the only place the wire ever
+        //    states the map area (BeginMapChange has the rest of that argument).
+        //    Without it the joiner spends the countdown with global.mapchanging
+        //    false, global.winners unset — so WinBanner never runs and nothing
+        //    humiliates its characters while the server holds every one of them
+        //    frozen — and then loads the wrong stage on the other side of the
+        //    CHANGE_MAP.
+        //
+        //    ⚠️ The order is not a preference. MAP_END's handler
+        //    (ClientBeginStep.gml:461-469) creates a WinBanner, whose Create
+        //    reads `global.myself.team` unguarded; global.myself is the -1
+        //    ClientCreate.gml:20 left until this player's own PLAYER_JOIN
+        //    arrives, and -1 is `self` in GM8 — so a MAP_END ahead of it kills
+        //    the client with "Unknown variable team" before it has drawn a frame.
+        //
+        //    The same four values every other client was sent, from the same
+        //    builder: a joiner that read a different next map or a different
+        //    area from the broadcast would diverge at the change rather than
+        //    during the countdown.
+        if (_world.MapChanging)
+        {
+            writer.Reset();
+            ServerMessages.MapEnd(writer, _nextMap, _world.Winner, (byte)_nextArea);
+            connection.Send(writer.WrittenSpan);
+        }
+
         connection.Flush();
 
         // The joiner's id is its roster index, which is the count before it was

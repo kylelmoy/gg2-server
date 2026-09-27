@@ -135,22 +135,29 @@ public static class Deaths
         // implicit drop: **a carrier killed by one of the three map boxes
         // sends the briefcase home instead of leaving it in the pit.**
         //
-        // What decides it is the source the *box* wrote, and a box that
-        // handed the kill to somebody else wrote FINISHED_OFF — so a stolen box
-        // kill leaves the flag in the pit. KillBoxTests has the control.
+        // ⛔ A DELIBERATE DEPARTURE FROM THE REFERENCE. Destroy.xml:36 asks
+        // `lastDamageSource in (KILL_BOX, FRAG_BOX, PITFALL)`, and a box that
+        // finds an enemy's claim on the victim from the last ASSIST_TIME writes
+        // FINISHED_OFF(_GIB) instead — so upstream, a carrier finished off by a
+        // pit leaves the flag at the bottom of it on the thirty-second timer
+        // while an unassisted one sends it home. The kill log wants the stolen
+        // source and the briefcase wants the box, so the port asks the box
+        // directly: KillBoxes.CollisionStep sets CharacterState.DiedToHazard
+        // beside the source it writes. A self-inflicted FINISHED_OFF_GIB death
+        // still drops the flag, because nothing but a box sets the field.
         //
-        // The reference reads `lastDamageSource`; `death.Source` is the same
-        // value today, because Resolve copies the field verbatim. Reading the
-        // field anyway is not a distinction without a difference — it is what
-        // keeps this correct if Resolve ever starts transforming the source, as
-        // the reference's own kill log does for its own purposes.
+        // Safe against the stock client: the whole arm is inside
+        // `if (global.isHost …)` upstream too, so no client decides this for
+        // itself — it is told by the RETURN_INTEL this broadcasts, which every
+        // stock client already handles. KillBoxTests has both controls.
         //
         // Placed here rather than in WorldState.Clear, where the drop is,
         // because the return is **broadcast** (sendEventReturnIntel) where the
-        // drop deliberately is not — and only a death can carry one of these
-        // three sources, since a box sets hp to 0 the moment it is touched.
-        var boxSource = state.Characters[slot].LastDamageSource
-            is DamageSource.KillBox or DamageSource.FragBox or DamageSource.Pitfall;
+        // drop deliberately is not — and only a death can carry the flag, since
+        // a box sets hp to 0 the moment it is touched.
+        //
+        // docs/TRAPS-SIMULATION.md, "Upstream bug fixes carried into the port".
+        var boxSource = state.Characters[slot].DiedToHazard;
 
         var carriedFlag = state.Characters[slot].CarryingIntel
             ? state.Characters[slot].Team switch

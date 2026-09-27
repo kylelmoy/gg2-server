@@ -705,6 +705,11 @@ public static class ControlCommands
         json.Append(",\"capLimit\":").Append(server.Options.CapLimit);
         json.Append(",\"setupTimer\":").Append(server.SetupTimer);
         json.Append(",\"nextMap\":\"").Append(Escape(server.NextMap)).Append('"');
+
+        // Zero while nothing is pending, and on a multi-area map inside the
+        // countdown it differs from "area" above — which keeps naming the area
+        // being played. See GameServer.NextMapArea.
+        json.Append(",\"nextArea\":").Append(server.NextMapArea);
         json.Append(",\"changeIn\":").Append(server.MapChangeCountdown).Append('}');
 
         AppendBots(json, server);

@@ -193,6 +193,12 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     // Reused every tick; see AdvanceSimulation.
     private readonly PlayerInput[] _inputs = new PlayerInput[WorldState.MaxSlots];
 
+    // Keys a client pressed and released again inside one tick, which are in no
+    // INPUTSTATE's keyState by the time the tick reads one. Filled from
+    // NetworkInputSource.TakeEdges below and relayed for exactly one update by
+    // TryGetCharacter, so the clients act on the same press the server did.
+    private readonly PlayerKeys[] _relayedPresses = new PlayerKeys[WorldState.MaxSlots];
+
     // botPopulationUpdate's half that needs a roster and a socket. Created in
     // Start, because it needs a `this` and the constructor does not have one to
     // hand out safely.
@@ -1023,14 +1029,37 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         var advancing = AdvancesThisTick();
         var live = Math.Min(_roster.Count, WorldState.MaxSlots);
 
+        Array.Clear(_relayedPresses);
+
         if (advancing)
         {
             GatherInputs(live);
 
             for (var slot = 0; slot < live; slot++)
             {
-                if (_world.Alive[slot])
-                    _world.Characters[slot].ApplyInput(_inputs[slot]);
+                // ⛔ Drained for EVERY slot, alive or not. It is an accumulator on
+                // the connection, so a tick that left it full would hand its
+                // edges to whatever character the player has next — a tap thrown
+                // away while dead arriving on the respawn.
+                var (pressed, released) = _roster[slot].Source is NetworkInputSource network
+                    ? network.TakeEdges()
+                    : (PlayerKeys.None, PlayerKeys.None);
+
+                if (!_world.Alive[slot])
+                    continue;
+
+                _world.Characters[slot].ApplyInput(_inputs[slot]);
+
+                // The edges of every INPUTSTATE this tick, not just the last
+                // one's. ApplyInput has already ORed the last one's in, and these
+                // are a superset of it, so nothing is counted twice.
+                // NetworkInputSource.TakeEdges says what is lost without this.
+                _world.Characters[slot].PressedKeys |= pressed;
+                _world.Characters[slot].ReleasedKeys |= released;
+
+                // Only what is NOT in the final keyState needs relaying, and Down
+                // is left out — see TryGetCharacter.
+                _relayedPresses[slot] = pressed & ~_inputs[slot].Keys;
             }
         }
 

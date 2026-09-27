@@ -248,35 +248,47 @@ public sealed class MultiAreaMapTests
     /// is about to load, not the one being played out.
     /// </summary>
     /// <remarks>
-    /// <b>The reference moves <c>global.currentMapArea</c> at MAP_END time</b>,
-    /// ten seconds before the change itself:
-    /// <c>GameServerBeginStep.gml:74-92</c> assigns it (<c>+= 1</c> on an
-    /// advance, <c>= 1</c> on a rotation) and only then writes the MAP_END that
-    /// carries it. So <c>ServerJoinUpdate.gml:6</c>, which reads the same global,
-    /// hands a joiner in that window the <em>next</em> area — and it has to,
-    /// because MAP_END is the only other place the wire ever states the area and
-    /// this joiner missed it. Its <c>global.currentMapArea</c> is frozen at
-    /// whatever the JOIN_UPDATE said for as long as it stays connected.
+    /// <b>Both halves of a deliberate departure from the reference.</b>
+    /// <c>GameServerBeginStep.gml:74-92</c> moves
+    /// <c>global.currentMapArea</c> at MAP_END time, ten seconds before the
+    /// change, so <c>ServerJoinUpdate.gml:6</c> hands a joiner in that window the
+    /// <em>next</em> area and it sets up the wrong stage of the map everybody
+    /// else is still playing. This port sends the running area and then the
+    /// joiner's own MAP_END, so it gets both numbers at the moment each is true.
     /// <para>
-    /// Two things read it on the client and both are wrong if it is stale:
-    /// <c>basicRoomSetup.gml:16-25</c> narrows the map to the wrong area's
+    /// The area alone cannot be corrected, and that is why the MAP_END half is
+    /// not optional: MAP_END is the only other place the wire ever states the
+    /// area, so a joiner told the running area and sent nothing else has
+    /// <c>global.currentMapArea</c> frozen at it for as long as it stays
+    /// connected. Two things read it on the client and both are wrong if it is
+    /// stale: <c>basicRoomSetup.gml:16-25</c> narrows the map to the wrong area's
     /// entities, and <c>ClientBeginStep.gml:511-544</c> wipes every team to
     /// <c>TEAM_SPECTATOR</c> on <c>global.currentMapArea == 1</c> — a rule the
     /// server applies to the area it is going TO. Stale at 1 across an advance,
     /// the joiner wipes teams the server keeps; it then reads a character for a
     /// slot it holds as a spectator and <c>Character</c>'s Create kills it with
-    /// <c>unknown team ID: 2</c>. That is the open <c>cp_dirtbowl</c> fatal's
+    /// <c>unknown team ID: 2</c>. That is the old <c>cp_dirtbowl</c> fatal's
     /// shape exactly, and <see cref="MirrorClient.Impossible"/> asks the same
     /// question the client's own code does.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The MAP_END has to follow this player's own PLAYER_JOIN</b>, which
+    /// the ordering assertion below is about: the handler creates a WinBanner
+    /// whose Create reads <c>global.myself.team</c> unguarded, and
+    /// <c>global.myself</c> is -1 until the PLAYER_JOIN lands. -1 is <c>self</c>
+    /// in GM8, so a MAP_END ahead of it kills the client outright.
     /// </para>
     /// <para>
     /// The incumbent is not decoration: without a player who is on a team and
     /// holds a character, the wipe has nothing to disagree about and the test
     /// goes vacuously green.
     /// </para>
+    /// <para>
+    /// docs/TRAPS-SIMULATION.md, "Upstream bug fixes carried into the port".
+    /// </para>
     /// </remarks>
     [Fact]
-    public void AJoinerInTheMapChangeCountdownIsToldTheAreaItIsAboutToLoad()
+    public void AJoinerInTheMapChangeCountdownIsToldBothAreas()
     {
         using var harness = new ServerHarness(options =>
         {
@@ -312,7 +324,15 @@ public sealed class MultiAreaMapTests
             string.IsNullOrEmpty(harness.Server.NextMap),
             "the join outlasted the countdown, so this test never reached the window it is about");
 
+        // The server half: the area being played has not moved, and the one it is
+        // about to open is recorded separately.
+        Assert.Equal(1, harness.Server.CurrentMapArea);
+        Assert.Equal(2, harness.Server.NextMapArea);
+
+        // The client half: the joiner has been told the next area, by its own
+        // MAP_END, and that MAP_END came after its own PLAYER_JOIN.
         Assert.Equal(2, mirror.CurrentMapArea);
+        AssertMapEndFollowsOwnPlayerJoin(mirror);
 
         // Through the change, and far enough past it for the incumbent to
         // respawn — a character for a slot the joiner wiped to spectator is the
@@ -408,7 +428,13 @@ public sealed class MultiAreaMapTests
             string.IsNullOrEmpty(harness.Server.NextMap),
             "the join outlasted the countdown, so this test never reached the window it is about");
 
+        // Area 3 is still being played; the rotation's area 1 reaches the joiner
+        // through its own MAP_END, after its own PLAYER_JOIN.
+        Assert.Equal(3, harness.Server.CurrentMapArea);
+        Assert.Equal(1, harness.Server.NextMapArea);
+
         Assert.Equal(1, mirror.CurrentMapArea);
+        AssertMapEndFollowsOwnPlayerJoin(mirror);
 
         harness.TickUntil(
             () =>
@@ -474,5 +500,56 @@ public sealed class MultiAreaMapTests
                 $"{when}: slot {slot} is {harness.Server.TeamOf(slot)} on the server "
                 + $"and {mirror.Teams[slot]} to the client");
         }
+    }
+
+    /// <summary>
+    /// A joiner inside the countdown got exactly one MAP_END, and it arrived
+    /// after the PLAYER_JOIN that tells the client which player it is.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The order is the whole point.</b> MAP_END's handler creates a
+    /// WinBanner, whose Create reads <c>global.myself.team</c> with no guard, and
+    /// <c>global.myself</c> is the -1 <c>ClientCreate.gml:20</c> left until this
+    /// player's own PLAYER_JOIN arrives — so a MAP_END ahead of it is fatal on a
+    /// stock client, which is exactly the failure a test that only checked the
+    /// area would miss.
+    /// <para>
+    /// The joiner's own PLAYER_JOIN is the LAST one in the burst: the burst
+    /// replays one per incumbent and this player's is appended after them
+    /// (<c>GameServer.CompleteJoin</c>), so the last PLAYER_JOIN before the
+    /// MAP_END is the index to compare against.
+    /// </para>
+    /// </remarks>
+    private static void AssertMapEndFollowsOwnPlayerJoin(MirrorClient mirror)
+    {
+        var mapEnd = -1;
+        var ownJoin = -1;
+        var joins = 0;
+
+        for (var i = 0; i < mirror.Messages.Count; i++)
+        {
+            if (mirror.Messages[i].Type == MessageType.PlayerJoin)
+            {
+                joins++;
+                ownJoin = i;
+            }
+            else if (mirror.Messages[i].Type == MessageType.MapEnd && mapEnd < 0)
+            {
+                mapEnd = i;
+            }
+        }
+
+        Assert.True(
+            mapEnd >= 0,
+            "the joiner was never sent a MAP_END, so nothing ever tells it the area it will load");
+
+        Assert.True(
+            joins == mirror.PlayerCount,
+            $"expected one PLAYER_JOIN per roster entry, got {joins} for {mirror.PlayerCount}");
+
+        Assert.True(
+            mapEnd > ownJoin,
+            $"MAP_END is message {mapEnd} and this player's own PLAYER_JOIN is {ownJoin}: "
+            + "a stock client dies in WinBanner's Create when they arrive in that order");
     }
 }

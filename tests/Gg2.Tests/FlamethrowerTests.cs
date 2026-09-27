@@ -613,6 +613,57 @@ public sealed class FlamethrowerTests
     }
 
     /// <summary>
+    /// An ubered character takes no afterburn, which is a deliberate departure
+    /// from the reference.
+    /// </summary>
+    /// <remarks>
+    /// <c>Character.events/Begin Step.xml:60</c> has no <c>ubered</c> test, and
+    /// the block that puts a fire out is two hundred lines further down the same
+    /// event (<see cref="CharacterPhysics.BeginStepUberEffects"/>). So upstream a
+    /// burning character takes one more tick of afterburn on the tick it becomes
+    /// invulnerable — the tick a medic pops, or the tick a beam target is ubered
+    /// — and a medic on low health dies inside their own uber. Afterburn is the
+    /// only damage over time in the game, and every direct source already tests
+    /// <c>ubered</c>.
+    /// <para>
+    /// Safe against a stock client: <c>End Step.xml:34</c> is
+    /// <c>if(global.isHost &amp;&amp; hp&lt;=0)</c>, so no client kills a
+    /// character itself, and hit points are on the wire in every QUICK_UPDATE.
+    /// docs/TRAPS-SIMULATION.md, "Upstream bug fixes carried into the port".
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AnUberedCharacterTakesNoAfterburn()
+    {
+        var state = default(WorldState);
+        Put(ref state, 1, PlayerClass.Medic, Team.Blue, OpenX, OpenY);
+        state.Characters[1].Hp = 1;
+        state.Characters[1].BurnIntensity = 60;
+        state.Characters[1].BurnDuration = 60;
+        state.Characters[1].BurnedBy = 2;
+        state.Characters[1].AfterburnSource = DamageSource.Flamethrower;
+        state.Characters[1].AfterburnDecayTimer = 90;
+        state.Characters[1].Ubered = true;
+
+        Afterburn.BeginStep(ref state, 1, ref DiscardedEvents.Events);
+
+        // Upstream this is 1 - 60/30 = -1, and End Step kills the medic.
+        Assert.Equal(1, state.Characters[1].Hp);
+        Assert.Equal(2, state.Characters[1].BurnedBy);
+
+        // The control: the same character, not ubered, does die from it — so the
+        // assertion above is about the uber and not about the numbers.
+        var burning = state;
+        burning.Characters[1].Ubered = false;
+
+        Afterburn.BeginStep(ref burning, 1, ref DiscardedEvents.Events);
+
+        Assert.True(
+            burning.Characters[1].Hp <= 0,
+            "the control did not reach lethal damage, so the ubered assertion proves nothing");
+    }
+
+    /// <summary>
     /// The heat only starts fading ninety ticks after the last flame lands.
     /// </summary>
     /// <remarks>

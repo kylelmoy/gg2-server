@@ -144,33 +144,44 @@ public sealed partial class GameServer
     /// to have in one and not the other, and the failure it causes is silent on
     /// the server and fatal on a client.
     /// <para>
-    /// ⚠️ <b><c>_match.CurrentMapArea</c> moves NOW, ten seconds before the map
-    /// does.</b> <c>GameServerBeginStep.gml:74-92</c> assigns
+    /// ⛔ <b><c>_match.CurrentMapArea</c> stays on the area being PLAYED, and the
+    /// area about to be served lives in <c>_nextArea</c> until
+    /// <see cref="OpenMap"/> takes it.</b> That is a deliberate departure from
+    /// <c>GameServerBeginStep.gml:74-92</c>, which assigns
     /// <c>global.currentMapArea</c> (<c>+= 1</c> on an advance, <c>= 1</c> on a
-    /// rotation) and only then writes the MAP_END that carries it, so a joiner
-    /// inside the countdown reads the NEXT area out of
-    /// <c>ServerJoinUpdate.gml:6</c>. It has to: MAP_END is the only other place
-    /// the wire ever states the area, this joiner missed it, and its
-    /// <c>global.currentMapArea</c> is then frozen for as long as it stays
-    /// connected. Stale at 1 across an advance, the joiner runs
+    /// rotation) and only then writes the MAP_END that carries it — so upstream a
+    /// joiner inside the countdown reads the NEXT area out of
+    /// <c>ServerJoinUpdate.gml:6</c> and sets up the wrong stage of the map
+    /// everybody else is still playing.
+    /// </para>
+    /// <para>
+    /// The area alone cannot be corrected, because MAP_END is the only other
+    /// place the wire ever states it: a joiner told the running area and never
+    /// sent a MAP_END has <c>global.currentMapArea</c> frozen for as long as it
+    /// stays connected, and stale at 1 across an advance it runs
     /// <c>ClientBeginStep.gml:511-544</c>'s team wipe that the server does not,
     /// reads a character for a slot it now holds as a spectator, and dies in
-    /// <c>Character</c>'s Create with <c>unknown team ID: 2</c>.
-    /// <c>MultiAreaMapTests.AJoinerInTheMapChangeCountdownIsToldTheAreaItIsAboutToLoad</c>
-    /// is the gate; <c>docs/PARITY.md</c>, "Multi-area maps".
+    /// <c>Character</c>'s Create with <c>unknown team ID: 2</c>. So the joiner is
+    /// sent its own MAP_END instead — see
+    /// <c>GameServer.CompleteJoin</c>, which is also where the ordering
+    /// constraint on it is written down.
+    /// <c>MultiAreaMapTests</c> is the gate; <c>docs/PARITY.md</c>, "Multi-area
+    /// maps", and docs/TRAPS-SIMULATION.md, "Upstream bug fixes carried into the
+    /// port".
     /// </para>
     /// <para>
     /// Safe against the advance decision above re-running on it:
     /// <c>_world.MapChanging</c> is set here and gates that whole block until
     /// <see cref="Rounds.ResetForNewMap"/> clears it, by which point
-    /// <see cref="OpenMap"/> has replaced <c>_match</c> outright.
+    /// <see cref="OpenMap"/> has replaced <c>_match</c> outright. The decision
+    /// reads <c>_match.CurrentMapArea</c>, so leaving it alone here also means
+    /// it no longer depends on running exactly once.
     /// </para>
     /// </remarks>
     private void BeginMapChange(string map, int area)
     {
         _nextMap = map;
         _nextArea = area;
-        _match.CurrentMapArea = (byte)area;
 
         Rounds.BeginMapChange(ref _world);
         _mapChangeCountdown = Rounds.MapChangeDelay;

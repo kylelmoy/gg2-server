@@ -148,12 +148,22 @@ observable simulation; owe GM8 nothing else. Concretely:
   authoritative.
 - Per-frame recomputation the reference does because it has nowhere to cache.
 
-**Neither, and there is exactly one of them:** a state in which the reference
+**Neither, and there is one of this kind:** a state in which the reference
 does not terminate. `good_move_contact_solid`'s crawl can reach a fixed point
 where GM8 spins for ever (see "The movement solver" below); the port breaks out
 of it. A hang has no observable behaviour to reproduce, so this is not a
 divergence — but it is a departure, and it is written down rather than left for
 a reader to find in a diff.
+
+**Neither, and a different kind: a reference bug whose consequences this port
+declines to reproduce.** Six of them, from a review of an upstream fork's fix
+branches, each one a case where the reference does something its own author
+would call wrong and a stock client cannot tell the difference or is told by a
+message it already handles. They are listed with the argument for each, and with
+the eleven candidates that turned out not to apply here, in
+`docs/TRAPS-SIMULATION.md`, "Upstream bug fixes carried into the port". A
+seventh needs the same test: what does the client do with the result, and is
+there anything on the wire that reconciles the two sides.
 
 **Explicitly free, and worth using:** structure the C# for performance and
 testability. Struct-of-arrays for characters, a pure `Step(state, inputs) ->

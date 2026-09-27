@@ -571,6 +571,12 @@ public static class Timers
         ref TickEvents events) =>
         PlayerSpawn(spawnPoints, ref state, slot, ref events);
 
+    /// <summary>
+    /// Ticks before a spawn that found no spawn point for the player's team is
+    /// tried again — one second, the reference's own retry interval for it.
+    /// </summary>
+    private const int RetrySpawnDelay = 30;
+
     private static void PlayerSpawn(
         Maps.SpawnPoints? spawnPoints,
         ref WorldState state,
@@ -599,7 +605,29 @@ public static class Timers
 
         var available = spawnPoints.Count(player.Team, Group);
         if (available == 0)
+        {
+            // ⛔ The alarm has already been spent by the caller, so returning
+            // plainly would strand this player for the rest of the map: no
+            // character, no timer, and nothing in the log. Re-arm it instead and
+            // ask again in a second.
+            //
+            // Upstream, PlayerSpawn.gml:5-9 has a `group == -1` guard that
+            // show_message()s and calls game_end(), and it cannot fire —
+            // selectSpawnGroup clamps the group to 0 — so the reference reads
+            // ds_list_find_value(<empty list>, 0), which is 0 for both axes, and
+            // puts the character in the top-left corner of the map. The port has
+            // never done that; this is only the other half, the one that decides
+            // what happens INSTEAD.
+            //
+            // Unreachable on all 22 shipped maps, every one of which places spawn
+            // points for both teams. A custom map served through --maps that
+            // places none for one team is what this is for, and a round on it is
+            // then simply empty on that side rather than quietly broken.
+            //
+            // docs/TRAPS-SIMULATION.md, "Upstream bug fixes carried into the port".
+            state.Players[slot].RespawnTimer = RetrySpawnDelay;
             return;
+        }
 
         var point = (int)state.Random.Next(available);
 

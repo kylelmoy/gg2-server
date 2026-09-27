@@ -189,6 +189,11 @@ public static class KillBoxes
 
                 character.Hp = 0;
 
+                // The port's own field, and the reason it exists is the line
+                // below: the source a box writes is not always the box. See
+                // CharacterState.DiedToHazard and Deaths.Kill.
+                character.DiedToHazard = true;
+
                 // `if (instance_exists(lastDamageDealer) && lastDamageDealer != player)`
                 // — somebody else's claim survives the box, and the box only
                 // names itself when there is nobody to hand the kill to. Note it

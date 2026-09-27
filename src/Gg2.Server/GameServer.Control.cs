@@ -137,6 +137,19 @@ public sealed partial class GameServer
     /// </remarks>
     public string NextMap => _world.MapChanging ? _nextMap : string.Empty;
 
+    /// <summary>
+    /// The 1-based area the pending map change will open, or 0 when there is no
+    /// change pending.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Separate from <see cref="CurrentMapArea"/>, which keeps naming the
+    /// area being PLAYED for the whole countdown.</b> On a multi-area map the two
+    /// differ for those ten seconds, and a joiner that arrives inside them is
+    /// sent the first in its JOIN_UPDATE and the second in its own MAP_END —
+    /// <see cref="BeginMapChange"/> has why.
+    /// </remarks>
+    public int NextMapArea => _world.MapChanging ? _nextArea : 0;
+
     /// <summary>Ticks until the pending map change lands, or -1 when there is none.</summary>
     public int MapChangeCountdown => _mapChangeCountdown;
 
@@ -435,9 +448,9 @@ public sealed partial class GameServer
         if (!MapExists(map) || _world.MapChanging)
             return false;
 
-        // ⛔ The shared body, not a second copy — it also moves
-        // _match.CurrentMapArea, and a joiner inside the countdown that is told
-        // the wrong area dies on the other side of the change. See BeginMapChange.
+        // ⛔ The shared body, not a second copy — it is what arms the countdown,
+        // broadcasts the MAP_END and records the area for the joiners who missed
+        // it. See BeginMapChange.
         BeginMapChange(map, Math.Max(1, area));
         _log.Info($"control: {_nextMap} area {_nextArea} in ten seconds");
 

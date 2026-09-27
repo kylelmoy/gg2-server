@@ -43,7 +43,24 @@ public static class Afterburn
     {
         ref var character = ref state.Characters[slot];
 
-        if (Gml.Greater(character.BurnDuration, 0))
+        // ⛔ A DELIBERATE DEPARTURE FROM THE REFERENCE, and the only one in this
+        // file. `Character.events/Begin Step.xml:60` has no `ubered` test: the
+        // block that puts a fire out is two hundred lines further down the same
+        // event (CharacterPhysics.BeginStepUberEffects), so a burning character
+        // takes one more tick of afterburn on the tick it becomes invulnerable —
+        // the tick a medic pops, or the tick a beam target is ubered — and a
+        // medic on low health dies inside their own uber. Afterburn is the only
+        // damage over time in the game and every direct source already tests
+        // `ubered`, so this one test closes it.
+        //
+        // Safe against the stock client: `Character.events/End Step.xml:34` is
+        // `if(global.isHost && hp<=0)`, so no client ever kills a character
+        // itself, and hp is on the wire in every QUICK_UPDATE. A client that
+        // predicted the tick of damage is corrected within seven ticks and
+        // nothing else about the character changes.
+        //
+        // docs/TRAPS-SIMULATION.md, "Upstream bug fixes carried into the port".
+        if (Gml.Greater(character.BurnDuration, 0) && !character.Ubered)
         {
             // The reference's own comment on this guard, citing its bug
             // number: "Don't count if someone else already finished him off, to

@@ -10,14 +10,49 @@ namespace Gg2.Server;
 /// </summary>
 public sealed class ServerOptions
 {
+    /// <summary>
+    /// How much of a string a message with a one-byte length prefix can carry.
+    /// </summary>
+    /// <remarks>
+    /// Three of the strings below reach the wire that way, and
+    /// <see cref="Gg2.Protocol.NetWriter.WriteString1"/> throws rather than
+    /// write a length it cannot represent. A throw there lands inside a join,
+    /// so the server would start, run and refuse every client that tried to
+    /// connect — which is why these truncate on the way in instead.
+    /// </remarks>
+    public const int MaxString1Length = 255;
+
+    private string _serverName = "My Server";
+    private string _serverPlayerName = "Server";
+    private string _welcomeMessage = string.Empty;
+
     /// <summary>Shown in the client's server browser and on join.</summary>
-    public string ServerName { get; set; } = "My Server";
+    /// <remarks>
+    /// ⚠️ <b>Truncated to <see cref="MaxString1Length"/> on assignment</b>, in
+    /// the setter rather than in a caller: the <c>HELLO</c> that carries it has
+    /// a one-byte length prefix. <c>game_init.gml:84</c> is the reference's own
+    /// <c>string_copy(…, 1, 255)</c> and it clamps as it reads, for the reason
+    /// <c>SettingRow.Set</c> gives — a clamp one path applies and another does
+    /// not. Here covers all four paths: the flag, the config file, the panel's
+    /// save and the control port.
+    /// </remarks>
+    public string ServerName
+    {
+        get => _serverName;
+        set => _serverName = Truncate(value);
+    }
 
     /// <summary>
     /// The name of the roster slot-0 entry — the reference's local player, which
     /// a headless server keeps as a permanent spectator.
     /// </summary>
-    public string ServerPlayerName { get; set; } = "Server";
+    /// <remarks>Truncated on assignment: <c>PLAYER_JOIN</c> carries it with a
+    /// one-byte length. See <see cref="ServerName"/>.</remarks>
+    public string ServerPlayerName
+    {
+        get => _serverPlayerName;
+        set => _serverPlayerName = Truncate(value);
+    }
 
     /// <summary>Listen port. Zero means "any free port", which tests use.</summary>
     public int Port { get; set; } = GameConstants.DefaultPort;
@@ -26,7 +61,13 @@ public sealed class ServerOptions
     public string Password { get; set; } = string.Empty;
 
     /// <summary>Sent as a <c>MESSAGE_STRING</c> to each joiner. Empty means none.</summary>
-    public string WelcomeMessage { get; set; } = string.Empty;
+    /// <remarks>Truncated on assignment: <c>MESSAGE_STRING</c> carries it with a
+    /// one-byte length. See <see cref="ServerName"/>.</remarks>
+    public string WelcomeMessage
+    {
+        get => _welcomeMessage;
+        set => _welcomeMessage = Truncate(value);
+    }
 
     /// <summary>
     /// A line sent to each player in the chat window as they join chat. Empty
@@ -969,6 +1010,13 @@ public sealed class ServerOptions
         MapDirectory = Server.MapDirectory.Resolve(),
         NavCacheDirectory = Server.MapDirectory.ResolveNav(),
     };
+
+    private static string Truncate(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+
+        return value.Length <= MaxString1Length ? value : value[..MaxString1Length];
+    }
 
     public void Validate()
     {

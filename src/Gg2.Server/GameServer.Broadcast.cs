@@ -643,6 +643,33 @@ public sealed partial class GameServer
     }
 
     /// <summary>The wire view of a slot's character, for the state writer.</summary>
+    /// <remarks>
+    /// ⚠️ <b>The relayed keys are not simply <c>keyState</c>.</b> A key pressed
+    /// and released again inside one tick — two <c>INPUTSTATE</c>s coalescing,
+    /// which is ordinary over the internet — is in no <c>keyState</c> the tick
+    /// ever saw, but the server acted on it through <c>pressedKeys</c>
+    /// (<see cref="NetworkInputSource.TakeEdges"/>). Relaying <c>keyState</c>
+    /// alone would make the server stab, jump or airblast while every client,
+    /// including the player's own, saw nothing — so the tapped bits ride out as
+    /// held for exactly this one update, which is the only way the wire can say
+    /// "this key was down" at all.
+    /// <para>
+    /// ⛔ <b><see cref="PlayerKeys.Down"/> is left out, and that is not
+    /// symmetry-breaking for its own sake.</b> Every other key reaches the
+    /// simulation through <c>downOrPressedKeys</c> — the union of <c>keyState</c>
+    /// and <c>pressedKeys</c> — or through a pressed-edge test, so the server DID
+    /// act on the tap and a client relaying it as held reproduces that. Down is
+    /// read as held only, so the server did nothing with the tap and a client told
+    /// it was held would drop the character through a platform the server kept it
+    /// on.
+    /// </para>
+    /// <para>
+    /// The byte's width and meaning are unchanged, so a stock client needs no
+    /// knowledge of any of this: it reads one tick of a held key, which is what
+    /// happened. docs/TRAPS-SIMULATION.md, "Upstream bug fixes carried into the
+    /// port".
+    /// </para>
+    /// </remarks>
     private bool TryGetCharacter(int slot, out CharacterBlock character, out WeaponBlock weapon)
     {
         if (!_world.IsAlive(slot))
@@ -653,6 +680,11 @@ public sealed partial class GameServer
         }
 
         character = CharacterWire.ToBlock(_world.Characters[slot], _world.Weapons[slot]);
+
+        var tapped = _relayedPresses[slot] & ~PlayerKeys.Down;
+        if (tapped != PlayerKeys.None)
+            character = character with { Keys = character.Keys | tapped };
+
         weapon = CharacterWire.ToWeaponBlock(_world, slot);
         return true;
     }
