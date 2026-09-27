@@ -104,3 +104,11 @@ are development tools, and they desync every client.
 
 GG2 v2.9.2, `VERSION = 29200`, `PROTOCOL_UUID =
 b31c2209-4256-9a19-d0ef-c71c5373bd75`.
+
+## License
+
+[Mozilla Public License 2.0](LICENSE), the same license as
+[Gang Garrison 2](https://github.com/Gang-Garrison-2/Gang-Garrison-2). The maps
+in `maps/` other than `gg_debug2` are copied unmodified from GG2 v2.9.2. The
+GeoIP test database under `tests/Gg2.Tests/Fixtures/geoip/` is MaxMind's, under
+Apache-2.0 or MIT; its README has the details.

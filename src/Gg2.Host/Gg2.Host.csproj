@@ -35,6 +35,8 @@
   -->
   <ItemGroup>
     <Content Include="..\..\maps\*.png" Link="maps\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- MPL-2.0 requires the license to travel with the covered files, and the maps are Gang Garrison 2's. -->
+    <Content Include="..\..\LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!--
