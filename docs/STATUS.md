@@ -8,8 +8,11 @@ the evidence that says so. `PLAN.md` is the plan and the exit criteria,
 "the trace replays with zero error", "the bots cost half a percent of a tick" —
 and each should say what would show it has gone stale.
 
-**Phases 0 to 8 are done and every exit criterion is met. Phase 9 — a learned
-policy — is in progress.**
+**The port is finished.** Phases 0 to 8 are done and every exit criterion is
+met. Phase 9's environment seam moved to `gg2-rl`; what remains here is the
+in-process policy runner, and its section below is what has been measured
+about it. [`PLAN.md`](PLAN.md) is closed, and the work from here is bug fixes
+and new features rather than phases.
 
 | Phase | What landed | State |
 |---|---|---|
@@ -18,7 +21,7 @@ policy — is in progress.**
 | 6 | all eight gamemodes, round after round, every `FULL_UPDATE` field real | closed — a stock client has survived four gamemode changes in one session |
 | 7 | bots: the input seam, nav, A\*, the follower, combat, the objective layer, the population manager | closed, with a number |
 | 8 | unpaced ticking, the human-play recorder, the headless match runner, the control port | closed — 44 matches across all 22 maps in 3.3s, 3,548x real time |
-| 9 | a learned policy: `NpyFile`, `PolicyNetwork`, `HybridBot`, the `Gg2.Env` seam (now in `gg2-rl`), `tools/bench/` | in progress — see below |
+| 9 | a learned policy: `NpyFile`, `PolicyNetwork`, `HybridBot`, `tools/bench/`; the `Gg2.Env` seam now lives in `gg2-rl` | the runner is built and gated — see below for what a checkpoint has been measured to do |
 
 **Every class is implemented.** All ten are armed: rockets, mines, healing
 beams, ubercharge, afterburn, the airblast, the sentry gun, the sniper's scope,
@@ -171,7 +174,7 @@ Arena matches as wins for weeks, because five instant rounds reach a cap limit
 like five real ones. `MatchActuallyHappensTests` makes that mechanical; any
 "N completed" criterion without it is satisfiable by a broken feature.
 
-## Phase 9 — a learned policy (in progress)
+## Phase 9 — a learned policy
 
 `PolicyNetwork` runs a checkpoint trained by the sibling `gg2-rl` project in
 this process, gated logit-for-logit against that project's own numpy on 64

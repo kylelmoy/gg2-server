@@ -615,6 +615,12 @@ do not produce the *same* bytes as each other (zlib and .NET pack the same input
 differently), which is why `NavGeneratorTests` compares the decompressed
 **text**: the format is the text, the gzip is a container.
 
+**`NavContainerTests.TheCheckedInGraphsAreCompressed` is what stops a
+half-finished cycle shipping.** A plain `.txt` left in `nav/` beside the
+compressed graphs fails it, and the failure message carries the commands that
+finish the cycle. It is the gate behind the rule above, so a tree where the
+fresh file is winning cannot go green.
+
 #### It can still fail, and it still says so
 
 **A map with no graph is no longer a map with no bot navigation.** The server
