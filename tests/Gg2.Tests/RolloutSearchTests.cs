@@ -46,7 +46,7 @@ public sealed class RolloutSearchTests
     private const int SpawnCooldownTicks = 32;
 
     private static ScenarioWorld Load() =>
-        ScenarioWorld.Load(Map, 1, ReferenceTree.IncludedFiles, null);
+        ScenarioWorld.Load(Map, 1, ReferenceTree.MapsDirectory, null);
 
     /// <summary>A duel: a searcher on red, something else on blue.</summary>
     private static (ScenarioWorld World, int Red, int Blue) Duel(
@@ -378,7 +378,7 @@ public sealed class RolloutSearchTests
     [Fact]
     public void ItBeatsTheScriptedBotInADuel()
     {
-        var world = ScenarioWorld.Load(Map, 1, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+        var world = ScenarioWorld.Load(Map, 1, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
         var red = world.Place(PlayerClass.Soldier, Team.Red, RedX, StandY);
         var blue = world.Place(PlayerClass.Soldier, Team.Blue, RedX + 160, StandY);
 

@@ -490,9 +490,8 @@ public sealed class SpriteBoxSampleTests
     {
         var sensitive = new List<string>();
 
-        foreach (var path in Directory.GetFiles(ReferenceTree.IncludedFiles, "*.png"))
+        foreach (var name in ReferenceTree.ShippedMapNames())
         {
-            var name = Path.GetFileNameWithoutExtension(path);
 
             LevelMap map;
             try { map = LevelMap.FromPng(name, ReferenceTree.ReadMap(name)); }

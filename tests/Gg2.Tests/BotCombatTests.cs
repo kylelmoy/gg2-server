@@ -29,7 +29,6 @@ public sealed class BotCombatTests
 
     private static CollisionWorld Collision()
     {
-        ReferenceTree.RequireAvailable();
         return new CollisionWorld(LevelMap.FromPng("ctf_truefort", ReferenceTree.ReadMap("ctf_truefort")));
     }
 

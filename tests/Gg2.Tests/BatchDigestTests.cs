@@ -107,7 +107,6 @@ public sealed class BatchDigestTests
             Seed = 7,
         };
 
-        ReferenceTree.RequireAvailable();
         ReferenceTree.RequireNavCache();
 
         var map = LevelMap.FromPng(options.Map, ReferenceTree.ReadMap(options.Map))

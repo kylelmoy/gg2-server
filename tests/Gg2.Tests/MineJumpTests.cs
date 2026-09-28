@@ -47,7 +47,7 @@ public sealed class MineJumpTests
 
     private static (double Launch, double Rise, double Damage) Fly(string map)
     {
-        var world = ScenarioWorld.Load(map, 1, ReferenceTree.IncludedFiles, null);
+        var world = ScenarioWorld.Load(map, 1, ReferenceTree.MapsDirectory, null);
 
         // A real spawn point, not a coordinate: an arbitrary point can land the
         // demoman inside terrain, sitting at terminal velocity going nowhere.

@@ -77,8 +77,6 @@ public sealed class PortedSimulationStateTests
     [Fact]
     public void ACopiedWorldFedTheSameInputsStaysIdentical()
     {
-        ReferenceTree.RequireAvailable();
-
         var (source, ticks, map) = Midway(300);
 
         var a = new PortedSimulation(MapLoader);
@@ -139,8 +137,6 @@ public sealed class PortedSimulationStateTests
     [Fact]
     public void ACopiedWorldFedADifferentInputDiverges()
     {
-        ReferenceTree.RequireAvailable();
-
         var (source, ticks, map) = Midway(300);
 
         var a = new PortedSimulation(MapLoader);

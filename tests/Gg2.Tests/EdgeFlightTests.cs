@@ -65,10 +65,9 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
 
     private static Func<ScenarioWorld> World(string map = Map)
     {
-        ReferenceTree.RequireAvailable();
         ReferenceTree.RequireNavCache();
 
-        return () => ScenarioWorld.Load(map, 1, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+        return () => ScenarioWorld.Load(map, 1, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
     }
 
     private static (int Measured, int Arrived, int Flown, int Blacklists) Tally(IReadOnlyList<EdgeFlight> flights)

@@ -30,7 +30,6 @@ public sealed class BotTargetingTests
     /// </remarks>
     private static CollisionWorld Collision()
     {
-        ReferenceTree.RequireAvailable();
         return new CollisionWorld(LevelMap.FromPng(Map, ReferenceTree.ReadMap(Map)));
     }
 

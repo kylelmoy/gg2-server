@@ -57,7 +57,7 @@ public sealed class WallStopTests
 
     private static (ScenarioWorld World, int Slot) Walk(int ticks)
     {
-        var scenario = ScenarioWorld.Load(Map, 1, ReferenceTree.IncludedFiles, null);
+        var scenario = ScenarioWorld.Load(Map, 1, ReferenceTree.MapsDirectory, null);
         var slot = scenario.Place(PlayerClass.Soldier, Team.Red, StartX, StartY);
 
         scenario.Drive(slot, new Held(new PlayerInput(PlayerKeys.Right, 0, 0)));

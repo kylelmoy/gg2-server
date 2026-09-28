@@ -23,7 +23,7 @@ public sealed class ServerPacingTests
         {
             Port = 0,
             Map = "ctf_truefort",
-            MapDirectory = ReferenceTree.IncludedFiles,
+            MapDirectory = ReferenceTree.MapsDirectory,
             SpeedMultiplier = speed,
         };
 
@@ -34,8 +34,6 @@ public sealed class ServerPacingTests
     [Fact]
     public void ADefaultServerPacesAtThirtyHertz()
     {
-        ReferenceTree.RequireAvailable();
-
         using var harness = new ServerHarness();
 
         Assert.Equal(1.0, harness.Options.SpeedMultiplier);
@@ -51,8 +49,6 @@ public sealed class ServerPacingTests
     [Fact]
     public void AMultiplierShortensTheIntervalProportionally()
     {
-        ReferenceTree.RequireAvailable();
-
         using var server = new GameServer(Options(4.0), new RecordingLog());
         server.Start();
 
@@ -75,8 +71,6 @@ public sealed class ServerPacingTests
     [Fact]
     public void InfinityIsTheUnpacedSignalAndReachesTheLoopAsZero()
     {
-        ReferenceTree.RequireAvailable();
-
         using var server = new GameServer(Options(double.PositiveInfinity), new RecordingLog());
         server.Start();
 
@@ -93,8 +87,6 @@ public sealed class ServerPacingTests
     [Fact]
     public void AnUnpacedServerRunsFarFasterThanRealTime()
     {
-        ReferenceTree.RequireAvailable();
-
         var (server, runLines, frames, elapsed) = RunUnpaced(untilFrame: 2000);
 
         using (server)
@@ -135,8 +127,6 @@ public sealed class ServerPacingTests
     [Fact]
     public void AnUnpacedServerLogsNothingAtAll()
     {
-        ReferenceTree.RequireAvailable();
-
         var (server, runLines, _, _) = RunUnpaced(untilFrame: 2000);
 
         using (server)
@@ -168,8 +158,6 @@ public sealed class ServerPacingTests
     [InlineData(double.NegativeInfinity)]
     public void AnImpossibleSpeedIsRefusedAtStartup(double speed)
     {
-        ReferenceTree.RequireAvailable();
-
         Assert.Throws<ArgumentOutOfRangeException>(() => Options(speed).Validate());
     }
 

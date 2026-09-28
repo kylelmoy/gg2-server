@@ -59,8 +59,6 @@ public sealed class TransitionCrossProductTests
     [Fact]
     public void AMapChangeWhileCarryingTheIntelLeavesNobodyHoldingIt()
     {
-        ReferenceTree.RequireAvailable();
-
         using var harness = Harness();
         var socket = harness.JoinClient("carrier");
         using var mirror = new MirrorClient(socket, Load, Map);
@@ -146,8 +144,6 @@ public sealed class TransitionCrossProductTests
     [Fact]
     public void ARespawnAlreadyTickingWhenTheMapChangesSpawnsNobody()
     {
-        ReferenceTree.RequireAvailable();
-
         using var harness = Harness();
         var socket = harness.JoinClient("respawner");
         using var mirror = new MirrorClient(socket, Load, Map);
@@ -222,8 +218,6 @@ public sealed class TransitionCrossProductTests
     [Fact]
     public void AClientJoiningDuringAMapChangeEndsUpOnTheNewMap()
     {
-        ReferenceTree.RequireAvailable();
-
         using var harness = Harness();
 
         // Somebody has to be watching from before the change, so the roster the
@@ -275,8 +269,6 @@ public sealed class TransitionCrossProductTests
     [Fact]
     public void WithoutAMapChangeThatSamePendingRespawnDoesFire()
     {
-        ReferenceTree.RequireAvailable();
-
         using var harness = Harness();
         var socket = harness.JoinClient("respawner");
 
@@ -320,8 +312,6 @@ public sealed class TransitionCrossProductTests
     [Fact]
     public void AnAreaAdvanceMidTauntKeepsTheTeamAndClearsTheTaunt()
     {
-        ReferenceTree.RequireAvailable();
-
         const string areaMap = "cp_dirtbowl";
 
         using var harness = new ServerHarness(options =>
@@ -394,8 +384,6 @@ public sealed class TransitionCrossProductTests
     [Fact]
     public void AMapChangeWhileTauntingLeavesTheClientInAgreement()
     {
-        ReferenceTree.RequireAvailable();
-
         using var harness = Harness();
         var socket = harness.JoinClient("taunter");
         using var mirror = new MirrorClient(socket, Load, Map);

@@ -120,7 +120,6 @@ public sealed class BotStaircaseTests(ITestOutputHelper output)
 
     private Sweep Run(PlayerClass playerClass)
     {
-        ReferenceTree.RequireAvailable();
         ReferenceTree.RequireNavCache();
 
         var times = new List<int>();

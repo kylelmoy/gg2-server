@@ -98,7 +98,7 @@ public sealed class ScenarioSuiteTests(ITestOutputHelper output)
     private const int BaselineRocketJumps = 10;
 
     private static ScenarioWorld Load(Scenario s) =>
-        ScenarioWorld.Load(s.Map, s.Area, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+        ScenarioWorld.Load(s.Map, s.Area, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
 
     /// <summary>
     /// The bot a scenario is measured with.

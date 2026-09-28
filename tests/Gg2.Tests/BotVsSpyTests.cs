@@ -126,7 +126,7 @@ public sealed class BotVsSpyTests(ITestOutputHelper output)
     }
 
     private static ScenarioWorld Load() =>
-        ScenarioWorld.Load(Map, 1, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+        ScenarioWorld.Load(Map, 1, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
 
     /// <summary>
     /// Runs the fixture with the spy approaching from one side, and reports what

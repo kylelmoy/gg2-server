@@ -164,7 +164,11 @@ public static class ReferenceTree
         Directory.Delete(path, recursive: true);
     }
 
-    /// <summary>Where the built-in map PNGs live.</summary>
+    /// <summary>
+    /// The reference's own copy of the built-in map PNGs. Only
+    /// <see cref="MapCopyTests"/> should read it; every other test reads
+    /// <see cref="MapsDirectory"/>, which needs no checkout.
+    /// </summary>
     public static string IncludedFiles => Path.Combine(Root, "Source", "gg2", "Included Files");
 
     /// <summary>
@@ -263,6 +267,23 @@ public static class ReferenceTree
             return File.Exists(Path.Combine(copied, "ctf_truefort.png")) ? copied : IncludedFiles;
         }
     }
+
+    /// <summary>
+    /// The names of the maps a stock client ships: every PNG in
+    /// <see cref="MapsDirectory"/> except <see cref="PortAuthoredMaps"/>, sorted.
+    /// </summary>
+    /// <remarks>
+    /// Read from <c>maps/</c>, not the reference, so a census over the shipped
+    /// maps needs no checkout. <see cref="MapCopyTests"/> is what makes that the
+    /// same list: it holds <c>maps/</c> byte-identical to the reference.
+    /// </remarks>
+    public static string[] ShippedMapNames() =>
+        Directory.GetFiles(MapsDirectory, "*.png")
+            .Select(Path.GetFileNameWithoutExtension)
+            .OfType<string>()
+            .Where(name => !PortAuthoredMaps.Contains(name))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
 
     public static string MapPath(string map) => Path.Combine(MapsDirectory, map + ".png");
 

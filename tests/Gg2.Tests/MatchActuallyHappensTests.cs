@@ -37,7 +37,7 @@ public sealed class MatchActuallyHappensTests
             RespawnTimeSeconds: 5,
             MaxTicks: Ticks,
             Seed: 11),
-        ReferenceTree.IncludedFiles,
+        ReferenceTree.MapsDirectory,
         ReferenceTree.NavCacheDirectory);
 
     /// <summary>
@@ -226,7 +226,7 @@ public sealed class MatchActuallyHappensTests
                 KillLimit = 4000,
                 MaxTicks = 30 * 60 * 3,
             },
-            ReferenceTree.IncludedFiles,
+            ReferenceTree.MapsDirectory,
             ReferenceTree.NavCacheDirectory);
 
         var started = Math.Min(match.State.RedTimer, match.State.BlueTimer);
@@ -328,7 +328,7 @@ public sealed class MatchActuallyHappensTests
                 KillLimit = 4000,
                 MaxTicks = 30 * 60 * 10,
             },
-            ReferenceTree.IncludedFiles,
+            ReferenceTree.MapsDirectory,
             ReferenceTree.NavCacheDirectory);
 
         var count = match.State.ControlPointCount;
@@ -523,7 +523,7 @@ public sealed class MatchActuallyHappensTests
         {
             var match = HeadlessMatch.Load(
                 HeadlessMatchOptions.Default with { Map = map, Bots = 12, Seed = seed },
-                ReferenceTree.IncludedFiles,
+                ReferenceTree.MapsDirectory,
                 ReferenceTree.NavCacheDirectory);
 
             var lastX = new double[WorldState.MaxSlots];
@@ -642,7 +642,7 @@ public sealed class MatchActuallyHappensTests
                 CapLimit = 5,
                 MaxTicks = Ticks,
             },
-            ReferenceTree.IncludedFiles,
+            ReferenceTree.MapsDirectory,
             ReferenceTree.NavCacheDirectory);
 
         var anchorX = new double[WorldState.MaxSlots];

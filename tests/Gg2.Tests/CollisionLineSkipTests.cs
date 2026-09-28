@@ -76,7 +76,7 @@ public sealed class CollisionLineSkipTests
     [InlineData("cp_dirtbowl", 2)]
     public void TheSkipAgreesWithTheUnskippedWalk(string map, int area)
     {
-        var world = ScenarioWorld.Load(map, area, ReferenceTree.IncludedFiles, null);
+        var world = ScenarioWorld.Load(map, area, ReferenceTree.MapsDirectory, null);
         var collision = world.Collision;
         var mask = collision.Mask;
         var collider = collision.MapCollider;

@@ -33,10 +33,9 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
 
     private static ScenarioWorld World()
     {
-        ReferenceTree.RequireAvailable();
         ReferenceTree.RequireNavCache();
 
-        return ScenarioWorld.Load(Map, 1, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+        return ScenarioWorld.Load(Map, 1, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
     }
 
     private static ScriptedBot Sniper(ScenarioWorld world, Team team) =>
@@ -441,7 +440,7 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
         for (var seed = 1u; seed <= 4; seed++)
         {
             var w = ScenarioWorld.Load(
-                "gg_debug", 1, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+                "gg_debug", 1, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
 
             w.State.Random = new GmlRandom(seed);
 
@@ -480,12 +479,11 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
     [Fact]
     public void AHeadlessSniperScopesLikeAServerOne()
     {
-        ReferenceTree.RequireAvailable();
         ReferenceTree.RequireNavCache();
 
         var match = HeadlessMatch.Load(
             HeadlessMatchOptions.Default with { Bots = 6, AllowedClasses = [PlayerClass.Sniper] },
-            ReferenceTree.IncludedFiles,
+            ReferenceTree.MapsDirectory,
             ReferenceTree.NavCacheDirectory);
 
         var zoomedAt = -1;

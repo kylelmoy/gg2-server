@@ -72,7 +72,7 @@ public sealed class LaneWalkingTimeTests(ITestOutputHelper output)
                 for (var lane = 0; lane < Lanes; lane++)
                 {
                     var world = ScenarioWorld.Load(
-                        scenario.Map, scenario.Area, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+                        scenario.Map, scenario.Area, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
 
                     var bot = new ScriptedBot(
                         world.Nav, new NavQuery(scenario.Team), BotSkill.ForTier(5), stagger: 1);

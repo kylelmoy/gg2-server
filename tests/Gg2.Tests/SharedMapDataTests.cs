@@ -43,7 +43,7 @@ public sealed class SharedMapDataTests
         };
 
     private static HeadlessMatch Load(uint seed) =>
-        HeadlessMatch.Load(Options(seed), ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+        HeadlessMatch.Load(Options(seed), ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
 
     /// <summary>Plays a match out and reports everything that could differ.</summary>
     private static (int Ticks, int Red, int Blue, MatchOutcome Outcome) Play(HeadlessMatch match)

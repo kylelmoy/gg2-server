@@ -27,7 +27,7 @@ public sealed class BotMinesTests(ITestOutputHelper output)
     private const double StandY = 325;
 
     private static ScenarioWorld Load() =>
-        ScenarioWorld.Load(Map, 1, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+        ScenarioWorld.Load(Map, 1, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
 
     private static WorldView View(ScenarioWorld world) => new(in world.State, world.Collision);
 

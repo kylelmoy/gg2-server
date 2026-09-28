@@ -68,8 +68,6 @@ public sealed class HeadlessMatchTests
     [Fact]
     public void ABatchGivesTheSameAnswersOnOneThreadAndOnEight()
     {
-        ReferenceTree.RequireAvailable();
-
         var (map, nav) = Navigable();
 
         var sequential = MatchRunner.Run(Short, count: 6, map, nav, threads: 1);
@@ -89,8 +87,6 @@ public sealed class HeadlessMatchTests
     [Fact]
     public void MatchesInABatchAreNotAllTheSameMatch()
     {
-        ReferenceTree.RequireAvailable();
-
         var (map, nav) = Navigable();
         var results = MatchRunner.Run(Short, count: 6, map, nav, threads: 1);
 
@@ -103,8 +99,6 @@ public sealed class HeadlessMatchTests
     [Fact]
     public void AMatchIsReproducibleFromItsSeed()
     {
-        ReferenceTree.RequireAvailable();
-
         var (map, nav) = Navigable();
 
         var first = HeadlessMatch.On(Short, map, nav).Run();
@@ -126,8 +120,6 @@ public sealed class HeadlessMatchTests
     [Fact]
     public void ResetPutsAMatchBackToItsFirstTick()
     {
-        ReferenceTree.RequireAvailable();
-
         var (map, nav) = Navigable();
         var match = HeadlessMatch.On(Short, map, nav);
 
@@ -150,8 +142,6 @@ public sealed class HeadlessMatchTests
     [Fact]
     public void ADifferentSeedIsADifferentMatch()
     {
-        ReferenceTree.RequireAvailable();
-
         var (map, nav) = Navigable();
 
         var first = HeadlessMatch.On(Short with { Seed = 1 }, map, nav).Run();
@@ -177,8 +167,6 @@ public sealed class HeadlessMatchTests
     [Fact]
     public void AMatchActuallyPlays()
     {
-        ReferenceTree.RequireAvailable();
-
         var (map, nav) = Navigable();
         var match = HeadlessMatch.On(Short, map, nav);
 
@@ -243,8 +231,6 @@ public sealed class HeadlessMatchTests
     [Fact]
     public void ACrowdedMatchNeverDropsAProjectileSpawn()
     {
-        ReferenceTree.RequireAvailable();
-
         var (map, nav) = Navigable();
         var options = HeadlessMatchOptions.Default with { Bots = 12, MaxTicks = 2000 };
         var match = HeadlessMatch.On(options, map, nav);
@@ -284,8 +270,6 @@ public sealed class HeadlessMatchTests
     [Fact]
     public void AMatchWithoutANavCacheStillRuns()
     {
-        ReferenceTree.RequireAvailable();
-
         var result = HeadlessMatch.On(Short, Map(), nav: null).Run();
 
         Assert.Equal(MatchOutcome.Exhausted, result.Outcome);
@@ -353,8 +337,6 @@ public sealed class HeadlessMatchTests
     [InlineData(3, 3)]
     public void ExplicitTeamsArePlacedExactly(int red, int blue)
     {
-        ReferenceTree.RequireAvailable();
-
         var match = HeadlessMatch.On(
             Short with { RedBots = red, BlueBots = blue },
             Map(),
@@ -389,8 +371,6 @@ public sealed class HeadlessMatchTests
     [Fact]
     public void AnEmptyTeamIsDifferentFromAnUnspecifiedOne()
     {
-        ReferenceTree.RequireAvailable();
-
         Assert.False(HeadlessMatchOptions.Default.HasExplicitTeams);
         Assert.True((HeadlessMatchOptions.Default with { BlueBots = 0 }).HasExplicitTeams);
 
@@ -530,8 +510,6 @@ public sealed class HeadlessMatchTests
     [Fact]
     public void AdjacentBatchSeedsDoNotOverlap()
     {
-        ReferenceTree.RequireAvailable();
-
         var (map, nav) = Navigable();
 
         var first = MatchRunner.Run(Short with { Seed = 1 }, count: 4, map, nav);

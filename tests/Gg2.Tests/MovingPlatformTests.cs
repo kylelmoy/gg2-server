@@ -397,8 +397,6 @@ public sealed class MovingPlatformTests
     [Fact]
     public void NoShippedMapPlacesAPlatformThatCouldCarryAnyone()
     {
-        ReferenceTree.RequireAvailable();
-
         var carriers = new List<string>();
 
         foreach (var (name, map) in ShippedMaps())
@@ -544,35 +542,11 @@ public sealed class MovingPlatformTests
     /// </remarks>
     private static IEnumerable<(string Name, LevelMap Map)> ShippedMaps()
     {
-        var directories = new List<string> { ReferenceTree.IncludedFiles };
-
-        var own = Path.Combine(RepositoryRoot(), "maps");
-        if (Directory.Exists(own))
-            directories.Add(own);
-
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var directory in directories)
-        foreach (var path in Directory.GetFiles(directory, "*.png"))
+        // maps/ holds the 22 shipped maps (MapCopyTests) and this repo's own.
+        foreach (var path in Directory.GetFiles(ReferenceTree.MapsDirectory, "*.png"))
         {
             var name = Path.GetFileNameWithoutExtension(path)!;
-            if (!seen.Add(name))
-                continue;
-
             yield return (name, LevelMap.FromPng(name, File.ReadAllBytes(path)));
         }
-    }
-
-    private static string RepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "Gg2.sln")))
-                return directory.FullName;
-        }
-
-        return AppContext.BaseDirectory;
     }
 }

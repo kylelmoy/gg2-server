@@ -87,9 +87,8 @@ public sealed class InvasionFixtureTests
         var invasion = new List<string>();
         var captureTheFlag = 0;
 
-        foreach (var path in Directory.GetFiles(ReferenceTree.IncludedFiles, "*.png"))
+        foreach (var name in ReferenceTree.ShippedMapNames())
         {
-            var name = Path.GetFileNameWithoutExtension(path)!;
             var mode = GameModes.ShapeOf(MapLoader(name)).GameMode;
 
             if (mode == GameMode.Invasion)

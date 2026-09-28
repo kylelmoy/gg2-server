@@ -32,8 +32,6 @@ public sealed class BotCarrierFailsafeTests
 {
     private static (ScriptedBot Bot, WorldState State) Carrier()
     {
-        ReferenceTree.RequireAvailable();
-
         var state = default(WorldState);
         state.GameMode = GameMode.CaptureTheFlag;
         state.AddPlayer(0);
@@ -79,7 +77,7 @@ public sealed class BotCarrierFailsafeTests
     public void AStalledCarrierAsksToDropTheIntel()
     {
         var (bot, state) = Carrier();
-        var world = ScenarioWorld.Load("ctf_truefort", 1, ReferenceTree.IncludedFiles, null).Collision;
+        var world = ScenarioWorld.Load("ctf_truefort", 1, ReferenceTree.MapsDirectory, null).Collision;
 
         var commands = Run(bot, ref state, world, ScriptedBot.CarrierStuckTicks + 60);
 
@@ -100,7 +98,7 @@ public sealed class BotCarrierFailsafeTests
     public void ACarrierDoesNotDropBeforeTheTimeout()
     {
         var (bot, state) = Carrier();
-        var world = ScenarioWorld.Load("ctf_truefort", 1, ReferenceTree.IncludedFiles, null).Collision;
+        var world = ScenarioWorld.Load("ctf_truefort", 1, ReferenceTree.MapsDirectory, null).Collision;
 
         var commands = Run(bot, ref state, world, ScriptedBot.CarrierStuckTicks - 30);
 
@@ -142,7 +140,7 @@ public sealed class BotCarrierFailsafeTests
     public void AMovingCarrierThatNeverDeliversStillDropsIt()
     {
         var (bot, state) = Carrier();
-        var world = ScenarioWorld.Load("ctf_truefort", 1, ReferenceTree.IncludedFiles, null).Collision;
+        var world = ScenarioWorld.Load("ctf_truefort", 1, ReferenceTree.MapsDirectory, null).Collision;
 
         var commands = default(PlayerCommandBuffer);
         var dropped = -1;
@@ -178,7 +176,7 @@ public sealed class BotCarrierFailsafeTests
         var (bot, state) = Carrier();
         state.Characters[1].CarryingIntel = false;
 
-        var world = ScenarioWorld.Load("ctf_truefort", 1, ReferenceTree.IncludedFiles, null).Collision;
+        var world = ScenarioWorld.Load("ctf_truefort", 1, ReferenceTree.MapsDirectory, null).Collision;
 
         var commands = Run(bot, ref state, world, ScriptedBot.CarrierStuckTicks * 2);
 

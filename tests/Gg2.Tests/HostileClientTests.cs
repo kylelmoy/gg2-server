@@ -72,8 +72,6 @@ public sealed class HostileClientTests
     [Fact]
     public void CommandsWhosePreconditionsFailReachTheWireAsNothing()
     {
-        ReferenceTree.RequireAvailable();
-
         using var harness = Harness();
         var socket = harness.JoinClient("hostile");
         using var mirror = new MirrorClient(socket, Load, Map);
@@ -137,8 +135,6 @@ public sealed class HostileClientTests
     [Fact]
     public void TheSameCommandIsObeyedOnceItsPreconditionsHold()
     {
-        ReferenceTree.RequireAvailable();
-
         using var harness = Harness();
         var socket = harness.JoinClient("sniper");
         using var mirror = new MirrorClient(socket, Load, Map);
@@ -184,8 +180,6 @@ public sealed class HostileClientTests
     [Fact]
     public void GoingSpectatorWhileCarryingTheIntelDropsItRatherThanLosingIt()
     {
-        ReferenceTree.RequireAvailable();
-
         using var harness = Harness();
         var socket = harness.JoinClient("defector");
         using var mirror = new MirrorClient(socket, Load, Map);
@@ -252,8 +246,6 @@ public sealed class HostileClientTests
     [Fact]
     public void AskingForTheTeamYouAreAlreadyOnIsRefusedRatherThanKillingYou()
     {
-        ReferenceTree.RequireAvailable();
-
         using var harness = Harness();
         var socket = harness.JoinClient("spammer");
 

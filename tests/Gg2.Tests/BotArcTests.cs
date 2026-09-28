@@ -279,7 +279,7 @@ public sealed class BotArcTests(ITestOutputHelper output)
     // ------------------------------------------------------------------
 
     private static ScenarioWorld Scenario() =>
-        ScenarioWorld.Load(Map, 1, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+        ScenarioWorld.Load(Map, 1, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
 
     /// <summary>
     /// What a class presses with a target at <paramref name="targetNode"/>, aimed

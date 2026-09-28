@@ -56,10 +56,9 @@ public sealed class ScriptedBotTests
 
     private static ScenarioWorld Load()
     {
-        ReferenceTree.RequireAvailable();
         ReferenceTree.RequireNavCache();
 
-        return ScenarioWorld.Load(Map, 1, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+        return ScenarioWorld.Load(Map, 1, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
     }
 
     private static ScriptedBot Bot(NavGraph? graph, Team team = Team.Red, int tier = 5, int stagger = 0) =>

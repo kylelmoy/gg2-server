@@ -52,8 +52,6 @@ public sealed class ChatBubbleThrottleTests
     [Fact]
     public void ABurstInOneTickIsRelayedOnce()
     {
-        ReferenceTree.RequireAvailable();
-
         using var harness = Harness(intervalMs: 250);
         var socket = harness.JoinClient("chatty");
         using var mirror = new MirrorClient(socket, Load, Map);
@@ -76,8 +74,6 @@ public sealed class ChatBubbleThrottleTests
     [Fact]
     public void EveryBubbleIsRelayedWhenTheThrottleIsOff()
     {
-        ReferenceTree.RequireAvailable();
-
         using var harness = Harness(intervalMs: 0);
         var socket = harness.JoinClient("chatty");
         using var mirror = new MirrorClient(socket, Load, Map);
@@ -105,8 +101,6 @@ public sealed class ChatBubbleThrottleTests
     [Fact]
     public void TheGateReopensRatherThanClosingForGood()
     {
-        ReferenceTree.RequireAvailable();
-
         using var harness = Harness(intervalMs: 1);
         var socket = harness.JoinClient("chatty");
         using var mirror = new MirrorClient(socket, Load, Map);

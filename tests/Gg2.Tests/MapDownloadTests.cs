@@ -87,11 +87,7 @@ public sealed class MapDownloadTests : IDisposable
     [Fact]
     public void EveryShippedMapIsInternal()
     {
-        ReferenceTree.RequireAvailable();
-
-        var notInternal = Directory
-            .GetFiles(ReferenceTree.IncludedFiles, "*.png")
-            .Select(path => Path.GetFileNameWithoutExtension(path)!)
+        var notInternal = ReferenceTree.ShippedMapNames()
             .Where(name => !InternalMaps.IsInternal(name))
             .Order(StringComparer.Ordinal)
             .ToArray();

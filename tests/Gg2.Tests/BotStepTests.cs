@@ -49,7 +49,7 @@ public sealed class BotStepTests(ITestOutputHelper output)
     private const double GateX = 682;
 
     private static ScenarioWorld Load() =>
-        ScenarioWorld.Load(Map, 1, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+        ScenarioWorld.Load(Map, 1, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
 
     /// <summary>A character of a class, put exactly where asked.</summary>
     /// <remarks>

@@ -57,7 +57,7 @@ public sealed class BotSuppressTests(ITestOutputHelper output)
         new(LevelMap.FromPng(Map, ReferenceTree.ReadMap(Map)));
 
     private static ScenarioWorld Scenario() =>
-        ScenarioWorld.Load(Map, 1, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+        ScenarioWorld.Load(Map, 1, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
 
     /// <summary>The tick <see cref="Engage"/> stopped on.</summary>
     private static int LastTick;

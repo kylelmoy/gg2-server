@@ -30,8 +30,6 @@ public sealed class ControlPortTests : IDisposable
 
     public ControlPortTests()
     {
-        ReferenceTree.RequireAvailable();
-
         _harness = new ServerHarness(o =>
         {
             // Port 0: an ephemeral port, read back from the server. A

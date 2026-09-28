@@ -70,8 +70,6 @@ public sealed class RosterCompactionClientTests
     [Fact]
     public void JoiningWhileTheBotPopulationChangesNeverDisagreesAboutThePlayerCount()
     {
-        ReferenceTree.RequireAvailable();
-
         using var harness = new ServerHarness(options =>
         {
             options.Map = Map;
@@ -162,8 +160,6 @@ public sealed class RosterCompactionClientTests
     [Fact]
     public void JoinsAndDeparturesInterleavedNeverDisagreeAboutThePlayerCount()
     {
-        ReferenceTree.RequireAvailable();
-
         using var harness = new ServerHarness(options =>
         {
             options.Map = Map;
@@ -249,8 +245,6 @@ public sealed class RosterCompactionClientTests
     [Fact]
     public void AnEarlierSlotLeavingSlidesTheSurvivorDownWithItsCharacterAndIntel()
     {
-        ReferenceTree.RequireAvailable();
-
         using var harness = new ServerHarness(options =>
         {
             options.Map = Map;

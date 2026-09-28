@@ -68,8 +68,6 @@ public sealed class JoinDuringDeathTests
     [Fact]
     public void AClientJoiningOnTheTickSomebodyDiedIsNotSentThatDeath()
     {
-        ReferenceTree.RequireAvailable();
-
         using var harness = new ServerHarness(options =>
         {
             options.Map = Map;

@@ -30,8 +30,6 @@ public sealed class ServerRestartTests : IDisposable
 
     public ServerRestartTests()
     {
-        ReferenceTree.RequireAvailable();
-
         _directory = Path.Combine(Path.GetTempPath(), $"gg2-restart-{Guid.NewGuid():N}");
         Directory.CreateDirectory(_directory);
     }
@@ -47,7 +45,7 @@ public sealed class ServerRestartTests : IDisposable
         ServerConfigFile.Apply(options, ConfigPath);
         options.ConfigFile = ConfigPath;
         options.Port = 0;
-        options.MapDirectory = ReferenceTree.IncludedFiles;
+        options.MapDirectory = ReferenceTree.MapsDirectory;
 
         var server = new GameServer(options, new RecordingLog());
         server.Start();
@@ -191,7 +189,7 @@ public sealed class ServerRestartTests : IDisposable
     {
         var options = ServerOptions.CreateDefault();
         options.Port = 0;
-        options.MapDirectory = ReferenceTree.IncludedFiles;
+        options.MapDirectory = ReferenceTree.MapsDirectory;
         options.Web = WebAdminOptions.Disabled with { Enabled = true, Port = 0 };
 
         using (var generated = new GameServer(options, new RecordingLog()))
@@ -222,7 +220,7 @@ public sealed class ServerRestartTests : IDisposable
     {
         var options = ServerOptions.CreateDefault();
         options.Port = 0;
-        options.MapDirectory = ReferenceTree.IncludedFiles;
+        options.MapDirectory = ReferenceTree.MapsDirectory;
 
         using var server = new GameServer(options, new RecordingLog());
         server.Start();

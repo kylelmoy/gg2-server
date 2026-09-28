@@ -25,7 +25,7 @@ public sealed class RolloutRestrictionTests
 
     private static ScenarioWorld World(out int red)
     {
-        var world = ScenarioWorld.Load(Map, 1, ReferenceTree.IncludedFiles, null);
+        var world = ScenarioWorld.Load(Map, 1, ReferenceTree.MapsDirectory, null);
 
         red = world.Place(PlayerClass.Soldier, Team.Red, 600, 850);
         world.Place(PlayerClass.Soldier, Team.Blue, 760, 850);
@@ -268,7 +268,7 @@ public sealed class RolloutRestrictionTests
     [Fact]
     public void AClassChangeDropsAStaleRestriction()
     {
-        var world = ScenarioWorld.Load(Map, 1, ReferenceTree.IncludedFiles, null);
+        var world = ScenarioWorld.Load(Map, 1, ReferenceTree.MapsDirectory, null);
         var sniper = world.Place(PlayerClass.Sniper, Team.Red, 600, 850);
         world.Place(PlayerClass.Soldier, Team.Blue, 760, 850);
 

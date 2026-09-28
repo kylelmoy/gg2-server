@@ -49,7 +49,7 @@ public sealed class RolloutThreadingTests
     /// </remarks>
     private static List<Decision> Run(int threads, int ticks = 150)
     {
-        var world = ScenarioWorld.Load(Map, 1, ReferenceTree.IncludedFiles, null);
+        var world = ScenarioWorld.Load(Map, 1, ReferenceTree.MapsDirectory, null);
         var red = new RolloutSearch(new RolloutOptions(Threads: threads));
         var blue = new RolloutSearch();
 

@@ -48,7 +48,7 @@ public sealed class BulletRectFilterTests
     [InlineData("cp_dirtbowl", 2)]
     public void FilteringOnceForTheWholeArcChangesNoAnswer(string map, int area)
     {
-        var world = ScenarioWorld.Load(map, area, ReferenceTree.IncludedFiles, null);
+        var world = ScenarioWorld.Load(map, area, ReferenceTree.MapsDirectory, null);
         var collision = world.Collision;
         var filter = CollisionFilter.ForBullet();
 

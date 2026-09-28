@@ -41,10 +41,9 @@ public sealed class PathFollowerFixtureTests(Xunit.Abstractions.ITestOutputHelpe
 
     private static ScenarioWorld Load()
     {
-        ReferenceTree.RequireAvailable();
         ReferenceTree.RequireNavCache();
 
-        return ScenarioWorld.Load(Map, 1, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+        return ScenarioWorld.Load(Map, 1, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
     }
 
     /// <summary>

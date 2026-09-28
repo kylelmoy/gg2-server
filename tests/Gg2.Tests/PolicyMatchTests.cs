@@ -60,7 +60,7 @@ public sealed class PolicyMatchTests
 
     private static Played Play(string map, uint seed, PlayerClass[]? classes, PolicyNetwork? policy)
     {
-        var match = HeadlessMatch.Load(Options(map, seed, classes, policy), ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+        var match = HeadlessMatch.Load(Options(map, seed, classes, policy), ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
 
         var deaths = 0;
         var start = new (double X, double Y)[WorldState.MaxSlots];
@@ -194,7 +194,7 @@ public sealed class PolicyMatchTests
     [Fact]
     public void ARestrictedMatchContainsOnlyTrainedClasses()
     {
-        var match = HeadlessMatch.Load(Options("ctf_truefort", 31u, Trained, Policy()), ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+        var match = HeadlessMatch.Load(Options("ctf_truefort", 31u, Trained, Policy()), ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
         var counted = 0;
 
         for (var slot = 1; slot < WorldState.MaxSlots; slot++)
@@ -232,7 +232,7 @@ public sealed class PolicyMatchTests
 
         for (uint seed = 40; seed < 48; seed++)
         {
-            var match = HeadlessMatch.Load(Options("ctf_truefort", seed, classes: null, policy: null), ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+            var match = HeadlessMatch.Load(Options("ctf_truefort", seed, classes: null, policy: null), ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
 
             for (var slot = 1; slot < WorldState.MaxSlots; slot++)
             {
@@ -288,7 +288,7 @@ public sealed class PolicyMatchTests
 
         var match = HeadlessMatch.Load(
             Options("ctf_truefort", 51u, untrained, Policy()),
-            ReferenceTree.IncludedFiles,
+            ReferenceTree.MapsDirectory,
             ReferenceTree.NavCacheDirectory);
 
         while (match.Outcome == MatchOutcome.Running && match.Tick < 30 * 60)

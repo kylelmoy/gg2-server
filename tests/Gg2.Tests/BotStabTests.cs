@@ -238,7 +238,7 @@ public sealed class BotStabTests(ITestOutputHelper output)
         bool ready, bool willLand, bool expectAttack)
     {
         var graph = Graph();
-        var world = ScenarioWorld.Load(Map, 1, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+        var world = ScenarioWorld.Load(Map, 1, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
 
         var spy = world.Place(PlayerClass.Spy, Team.Red, StandX, StandY);
         var enemy = world.Place(PlayerClass.Scout, Team.Blue, StandX + 100, StandY);
@@ -282,7 +282,7 @@ public sealed class BotStabTests(ITestOutputHelper output)
     public void AnUncloakedSpyShootsRatherThanStabbing()
     {
         var graph = Graph();
-        var world = ScenarioWorld.Load(Map, 1, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+        var world = ScenarioWorld.Load(Map, 1, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
 
         var spy = world.Place(PlayerClass.Spy, Team.Red, StandX, StandY);
         var enemy = world.Place(PlayerClass.Scout, Team.Blue, StandX + 100, StandY);

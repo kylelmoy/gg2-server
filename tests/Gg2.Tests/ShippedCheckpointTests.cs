@@ -378,7 +378,7 @@ public sealed class ShippedCheckpointTests
         };
 
         var match = HeadlessMatch.Load(
-            options, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+            options, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
 
         var deaths = 0;
 

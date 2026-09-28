@@ -55,7 +55,7 @@ public sealed class ObservationRayFanTests
     [InlineData("cp_dirtbowl", 2)]
     public void SkippingMarchEqualsTheNaiveOne(string map, int area)
     {
-        var world = ScenarioWorld.Load(map, area, ReferenceTree.IncludedFiles, null);
+        var world = ScenarioWorld.Load(map, area, ReferenceTree.MapsDirectory, null);
         var mask = world.Collision.Mask;
         var slot = world.Place(PlayerClass.Soldier, Team.Red, 100, 100);
 
@@ -144,7 +144,7 @@ public sealed class ObservationRayFanTests
     [InlineData("ctf_truefort")]
     public void ClearanceIsTheChebyshevDistanceToSolid(string map)
     {
-        var world = ScenarioWorld.Load(map, 1, ReferenceTree.IncludedFiles, null);
+        var world = ScenarioWorld.Load(map, 1, ReferenceTree.MapsDirectory, null);
         var mask = world.Collision.Mask;
         var clearance = mask.Clearance;
         var random = new Random(7);
@@ -206,7 +206,7 @@ public sealed class ObservationRayFanTests
     {
         // Uncached, so this really is a mask whose clearance field has never
         // been asked for.
-        var world = ScenarioWorld.Load("ctf_2dfort", 1, ReferenceTree.IncludedFiles, null, resources: null);
+        var world = ScenarioWorld.Load("ctf_2dfort", 1, ReferenceTree.MapsDirectory, null, resources: null);
         var slot = world.Place(PlayerClass.Soldier, Team.Red, 600, 850);
         var buffer = new float[ObservationWriter.Length];
         var view = new WorldView(in world.State, world.Collision);
@@ -215,7 +215,7 @@ public sealed class ObservationRayFanTests
         // static constructor, the buffer.
         ObservationWriter.Write(in view, slot, buffer);
 
-        var fresh = ScenarioWorld.Load("ctf_orange", 1, ReferenceTree.IncludedFiles, null, resources: null);
+        var fresh = ScenarioWorld.Load("ctf_orange", 1, ReferenceTree.MapsDirectory, null, resources: null);
         var freshSlot = fresh.Place(PlayerClass.Soldier, Team.Red, 600, 850);
         var freshView = new WorldView(in fresh.State, fresh.Collision);
 

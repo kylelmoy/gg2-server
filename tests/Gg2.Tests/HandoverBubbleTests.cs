@@ -246,8 +246,6 @@ public sealed class HandoverBubbleTests
     [Fact]
     public void TheBubbleReachesTheWire()
     {
-        ReferenceTree.RequireAvailable();
-
         using var harness = new ServerHarness(options =>
         {
             options.Map = MapName;

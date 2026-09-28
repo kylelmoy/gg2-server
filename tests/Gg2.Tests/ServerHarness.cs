@@ -17,14 +17,12 @@ public sealed class ServerHarness : IDisposable
 
     public ServerHarness(Action<ServerOptions>? configure = null, Action<GameServer>? configureServer = null)
     {
-        ReferenceTree.RequireAvailable();
-
         Options = new ServerOptions
         {
             Port = 0, // any free port
             ServerName = "test server",
             Map = "ctf_truefort",
-            MapDirectory = ReferenceTree.IncludedFiles,
+            MapDirectory = ReferenceTree.MapsDirectory,
         };
 
         configure?.Invoke(Options);

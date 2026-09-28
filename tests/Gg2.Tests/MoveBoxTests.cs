@@ -89,9 +89,8 @@ public sealed class MoveBoxTests
     {
         var withBoxes = new List<string>();
 
-        foreach (var path in Directory.GetFiles(ReferenceTree.IncludedFiles, "*.png"))
+        foreach (var name in ReferenceTree.ShippedMapNames())
         {
-            var name = Path.GetFileNameWithoutExtension(path)!;
             var boxes = MoveBoxes.Build(LevelMap.FromPng(name, ReferenceTree.ReadMap(name)));
 
             if (boxes.Length == 0)

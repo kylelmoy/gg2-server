@@ -414,7 +414,7 @@ public sealed class BotOccupancyTests(ITestOutputHelper output)
         var shared = new BotOccupancy();
 
         var world = ScenarioWorld.Load(
-            Map, 1, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+            Map, 1, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
 
         var slot = world.Place(PlayerClass.Scout, Team.Red, 3570, 325);
 

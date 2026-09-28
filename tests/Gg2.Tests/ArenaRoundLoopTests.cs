@@ -42,7 +42,7 @@ public sealed class ArenaRoundLoopTests
             RespawnTimeSeconds: 5,
             MaxTicks: 4000,
             Seed: seed),
-        ReferenceTree.IncludedFiles,
+        ReferenceTree.MapsDirectory,
         ReferenceTree.NavCacheDirectory);
 
     /// <summary>

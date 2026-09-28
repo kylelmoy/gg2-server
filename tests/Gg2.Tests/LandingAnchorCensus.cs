@@ -52,7 +52,6 @@ public sealed class LandingAnchorCensus(ITestOutputHelper output)
     [Fact(Skip = "Measurement, not a gate. Numbers in docs/TRAPS-BOTS.md.")]
     public void Census()
     {
-        ReferenceTree.RequireAvailable();
         ReferenceTree.RequireNavCache();
 
         var maps = Directory.EnumerateFiles(MapDirectory.Resolve(), "*.png")
@@ -76,7 +75,7 @@ public sealed class LandingAnchorCensus(ITestOutputHelper output)
 
             try
             {
-                world = ScenarioWorld.Load(name, 1, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+                world = ScenarioWorld.Load(name, 1, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
             }
             catch (FileNotFoundException)
             {

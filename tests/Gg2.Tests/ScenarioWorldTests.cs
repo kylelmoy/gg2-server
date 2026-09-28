@@ -31,10 +31,9 @@ public sealed class ScenarioWorldTests
 
     private static ScenarioWorld Load(string map, int area = 1)
     {
-        ReferenceTree.RequireAvailable();
         ReferenceTree.RequireNavCache();
 
-        return ScenarioWorld.Load(map, area, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+        return ScenarioWorld.Load(map, area, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
     }
 
     /// <summary>
