@@ -273,11 +273,19 @@ itself.
 
 | | |
 |---|---|
-| `PlayerAnalyticsTests` | counting, per-day uniqueness across a day boundary, playtime including sessions still open, the salt and every total surviving a reload, the cap and its effect on the all-time count, a live player never being trimmed, geography by country and by US state, and the three claims a reader would act on: no address is in the file, a name cannot forge the format, and a store that never read its file cannot write one |
+| `PlayerAnalyticsTests` | counting, per-day uniqueness across a day boundary, playtime including sessions still open, the salt and every total surviving a reload, the cap and its effect on the all-time count, a live player never being trimmed, an unresolvable address still counted under `??`, and the three claims a reader would act on: no address is in the file, a name cannot forge the format, and a store that never read its file cannot write one |
 | `AnalyticsServerTests` | the same store as a running `GameServer` drives it, over a real socket: a join and a disconnect are counted, bots never are, the history survives a whole server restart, no file appears without the flag, and the `analytics` verb reports what happened |
-| `GeoIpDatabaseTests` | the MaxMind DB reader against **MaxMind's own test database** — an oracle rather than a mirror, because a reader tested against an encoder by the same author passes whenever both misread the specification the same way |
+| `GeoIpDatabaseTests` | only that the reader refuses a missing file and a file that is not a MaxMind DB, without throwing |
 | `WebAssetTests` | the panel's files, checked the way a build step would: no top-level name declared twice across the scripts a page loads, every literal `$('id')` present in the HTML (for the fleet page, inside the analytics sheet it cuts out), and the map geometry's shape and antimeridian |
 | `CliCoverageTests`, `ConfigFileCoverageTests` | both settings are reachable from a flag and from a config file, and each moves the option it names |
+
+**Geography is not gated.** The repo carries no `.mmdb`, so nothing tests a
+lookup, the country-versus-US-state keying, geography surviving a reload, or the
+payload naming a loaded database. A reader tested against an encoder written
+beside it would pass whenever both misread the specification the same way, so
+that is not a substitute. A change to `GeoIpDatabase` or to region keying is
+verified by running with `--geoip` against a downloaded database and opening the
+panel.
 
 **What no test here catches**, and cannot: anything that needs the panel's
 JavaScript to run. The view is verified by opening it. Two bugs found that way

@@ -30,9 +30,6 @@ public sealed class PlayerAnalyticsTests : IDisposable
 
     private static readonly DateTime Noon = new(2026, 3, 4, 12, 0, 0, DateTimeKind.Utc);
 
-    private static string GeoFixture => System.IO.Path.Combine(
-        AppContext.BaseDirectory, "Fixtures", "geoip", "GeoIP2-City-Test.mmdb");
-
     public PlayerAnalyticsTests() => Directory.CreateDirectory(_directory);
 
     public void Dispose()
@@ -449,39 +446,6 @@ public sealed class PlayerAnalyticsTests : IDisposable
     /* ---------- geography --------------------------------------------------- */
 
     /// <summary>
-    /// The United States is subdivided by state and nowhere else is, which is
-    /// what the map's two views are built on.
-    /// </summary>
-    [Fact]
-    public void GeographyIsByCountryExceptInsideTheUnitedStates()
-    {
-        using var geo = GeoIpDatabase.Open(GeoFixture, new RecordingLog());
-        Assert.NotNull(geo);
-
-        using var store = New(geo);
-
-        // Milton, Washington and a British address, from the fixture.
-        store.End(store.Begin(IPAddress.Parse("216.160.83.56"), "american", Noon, 1), Noon.AddMinutes(10));
-        store.End(store.Begin(IPAddress.Parse("81.2.69.142"), "briton", Noon, 2), Noon.AddMinutes(20));
-
-        var american = Assert.Single(store.Regions, r => r.Key == "US-WA");
-
-        Assert.Equal("US", american.CountryCode);
-        Assert.Equal("WA", american.RegionCode);
-        Assert.Equal("Washington", american.RegionName);
-        Assert.Equal(1, american.Players);
-
-        var briton = Assert.Single(store.Regions, r => r.Key == "GB");
-
-        Assert.Equal("United Kingdom", briton.CountryName);
-
-        // ⚠️ No "GB-ENG". A subdivision outside the United States is read from
-        // the database and then deliberately not used as a key — the map has no
-        // view for it and a table full of one-player regions is not a map.
-        Assert.DoesNotContain(store.Regions, r => r.Key.StartsWith("GB-", StringComparison.Ordinal));
-    }
-
-    /// <summary>
     /// An address the database cannot place is counted, not dropped.
     /// </summary>
     /// <remarks>
@@ -492,8 +456,7 @@ public sealed class PlayerAnalyticsTests : IDisposable
     [Fact]
     public void AnAddressWithNoGeographyIsStillCounted()
     {
-        using var geo = GeoIpDatabase.Open(GeoFixture, new RecordingLog());
-        using var store = New(geo);
+        using var store = New();
 
         store.End(store.Begin(IPAddress.Parse("192.168.1.40"), "on the lan", Noon, 1), Noon.AddMinutes(10));
 
@@ -503,23 +466,6 @@ public sealed class PlayerAnalyticsTests : IDisposable
 
         Assert.Equal(1, unknown.Players);
         Assert.Equal(600, unknown.PlaytimeSeconds);
-    }
-
-    /// <summary>Geography survives a restart with the rest of it.</summary>
-    [Fact]
-    public void GeographySurvivesARestart()
-    {
-        using (var geo = GeoIpDatabase.Open(GeoFixture, new RecordingLog()))
-        using (var store = New(geo))
-        {
-            store.End(store.Begin(IPAddress.Parse("216.160.83.56"), "american", Noon, 1), Noon.AddMinutes(10));
-        }
-
-        using var second = New();
-        var region = Assert.Single(second.Regions, r => r.Key == "US-WA");
-
-        Assert.Equal(1, region.Players);
-        Assert.Equal("Washington", region.RegionName);
     }
 
     /* ---------- the payload -------------------------------------------------- */
@@ -533,8 +479,7 @@ public sealed class PlayerAnalyticsTests : IDisposable
     [Fact]
     public void EveryRowMatchesItsDeclaredFields()
     {
-        using var geo = GeoIpDatabase.Open(GeoFixture, new RecordingLog());
-        using var store = New(geo);
+        using var store = New();
 
         store.End(store.Begin(IPAddress.Parse("216.160.83.56"), "american", Noon, 1), Noon.AddMinutes(10));
 
@@ -559,26 +504,19 @@ public sealed class PlayerAnalyticsTests : IDisposable
     }
 
     /// <summary>
-    /// The panel is told which database produced the geography, or that there
-    /// is none.
+    /// The panel is told when there is no geo database.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Both cases matter.</b> An empty map with a country-level database
-    /// loaded and an empty map with no database at all look identical, and only
-    /// one of them is fixed by downloading a file.
+    /// ⚠️ An empty map with a country-level database loaded and an empty map
+    /// with no database at all look identical, and only one of them is fixed by
+    /// downloading a file. The loaded case needs a real <c>.mmdb</c>, which this
+    /// repo does not carry, so it is verified by opening the panel.
     /// </remarks>
     [Fact]
-    public void ThePayloadNamesTheGeoDatabaseOrSaysThereIsNone()
+    public void ThePayloadSaysWhenThereIsNoGeoDatabase()
     {
-        using (var store = New())
-            Assert.Equal(JsonValueKind.Null, Read(store, Noon).GetProperty("geoip").ValueKind);
+        using var store = New();
 
-        using var geo = GeoIpDatabase.Open(GeoFixture, new RecordingLog());
-        using var withGeo = New(geo);
-
-        var reported = Read(withGeo, Noon).GetProperty("geoip");
-
-        Assert.Equal("GeoIP2-City", reported.GetProperty("type").GetString());
-        Assert.True(reported.GetProperty("regions").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, Read(store, Noon).GetProperty("geoip").ValueKind);
     }
 }
