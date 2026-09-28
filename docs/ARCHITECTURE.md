@@ -380,7 +380,7 @@ tightest instrument available, but it is still a bound, not a proof.
 
 ## The control surface
 
-A C# server does not need injection the way `gg2-agent` needs one to drive the
+A C# server does not need injection the way the live-game bridge needs one to drive the
 GM8 game: it exposes the same capabilities as a small local-only TCP/JSON
 control port, or an in-process API when hosting the sim from a test.
 

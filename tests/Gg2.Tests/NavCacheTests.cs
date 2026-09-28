@@ -123,7 +123,7 @@ public sealed class NavCacheTests
         Assert.Equal(new NavNode(10, 20, 26, 0, NavDoor.None, NavGate.TeamRed), graph.Nodes[1]);
         Assert.Equal(new NavNode(17, 4, 30, 0, NavDoor.None, NavGate.Setup), graph.Nodes[2]);
 
-        // Rejump is field 8, and gg2-agent/tools/navgraph.js — the file the
+        // Rejump is field 8, and the JavaScript nav-graph decoder — the file the
         // format is documented in — does not read it. A reader written from that
         // alone drops it silently.
         Assert.Equal(
@@ -262,7 +262,7 @@ public sealed class NavCacheTests
     /// <remarks>
     /// <b>The one word that is the difference between a bot that walks a
     /// staircase and one that hops up it</b>, and the one place this reader
-    /// deliberately disagrees with <c>gg2-agent/tools/navgraph.js</c>, which
+    /// deliberately disagrees with the JavaScript nav-graph decoder, which
     /// still floors. <c>navNodeFromWorld.gml</c>'s own header explains it: a
     /// node's feet sit exactly on a row boundary, but GG2 rests a character with
     /// its feet a pixel <em>above</em> the surface, so flooring puts a
@@ -487,7 +487,7 @@ public sealed class NavCacheTests
     /// stamps an edge that passes through a gate with that gate, so the check
     /// below covers both".
     /// <para>
-    /// The game is the specification here, not <c>gg2-agent/tools/navgraph.js</c>'s
+    /// The game is the specification here, not the JavaScript nav-graph decoder's
     /// <c>reach</c>, which checks both node and edge gates and is deliberately
     /// conservative. The two agree on every shipped graph —
     /// <c>NavSearchFixtureTests.NoEdgeLandsOnAGatedNodeUnstamped</c> is the

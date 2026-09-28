@@ -17,7 +17,7 @@ public sealed class MapFormatException(string message) : Exception(message);
 /// collision cell is. The art in the PNG is decoration; the mask is the truth,
 /// and the two routinely disagree.
 /// <para>
-/// Ported from <c>gg2-agent/tools/walkmask.js</c>, which is the existing
+/// Ported from the JavaScript walkmask decoder, which is the existing
 /// decoder and has been verified cell-for-cell against the running game.
 /// </para>
 /// </remarks>

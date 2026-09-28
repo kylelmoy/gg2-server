@@ -60,7 +60,7 @@ public readonly record struct ScenarioExpectations(
     bool? Acquired = null);
 
 /// <summary>
-/// One behaviour scenario, ported from <c>gg2-agent/tools/bot-scenarios.js</c>.
+/// One behaviour scenario, ported from the original JavaScript bot scenarios.
 /// </summary>
 /// <remarks>
 /// <b>The <see cref="About"/> text is the valuable part and is carried across

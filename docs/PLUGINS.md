@@ -765,14 +765,14 @@ A rotation kills every connected client on a server with bots, it has nothing to
 do with plugins, and the server log says only `ConnectionReset`.
 
 1. **Two ini keys, or every launch stops on a modal.** In
-   `D:/code/Gang-Garrison-2/Source/build/gg2.ini`, under `[Settings]`
-   (that path is the deleted bot fork's — see `docs/TRAPS-LIVEGAME.md`):
+   `<reference>/Source/build/gg2.ini`, under `[Settings]`
+   (`<reference>` and `<bridge>` are defined in `docs/TRAPS-LIVEGAME.md`):
    `ServerPluginsPrompt=0` (else the client raises the "download these plugins?"
    dialog and the bridge stops answering) and `RestartPrompt=0` (else
    `pluginscleanup` raises one on disconnect). **Back the file up and restore
    it** — it is the live game's own config, not this repo's.
 2. `gg2-server --port 8190 --plugins chat --bots 2`, then point a client at it
-   via `gg2-agent`'s `run-agent.js --role client -- -server 127.0.0.1 -port
+   via the live-game bridge's `run-agent.js --role client -- -server 127.0.0.1 -port
    8190`. `tail`ing its launcher log shows any load failure — nothing else does.
 3. `gg2_evalx` on the client: `global.serverPluginsInUse` is 1,
    `global.chatPacketID` is 0, and `global.chatLog` holds the server's reply.
@@ -850,14 +850,14 @@ spectator directly (that guard is correct).
 ```
 gg2-server --port 8190 --map ctf_truefort --bots 4 --time-limit 1 \
            --rotation ctf_truefort,koth_valley
-cd D:/Code/gg2-agent && node run-agent.js --port 17778 --name client1 \
+cd <bridge> && node run-agent.js --port 17778 --name client1 \
     --role client --keep -- -server 127.0.0.1 -port 8190
 ```
 
 Wait for `now playing koth_valley`, wait another 30 seconds, then:
 
 ```
-tail D:/code/Gang-Garrison-2/Source/build/agent_launcher_17778.log
+tail <reference>/Source/build/agent_launcher_17778.log
 ```
 
 **The launcher log is the only place the failure appears.** The server log

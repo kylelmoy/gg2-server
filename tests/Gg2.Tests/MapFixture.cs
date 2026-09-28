@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace Gg2.Tests;
 
 /// <summary>
-/// The checked-in oracle for phase 0: what <c>gg2-agent</c>'s decoders say each
+/// The checked-in oracle for phase 0: what the JavaScript map decoders say each
 /// built-in map contains.
 /// </summary>
 /// <remarks>

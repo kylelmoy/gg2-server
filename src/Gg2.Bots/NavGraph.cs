@@ -259,7 +259,7 @@ public sealed class NavGraph
     /// the engine actually rests the body — gives n608, the step above.
     /// </para>
     /// <para>
-    /// <c>gg2-agent/tools/navgraph.js</c> floors instead of rounding here — it
+    /// the JavaScript nav-graph decoder floors instead of rounding here — it
     /// documents the format but is wrong about this line. The reference is the
     /// specification (CLAUDE.md, "the reference is the specification, not this
     /// repo"), so this rounds, and <c>NavGraphTests</c> gates the difference.

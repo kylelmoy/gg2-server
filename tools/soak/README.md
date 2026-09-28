@@ -105,7 +105,7 @@ If the roster watch is quiet too, the client was not following the churn and the
 run says nothing.
 
 **`agentDebugDesync`**, already patched into `deserializeState.gml` by
-`gg2-agent`, which records a declared-count mismatch to the bridge log instead of
+the live-game tooling, which records a declared-count mismatch to the bridge log instead of
 only putting it on screen.
 
 ## Measured

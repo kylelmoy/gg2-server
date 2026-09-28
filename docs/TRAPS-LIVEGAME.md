@@ -1,6 +1,11 @@
 # Driving the live game
 
-**`D:\code\Gang-Garrison-2` holds stock upstream GG2, not the bot fork the running game was built and driven from.** Nothing below runs until the fork is
+The live-game bridge is private tooling outside this repository: it injects into
+the running GM8 game and serves the `gg2_*` MCP tools. Commands below write its
+checkout as `<bridge>` and the GG2 checkout the game is built from as
+`<reference>`.
+
+**`<reference>` holds stock upstream GG2, not the bot fork the running game was built and driven from.** Nothing below runs until the fork is
 re-cloned (`git clone https://github.com/kylelmoy/Gang-Garrison-2.git`,
 `git checkout bot-route-variety`, then rebuild `Source/build/`). Stock upstream
 has no `Source/build/`, no bots and no bridge.
@@ -40,7 +45,7 @@ wants.
 needed:
 
 ```powershell
-node D:\code\gg2-agent\tools\launcher.js "D:\code\Gang-Garrison-2\Source\build\Gang Garrison 2.exe" `
+node <bridge>\tools\launcher.js "<reference>\Source\build\Gang Garrison 2.exe" `
      --name c1 --role client -agentport 17779 -server 127.0.0.1 -port 8191
 ```
 
@@ -349,7 +354,7 @@ compares every rectangle the port builds against it.
 it.** Once a session has called any `gg2_*` tool, a `node gg2-samplers/sample-*.js`
 run times out on its first call — even `gg2_ping` — even though the game is
 fine. Hand the socket over deliberately: stop the game, restart it with
-`node D:/code/gg2-agent/run-agent.js --port 17777 --name server --role server -- -dedicated -map ctf_truefort`,
+`node <bridge>/run-agent.js --port 17777 --name server --role server -- -dedicated -map ctf_truefort`,
 and do not touch `gg2_*` until the tool has finished. The other direction is
 free, because each CLI run exits and releases.
 
@@ -363,7 +368,7 @@ are finished with the game.
 
 ## Soaking a stock client against the port
 
-The instrumentation is in `gg2-agent`'s payload, not a fork of the game:
+The instrumentation is in the live-game bridge's payload, not a fork of the game:
 `agentRate`, `agentSnap` and `agentSoak`, all off by default, plus
 `agentRateArm()` and `agentSnapReport()` to read back over `gg2_evalx`. That
 repo's `docs/CLIENTDEBUG.md` has the patch sites. What belongs here is what a

@@ -4,7 +4,7 @@ namespace Gg2.Bots;
 
 /// <summary>
 /// The fourteen behaviour scenarios, ported from
-/// <c>gg2-agent/tools/bot-scenarios.js</c>.
+/// the original JavaScript bot scenarios.
 /// </summary>
 /// <remarks>
 /// <b>Adding a scenario is an edit to this file and nothing else.</b> That is

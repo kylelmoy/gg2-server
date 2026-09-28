@@ -415,7 +415,7 @@ runaway client did, and then at exactly one byte per command.
 
 **What is not:** what emits the byte, and what puts a client into that state —
 it had just reconnected after a server restart. Both sightings used a client
-carrying the `gg2-agent` payload, whose own writes go to its bridge socket and
+carrying the live-game bridge payload, whose own writes go to its bridge socket and
 not to `global.serverSocket`; a clean, un-injected client has not been tried.
 
 ---

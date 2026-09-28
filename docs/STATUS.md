@@ -53,7 +53,7 @@ rotation between rounds was broken until this audit found it.
 
 ## Phase 0 — foundations
 
-All 22 built-in maps decode **cell-for-cell** against `gg2-agent/tools/walkmask.js`,
+All 22 built-in maps decode **cell-for-cell** against the JavaScript walkmask decoder,
 the decoder that has itself been checked against the running game.
 
 ## Phase 1 — a server a client can join

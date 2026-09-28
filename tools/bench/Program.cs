@@ -4,11 +4,22 @@ using Gg2.Bots;
 using Gg2.Simulation;
 using Gg2.Protocol;
 
-// The reference's Included Files, where GG2_REFERENCE points or at the default
-// checkout. The same resolution the test suite's ReferenceTree uses.
+// The reference's Included Files when GG2_REFERENCE is set, otherwise this
+// repo's checked-in maps/ — byte-identical to them, which MapCopyTests gates.
 var maps = Environment.GetEnvironmentVariable("GG2_REFERENCE") is { Length: > 0 } reference
     ? Path.Combine(reference, "Source", "gg2", "Included Files")
-    : Path.Combine("D:", "code", "Gang-Garrison-2", "Source", "gg2", "Included Files");
+    : RepositoryMaps();
+
+static string RepositoryMaps()
+{
+    for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+    {
+        if (File.Exists(Path.Combine(directory.FullName, "Gg2.sln")))
+            return Path.Combine(directory.FullName, "maps");
+    }
+
+    throw new DirectoryNotFoundException("no Gg2.sln above the bench binary; set GG2_REFERENCE");
+}
 
 // Both flight modes want a nav directory and are meaningless without one, so
 // they resolve it the loud way rather than falling back to "no graph, no edges,

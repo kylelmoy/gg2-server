@@ -219,7 +219,7 @@ observed after that anchor tick.
 
 ## Tier 1 — primitives, against the live engine
 
-Before any trajectory can match, `placeFree` must match. `gg2-agent` can answer
+Before any trajectory can match, `placeFree` must match. The live-game bridge can answer
 this directly from the running game: `gg2_eval` a `place_free(x, y)` at a few
 thousand sampled points on a map and compare against the C# implementation
 reading the same walkmask.
@@ -944,7 +944,7 @@ tick (`game_init.gml`), so 0 is unreachable there and unambiguous here
 ## Tier 3 — a real client, watched
 
 The end-to-end check the other tiers cannot give: launch a stock GM8 client
-against the ported server and play. `gg2-agent` automates this —
+against the ported server and play. The live-game bridge automates this —
 `tools/launcher.js` starts a client, `gg2_session` manages a server-plus-clients
 set, `gg2_screenshot`/`gg2_area_shot` see what is happening, and `gg2_evalx`
 reads the client's own predicted position (`Character.syncWrongness`) so it
@@ -1490,7 +1490,7 @@ that frame's flush.
 
 ## Tier 4 — behaviour scenarios
 
-`gg2-agent/tools/bot-scenarios.js` is an existing suite of "can a bot still
+the original JavaScript bot scenarios is an existing suite of "can a bot still
 walk from A to B on map M" cases, with tick counts. Once the port runs bots,
 the same scenarios should pass with comparable tick counts. This is the
 regression net for the bot work that motivated the project, and porting the

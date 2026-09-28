@@ -5,7 +5,7 @@ namespace Gg2.Tests;
 
 /// <summary>
 /// Phase 0's exit criterion: decode every built-in map and match
-/// <c>gg2-agent/tools/walkmask.js</c> cell-for-cell on all of them
+/// the JavaScript walkmask decoder cell-for-cell on all of them
 /// (docs/PLAN.md).
 /// </summary>
 /// <remarks>

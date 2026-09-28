@@ -1,6 +1,6 @@
 # Where everything lives in the reference
 
-An index into `D:\code\Gang-Garrison-2\Source\gg2` (GG2 v2.9.2), so a session
+An index into `Source/gg2` of the reference checkout (GG2 v2.9.2), so a session
 does not spend its first hour finding things. Paths are relative to that
 directory.
 
@@ -20,13 +20,11 @@ across 19 object directories. Two ways to read it:
 # unescape one event by hand
 cat "Objects/InGameElements/Character.events/Step.xml" |
   sed -e 's/&lt;/</g' -e 's/&gt;/>/g' -e 's/&amp;/\&/g'
-
-# search scripts and unescaped event text together
-node D:\code\gg2-agent\tools\...   # gg2_find, via the gg2-agent MCP server
 ```
 
-`gg2-agent`'s `gg2_find` and `gg2_event` tools exist precisely for this and are
-worth using if that MCP server is available in the session.
+The live-game bridge's `gg2_find` (scripts and unescaped event text together)
+and `gg2_event` tools exist precisely for this and are worth using if that MCP
+server is available in the session.
 
 ## Constants
 
@@ -119,8 +117,8 @@ across `Player`, `Character`, weapons, `MovingPlatform` and `HUD`.
 | Design notes | `Documentation/Bots.md` |
 
 **The paths in this section resolve only in the bot fork**, at
-`github.com/kylelmoy/Gang-Garrison-2` (branch `bot-route-variety`) — the local
-`D:\code\Gang-Garrison-2` is stock upstream GG2 and has none of `Scripts/Bots/`,
+`github.com/kylelmoy/Gang-Garrison-2` (branch `bot-route-variety`) — the
+reference checkout is stock upstream GG2 and has none of `Scripts/Bots/`,
 `Scripts/BotNav/`, the `BOT_*`/`NAV_*` constants, or `Documentation/Bots.md`. See
 CLAUDE.md, "Reading the reference", for the full picture. This port's bot layer
 has since diverged from the fork's, so nothing here is a specification; it is a
@@ -130,11 +128,11 @@ stock tree and is accurate.
 **Nav graph generation is no longer in the game.** It lives in this repo's
 `src/Gg2.Nav` (`gg2-server navgen`), which writes `botnav/<map>_a<area>.txt`
 into `nav/` (or wherever `GG2_NAVCACHE` points). The cache format is documented
-in `D:\code\gg2-agent\tools\navgraph.js` — it is `ds_grid_write`'s column-major
+in the JavaScript nav-graph decoder — it is `ds_grid_write`'s column-major
 layout with sixteen-byte cells and the double four bytes in, which is not the
 obvious format. Do not re-derive it by hand.
 
-## Tooling worth borrowing from `gg2-agent`
+## Tooling worth borrowing from the live-game bridge
 
 | What | Where |
 |---|---|
@@ -145,6 +143,6 @@ obvious format. Do not re-derive it by hand.
 | GM8/GML gotchas that cost real debugging time | `GML.md` |
 | Live-game control (bridge, MCP tools) | `CLAUDE.md` |
 
-`gg2-agent/GML.md` is worth reading once even though no GML is being written
+The bridge's GML notes are worth reading once even though no GML is being written
 here: several entries are about engine behaviour the port has to reproduce, not
 about syntax.

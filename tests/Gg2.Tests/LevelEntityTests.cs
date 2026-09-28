@@ -6,7 +6,7 @@ namespace Gg2.Tests;
 /// The <c>{ENTITIES}</c> half of phase 0.
 /// </summary>
 /// <remarks>
-/// The oracle here (<c>gg2-agent/tools/navgraph.js</c>) splits GGON with a
+/// The oracle here (the JavaScript nav-graph decoder) splits GGON with a
 /// regex instead of parsing it, so it is a cross-check rather than a
 /// specification: it agrees on the shipped list-form maps, which is enough to
 /// catch an off-by-one or a dropped entity, and it cannot read <c>gg_debug</c>

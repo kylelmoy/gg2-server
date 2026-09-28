@@ -102,7 +102,7 @@ public sealed class NavManifest
     /// the last column are unspecified, so hashing them would make the answer
     /// depend on padding rather than on geometry. One byte per cell is the
     /// representation the phase-0 parity fixture already compares against
-    /// <c>gg2-agent/tools/walkmask.js</c>, so it is a shape that has been
+    /// the JavaScript walkmask decoder, so it is a shape that has been
     /// checked against something outside this repository.
     /// </para>
     /// <para>

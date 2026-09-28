@@ -561,7 +561,7 @@ public sealed class Walkmask
 
     /// <summary>
     /// One byte per cell, row-major, 1 where solid — the layout
-    /// <c>gg2-agent/tools/walkmask.js</c> produces.
+    /// the JavaScript walkmask decoder produces.
     /// </summary>
     /// <remarks>
     /// Exists so the parity fixture can compare this decoder against that one

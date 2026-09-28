@@ -13,7 +13,7 @@ namespace Gg2.Bots;
 /// training and rollout search both want a <em>fight</em>, not a match, and the
 /// sample budget is spent here rather than in whole rounds.
 /// <para>
-/// It is also the scenario harness — <c>gg2-agent/tools/botscenario.js</c>'s job
+/// It is also the scenario harness — the original JavaScript scenario runner's job
 /// in this port, minus the running game. The reason that runner lives outside
 /// GML is that every new script costs a full Game Maker build; here the same
 /// reasoning says it should be a library rather than a test fixture, because a

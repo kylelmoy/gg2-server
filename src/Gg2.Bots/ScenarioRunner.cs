@@ -8,7 +8,7 @@ namespace Gg2.Bots;
 /// measures it.
 /// </summary>
 /// <remarks>
-/// <c>gg2-agent/tools/botscenario.js</c>'s job, without a running game. The
+/// The original JavaScript scenario runner's job, without a running game. The
 /// runner is the part that must not be re-invented per scenario: place, step,
 /// measure, stop — so that adding a scenario is an edit to
 /// <see cref="Scenarios"/> and nothing else.

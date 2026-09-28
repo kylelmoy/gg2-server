@@ -135,7 +135,7 @@ PlayerCommandBuffer, ICommandSource}`, `Gg2.Server.NetworkInputSource`,
 
 `src/Gg2.Bots/` — `NavCache`, `NavGraph`, `NavTypes`. Gated by `NavCacheTests`
 (built bytes) and `NavGraphFixtureTests` (all 24 real caches). The reference is
-`Scripts/BotNav/`; `gg2-agent/tools/navgraph.js` documents the format.
+`Scripts/BotNav/`; the JavaScript nav-graph decoder documents the format.
 
 - ✅ **The `NAV_*` and `BOT_*` constants are already ported** —
   `Gg2.Protocol.{NavConstants, BotConstants}`, pinned to `Constants.xml` by
@@ -149,7 +149,7 @@ PlayerCommandBuffer, ICommandSource}`, `Gg2.Server.NetworkInputSource`,
   produces a graph that loads without complaint and describes geometry that does
   not exist — every field is a plausible small number in the wrong place.
 - ⚠️ **`navNodeFromWorld` *rounds* the feet row; it does not floor it — and
-  `gg2-agent/tools/navgraph.js` still floors.** That file is right about the
+  the JavaScript nav-graph decoder still floors.** That file is right about the
   format and a revision behind the game on this line. A node's feet sit exactly
   on a row boundary but GG2 rests a character with its feet a pixel *above* the
   surface, so flooring puts a stationary bot one row up. Invisible on a wide
@@ -191,7 +191,7 @@ PlayerCommandBuffer, ICommandSource}`, `Gg2.Server.NetworkInputSource`,
 
 `Gg2.Bots.{ScenarioWorld, ScenarioRunner, Scenario, Scenarios}`. Gated by
 `ScenarioWorldTests` and `ScenarioDefinitionTests`. The reference is
-`gg2-agent/tools/{botscenario,bot-scenarios}.js`.
+the original JavaScript scenario runner and scenarios.
 
 - ✅ **`ScenarioWorld` is docs/BOTAI.md item 11** — "spawn two characters of
   given classes at given positions on a given map, with no gamemode running, and
@@ -335,7 +335,7 @@ reddens only this one.
   edges, 1,350 stamped, 148 gated nodes, zero unstamped landings**
   (`NavSearchFixtureTests.NoEdgeLandsOnAGatedNodeUnstamped` catches a
   regression). `NavGraph.EdgePassable` checked the landing node too until this
-  landed, ported from `gg2-agent/tools/navgraph.js`'s deliberately
+  landed, ported from the JavaScript nav-graph decoder's deliberately
   conservative `reach`. **The game is the specification**: a bot inside a gate
   it may not pass still gets edges *out*.
 - ⚠️ **Refusing a class arc is the DEFAULT** — `CanDoubleJump`/`CanRocketJump`
@@ -736,7 +736,7 @@ of the time and fails occasionally.
 ### Phase 7 item 4e: the scenario suite runs, and eight of fourteen legs pass
 
 `Gg2.Bots.{IScenarioSubject, ScenarioRunner, ScenarioWorld}` and
-`ScenarioSuiteTests`. The reference is `gg2-agent/tools/botscenario.js`.
+`ScenarioSuiteTests`. The reference is the original JavaScript scenario runner.
 
 ✅ **The fourteen scenarios are executable assertions now**, driven by
 `ScriptedBot`. **Eight pass; six do not**, asserted as an exact set both ways — a

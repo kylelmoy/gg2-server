@@ -384,7 +384,7 @@ set walkmask cell or any enabled solid rectangle?* That is a bitmask lookup over
 a handful of cells plus a few AABB tests. It should be nanoseconds, and it is
 the single hottest function in the server.
 
-**There is prior art for the mask decode.** `gg2-agent/tools/walkmask.js` already
+**There is prior art for the mask decode.** the JavaScript walkmask decoder already
 decodes the `zTXt` "Gang Garrison 2 Level Data" chunk and its `{WALKMASK}`
 bitstream with no game running, and `gg2-nav-gen` already runs collision queries
 against it offline accurately enough to build nav graphs the live game accepts.
@@ -511,7 +511,7 @@ it into a parameter is not free.
 ## GM8 semantics that will bite
 
 Collected because each of these has already cost someone real time; several are
-recorded in `gg2-agent/GML.md`.
+recorded in the bridge's GML notes.
 
 - **Automatic movement.** Described above — GM8 adds velocity to position
   between Step and End Step. `x -= hspeed` at the end of a Step event means "undo
@@ -542,7 +542,7 @@ recorded in `gg2-agent/GML.md`.
 Be honest about these in the parity harness rather than assuming:
 
 1. **Instance ordering under heavy churn** (projectiles created and destroyed in
-   the same tick) — answerable with `gg2-agent`'s live bridge; do that before
+   the same tick) — answerable with the live-game bridge; do that before
    building on a guess.
 2. How an alarm assigned a fractional number of ticks rounds is settled: **half
    to even**, which is what `Timers.SetAlarm` already did. See "Settled: the

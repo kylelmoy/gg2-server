@@ -17,7 +17,7 @@ session spends a day arriving where it started.
 ### What each project is, and the ordering facts that came with it
 
 - `Gg2.Protocol`, `Gg2.Maps` — phase 0. Every built-in map decodes
-  cell-for-cell against `gg2-agent/tools/walkmask.js`.
+  cell-for-cell against the JavaScript walkmask decoder.
 - `Gg2.Server`, `Gg2.Host` — phase 1. A stock GM8 client joins and reaches the
   team-select screen; `gg2-parity` shows this server's broadcast stream is
   byte-identical to the reference's, including the CTF round timer.
@@ -3788,7 +3788,7 @@ platforms silently, the same shape as `MaxProjectiles`; raising it is the fix.
 #### What the map archive says about moving platforms — measured 2026-09-01
 
 ⚠️ **The carry is NOT hypothetical — "no shipped map places one" was hiding
-that.** Scanned all 2,348 maps in `D:\code\gg2-maps\maps` with this port's own
+that.** Scanned all 2,348 maps in a community map archive with this port's own
 `LevelMap.FromPng`: **1,838 parsed, and 8 of them place a moving platform.**
 
 | map | platforms |

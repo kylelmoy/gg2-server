@@ -11,7 +11,7 @@ namespace Gg2.Server;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Why it exists.</b> <c>gg2-agent</c> drives the Game Maker game through an
+/// <b>Why it exists.</b> The live-game tooling drives the Game Maker game through an
 /// injected bridge because there was no other way in. A C# server does not need
 /// injection — it needs a socket and a switch statement — and the capabilities
 /// worth having are the ones that tooling actually found useful over the last
