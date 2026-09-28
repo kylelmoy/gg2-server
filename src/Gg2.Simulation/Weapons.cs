@@ -492,7 +492,7 @@ public static partial class Weapons
     /// <summary>
     /// <c>AirBlastMaskS</c>, the mask <c>AirBlastO.xml</c> declares: bbox
     /// 9,1,97,28 on a 120x30 image about origin (1, 14). Measured against the
-    /// engine (<c>tools/probes/probe-airblast.js</c>) — the XML's AUTO bound
+    /// engine (<c>gg2-samplers/probes/probe-airblast.js</c>) — the XML's AUTO bound
     /// happens to agree, but the engine is the oracle.
     /// </summary>
     private static readonly Aabb AirBlastSpriteBbox = new(9, 1, 97, 28);

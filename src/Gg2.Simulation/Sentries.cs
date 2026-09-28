@@ -105,7 +105,7 @@ public static class Sentries
     /// inflation applied <em>before</em> the rotation.
     /// </summary>
     /// <remarks>
-    /// Measured (<c>tools/probes/probe-airblast.js</c>): three flipped
+    /// Measured (<c>gg2-samplers/probes/probe-airblast.js</c>): three flipped
     /// rotations of <c>SentryTurretS</c> all match the pre-rotation model.
     /// See <see cref="Aabb.ForRotatedSpriteReported"/>.
     /// </remarks>

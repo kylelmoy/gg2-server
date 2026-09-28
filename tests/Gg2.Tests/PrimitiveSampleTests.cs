@@ -18,7 +18,7 @@ namespace Gg2.Tests;
 /// <c>Shot</c> around a real character in the running game, with <b>both</b>
 /// bounding boxes recorded per sample rather than assumed — so each row is a
 /// self-contained statement about two rectangles the engine named. Regenerate
-/// with <c>node tools/sample-primitives.js</c>.
+/// with <c>node gg2-samplers/sample-primitives.js</c>.
 /// </para>
 /// </remarks>
 public sealed class PrimitiveSampleTests

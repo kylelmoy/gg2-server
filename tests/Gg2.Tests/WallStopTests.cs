@@ -16,7 +16,7 @@ namespace Gg2.Tests;
 /// reference's exact position is unrecoverable from any recording. This
 /// reproduces the whole of the interesting part — slot 4's walk from t383 —
 /// with no trace, no replayer and no other player, so that the engine can be
-/// asked the same question directly: <c>tools/probes/probe-wall-stop.js</c>
+/// asked the same question directly: <c>gg2-samplers/probes/probe-wall-stop.js</c>
 /// runs exactly this scenario in GM8 and prints the difference.
 /// <para>
 /// <b>The stop is a WALL, not friction.</b> The recording holds key 0x20 —
@@ -45,7 +45,7 @@ public sealed class WallStopTests
 
     /// <summary>
     /// Where the port comes to rest, exactly. Shared with
-    /// <c>tools/probes/probe-wall-stop.js</c>, which prints the engine's answer
+    /// <c>gg2-samplers/probes/probe-wall-stop.js</c>, which prints the engine's answer
     /// beside it.
     /// </summary>
     private const double RestX = 629.4972928249938;
@@ -140,7 +140,7 @@ public sealed class WallStopTests
 
     /// <summary>
     /// The resting position, pinned to the last bit — this is the number
-    /// <c>tools/probes/probe-wall-stop.js</c> compares the engine against.
+    /// <c>gg2-samplers/probes/probe-wall-stop.js</c> compares the engine against.
     /// </summary>
     /// <remarks>
     /// <b>If this test fails, do not repair it and move on.</b> It is the

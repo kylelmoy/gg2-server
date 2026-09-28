@@ -18,7 +18,7 @@ namespace Gg2.Tests;
 /// in doubt at a boundary: across cell edges at both <c>x % 6 == 0</c> and
 /// <c>x % 6 == 3</c>, across the origin into negative coordinates, and across
 /// the far edge where the sprite stops. Regenerate with
-/// <c>node tools/sample-collision.js</c> against a running dedicated server.
+/// <c>node gg2-samplers/sample-collision.js</c> against a running dedicated server.
 /// </para>
 /// </remarks>
 public sealed class CollisionSampleTests
@@ -118,7 +118,7 @@ public sealed class CollisionSampleTests
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "collision-samples.json");
         if (!File.Exists(path))
-            throw new FileNotFoundException($"missing {path}; run tools/sample-collision.js", path);
+            throw new FileNotFoundException($"missing {path}; run gg2-samplers/sample-collision.js", path);
 
         return System.Text.Json.JsonSerializer.Deserialize<Document>(File.ReadAllBytes(path))!.Maps;
     }
@@ -271,7 +271,7 @@ public sealed class CollisionSampleTests
         var world = new CollisionWorld(LevelMap.FromPng(name, ReferenceTree.ReadMap(name)));
 
         // SOLID rectangles only, and the exclusion is the oracle's rather than
-        // this test's. `tools/sample-collision.js` enumerates the objects
+        // this test's. `gg2-samplers/sample-collision.js` enumerates the objects
         // `charSetSolids` names (plus BulletWall), and `DropdownPlatform` is in
         // neither list because it is never solid — you walk and jump straight
         // through one in every direction. So the game was never asked for its

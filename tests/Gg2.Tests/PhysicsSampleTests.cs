@@ -15,7 +15,7 @@ namespace Gg2.Tests;
 /// character placed at a state we chose exactly, then stepped through its own
 /// <c>Begin Step</c>, <c>Step</c> and <c>End Step</c> events for forty-eight
 /// ticks of scripted input, with its position and velocity read back to the
-/// last bit. Regenerate with <c>node tools/sample-physics.js</c> against a
+/// last bit. Regenerate with <c>node gg2-samplers/sample-physics.js</c> against a
 /// running dedicated server.
 /// <para>
 /// <b>Why this exists alongside the trace replay.</b> A recorded trace carries
@@ -91,7 +91,7 @@ public sealed class PhysicsSampleTests
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "physics-samples.json");
         if (!File.Exists(path))
-            throw new FileNotFoundException($"missing {path}; run tools/sample-physics.js", path);
+            throw new FileNotFoundException($"missing {path}; run gg2-samplers/sample-physics.js", path);
 
         return System.Text.Json.JsonSerializer.Deserialize<Document>(File.ReadAllBytes(path))!.Scenarios;
     }

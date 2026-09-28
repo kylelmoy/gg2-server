@@ -9,7 +9,7 @@ namespace Gg2.Tests;
 /// </summary>
 /// <remarks>
 /// <c>sprite-mask-samples.json</c> is what GM8 said, rasterised by
-/// <c>tools/probes/probe-platform-mask.js</c> with
+/// <c>gg2-samplers/probes/probe-platform-mask.js</c> with
 /// <c>collision_point(prec = 1)</c> over a sprite loaded exactly the way
 /// <c>stringToResource.gml</c> loads one. Where this port and that file disagree,
 /// <b>the file is right.</b>

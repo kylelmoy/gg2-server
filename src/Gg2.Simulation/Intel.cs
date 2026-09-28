@@ -120,7 +120,7 @@ public static class Intel
     /// and every map places them at <c>xscale = yscale = 1</c>.
     /// <para>
     /// <b>Measured against the running game</b>, by
-    /// <c>tools/sample-sprite-box.js</c> and gated by
+    /// <c>gg2-samplers/probes/probe-sprite-boxes.js</c> and gated by
     /// <c>SpriteBoxSampleTests</c>. The engine reports all three of
     /// <c>IntelligenceRedS</c>, <c>IntelligenceBlueS</c> and
     /// <c>IntelligenceBaseS</c> as <c>0, 0, 19, 19</c> about origin (9, 12) on a

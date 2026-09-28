@@ -23,7 +23,7 @@ namespace Gg2.Simulation;
 /// <para>
 /// Measured across 13,702 samples on <c>ctf_truefort</c> —
 /// <c>tests/Gg2.Tests/Fixtures/collision-line-samples.json</c>, regenerate with
-/// <c>node tools/sample-collision-line.js</c> — covering seven probe boxes at
+/// <c>node gg2-samplers/sample-collision-line.js</c> — covering seven probe boxes at
 /// both coordinate parities, positive, fractional and <b>negative</b> scales,
 /// an off-centre sprite origin, four classes of live character at both facings,
 /// and the map's own precise 6× mask. Exact on all of them, with no

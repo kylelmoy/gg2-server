@@ -306,8 +306,8 @@ and reading the result back.
   and ratios and let the game divide.
 - **`string_format(v, 1, 17)` is only good to ~16 significant digits** and the
   last one is noise. For ULP work pull the mantissa out in chunks, each under
-  2^19, because GM8's `floor()` wraps at 32 bits. Use `tools/exact-double.js` —
-  do not write another one. `node tools/exact-double.js` self-tests it.
+  2^19, because GM8's `floor()` wraps at 32 bits. Use `gg2-samplers/exact-double.js` —
+  do not write another one. `node gg2-samplers/exact-double.js` self-tests it.
 - **A probe character inherits its bot's `player.team`,** and `charSetSolids`
   makes the *other* team's gates solid — set `team` explicitly or the
   character walks into a wall the recording walked through.
@@ -321,9 +321,14 @@ and reading the result back.
 
 ## The samplers, the probes, and handing over the socket
 
-`tools/sample-collision.js`, `tools/sample-physics.js`, `tools/sample-rng.js`,
-`tools/sample-primitives.js`, `tools/sample-collision-line.js`,
-`tools/sample-motion.js` and `tools/sample-rotated-box.js` regenerate the
+The samplers and probes live in the separate `gg2-samplers` repo, a sibling
+checkout of this one. Each writes its fixture into this repo's
+`tests/Gg2.Tests/Fixtures/`; `GG2_SERVER` says where this repo is when it is not
+`../gg2-server`.
+
+`gg2-samplers/sample-collision.js`, `gg2-samplers/sample-physics.js`, `gg2-samplers/sample-rng.js`,
+`gg2-samplers/sample-primitives.js`, `gg2-samplers/sample-collision-line.js`,
+`gg2-samplers/sample-motion.js` and `gg2-samplers/sample-rotated-box.js` regenerate the
 engine oracles. All seven need a **running game with the agent bridge**; the
 physics and primitives ones also need at least one bot character, and the RNG,
 collision-line, motion and rotated-box ones are happy with any running
@@ -331,7 +336,7 @@ instance — the last two create and scale their own probe rather than
 borrowing a bot's character, so a dedicated server with an empty match is
 enough.
 
-`tools/probes/` holds the one-off probes that settled a single question rather
+`gg2-samplers/probes/` holds the one-off probes that settled a single question rather
 than generating a fixture — the sprite boxes, the bubble pair, the sentry
 mask, the airblast, the turret. Read the header of one before writing another:
 each records what it cost to get right.
@@ -341,7 +346,7 @@ each records what it cost to get right.
 compares every rectangle the port builds against it.
 
 **The bridge serves one TCP client at a time and the MCP server process holds
-it.** Once a session has called any `gg2_*` tool, a `node tools/sample-*.js`
+it.** Once a session has called any `gg2_*` tool, a `node gg2-samplers/sample-*.js`
 run times out on its first call — even `gg2_ping` — even though the game is
 fine. Hand the socket over deliberately: stop the game, restart it with
 `node D:/code/gg2-agent/run-agent.js --port 17777 --name server --role server -- -dedicated -map ctf_truefort`,

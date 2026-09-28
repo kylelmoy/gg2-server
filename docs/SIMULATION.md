@@ -554,7 +554,7 @@ Was items 1 and 2 on this list. Measured against the running game on
 `ctf_truefort` with `collision_point` against `CollisionMapO`, then checked
 across **23,040 sampled points on three maps** — the fixture is
 `tests/Gg2.Tests/Fixtures/collision-samples.json` and
-`tools/sample-collision.js` regenerates it.
+`gg2-samplers/sample-collision.js` regenerates it.
 
 - **A mask cell covers `[6c, 6c+6)` on both axes.** World pixel to cell is
   `floor(v / 6)`, half-open at the top. Sweeping x across a known edge, the
@@ -722,7 +722,7 @@ holding on to:
 ### Settled: GM8's decimal literals are not always the nearest double
 
 Measured by pulling the mantissa out of a live value a chunk at a time
-(`tools/sample-physics.js` has the encoder; the game's own `string_format` is
+(`gg2-samplers/sample-physics.js` has the encoder; the game's own `string_format` is
 only good to about sixteen significant digits and the seventeenth is noise,
 which is useless when the question is a single ULP).
 
@@ -817,7 +817,7 @@ classes (Scout, Soldier, Pyro, Heavy), two maps, 48 ticks each, **32 of them
 started from rest** — driven inside the running game from start states chosen
 exactly, with position and velocity read back to the last bit. The port
 reproduces every one of them **bit for bit**. Regenerate with
-`node tools/sample-physics.js` against a running dedicated server with bots.
+`node gg2-samplers/sample-physics.js` against a running dedicated server with bots.
 
 This is the gate phase 4 is actually held to, and it exists because a recorded
 trace cannot do the job: the wire carries position to a fifth of a pixel and
@@ -850,7 +850,7 @@ choose(..) = argument[floor(count * seed' / 2^32)]   // exactly one advance
 `tests/Gg2.Tests/Fixtures/rng-samples.json` is the evidence — 15 seeds × 8
 advances of the chain, 225 `random(x)` values compared **bit for bit** through
 the mantissa encoder, and every `irandom`/`choose` draw. Regenerate with
-`node tools/sample-rng.js`. Four properties are worth stating because each one
+`node gg2-samplers/sample-rng.js`. Four properties are worth stating because each one
 could have gone the other way:
 
 - **The seed advances before the value is taken.** `random_set_seed(s)` followed
@@ -882,7 +882,7 @@ buys nothing.
 
 Phase 3 pinned `place_free` and stopped there on purpose. Combat needs two more
 primitives, both measured against the running game —
-`tools/sample-primitives.js` regenerates
+`gg2-samplers/sample-primitives.js` regenerates
 `tests/Gg2.Tests/Fixtures/primitive-samples.json`, which is a grid of offsets of
 a real `Rocket` and a real `Shot` around a real character, **with both bounding
 boxes recorded per sample** rather than assumed.
@@ -938,7 +938,7 @@ matches 636. GML's `point_distance` is the naive form; write the naive form.
 Was the last unmeasured primitive and the one the hitscan waits on. Measured
 across **13,702 segments** on `ctf_truefort` —
 `tests/Gg2.Tests/Fixtures/collision-line-samples.json`, regenerate with
-`node tools/sample-collision-line.js`. `Gg2.Simulation.CollisionLine` reproduces
+`node gg2-samplers/sample-collision-line.js`. `Gg2.Simulation.CollisionLine` reproduces
 every one of them, exactly.
 
 **It is not a segment-versus-rectangle intersection, and writing one gives wrong
@@ -1076,7 +1076,7 @@ Four of those details change results rather than last digits:
   be worth not "fixing". Note the asymmetry with the line above: the residue
   survives in the components and is snapped out of `speed`.
 
-**Status: measured.** `tools/sample-motion.js`, 399 write sequences and 27
+**Status: measured.** `gg2-samplers/sample-motion.js`, 399 write sequences and 27
 angles against the running game, replayed by
 `tests/Gg2.Tests/MotionSampleTests.cs`. The starting point was OpenGMK's
 `gm8emulator/src/instance.rs`, and the measurement moved it: **the transcription
@@ -1146,13 +1146,13 @@ formula.
 
 **The mantissa encoder must be a single shared implementation.** Copy-pasted
 into four samplers, three of the four copies were wrong. It is one file now,
-`tools/exact-double.js`, and `node tools/exact-double.js` self-tests it without
+`gg2-samplers/exact-double.js`, and `node gg2-samplers/exact-double.js` self-tests it without
 a game — see "Settled: reading a GM8 double back to the last bit" below.
 
 ### Settled: a rotated sprite's bounding box
 
 `Gg2.Simulation.Aabb.ForRotatedSprite`, regenerate with
-`node tools/sample-rotated-box.js`. Phase 4 never needed it and phase 5 cannot
+`node gg2-samplers/sample-rotated-box.js`. Phase 4 never needed it and phase 5 cannot
 start without it.
 
 A character's `image_angle` is always 0, so its box is a fixed rectangle offset
@@ -1216,7 +1216,7 @@ if alarm >= 0 { alarm -= 1; if alarm == 0 { run the event } }
 - After firing it rests at **0**, not -1, and is consumed on the following tick.
   That is what makes it fire once.
 
-**Confirmed against the running game**: `tools/probes/probe-alarm-image.js`,
+**Confirmed against the running game**: `gg2-samplers/probes/probe-alarm-image.js`,
 witnessed with a `StabAnim` (Create sets `alarm[0] = 10`, `Alarm 0` sets
 `image_speed = 1`). Watching `alarm[0]` and `image_speed` from `AgentBridge`'s
 Step event — during the Step stage, after that frame's alarm stage — the
@@ -1274,7 +1274,7 @@ uncertain" for the part of that which is not measured.
 
 ### Settled: GM8 advances `image_index` after the whole Step stage
 
-Measured with `tools/probes/probe-alarm-image.js`, in the same trace as the
+Measured with `gg2-samplers/probes/probe-alarm-image.js`, in the same trace as the
 alarm rule above.
 
 **A Step event that reads `image_index` sees the value the end of the *previous*
@@ -2128,7 +2128,7 @@ direction jitter — and the count is contract, not bookkeeping.
 
 ### Settled: the four boxes that were derived, and are not any more
 
-Measured against the running game, `tools/probes/probe-sprite-boxes.js`, gated by
+Measured against the running game, `gg2-samplers/probes/probe-sprite-boxes.js`, gated by
 `SpriteBoxSampleTests` against `tests/Gg2.Tests/Fixtures/sprite-box-samples.json`.
 Four collision boxes landed without a live session and were confirmed correct
 here; none of them can drift silently again.
@@ -2167,7 +2167,7 @@ box some day and it will be quietly wrong.
 
 ### Settled: the sentry's collision box does not animate, and the turret's does
 
-Measured against the running game, `tools/probes/probe-sentry-mask.js`.
+Measured against the running game, `gg2-samplers/probes/probe-sentry-mask.js`.
 
 ⚠️ **A sentry's drawn sprite grows out of a toolbox and its extent swings
 wildly; its hitbox does neither.** `SentryRed`/`SentryBlue` have **twelve**
@@ -2215,7 +2215,7 @@ through `Aabb.ForRotatedSprite`; measured at 0/45/90/135/180 degrees. At
 pixels on `bbox_left`.
 
 **The flip inflation is applied to the sprite edge *before* the rotation, not
-to the rotated box** — measured (`tools/probes/probe-airblast.js`). At
+to the rotated box** — measured (`gg2-samplers/probes/probe-airblast.js`). At
 `image_xscale = -1` GM8's box
 is the rotated bound of the *mirrored sprite box with its mirrored-left edge
 extended two sprite pixels*, so at 45° the two pixels land partly on the
@@ -2233,7 +2233,7 @@ even when it looks like one.
 
 ### Settled: `collision_circle` is a plain Euclidean test, unlike `collision_line`
 
-Measured (`tools/probes/probe-circle.js`). Unlike `collision_line` — a
+Measured (`gg2-samplers/probes/probe-circle.js`). Unlike `collision_line` — a
 clip-round-pixel-walk that three exact intersection tests failed to reproduce —
 `collision_circle` is a plain Euclidean distance test.
 
@@ -2257,7 +2257,7 @@ Evidence, against a probe whose box is exactly `992..1007` by `993..1012`:
 - **Radius 0 on the corner pixel `(1007, 1012)` hits** and one pixel past it
   misses, so the box really is inclusive at both ends.
 
-**Second measurement (`tools/probes/probe-airblast.js`, `probe-airblast2.js`),
+**Second measurement (`gg2-samplers/probes/probe-airblast.js`, `probe-airblast2.js`),
 closing the gaps the first left open:**
 
 - ⚠️ **The centre is floored per axis before the test.** The airblast centres
@@ -2655,7 +2655,7 @@ fully transparent — and none of the four objects that wear them declares a
 `<mask>` of its own, so one box serves the flags and the bases alike. A **live
 briefcase on `ctf_truefort` answers `bbox_* - x/y = -9, -12, 10, 7` directly**,
 at `image_xscale = image_yscale = 1` and `image_angle = 0`.
-`tools/sample-sprite-box.js` regenerates
+`gg2-samplers/probes/probe-sprite-boxes.js` regenerates
 `tests/Gg2.Tests/Fixtures/sprite-box-samples.json`; `SpriteBoxSampleTests` is
 the gate.
 
@@ -3727,9 +3727,9 @@ the right click.
 **`BubbleS` is `0, 0, 11, 11` about origin (6, 6)** — the whole 12x12 image,
 which is what `mode="FULL"` in the XML had always been read to mean.
 ⚠️ **It is not sampled the way the other projectile sprites are.**
-`tools/sample-rotated-box.js` measures a projectile by creating one and reading
+`gg2-samplers/sample-rotated-box.js` measures a projectile by creating one and reading
 its instance `bbox_*`, and a bubble is not something `createShot` can be handed;
-`tools/sample-sprite-box.js` asks `sprite_get_bbox_*` of the sprite resource
+`gg2-samplers/probes/probe-sprite-boxes.js` asks `sprite_get_bbox_*` of the sprite resource
 instead, which needs no instance at all, and also records that `Bubble` declares
 no `<mask>` — without which the sprite's bbox would not be its collision box.
 
@@ -3879,7 +3879,7 @@ was created first, and for the commonest case (a screen older than the pellet
 flying into it) would leave every pellet alive and make `perseverant`
 meaningless. `Projectiles.ResolveBubblePair`.
 
-**Measured**, via `tools/probes/probe-bubble-pair.js`: a real `Bubble` and a
+**Measured**, via `gg2-samplers/probes/probe-bubble-pair.js`: a real `Bubble` and a
 real `Shot` created on the same point in open space (`place_meeting` between
 them checked, so the overlap is not assumed), read back one frame later. All
 four cells:
@@ -4153,7 +4153,7 @@ Step ghost.
 
 ### Settled: reading a GM8 double back to the last bit
 
-`tools/exact-double.js`. `string_format(v, 1, 17)` is good to about sixteen
+`gg2-samplers/exact-double.js`. `string_format(v, 1, 17)` is good to about sixteen
 significant digits and the seventeenth is noise, which is useless when the
 question is a single ULP — so every sampler that needs an exact value pulls the
 double apart inside the game and puts it back together in node.
@@ -4200,7 +4200,7 @@ an oracle** — so the port would be held to a number the game never said.
    it: the first intermediate is always in [1, 2) and the second always in
    [2^53, 2^54).
 
-`node tools/exact-double.js` round-trips 20,000 swept values plus a battery of
+`node gg2-samplers/exact-double.js` round-trips 20,000 swept values plus a battery of
 the residues, ULP-high literals and power-of-two boundaries this project cares
 about, and **asserts that all three bugs still reproduce** in a faithful
 transcription of the naive encoder, so a green run means something.

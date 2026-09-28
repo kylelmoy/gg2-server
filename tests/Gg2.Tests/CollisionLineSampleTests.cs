@@ -17,7 +17,7 @@ namespace Gg2.Tests;
 /// shot that hits a wall the reference shot through.
 /// <para>
 /// The fixture is 13,702 segments asked of the running game
-/// (<c>node tools/sample-collision-line.js</c>): seven probe boxes at both
+/// (<c>node gg2-samplers/sample-collision-line.js</c>): seven probe boxes at both
 /// coordinate parities, at positive, fractional and negative image scales and
 /// with an off-centre sprite origin; four classes of live bot at both facings;
 /// and the map's own precise 6× mask. Each probe records the bounding box the

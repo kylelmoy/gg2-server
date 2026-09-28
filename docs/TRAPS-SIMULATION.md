@@ -34,7 +34,7 @@ session spends a day arriving where it started.
 - `Gg2.Simulation.CharacterPhysics` — phase 4. The character update reproduces
   the running engine **bit for bit** across 64 trajectories on two maps
   (`tests/Gg2.Tests/Fixtures/physics-samples.json`, regenerate with
-  `node tools/sample-physics.js`), and replays the checked-in 898-tick bot trace
+  `node gg2-samplers/sample-physics.js`), and replays the checked-in 898-tick bot trace
   closed-loop with **zero** error on both axes, hp included. No nudges, no
   tolerances.
 - ⚠️ **`Projectiles.Move` runs before the characters move, and `Projectiles.Collide`
@@ -81,19 +81,19 @@ Do not re-derive any of them.
 
 - **GM8's RNG is Delphi's** — `seed' = seed*0x08088405 + 1 mod 2^32`, then
   `random(x) = x*seed'/2^32`. `Gg2.Protocol.GmlRandom`, regenerate the fixture
-  with `node tools/sample-rng.js`. It is **contract, not incidental**: a weapon
+  with `node gg2-samplers/sample-rng.js`. It is **contract, not incidental**: a weapon
   puts the *seed* on the wire and every client re-derives the shot spread itself,
   so `docs/SIMULATION.md`'s "server-side RNG is free" does not cover weapon fire.
   `Minigun` and `Blade` are exempt — they `randomize()` and send no seed.
 - **`distance_to_object` and `place_meeting`** — `Gg2.Simulation.Aabb`,
-  regenerate with `node tools/sample-primitives.js`. Both exact over 722 samples.
+  regenerate with `node gg2-samplers/sample-primitives.js`. Both exact over 722 samples.
   ⚠️ `distance_to_object` uses the **facing-inflated** bounding box and
   `place_meeting` does not, so **splash damage depends on which way the victim is
   facing**. And do not reach for `double.Hypot`; it rescales and loses the last
   bit.
 - **`collision_line` clips, rounds, then walks pixels** —
   `Gg2.Simulation.CollisionLine`, regenerate with
-  `node tools/sample-collision-line.js`. Exact over 9,014 segments.
+  `node gg2-samplers/sample-collision-line.js`. Exact over 9,014 segments.
   ⚠️ **It is not a segment-versus-rectangle intersection.** GM8 clips the segment
   to the instance's horizontal span, rounds the clipped endpoints half to even,
   and steps whole pixels along the longer axis — so a line can register against a
@@ -124,7 +124,7 @@ Do not re-derive any of them.
 
 ### The four motion variables, measured — and the one place exactness ends
 
-`Gg2.Simulation.Motion`, regenerate with `node tools/sample-motion.js`. **All
+`Gg2.Simulation.Motion`, regenerate with `node gg2-samplers/sample-motion.js`. **All
 four of `hspeed`, `vspeed`, `direction` and `speed` are stored**, and writing any
 one rewrites the others. A character never writes `direction`, which is why
 phase 4 got away with two fields; a projectile writes it three times before it
@@ -157,9 +157,9 @@ GML's own 1e-13 comparison fuzz, and twelve orders below the wire's fifth of a
 pixel. `MotionSampleTests` asserts a bound for the trig and stays exact for the
 snap. Do not re-derive it and do not try to beat it.
 
-✅ **The mantissa encoder is one file now: `tools/exact-double.js`.** There
+✅ **The mantissa encoder is one file now: `gg2-samplers/exact-double.js`.** There
 were four copies of it and **three of them were wrong**, so the duplication is
-gone and `node tools/exact-double.js` self-tests it without a game. All four
+gone and `node gg2-samplers/exact-double.js` self-tests it without a game. All four
 samplers use it. Three bugs, each of which silently loses the last bit or the
 whole value:
 
@@ -561,7 +561,7 @@ which is the only way to see bytes that were never written.
 `docs/SIMULATION.md`, "Settled: afterburn", has the full rules.
 
 - ⚠️ **A fired alarm rests at 0 for the rest of its own frame, and the port is
-  wrong about it.** Measured (`tools/probes/probe-alarm-image.js`): the counter
+  wrong about it.** Measured (`gg2-samplers/probes/probe-alarm-image.js`): the counter
   reads `…2, 1, 0, -1` on successive frames and the event runs on the frame it
   reads **0**. `Timers.Advance` writes `Inactive` at the moment of firing, one
   tick early. Invisible everywhere except `Character.events/Begin Step.xml:67`,
@@ -656,7 +656,7 @@ sentry", has the full rules; these are the traps:
 
 ### The sentry's box, the turret's box, and collision_circle — all measured
 
-Measured 2026-08-26 against the running game; `tools/probes/` has the scripts and
+Measured 2026-08-26 against the running game; `gg2-samplers/probes/` has the scripts and
 `docs/SIMULATION.md` has the tables. These unblocked the sentry and the airblast.
 
 - ⚠️ **A sentry's hitbox does NOT animate, though its sprite does.**
@@ -1368,7 +1368,7 @@ Blade", has the full rules; these are the traps:
 - ✅ **A collision between two projectiles runs two events, and the port applies
   both from whichever side it reaches the pair first.** Otherwise the outcome
   depends on creation order and `perseverant` becomes meaningless. **Measured
-  2026-08-27** (`tools/probes/probe-bubble-pair.js`) across all four cells of
+  2026-08-27** (`gg2-samplers/probes/probe-bubble-pair.js`) across all four cells of
   the team × `perseverant` table, and the port was right. The decisive row is an
   enemy ordinary pellet, where **both** instances die — which no single event
   can do. ⚠️ So **a projectile that destroys itself in its own collision event
@@ -2276,7 +2276,7 @@ That is the whole reason no fixture can see this.
 
 #### ⬅️ The next step is one command, and it is decisive
 
-`tools/probes/probe-wall-stop.js` drives that scenario in the engine and prints
+`gg2-samplers/probes/probe-wall-stop.js` drives that scenario in the engine and prints
 the engine's resting x beside the port's. It needs a dedicated server on
 `gg_debug` with the bridge and one Character to borrow, and it answers the item
 either way:
@@ -2336,7 +2336,7 @@ slot 2's bounding box*.
 the PRECISE MASK for a rotated projectile, where this port uses the bounding
 box.** Measured with `collision_point(..., precise)` — nine sprites by eighteen
 angles, `tests/Gg2.Tests/Fixtures/rotated-mask-samples.json`, regenerate with
-`node tools/sample-rotated-mask.js`.
+`node gg2-samplers/sample-rotated-mask.js`.
 
 ⚠️ **The split runs through the middle of one GML line, and it is sharper than
 the facing asymmetry already recorded on `Aabb.ForCharacter`:**
@@ -3473,7 +3473,7 @@ Falsified; do not retry it.
 
 ### ✅ Every character box measured — and the physics oracle was measuring the wrong one
 
-`tools/probes/probe-character-boxes.js`. Chasing the `gg_debug`
+`gg2-samplers/probes/probe-character-boxes.js`. Chasing the `gg_debug`
 t523 residue into the physics oracle turned up something bigger than the residue.
 
 ✅ **`CharacterBox.For` is exactly right for all ten classes, on both teams.**
@@ -3486,7 +3486,7 @@ in `Character.events/Create.xml:12-15` — so the probe needs no character, no b
 and no map. That is why this was cheap once anybody thought to ask, and why
 nothing had forced it.
 
-⚠️ **`tools/sample-physics.js` overrode the engine with a table of its own, and
+⚠️ **`gg2-samplers/sample-physics.js` overrode the engine with a table of its own, and
 two of its numbers were wrong.** It set `top_bound_offset = -6` for the Scout
 and the Heavy where the engine derives **-10** and **-12**. So
 `physics-samples.json` is a recording of a character the port does not simulate,
