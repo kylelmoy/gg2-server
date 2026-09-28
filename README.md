@@ -100,6 +100,34 @@ internet.
 Never use `--speed` or `--control-port` on a server with clients connected. They
 are development tools, and they desync every client.
 
+## Performance
+
+Compared against the stock GM8 server (GG2 `ea8d6951`, `-dedicated`) on the
+same machine, map and load. Each figure is the range over two 79-second runs
+per server on an i7-13700K, with this server built in Release at `e04314a`. The
+load is real TCP clients from `tools/loadprobe` (spectators) and `tools/soak`
+(players that join, pick teams and classes, press random keys and leave, with
+the same seed for both servers).
+
+| Load | GM8 CPU | gg2-server CPU | GM8 memory | gg2-server memory |
+|---|---|---|---|---|
+| 1 spectator | 10.3–10.5% | 0.3–0.7% | 278 MB | 57–61 MB |
+| 16 spectators | 10.1–10.6% | 1.3–1.6% | 280 MB | 70 MB |
+| 8 players | 14.8–15.6% | 1.2–1.3% | 280 MB | 67–72 MB |
+
+CPU is a percentage of one core; memory is the working set. With 8 players that
+is about 5.1 ms of CPU per 33.3 ms tick for GM8 and 0.42 ms for gg2-server,
+roughly 12 times less. GM8 also spends about 10% of a core with nobody
+connected, while this server slows its tick almost to a stop until someone joins.
+It starts accepting connections in 0.55 s against GM8's 2.1 s.
+
+Both servers delivered exactly 30 broadcasts a second, with the same bytes per
+second. The gap between broadcasts had a p99 of 34–36 ms and a maximum of
+35–41 ms on both.
+
+Stock GM8 has no bots, so there is no bot comparison. On its own, this server
+runs twelve bots at 0.151 ms a tick (Release), 0.5% of the 33.3 ms budget.
+
 ## Compatibility
 
 GG2 v2.9.2, `VERSION = 29200`, `PROTOCOL_UUID =
