@@ -107,7 +107,7 @@ same machine, map and load. Each figure is the range over two 79-second runs
 per server on an i7-13700K, with this server built in Release at `e04314a`. The
 load is real TCP clients from `tools/loadprobe` (spectators) and `tools/soak`
 (players that join, pick teams and classes, press random keys and leave, with
-the same seed for both servers).
+the same seed for both servers). `tools/gm8-compare` reproduces it.
 
 | Load | GM8 CPU | gg2-server CPU | GM8 memory | gg2-server memory |
 |---|---|---|---|---|
