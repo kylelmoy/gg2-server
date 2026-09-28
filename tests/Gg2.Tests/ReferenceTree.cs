@@ -11,18 +11,18 @@ namespace Gg2.Tests;
 /// deliberate: a copied map is a map that can silently go stale, and phase 0's
 /// exit criterion is about the maps the stock client actually ships.
 /// <para>
-/// Set <c>GG2_REFERENCE</c> to override the path. The tree is <b>read-only</b>
-/// from this repo (CLAUDE.md).
+/// Set <c>GG2_REFERENCE</c> to use an existing checkout. Without it, the first
+/// test that asks clones <see cref="Upstream"/> at <see cref="PinnedCommit"/>
+/// into a per-user cache (<see cref="CacheRoot"/>) and every later run reuses
+/// it, so a fresh clone of this repo needs git and a network connection once
+/// and nothing on disk. The tree is <b>read-only</b> from this repo (CLAUDE.md).
 /// </para>
 /// <para>
-/// <b>The default is stock upstream GG2.</b> <c>D:\code\Gang-Garrison-2</c>
-/// held a bot fork until 2026-09-05; that fork was deleted locally and now
-/// lives only at <c>github.com/kylelmoy/Gang-Garrison-2</c> (branch
-/// <c>bot-route-variety</c>), and this path was renamed from
-/// <c>Gang-Garrison-2-upstream</c> to take its place. This port's bot layer has
-/// diverged from the fork's, so there is no reason to check anything against
-/// it. Stock GG2 is the thing a stock client runs, and that is the only thing
-/// this port owes compatibility to.
+/// <b>The reference is stock upstream GG2</b>, pinned to the commit the suite
+/// was written against: <c>V2.9.2-78-gea8d6951</c>, upstream's master, not the
+/// <c>V2.9.2</c> tag. Stock GG2 is the thing a stock client runs, and that is
+/// the only thing this port owes compatibility to. <c>.github/workflows/release.yml</c>
+/// checks out the same commit and must move with <see cref="PinnedCommit"/>.
 /// </para>
 /// </remarks>
 public static class ReferenceTree
@@ -46,13 +46,123 @@ public static class ReferenceTree
 
     public const string NavCacheEnvironmentVariable = "GG2_NAVCACHE";
 
-    private const string DefaultPath = @"D:\code\Gang-Garrison-2";
+    public const string Upstream = "https://github.com/Gang-Garrison-2/Gang-Garrison-2.git";
 
-    /// <summary>Root of the checkout, whether or not it exists.</summary>
+    public const string PinnedCommit = "ea8d69511ee1a2f76bc8266bf890764f480c4993";
+
+    /// <summary>
+    /// Where a cloned reference is kept: one directory per pinned commit (its
+    /// first twelve hex digits) under
+    /// the user's local application data, shared by every worktree of this repo.
+    /// </summary>
+    public static string CacheRoot =>
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "gg2-server", "reference");
+
+    private static readonly Lazy<string> Cached = new(EnsureCached, LazyThreadSafetyMode.ExecutionAndPublication);
+
+    /// <summary>
+    /// Root of the checkout: <c>GG2_REFERENCE</c> as given, whether or not it
+    /// exists, or the cached clone, made on first use.
+    /// </summary>
     public static string Root =>
         Environment.GetEnvironmentVariable(EnvironmentVariable) is { Length: > 0 } fromEnv
             ? fromEnv
-            : DefaultPath;
+            : Cached.Value;
+
+    /// <summary>
+    /// Clones <see cref="Upstream"/> at <see cref="PinnedCommit"/> into the cache
+    /// unless it is already there.
+    /// </summary>
+    /// <remarks>
+    /// Only <c>Source/gg2</c> is checked out, from a depth-1 fetch of the one
+    /// commit, so the cost is that subtree (~17 MB) rather than the history.
+    /// The clone is built beside its final name and renamed into place, so a
+    /// run that dies halfway leaves no directory that looks complete, and two
+    /// test processes racing (two lanes' worktrees) both end up reading the
+    /// one that won.
+    /// </remarks>
+    private static string EnsureCached()
+    {
+        // Short names on purpose: GG2's deepest sprite path is already close to
+        // Windows' 260-character limit before the cache's own prefix is added.
+        var final = Path.Combine(CacheRoot, PinnedCommit[..12]);
+
+        if (File.Exists(Path.Combine(final, "Source", "gg2", "Constants.xml")))
+            return final;
+
+        Directory.CreateDirectory(CacheRoot);
+        var staging = Path.Combine(CacheRoot, $"{PinnedCommit[..12]}.{Guid.NewGuid():N}"[..21]);
+
+        try
+        {
+            Git(CacheRoot, "init", "--quiet", staging);
+            Git(staging, "config", "core.longpaths", "true");
+            Git(staging, "remote", "add", "origin", Upstream);
+            Git(staging, "sparse-checkout", "set", "Source/gg2");
+            Git(staging, "fetch", "--quiet", "--depth", "1", "origin", PinnedCommit);
+            Git(staging, "checkout", "--quiet", "--detach", "FETCH_HEAD");
+
+            try
+            {
+                Directory.Move(staging, final);
+            }
+            catch (IOException) when (Directory.Exists(final))
+            {
+                // Another process got there first; its copy is the same commit.
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(staging))
+                DeleteTree(staging);
+        }
+
+        return final;
+    }
+
+    private static void Git(string workingDirectory, params string[] arguments)
+    {
+        var start = new System.Diagnostics.ProcessStartInfo("git")
+        {
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+
+        foreach (var argument in arguments)
+            start.ArgumentList.Add(argument);
+
+        using var git = System.Diagnostics.Process.Start(start)
+            ?? throw new InvalidOperationException("could not start git");
+
+        var stderr = git.StandardError.ReadToEndAsync();
+        git.StandardOutput.ReadToEnd();
+        git.WaitForExit();
+
+        if (git.ExitCode != 0)
+            throw new InvalidOperationException(
+                $"""
+                 git {string.Join(' ', arguments)} failed ({git.ExitCode}) while caching the
+                 GG2 reference at {CacheRoot}:
+
+                 {stderr.Result.Trim()}
+
+                 Set {EnvironmentVariable} to an existing checkout of {Upstream}
+                 at {PinnedCommit} to skip the clone.
+                 """);
+    }
+
+    /// <summary>Deletes a directory git wrote, whose object files are read-only on Windows.</summary>
+    private static void DeleteTree(string path)
+    {
+        foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+            File.SetAttributes(file, FileAttributes.Normal);
+
+        Directory.Delete(path, recursive: true);
+    }
 
     /// <summary>Where the built-in map PNGs live.</summary>
     public static string IncludedFiles => Path.Combine(Root, "Source", "gg2", "Included Files");
@@ -182,8 +292,8 @@ public static class ReferenceTree
             $"""
              No reference checkout at {IncludedFiles}.
 
-             These tests read the built-in maps out of the Gang Garrison 2 tree, which
-             is the specification this port is checked against. Point {EnvironmentVariable}
-             at a checkout to run them.
+             These tests read the Gang Garrison 2 source, which is the specification this
+             port is checked against. Unset {EnvironmentVariable} to have it cloned into
+             {CacheRoot}, or point it at a checkout of {Upstream}.
              """);
 }

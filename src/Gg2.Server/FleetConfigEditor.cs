@@ -90,7 +90,7 @@ public sealed class FleetConfigEditor
 
         // ⚠️ Two path defaults (MapDirectory, [Nav] Directory) are RESOLVED FROM
         // THIS MACHINE'S DISK, and each server resolves its own. Shown as the
-        // shared value they would read as "every server uses D:\code\...", so a
+        // shared value they would read as "every server uses this one path", so a
         // path still at its resolved default is reported empty and marked.
         var pristine = ServerOptions.CreateDefault();
 

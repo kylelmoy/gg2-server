@@ -133,7 +133,7 @@ public class PortabilityTests
     /// <remarks>
     /// <b>This was a real defect, not a hypothetical one.</b> Every entry point
     /// once defaulted <c>MapDirectory</c> to
-    /// <c>D:\code\Gang-Garrison-2\Source\gg2\Included Files</c> — see
+    /// one developer's own reference checkout — see
     /// <c>MapDirectory</c>'s remarks — so the server could not serve a round on
     /// any machine but one, let alone another operating system. Reading the
     /// literals out of the metadata is the cheapest thing that would have caught
@@ -194,7 +194,7 @@ public class PortabilityTests
     [Fact]
     public void TheWindowsPathDetectorWorks()
     {
-        Assert.True(LooksLikeAWindowsPath(@"D:\code\Gang-Garrison-2\Source\gg2\Included Files"));
+        Assert.True(LooksLikeAWindowsPath(@"C:\games\Gang-Garrison-2\Source\gg2\Included Files"));
         Assert.True(LooksLikeAWindowsPath(@"c:\temp"));
 
         Assert.False(LooksLikeAWindowsPath(@"\"));                   // Ggon's escape handling
