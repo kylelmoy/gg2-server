@@ -97,7 +97,7 @@ Each release also pushes a container image to
 plain HTTP and reachable from outside the container:
 
 ```bash
-docker run -d --restart on-failure -p 8190:8190 -p 8191:8191 ghcr.io/kylelmoy/gg2-server:latest --bots 8
+docker run -d --restart on-failure -p 8190:8190 -p 8191:8191 ghcr.io/kylelmoy/gg2-server:latest --bots 8 --lobby
 ```
 
 The panel password is printed in `docker logs`. `docs/DEPLOY.md`, "Running in

@@ -230,11 +230,11 @@ Every tagged release also pushes an image to GHCR,
 `ghcr.io/<owner>/<repo>:<version>` and `:latest`, built from the `Dockerfile`
 at the root by `release.yml`'s `docker` job, behind the same test run as the
 archives. `docker build -t gg2-server .` builds the same image from a checkout.
-It is the self-contained linux-x64 publish on `dotnet/runtime-deps`, running as
+The `docker` job also starts the image before pushing it and fails unless the game port accepts a connection, the panel answers, and `docker stop` exits 0. It is the self-contained linux-x64 publish on `dotnet/runtime-deps`, running as
 the non-root `app` user from `/app`.
 
 ```bash
-docker run -d --name gg2 --restart on-failure   -p 8190:8190 -p 8191:8191 -v /srv/gg2:/data   ghcr.io/<owner>/<repo>:latest --config /data/gg2.ini --bots 8
+docker run -d --name gg2 --restart on-failure   -p 8190:8190 -p 8191:8191 -v /srv/gg2:/data   ghcr.io/<owner>/<repo>:latest --config /data/gg2.ini --bots 8 --lobby
 ```
 
 | | |
@@ -245,6 +245,7 @@ docker run -d --name gg2 --restart on-failure   -p 8190:8190 -p 8191:8191 -v /sr
 | Password | Generated and printed to `docker logs` unless `[Web] Password` in the config file or `--web-password` sets one. A generated one survives the panel's restart button but not a container restart. |
 | Config | `--config` pointing into a mounted directory, not a mounted single file, so the settings page can rewrite it. A missing config file is a startup error. |
 | Writable state | `nav/` inside the image takes a custom map's graph built at the map change, and is lost with the container, which only costs rebuilding it. `--record`, `--analytics`, `--geoip` and `--log-file` paths should point into the mounted volume. |
+| Lobby | Not listed unless `--lobby` is passed, as on a bare host. |
 | Stopping | `docker stop` sends SIGTERM, which the server handles (section 2 below). |
 | Restarting | `--restart on-failure`, for the reason the systemd unit gives: exit 3 is the tick-fault budget, and exit 0 is an operator stopping it on purpose. |
 | Logs | stdout and stderr, so `docker logs`; no `--log-file` needed. |
