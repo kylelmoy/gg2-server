@@ -10,7 +10,7 @@ wrong, separately for the people and the bots the same recordings label.
 
     dotnet run --project tools/inputpredict -c Release -- <trace-or-directory>...
 
-Not in `Gg2.sln`; build it explicitly, like `tools/bench`.
+Not in `GG2.sln`; build it explicitly, like `tools/bench`.
 
 ## Measured, 48 fleet recordings, 2026-09-17
 

@@ -10,7 +10,7 @@ The five rules that bite a session before it knows it is near them are in
 `CLAUDE.md`; this is the reference half — grep it when you change what the
 state holds.
 
-`Gg2.Simulation.WorldState` is the flat, cheaply-copyable state `docs/BOTAI.md`
+`GG2.Simulation.WorldState` is the flat, cheaply-copyable state `docs/BOTAI.md`
 item 1 asks for: a value type built on `[InlineArray]` slot buffers, holding no
 reference to anything — no map, no config, no logger. Read-only inputs (the
 `CollisionWorld`) are passed **to** `MatchSimulation.Tick`, never held by the
@@ -24,7 +24,7 @@ winner, `mapchanging`, the setup timer), the control points, the KotH timers and
 Arena's round state, both generators, Team Deathmatch's kill limit and spawn
 invulnerability, the scoreboard and the domination matrix, the autobalance fuse
 and the class limits, a fixed-capacity projectile pool and the match's own
-`GmlRandom` stream. **`Gg2.Server.MatchState` holds no objective at all any
+`GmlRandom` stream. **`GG2.Server.MatchState` holds no objective at all any
 more** — the generator and the kill limit were the last of its placeholders. What is left is
 server configuration and the roster's view of the map, and it should keep
 shrinking rather than grow. `StateUpdateWriter` reaches the simulated half
@@ -256,7 +256,7 @@ they do not turn up under a `<Class><Team>S` search.
 
 Both ends of the box are **inclusive**, and the position is rounded to an
 integer before the box is built — see "Settled: `place_free` rounds the
-position" below. `Gg2.Simulation.CharacterBox` is the transcription.
+position" below. `GG2.Simulation.CharacterBox` is the transcription.
 
 ### Order of operations
 
@@ -553,7 +553,7 @@ Be honest about these in the parity harness rather than assuming:
 Was items 1 and 2 on this list. Measured against the running game on
 `ctf_truefort` with `collision_point` against `CollisionMapO`, then checked
 across **23,040 sampled points on three maps** — the fixture is
-`tests/Gg2.Tests/Fixtures/collision-samples.json` and
+`tests/GG2.Tests/Fixtures/collision-samples.json` and
 `gg2-samplers/sample-collision.js` regenerates it.
 
 - **A mask cell covers `[6c, 6c+6)` on both axes.** World pixel to cell is
@@ -595,11 +595,11 @@ netcode jitter:
 
 | Where | Rule | In C# |
 |---|---|---|
-| A real onto the wire (`write_ushort` and friends) | half **away from zero**, then clamp | `Gg2.Protocol.WireQuantise` |
-| GML's own `round()` | half to **even** | `Gg2.Protocol.Gml.Round` |
-| A position into a collision box | half to **even** | `Gg2.Simulation.CollisionWorld.RoundPosition` |
-| A scaled sprite's extent into a bounding box | half to **even** | `Gg2.Simulation.SolidRect.FromEntity` |
-| `move_outside_solid`'s allowance into whole pixels | half to **even** | `Gg2.Simulation.Movement.MoveOutsideSolid` |
+| A real onto the wire (`write_ushort` and friends) | half **away from zero**, then clamp | `GG2.Protocol.WireQuantise` |
+| GML's own `round()` | half to **even** | `GG2.Protocol.Gml.Round` |
+| A position into a collision box | half to **even** | `GG2.Simulation.CollisionWorld.RoundPosition` |
+| A scaled sprite's extent into a bounding box | half to **even** | `GG2.Simulation.SolidRect.FromEntity` |
+| `move_outside_solid`'s allowance into whole pixels | half to **even** | `GG2.Simulation.Movement.MoveOutsideSolid` |
 
 Only the first is different. Everything GM8 itself rounds is half to even; the
 odd one out is the networking extension, which is not GM8 at all.
@@ -678,7 +678,7 @@ this is worth writing down. `gg_debug` is 120 × 64 of art over a 118 × 69 mask
 its bounds reach twelve world pixels *past* the mask horizontally and stop
 thirty *short* of it vertically. `Character.events/End Step.xml` clamps
 positions into `map_width()` × `map_height()`, so the physics wants the art's
-number — `Gg2.Maps.LevelMap.Width` — and not the walkmask's extent.
+number — `GG2.Maps.LevelMap.Width` — and not the walkmask's extent.
 
 ### Settled: how a real becomes an integer on the wire
 
@@ -702,7 +702,7 @@ So every `write_ubyte` / `write_byte` / `write_ushort` / `write_short` /
 2. **clamps to the target type's range** rather than wrapping.
 
 Both defaults in C# are the other answer: `Math.Round` is half-to-even and an
-integer cast wraps. `Gg2.Protocol.WireQuantise` is the transcription; use it,
+integer cast wraps. `GG2.Protocol.WireQuantise` is the transcription; use it,
 and do not spell the conversion out by hand at a call site.
 
 **This is not GML's `round()`**, which *is* half-to-even, and the reference
@@ -748,7 +748,7 @@ Computing the same value instead of writing it — `3/5`, `23/20`, `17/20` — g
 the IEEE-nearest double, so this is the literal parser and not the arithmetic.
 
 Those five are gravity, `baseControl`, `baseFriction`, and two of the rocket
-jump's control factors. `Gg2.Protocol.Gml` holds each of them as the C# decimal
+jump's control factors. `GG2.Protocol.Gml` holds each of them as the C# decimal
 that rounds to GM8's double, and `ClassStats` takes them from there.
 
 **One ULP is not cosmetic here, for two reasons.** `basemaxspeed` is
@@ -777,8 +777,8 @@ The rules that reproduce every measured case:
 | `a >= b` | `a > b \|\| Equal(a, b)` |
 | `sign(x)` | `Equal(x, 0) ? 0 : Math.Sign(x)` |
 
-`Gg2.Protocol.Gml` has all of them, and every real-to-real comparison in
-`Gg2.Simulation` goes through them.
+`GG2.Protocol.Gml` has all of them, and every real-to-real comparison in
+`GG2.Simulation` goes through them.
 
 **What this costs if you skip it.** In `characterHitObstacle`, a crawl that uses
 up its whole allowance leaves `hleft` at about `-2.7e-14` through ordinary
@@ -812,7 +812,7 @@ it fails silently.
 
 ### Settled: the character update matches the engine exactly
 
-`tests/Gg2.Tests/Fixtures/physics-samples.json` is 64 whole trajectories — four
+`tests/GG2.Tests/Fixtures/physics-samples.json` is 64 whole trajectories — four
 classes (Scout, Soldier, Pyro, Heavy), two maps, 48 ticks each, **32 of them
 started from rest** — driven inside the running game from start states chosen
 exactly, with position and velocity read back to the last bit. The port
@@ -846,8 +846,8 @@ irandom(n) = floor((n + 1) * seed' / 2^32)           // n is INCLUSIVE
 choose(..) = argument[floor(count * seed' / 2^32)]   // exactly one advance
 ```
 
-`Gg2.Protocol.GmlRandom` is the transcription and
-`tests/Gg2.Tests/Fixtures/rng-samples.json` is the evidence — 15 seeds × 8
+`GG2.Protocol.GmlRandom` is the transcription and
+`tests/GG2.Tests/Fixtures/rng-samples.json` is the evidence — 15 seeds × 8
 advances of the chain, 225 `random(x)` values compared **bit for bit** through
 the mantissa encoder, and every `irandom`/`choose` draw. Regenerate with
 `node gg2-samplers/sample-rng.js`. Four properties are worth stating because each one
@@ -883,7 +883,7 @@ buys nothing.
 Phase 3 pinned `place_free` and stopped there on purpose. Combat needs two more
 primitives, both measured against the running game —
 `gg2-samplers/sample-primitives.js` regenerates
-`tests/Gg2.Tests/Fixtures/primitive-samples.json`, which is a grid of offsets of
+`tests/GG2.Tests/Fixtures/primitive-samples.json`, which is a grid of offsets of
 a real `Rocket` and a real `Shot` around a real character, **with both bounding
 boxes recorded per sample** rather than assumed.
 
@@ -895,7 +895,7 @@ distance_to_object(a, b) = sqrt(gapx^2 + gapy^2)
 ```
 
 Both exact on all 722 samples, with no rounding rule and no epsilon.
-`Gg2.Simulation.Aabb` is the transcription.
+`GG2.Simulation.Aabb` is the transcription.
 
 **Two things that are not obvious and cost real accuracy:**
 
@@ -937,8 +937,8 @@ matches 636. GML's `point_distance` is the naive form; write the naive form.
 
 Was the last unmeasured primitive and the one the hitscan waits on. Measured
 across **13,702 segments** on `ctf_truefort` —
-`tests/Gg2.Tests/Fixtures/collision-line-samples.json`, regenerate with
-`node gg2-samplers/sample-collision-line.js`. `Gg2.Simulation.CollisionLine` reproduces
+`tests/GG2.Tests/Fixtures/collision-line-samples.json`, regenerate with
+`node gg2-samplers/sample-collision-line.js`. `GG2.Simulation.CollisionLine` reproduces
 every one of them, exactly.
 
 **It is not a segment-versus-rectangle intersection, and writing one gives wrong
@@ -1034,7 +1034,7 @@ that reproduces it.
 Was the bullet in "Other engine behaviours to preserve" that called `speed` and
 `direction` *derived*. They are not derived; **all four of `hspeed`, `vspeed`,
 `direction` and `speed` are stored on the instance**, and writing any of them
-rewrites the others. `Gg2.Simulation.Motion`.
+rewrites the others. `GG2.Simulation.Motion`.
 
 The old wording was harmless for phase 4 because no character ever writes
 `direction` or `speed` — but a projectile does. `Scattergun.events/User Event
@@ -1078,7 +1078,7 @@ Four of those details change results rather than last digits:
 
 **Status: measured.** `gg2-samplers/sample-motion.js`, 399 write sequences and 27
 angles against the running game, replayed by
-`tests/Gg2.Tests/MotionSampleTests.cs`. The starting point was OpenGMK's
+`tests/GG2.Tests/MotionSampleTests.cs`. The starting point was OpenGMK's
 `gm8emulator/src/instance.rs`, and the measurement moved it: **the transcription
 snapped `direction` and not `speed`, and the engine snaps both.** That is a
 1e-4-sized correction, not a last-bit one.
@@ -1098,7 +1098,7 @@ Measured: `lengthdir_x(1, 89.999)` is **0** where `1*cos(degtorad(89.999))` is
 1.7e-5, and `lengthdir_y(15, 89.999)` is **-15** where the product is
 -14.999999998. Each scattergun pellet is nudged fifteen pixels along its own
 direction with `lengthdir` before it flies, so this is on the live path.
-`Gg2.Protocol.Gml.LengthDirX`/`LengthDirY` are the ones to call — never a bare
+`GG2.Protocol.Gml.LengthDirX`/`LengthDirY` are the ones to call — never a bare
 `Math.Cos(...) * length`.
 
 #### ⚠️ This is the one primitive that is not bit-exact, and it cannot be made so
@@ -1151,7 +1151,7 @@ a game — see "Settled: reading a GM8 double back to the last bit" below.
 
 ### Settled: a rotated sprite's bounding box
 
-`Gg2.Simulation.Aabb.ForRotatedSprite`, regenerate with
+`GG2.Simulation.Aabb.ForRotatedSprite`, regenerate with
 `node gg2-samplers/sample-rotated-box.js`. Phase 4 never needed it and phase 5 cannot
 start without it.
 
@@ -1200,7 +1200,7 @@ cover an ordinary mistake.
 
 ### Settled: the alarm stage
 
-`Gg2.Simulation.Timers`, from OpenGMK's `run_alarms`. Two parts, both narrower
+`GG2.Simulation.Timers`, from OpenGMK's `run_alarms`. Two parts, both narrower
 than the obvious reading:
 
 **The firing rule.** Per alarm, per frame:
@@ -1223,7 +1223,7 @@ Step event — during the Step stage, after that frame's alarm stage — the
 counter reads `9, 8, 7, 6, 5, 4, 3, 2, 1, 0, -1` on successive frames and
 `image_speed` becomes 1 on the frame the counter reads **0**.
 
-**`Gg2.Simulation.Timers.Advance` writes -1 at the moment of firing, and the
+**`GG2.Simulation.Timers.Advance` writes -1 at the moment of firing, and the
 engine does not.** That is a real one-tick divergence, and it has exactly one
 observable site — the one the change was made for.
 `Character.events/Begin Step.xml:67` gates the afterburn intensity fade on
@@ -1237,7 +1237,7 @@ observable site — the one the change was made for.
 So the port starts every burn's intensity decay **one tick early**. The fix is
 to delete the `timer = Inactive;` line from `Advance` and let the following
 tick's decrement carry the counter from 0 to -1 — which is what the pseudocode
-above already says. It is owed to whichever lane owns `src/Gg2.Simulation`; the
+above already says. It is owed to whichever lane owns `src/GG2.Simulation`; the
 measurement lane found it and does not apply it.
 
 **GM8 does not count down an alarm index the object has no event for.**
@@ -1370,7 +1370,7 @@ committed this tick's movement while the projectiles are being walked. **This
 also retires the long-standing question of whether `GameServer`'s Step runs
 before a `Character`'s: for this purpose it does not matter.**
 
-`Gg2.Simulation.MatchSimulation` therefore runs `Projectiles.Move` **before** the
+`GG2.Simulation.MatchSimulation` therefore runs `Projectiles.Move` **before** the
 `CharacterPhysics.Step` loop. The port commits a character's move inside `Step`
 rather than subtracting it back, so running the projectiles first is the only way
 to show them the same world the engine shows them.
@@ -1400,7 +1400,7 @@ wall test and rotating `image_angle` entirely.
 The script is one `with` block per object and they are **not**
 interchangeable: a `Shot` falls, a `Rocket` accelerates and drags and tracks a
 travel budget, a `Mine` substeps in six-pixel hops and sticks to walls, a
-`BurningProjectile` substeps without sticking. `Gg2.Simulation.Projectiles.Move`
+`BurningProjectile` substeps without sticking. `GG2.Simulation.Projectiles.Move`
 dispatches on the kind for that reason.
 
 **`with(Shot)`, in order:**
@@ -1436,7 +1436,7 @@ never gets that far, because step 4 already killed it.
 ⚠️ **None of this is visible to a state-update comparison.** A `Shot` is never
 serialised, so its trajectory is observable only where it changes whether
 somebody is hit — and `reference-ctf_truefort-bots.trace` replays closed-loop
-with zero error either way. `tests/Gg2.Tests/ProjectileMoveTests.cs` is the gate;
+with zero error either way. `tests/GG2.Tests/ProjectileMoveTests.cs` is the gate;
 each of its rules was checked by deleting the corresponding line and watching
 only its own tests go red while the trace stayed green. Absence of a red test is
 not evidence.
@@ -1456,10 +1456,10 @@ speed, rather than accelerated along its own.
 
 ### Settled: the rocket
 
-`Gg2.Simulation.Explosions`, the `with(Rocket)` block of `move_all_bullets.gml`,
+`GG2.Simulation.Explosions`, the `with(Rocket)` block of `move_all_bullets.gml`,
 `Objects/Weapons/Rocketlauncher.events/User Event 3.xml` and
 `Objects/Projectiles/Rocket.events/*`. Gated by
-`tests/Gg2.Tests/RocketTests.cs`, every rule of which was checked by deleting
+`tests/GG2.Tests/RocketTests.cs`, every rule of which was checked by deleting
 the line it is about.
 
 **Firing.** The muzzle is `weapon.x + lengthdir_x(20, aimDirection)` — the
@@ -1623,7 +1623,7 @@ They wear one of two sprites the game builds at runtime, and both have their
 | `sprite45` | 6x60 | `0,0..5,59` | `0,0` | the vertical variants |
 | `sprite44` | 60x6 | `0,0..59,5` | `0,0` | the `*Horizontal` and `*Gate2` variants |
 
-`Gg2.Simulation.LineCollider.ForSolidRect` is built on exactly that, and
+`GG2.Simulation.LineCollider.ForSolidRect` is built on exactly that, and
 `SolidRect` now carries the instance (position, scale, sprite extent) alongside
 the box, which is free because a `SolidRect` lives in `CollisionWorld` and is
 never cloned by a rollout.
@@ -1645,9 +1645,9 @@ fire.
 
 ### Settled: the mine, which is not a small rocket
 
-`Gg2.Simulation` — the `with(Mine)` block of `move_all_bullets.gml`,
+`GG2.Simulation` — the `with(Mine)` block of `move_all_bullets.gml`,
 `Objects/Weapons/Minegun.events/*` and `Objects/Projectiles/Mine.events/*`.
-Gated by `tests/Gg2.Tests/MinegunTests.cs`.
+Gated by `tests/GG2.Tests/MinegunTests.cs`.
 
 **Firing.** `weapon.x + lengthdir(10, aim)`, speed 12, and then — the line that
 catches people — **`oid.image_angle = 0`**, written straight after `createShot`
@@ -1733,7 +1733,7 @@ right-click detonates their mines; a mine going off under its owner sets
 Running the detonation after the whole of Begin Step gives the jump last tick's
 friction and a different trajectory.
 
-`Gg2.Simulation.CharacterPhysics` is therefore split into `BeginStepInput` and
+`GG2.Simulation.CharacterPhysics` is therefore split into `BeginStepInput` and
 `BeginStepAccelerate`, with `Weapons.SpecialStep` between them in
 `MatchSimulation.Tick`. The second half recomputes `stuckInWall` and the key
 union rather than carrying them across: both are pure functions of the character
@@ -1758,7 +1758,7 @@ and three of the five kinds of solid differ:
 | `IntelGate` | `team != mine and carrying intel` | **always solid** |
 | `ControlPointSetupGate` | while setup runs | while setup runs |
 
-`Gg2.Simulation.CollisionFilter.ForBullet()` selects the right column;
+`GG2.Simulation.CollisionFilter.ForBullet()` selects the right column;
 `SolidRect.IsSolidTo` is the predicate. Maps use the `PlayerWall`/`BulletWall`
 pair to build a window that stops people but not shots, and the reverse.
 
@@ -1773,7 +1773,7 @@ wrong for a custom map that uses the trigger.
 ### Settled: death, and who gets the credit
 
 `Character.events/End Step.xml:34-47`, `Scripts/Events/sendEventPlayerDeath.gml`
-and `doEventPlayerDeath.gml`. `Gg2.Simulation.Deaths`.
+and `doEventPlayerDeath.gml`. `GG2.Simulation.Deaths`.
 
 ⚠️ **The check `exit`s, and its position in End Step is observable.** It sits
 after the stair descent and *before* the hp clamp, the facing and
@@ -1842,7 +1842,7 @@ Those are server command handling and belong with the rest of it.
 `Objects/Weapons/Medigun.events/{Create, Begin Step, Step, Alarm 5, User Event 1,
 User Event 2, Destroy}.xml`, `Objects/Characters/Medic.events/{Create, Alarm
 11}.xml`, `Scripts/Misc/calculateHealingFactor.gml`,
-`Scripts/Events/{doEventUber, doEventUberReady}.gml`. `Gg2.Simulation.Healing`,
+`Scripts/Events/{doEventUber, doEventUberReady}.gml`. `GG2.Simulation.Healing`,
 `Weapons.FireNeedleOrUber`.
 
 ⚠️ **The attack key does not fire this weapon.** Every other weapon's
@@ -1970,7 +1970,7 @@ reasoning has an expiry.** The stamp would not have caught it either way — its
 surface is chosen rather than swept, constants and tables rather than branch
 conditions — so the bump would have been a hand-made claim that every existing
 checkpoint is now dated. It was skipped because **the change cannot reach
-training**: nothing in `gg2-rl/env/Gg2.Env` sets `SetupTimer` or `AttackDefend`, so both
+training**: nothing in `gg2-rl/env/GG2.Env` sets `SetupTimer` or `AttackDefend`, so both
 sit at their `default(WorldState)` values and the branch is unreachable there, and
 `PolicyController.TrainedClasses` (Scout, Soldier, Sniper, Heavy) contains no
 Medic. **If an env or a duel ever arms a setup timer, or the policy is trained
@@ -1992,7 +1992,7 @@ gate, with a control on each half of the conjunction.
 `Objects/Weapons/Flamethrower.events/{Create, Begin Step, Alarm 5, User Event
 1}.xml`, `Objects/Projectiles/{Flame, BurningProjectile}.events/*.xml` and the
 `with(BurningProjectile)` block of `move_all_bullets.gml`.
-`Gg2.Simulation.Afterburn`, `FlameStats`, `Weapons.FireFlamethrower`.
+`GG2.Simulation.Afterburn`, `FlameStats`, `Weapons.FireFlamethrower`.
 
 **Two quantities, not one.** `burnIntensity` is "heat" — damage per second,
 capped at 13 — and `burnDuration` is "fuel", ticks remaining, capped at 210. A
@@ -2095,7 +2095,7 @@ that rides on it" below.
 ### Settled: the Shotgun is the Scattergun with four numbers changed
 
 `Objects/Weapons/Shotgun.events/{Create, User Event 1, User Event 3}.xml`.
-`Gg2.Simulation.Weapons.FireScattergun`, which serves both.
+`GG2.Simulation.Weapons.FireScattergun`, which serves both.
 
 The two `User Event 3`s are line for line identical — the same `createShot`, the
 same three writes per pellet in the same order (component, speed, direction), the
@@ -2129,7 +2129,7 @@ direction jitter — and the count is contract, not bookkeeping.
 ### Settled: the four boxes that were derived, and are not any more
 
 Measured against the running game, `gg2-samplers/probes/probe-sprite-boxes.js`, gated by
-`SpriteBoxSampleTests` against `tests/Gg2.Tests/Fixtures/sprite-box-samples.json`.
+`SpriteBoxSampleTests` against `tests/GG2.Tests/Fixtures/sprite-box-samples.json`.
 Four collision boxes landed without a live session and were confirmed correct
 here; none of them can drift silently again.
 
@@ -2293,7 +2293,7 @@ precondition (`no sentry within 50 px`) and the sentry's self-destruct guard
 
 ### Settled: the sentry, and the turret that fires from End Step
 
-`Gg2.Simulation.Sentries`, `SentryState`. Transcribed from
+`GG2.Simulation.Sentries`, `SentryState`. Transcribed from
 `Sentry.events/{Create, Begin Step, End Step, User Event 2, Destroy}.xml`,
 `SentryTurret.events/{Create, User Event 0, End Step, Alarm 0}.xml`,
 `serverBuildSentry.gml`, `buildSentry.gml` and `damageSentry.gml`; gated by
@@ -2385,7 +2385,7 @@ The Begin Step guard destroys a sentry overlapping another
 (`collision_circle(x, y+10, 25)`) with killer nobody and cause 0.
 ⚠️ **The class/team half of that guard lives at the seams** —
 `ownerPlayer.class` is *player* state `WorldState` does not hold, so
-`Gg2.Server` and `PortedSimulation` destroy the sentry when they apply a
+`GG2.Server` and `PortedSimulation` destroy the sentry when they apply a
 change-class/team; it moves into the simulation when phase 6 brings player
 state in.
 
@@ -2404,7 +2404,7 @@ that bites.
 
 `Objects/Weapons/Flamethrower.events/User Event 2.xml`, dispatched by the same
 right-click as the mine detonation (`Character.events/Begin Step.xml:120-126`).
-`Gg2.Simulation.Weapons.AirBlast`, gated by `AirBlastTests` and the oracle rows
+`GG2.Simulation.Weapons.AirBlast`, gated by `AirBlastTests` and the oracle rows
 in `AirBlastBoxTests`. Each rule below was verified to bite by mutation or was
 measured directly.
 
@@ -2518,7 +2518,7 @@ about a pyro; the unit tests carry this stage.
 `Objects/InGameElements/Player.events/{Create, Alarm 5}.xml`,
 `Scripts/Spawning/PlayerSpawn.gml`, `Character.events/Destroy.xml`,
 `processClientCommands.gml`'s `PLAYER_CHANGECLASS`/`PLAYER_CHANGETEAM` cases.
-`Gg2.Simulation.PlayerState`, `PlayerCommands`, the alarm-5 stage in `Timers`;
+`GG2.Simulation.PlayerState`, `PlayerCommands`, the alarm-5 stage in `Timers`;
 gated by `PlayerLifecycleTests` and the end-to-end
 `SimulatedServerTests.AClassChangeKillsAndTheServerRespawnsByItself` — no
 recording gates respawn, because every closed-loop fixture injects the
@@ -2582,7 +2582,7 @@ reference's own `PLAYER_SPAWN`s.
 `Objects/Map elements/Gamemode-specific/CTF/Intelligence*`,
 `Scripts/Events/doEvent{Grab,Drop,Return,Score}Intel.gml`, the four
 `Character.events/Collision with Intelligence*.xml`, and
-`Character.events/Begin Step.xml:303-369`. `Gg2.Simulation.Intel`,
+`Character.events/Begin Step.xml:303-369`. `GG2.Simulation.Intel`,
 `IntelState`, `WorldState.{RedIntel, BlueIntel, RedCaps, BlueCaps}`; gated by
 `IntelTests`, `IntelUpdateLayoutTests` and `IntelFixtureTests`.
 
@@ -2656,7 +2656,7 @@ fully transparent — and none of the four objects that wear them declares a
 briefcase on `ctf_truefort` answers `bbox_* - x/y = -9, -12, 10, 7` directly**,
 at `image_xscale = image_yscale = 1` and `image_angle = 0`.
 `gg2-samplers/probes/probe-sprite-boxes.js` regenerates
-`tests/Gg2.Tests/Fixtures/sprite-box-samples.json`; `SpriteBoxSampleTests` is
+`tests/GG2.Tests/Fixtures/sprite-box-samples.json`; `SpriteBoxSampleTests` is
 the gate.
 
 ⚠️ **The fixtures corroborate almost none of this box.** Measured by mutation
@@ -2678,7 +2678,7 @@ map object; and the round ending at `global.capLimit`.
 ### Settled: the round, and the ten seconds after it
 
 `Objects/Overlays/Gamemodes/CTFHUD.events/{Create, Step}.xml` and
-`Scripts/GameServer/GameServerBeginStep.gml:102-179`. `Gg2.Simulation.Rounds`,
+`Scripts/GameServer/GameServerBeginStep.gml:102-179`. `GG2.Simulation.Rounds`,
 `WorldState.{GameMode, RoundTimer, TimeLimitMinutes, CapLimit, RoundDecided,
 Winner, Overtime, MapChanging}`; gated by `RoundTests` and `MapRotationTests`.
 
@@ -2751,7 +2751,7 @@ be a round whose clock read 0:00 before its first tick.
 `Objects/Map elements/Gamemode-specific/CP/ControlPoint.events/`,
 `CaptureZone.events/Alarm 0.xml`, `Scripts/Maps/pointCapture.gml`,
 `Objects/Overlays/Gamemodes/KothHUD.events/`, and the `cappingPoint` block of
-`Character.events/Begin Step.xml:429-439`. `Gg2.Simulation.ControlPoints`,
+`Character.events/Begin Step.xml:429-439`. `GG2.Simulation.ControlPoints`,
 `ControlPointState`, `Rounds.StepKoth`; gated by `ControlPointTests`.
 
 - **One object, four gamemodes.** `ControlPoint`'s `mode` is decided in
@@ -2835,7 +2835,7 @@ has somewhere to hook in; and the CP modes' neighbour-based locking.
 
 `Objects/Overlays/Gamemodes/DKothHUD.events/{Create, Step}.xml` and the
 `mode == 4` branch of `ControlPoint.events/Step.xml:12-19`.
-`Gg2.Simulation.Rounds.StepDkoth`, `ControlPoints.Relock`, `Rounds.Start`;
+`GG2.Simulation.Rounds.StepDkoth`, `ControlPoints.Relock`, `Rounds.Start`;
 gated by `DualKothTests`.
 
 - ⚠️ **The clocks are crossed, and that is the whole mode.** `redTimer` counts
@@ -2880,7 +2880,7 @@ gated by `DualKothTests`.
 
 ### Settled: map areas, and the entities that do not exist
 
-`Scripts/Maps/basicRoomSetup.gml:7-26`. `Gg2.Maps.LevelMap.ForArea`; gated by
+`Scripts/Maps/basicRoomSetup.gml:7-26`. `GG2.Maps.LevelMap.ForArea`; gated by
 `ControlPointModeTests`.
 
 ⚠️ **A tall map can be several rounds stacked vertically, and only one area's
@@ -2912,7 +2912,7 @@ the only attack/defend map.
 
 `Objects/Overlays/Gamemodes/ControlPointHUD.events/{Create, Step}.xml`,
 `InvasionHUD.events/{Create, Step}.xml`, and the neighbour-locking branch of
-`ControlPoint.events/Step.xml:20-35`. `Gg2.Simulation.Rounds.StepControlPoints`
+`ControlPoint.events/Step.xml:20-35`. `GG2.Simulation.Rounds.StepControlPoints`
 / `StepInvasion`, `ControlPoints.RelockNeighbour` / `CapTimeFor` /
 `AssignStartingOwners`; gated by `ControlPointModeTests`.
 
@@ -2982,7 +2982,7 @@ entity is what turns a CTF map into Invasion, so one question answers both
 ### Settled: Arena, the only mode with no respawns
 
 `Objects/Overlays/Gamemodes/ArenaHUD.events/{Create, Step}.xml` and
-`Scripts/Maps/Arena/`. `Gg2.Simulation.Arena`, `ArenaState`, the arena arm of
+`Scripts/Maps/Arena/`. `GG2.Simulation.Arena`, `ArenaState`, the arena arm of
 `ControlPoints.StepOne`; gated by `ArenaTests`.
 
 The reference's own summary, from the top of its Create event: a round is a
@@ -3045,7 +3045,7 @@ which the port sends as zero — framed correctly, empty in content; and
 `Scripts/Damage API/damageGenerator.gml`,
 `Scripts/Events/doEventGeneratorDestroy.gml` and
 `Objects/Overlays/Gamemodes/GeneratorHUD.events/Step.xml`.
-`Gg2.Simulation.Generators`, `GeneratorState`, `Rounds.StepGenerator`, the
+`GG2.Simulation.Generators`, `GeneratorState`, `Rounds.StepGenerator`, the
 generator arms of `Projectiles.CollideOne` and `Explosions`; gated by
 `GeneratorTests` and `GeneratorUpdateLayoutTests`.
 
@@ -3168,7 +3168,7 @@ what happens when the clock runs out with both still standing.
 `Scripts/Events/doEventPlayerDeath.gml:307-317`,
 `Scripts/Damage API/dealDamage.gml`, and the `deathmatch_invulnerable` lines
 spread across `Character.events/{Create, Begin Step, End Step, Destroy}.xml`.
-`Gg2.Simulation.DamageApi`, `Rounds.StepTeamDeathmatch`,
+`GG2.Simulation.DamageApi`, `Rounds.StepTeamDeathmatch`,
 `Deaths.CountTeamDeathmatchKill`, `CharacterState.DeathmatchInvulnerable`,
 `PlayerState.DeathmatchRespawnBypass`; gated by `TeamDeathmatchTests`.
 
@@ -3256,7 +3256,7 @@ mode changed an existing server test.
 `Scripts/Events/doEvent{PlayerDeath, ScoreIntel, Uber, Destruction}.gml`,
 `Scripts/Maps/pointCapture.gml`, `Scripts/Maps/Arena/{resetRoundStats,
 serverArenaEndRound}.gml` and `Objects/Weapons/Medigun.events/User Event 1.xml`.
-`Gg2.Simulation.Scoring`, `StatBuffer`, `PlayerState.{Stats, RoundStats}`; gated
+`GG2.Simulation.Scoring`, `StatBuffer`, `PlayerState.{Stats, RoundStats}`; gated
 by `ScoringTests` and `PlayerStatsLayoutTests`.
 
 Thirteen counters per player, indexed by `StatIndex`, of which **eleven reach
@@ -3359,7 +3359,7 @@ they move the lowest-scoring player of the bigger team across and broadcast a
 `Scripts/Team Balance/ServerBalanceTeams.gml`,
 `Scripts/Maps/Arena/serverArenaRestart.gml`,
 `Scripts/Classlimits/{checkClasslimits, countClassmembersExcept}.gml`.
-`Gg2.Simulation.TeamBalance`, `Classlimits`, `ClassLimitBuffer`,
+`GG2.Simulation.TeamBalance`, `Classlimits`, `ClassLimitBuffer`,
 `WorldState.{Autobalance, BalanceNoticeGiven, BalanceCounter, ClassLimits}`;
 gated by `TeamBalanceTests`.
 
@@ -3444,7 +3444,7 @@ paths.
 
 `Scripts/Dominations/`, `Scripts/Events/doEventPlayerDeath.gml:81-96`,
 `Objects/InGameElements/Player.events/{Create, Destroy, User Event 12}.xml`.
-`Gg2.Simulation.Dominations`, `WorldState.DominationKills`; gated by
+`GG2.Simulation.Dominations`, `WorldState.DominationKills`; gated by
 `DominationTests`.
 
 `killer.dominationKills[victim]` is **how many times that killer has killed that
@@ -3509,7 +3509,7 @@ player holds and the ones held over them.
 ### Settled: the Minigun, and a line that is worth one tick
 
 `Objects/Weapons/Minigun.events/{Create, Begin Step, Alarm 5, User Event 1}.xml`.
-`Gg2.Simulation.Weapons.{FireMinigun, WeaponBeginStep}`; gated by
+`GG2.Simulation.Weapons.{FireMinigun, WeaponBeginStep}`; gated by
 `MinigunTests`.
 
 The heavy's chaingun: one `Shot` every two ticks, eight damage, a ±7° cone and a
@@ -3583,7 +3583,7 @@ which sees no seed either way — and stays reproducible.
 
 `Objects/Weapons/Rifle.events/{Create, Begin Step, User Event 1, User Event
 3}.xml`, `Scripts/Misc/toggleZoom.gml`,
-`Scripts/GameServer/serverToggleZoom.gml`. `Gg2.Simulation.Weapons.{FireRifle,
+`Scripts/GameServer/serverToggleZoom.gml`. `GG2.Simulation.Weapons.{FireRifle,
 RifleBeginStep, Hitscan}`, `PlayerCommands.ToggleZoom`,
 `CharacterState.{Zoomed, RunPower, JumpStrength}`; gated by `RifleTests`.
 
@@ -3682,8 +3682,8 @@ kind). `CharacterPhysics.HeavyStep`; gated by `MinigunTests`.
 
 `Objects/Weapons/Blade.events/*`, `Objects/Projectiles/BladeB.events/*`,
 `Objects/Projectiles/Bubble.events/*`, and the `with(BladeB)` block of
-`Scripts/Physics/System/move_all_bullets.gml`. `Gg2.Simulation.Weapons`
-(`FireBubble`, `ThrowBlade`, `BladeThrowDamage`), `Gg2.Simulation.Projectiles`
+`Scripts/Physics/System/move_all_bullets.gml`. `GG2.Simulation.Weapons`
+(`FireBubble`, `ThrowBlade`, `BladeThrowDamage`), `GG2.Simulation.Projectiles`
 (`MoveBlade`, `BubbleBeginStep`, `BubbleStep`, `BladeEndStep`, `BubbleCollide`,
 `ResolveBubblePair`), `WeaponState.{Replenishing, BubbleCount, BladesOut,
 ReadyToStab}`, `ProjectileState.{AmmoDrained, Bubbled}`. Gated by `BladeTests`
@@ -3956,8 +3956,8 @@ either).
 `Objects/Weapons/Revolver.events/*`, `Objects/Projectiles/{StabMask,
 StabAnim}.events/*`, and the cloak block of
 `Objects/InGameElements/Character.events/Begin Step.xml`.
-`Gg2.Simulation.Weapons` (`FireRevolver`, `TryStab`, `StabAnimStep`,
-`CreateStabMask`), `Gg2.Simulation.Projectiles` (`StabStep`, `StabConnects`,
+`GG2.Simulation.Weapons` (`FireRevolver`, `TryStab`, `StabAnimStep`,
+`CreateStabMask`), `GG2.Simulation.Projectiles` (`StabStep`, `StabConnects`,
 `StabHitCharacter`, `StabHitSentry`), `CharacterPhysics.CloakStep`,
 `CharacterState.{Stabbing, StabFreezeTimer}`,
 `WeaponState.{ReadyToStab, StabTimer, StabReadyTimer, StabDirection}`,
@@ -4218,8 +4218,8 @@ comment was wrong.
 `Objects/Map elements/Spawnroom objects/`, `Character.events/Destroy.xml:37`,
 `Character.events/Collision with HealingCabinet.xml`,
 `Character.events/End Step.xml:104`, `processClientCommands.gml:84` and
-`serverBuildSentry.gml`. `Gg2.Simulation.SpawnRooms`,
-`Gg2.Simulation.Cabinets`, `CollisionWorld.{SpawnRooms, Cabinets,
+`serverBuildSentry.gml`. `GG2.Simulation.SpawnRooms`,
+`GG2.Simulation.Cabinets`, `CollisionWorld.{SpawnRooms, Cabinets,
 PointInSpawnRoom, MeetsSpawnRoom, MeetsCabinet}`, `CharacterState.OnCabinet`.
 Gated by `SpawnRoomTests`.
 
@@ -4328,7 +4328,7 @@ shell counter the Revolver's alarm-5 body resets.
 `Sentry.events/Collision with {KillBox, FragBox}.xml`, and
 `Character.events/Destroy.xml`'s
 `lastDamageSource in (KILL_BOX, FRAG_BOX, PITFALL)` branch.
-`Gg2.Simulation.KillBoxes`, `CollisionWorld.KillBoxes`, and the return arm in
+`GG2.Simulation.KillBoxes`, `CollisionWorld.KillBoxes`, and the return arm in
 `Deaths.Kill`. Gated by `KillBoxTests`.
 
 ⚠️ **What the shipped maps actually place, scanned across all 22**: `tdm_mantic`
@@ -4412,7 +4412,7 @@ below.
 ### Settled: the four boxes that shove you
 
 `Character.events/Collision with MoveBox{Up,Down,Left,Right}.xml`,
-`MoveBox.events/{Create, User Event 1}.xml`. `Gg2.Simulation.MoveBoxes`,
+`MoveBox.events/{Create, User Event 1}.xml`. `GG2.Simulation.MoveBoxes`,
 `CollisionWorld.MoveBoxes`, and one line in `MatchSimulation`'s collision stage.
 Gated by `MoveBoxTests`.
 
@@ -4480,7 +4480,7 @@ sixteen mutants are all caught.
 ### Settled: what a departure destroys
 
 `Player.events/Destroy.xml`, reached from `Scripts/Misc/removePlayer.gml` and
-`GameServerBeginStep.gml:68`. `Gg2.Simulation.WorldState.RemoveSlot`, gated by
+`GameServerBeginStep.gml:68`. `GG2.Simulation.WorldState.RemoveSlot`, gated by
 `RemoveSlotTests`.
 
 ⚠️ **The event's first line is invisible to every code-extracting grep of the

@@ -1,6 +1,6 @@
 # `tools/loadprobe` — what a client actually experiences
 
-Not in `Gg2.sln`. Build it explicitly; `dotnet test` should not build a load
+Not in `GG2.sln`. Build it explicitly; `dotnet test` should not build a load
 generator and CI should not run one.
 
 ```powershell
@@ -36,7 +36,7 @@ no amount of optimising the server moves it.
 
 ## Traps built into this code
 
-1. **The reader blocks; it does not poll.** `Gg2.Parity.Recorder` already joins a
+1. **The reader blocks; it does not poll.** `GG2.Parity.Recorder` already joins a
    remote server and timestamps its chunks, and was not reused for one reason: it
    polls with `Thread.Sleep(1)`, which on Windows rounds up to the system timer
    resolution — 1 to 15 ms. The signal here is a 33.3 ms interval, so a

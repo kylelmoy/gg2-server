@@ -14,11 +14,11 @@
          stops happening. The projects it references keep the strict settings. -->
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
 
-    <!-- Deliberately NOT in Gg2.sln: `dotnet test Gg2.sln` should not build a
+    <!-- Deliberately NOT in GG2.sln: `dotnet test GG2.sln` should not build a
          benchmark, and CI should not run one. Build it explicitly. -->
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/Gg2.Bots/Gg2.Bots.csproj" />
-    <ProjectReference Include="../../src/Gg2.Simulation/Gg2.Simulation.csproj" />
+    <ProjectReference Include="../../src/GG2.Bots/GG2.Bots.csproj" />
+    <ProjectReference Include="../../src/GG2.Simulation/GG2.Simulation.csproj" />
   </ItemGroup>
 </Project>

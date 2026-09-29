@@ -22,7 +22,7 @@ To build from source instead, you need the **.NET 10 SDK**:
 ```powershell
 git clone https://github.com/kylelmoy/gg2-server.git
 cd gg2-server
-dotnet run -c Release --project src/Gg2.Host -- --map koth_valley --bots 12
+dotnet run -c Release --project src/GG2.Host -- --map koth_valley --bots 12
 ```
 
 Then connect a GG2 client to `127.0.0.1:8190` (Join Game → Direct Connect).
@@ -83,7 +83,7 @@ gg2-server --bots 12 --bot-mode policy `
 A release archive is ready to copy to a host as it is. To build one yourself:
 
 ```bash
-dotnet publish src/Gg2.Host/Gg2.Host.csproj -c Release -r linux-x64 --self-contained false -o out/
+dotnet publish src/GG2.Host/GG2.Host.csproj -c Release -r linux-x64 --self-contained false -o out/
 ```
 
 The published output includes the maps, nav graphs and checkpoints. Copy `out/` to the host

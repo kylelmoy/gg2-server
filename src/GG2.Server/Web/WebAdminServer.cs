@@ -1,0 +1,829 @@
+using System.Collections.Concurrent;
+using System.Net;
+using System.Net.Security;
+using System.Net.Sockets;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Text.Json;
+
+namespace GG2.Server;
+
+/// <summary>
+/// The remote admin panel — <c>gg2-server --web &lt;port&gt;</c>.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Why it exists.</b> <see cref="ControlPort"/> answers the same questions,
+/// but only to something already on the machine and only in JSON. An operator
+/// running a public server wants to see who is on it, why a tick is slow and
+/// what map is next from wherever they are, and wants to change the map, the bot
+/// count or the speed without an SSH session. That is a web page.
+/// </para>
+/// <para>
+/// <b>THE THREADING RULE, and it is the whole design.</b> The simulation is
+/// single-threaded and <c>WorldState</c> has no locks, so nothing on this class's
+/// socket threads may touch <see cref="GameServer"/>. Instead:
+/// <list type="bullet">
+/// <item>a request that <em>changes</em> anything is queued and executed by
+/// <see cref="Pump"/>, on the tick thread, between two ticks — the same
+/// guarantee the control port gets by being serviced inline;</item>
+/// <item>a request that only <em>reads</em> is answered from
+/// <see cref="_snapshot"/>, an immutable JSON string the tick thread
+/// republishes.</item>
+/// </list>
+/// The control port's own approach — service the sockets inline — is
+/// <em>wrong</em> here and that is the reason for the difference. A control-port
+/// client is on loopback and is a tool; a panel client is across a network and
+/// may be slow, hostile, or a phone that went into a tunnel mid-response.
+/// Writing to it from <see cref="GameServer.Tick"/> would let it stall the
+/// simulation for every player on the server by simply not reading.
+/// </para>
+/// <para>
+/// <b>It adds no verb of its own.</b> Everything it can do goes through
+/// <see cref="ControlCommands"/>, which the control port also uses, so the two
+/// surfaces cannot drift apart. What is here is transport, authentication and
+/// the page.
+/// </para>
+/// <para>
+/// <b>Reachable from the network, which nothing else in this project is.</b>
+/// <see cref="WebAdminOptions"/> has the argument; the short version is that the
+/// password is mandatory, generated when unset, checked in constant time, and
+/// rate-limited, and that a non-loopback bind without TLS warns about the
+/// password crossing the network in the clear.
+/// </para>
+/// </remarks>
+public sealed class WebAdminServer : IDisposable
+{
+    /// <summary>
+    /// Ticks between snapshots — 6, so 5 Hz on a 30 Hz server.
+    /// </summary>
+    /// <remarks>
+    /// <b>Fast enough to watch a fight, slow enough not to matter.</b> A
+    /// snapshot walks the roster and builds a string; at 30 Hz that would be a
+    /// real per-tick cost for a page nobody can read that fast. It is also built
+    /// <em>only while somebody is watching</em> — see <see cref="_watchers"/>.
+    /// On an idle server the tick rate itself drops to 2 Hz
+    /// (<c>--no-idle-when-empty</c>), so the panel updates twice a second and
+    /// says "idle" rather than looking stuck.
+    /// </remarks>
+    public const int SnapshotIntervalTicks = 6;
+
+    /// <summary>How long a queued command waits for the tick thread before failing.</summary>
+    /// <remarks>
+    /// Generous next to a 33 ms tick, and short enough that a panel against a
+    /// server that has stopped ticking says so instead of hanging.
+    /// </remarks>
+    private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>Sockets served at once. Beyond this, a connection is closed immediately.</summary>
+    private const int MaxConnections = 64;
+
+    /// <summary>Commands that may be waiting for the tick thread at once.</summary>
+    private const int MaxQueuedCommands = 256;
+
+    /// <summary>How long a kept-alive connection may sit idle before it is dropped.</summary>
+    private static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(60);
+
+    private readonly GameServer _server;
+    private readonly IServerLog _log;
+    private readonly LogRing _logRing;
+    private readonly WebAdminOptions _options;
+    private readonly AdminSessions _sessions;
+    private readonly PerfHistory _perf = new();
+    private readonly ConcurrentQueue<Pending> _queue = new();
+    private readonly CancellationTokenSource _stopping = new();
+
+    private TcpListener? _listener;
+    private X509Certificate2? _certificate;
+    private int _connections;
+    private int _watchers;
+    private int _queued;
+    private long _snapshotVersion;
+    private long _sweptAtFrame;
+    /// <remarks>
+    /// <b><see cref="_snapshotVersion"/> is 0 until the tick thread has
+    /// published a real one, and the event stream will not send this.</b>
+    /// Otherwise the panel's first act on connecting would be to render a
+    /// state object with no fields in it and throw — an error a browser shows
+    /// nowhere the operator will look.
+    /// </remarks>
+    private string _snapshot = "{\"ok\":false,\"error\":\"no snapshot yet\"}";
+
+    private sealed class Pending
+    {
+        public required string Body { get; init; }
+
+        public TaskCompletionSource<string> Result { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    public WebAdminServer(GameServer server, IServerLog log, LogRing logRing, WebAdminOptions options)
+    {
+        _server = server;
+        _log = log;
+        _logRing = logRing;
+        _options = options;
+
+        Password = options.Password.Length != 0
+            ? options.Password
+            : AdminSessions.GeneratePassword();
+
+        Generated = options.Password.Length == 0;
+        _sessions = new AdminSessions(Password);
+    }
+
+    /// <summary>The password the panel will accept.</summary>
+    /// <remarks>
+    /// Held in the clear here because the operator can be shown it, which is
+    /// the point of <see cref="Generated"/>. <see cref="AdminSessions"/> keeps
+    /// only a salted hash for the comparison.
+    /// </remarks>
+    public string Password { get; }
+
+    /// <summary>Whether <see cref="Password"/> was generated rather than configured.</summary>
+    public bool Generated { get; }
+
+    /// <summary>The port actually bound. Zero asks the OS for a free one.</summary>
+    public int BoundPort { get; private set; }
+
+    /// <summary>Whether the panel is served over TLS.</summary>
+    public bool Secure => _certificate is not null;
+
+    /// <inheritdoc cref="GameServer.WebSnapshotCount"/>
+    internal long SnapshotCount => Interlocked.Read(ref _snapshotVersion);
+
+    public void Start()
+    {
+        if (_options.CertificatePath.Length != 0)
+        {
+            _certificate = X509CertificateLoader.LoadPkcs12FromFile(
+                _options.CertificatePath,
+                _options.CertificatePassword.Length == 0 ? null : _options.CertificatePassword);
+        }
+
+        _listener = new TcpListener(IPAddress.Parse(_options.Bind), _options.Port);
+        _listener.Start();
+        BoundPort = ((IPEndPoint)_listener.LocalEndpoint).Port;
+
+        var scheme = Secure ? "https" : "http";
+        var shown = _options.Bind == "0.0.0.0" ? "<this machine>" : _options.Bind;
+
+        _log.Info($"web admin on {scheme}://{shown}:{BoundPort}/");
+
+        if (Generated)
+        {
+            // The only place this is ever printed. An operator who misses it
+            // restarts with --web-password; there is deliberately no endpoint
+            // that hands it back.
+            //
+            // ⚠️ "this process" rather than "changes on restart", and the
+            // distinction is load-bearing: a restart asked for from the PANEL
+            // carries this password into the new server — Program.Main, and
+            // GameServer.GeneratedWebPassword — precisely so it does not lock out
+            // the operator who pressed the button. A new process generates a new
+            // one, and only that.
+            _log.Info($"web admin password (generated, lasts as long as this process): {Password}");
+        }
+
+        // Printed every start, not once, and phrased as what an attacker gets
+        // rather than as "consider using TLS". The failure it describes — the
+        // admin password read off the wire — is silent and total.
+        if (_options.IsRemote && !Secure)
+        {
+            _log.Info(
+                "WARNING: the web admin is reachable from the network over plain HTTP, so "
+                + "the admin password and every session cookie cross it in the clear. "
+                + "Pass --web-tls <cert.pfx>, or put it behind a reverse proxy that "
+                + "terminates TLS, or bind it to 127.0.0.1 and reach it over an SSH tunnel.");
+        }
+
+        _ = Task.Run(() => AcceptLoopAsync(_stopping.Token));
+    }
+
+    /// <summary>
+    /// The tick thread's half: run what the panel asked for, publish what it
+    /// reads.
+    /// </summary>
+    /// <remarks>
+    /// <b>Called from inside <see cref="GameServer.Tick"/> and nowhere
+    /// else.</b> Everything it does touches the game, and nothing else in this
+    /// class may.
+    /// </remarks>
+    public void Pump(long frame)
+    {
+        while (_queue.TryDequeue(out var pending))
+        {
+            Interlocked.Decrement(ref _queued);
+
+            // TrySetResult, not SetResult: the waiting request may already
+            // have timed out and gone, and a command that lands after that is not
+            // an error — it ran.
+            pending.Result.TrySetResult(ControlCommands.Dispatch(_server, pending.Body));
+        }
+
+        // Sampled whether or not anybody is watching, which is the OPPOSITE of
+        // the snapshot below and is deliberate: an operator opens the panel
+        // because something already happened, and a graph that started when they
+        // arrived answers a question nobody has. The per-tick cost is the one
+        // TickCount64 comparison inside Sample. See PerfHistory.
+        _perf.Sample(_server);
+
+        // Only while a browser is actually watching. A server with the panel
+        // enabled and nobody on it pays nothing per tick beyond this comparison,
+        // which is the property that makes leaving --web on reasonable.
+        if (Volatile.Read(ref _watchers) > 0 && frame % SnapshotIntervalTicks == 0)
+        {
+            Volatile.Write(ref _snapshot, ControlCommands.State(_server));
+            Interlocked.Increment(ref _snapshotVersion);
+        }
+
+        // Once a minute, off the tick thread's critical path in every sense: it
+        // walks two small dictionaries.
+        if (frame - _sweptAtFrame >= 30 * 60)
+        {
+            _sweptAtFrame = frame;
+            _sessions.Sweep();
+        }
+    }
+
+    private async Task AcceptLoopAsync(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            TcpClient client;
+
+            try
+            {
+                client = await _listener!.AcceptTcpClientAsync(token);
+            }
+            catch (Exception e) when (e is OperationCanceledException or ObjectDisposedException)
+            {
+                return;
+            }
+            catch (SocketException)
+            {
+                continue;
+            }
+
+            if (Interlocked.Increment(ref _connections) > MaxConnections)
+            {
+                Interlocked.Decrement(ref _connections);
+                client.Dispose();
+                continue;
+            }
+
+            _ = Task.Run(() => ServeAsync(client, token), CancellationToken.None);
+        }
+    }
+
+    private async Task ServeAsync(TcpClient client, CancellationToken token)
+    {
+        try
+        {
+            client.NoDelay = true;
+
+            await using var network = client.GetStream();
+            Stream stream = network;
+            SslStream? tls = null;
+
+            if (_certificate is not null)
+            {
+                tls = new SslStream(network, leaveInnerStreamOpen: true);
+                await tls.AuthenticateAsServerAsync(
+                    _certificate,
+                    clientCertificateRequired: false,
+                    checkCertificateRevocation: false);
+                stream = tls;
+            }
+
+            try
+            {
+                // Bounded. A keep-alive connection that is answered for ever
+                // is a connection slot held for ever, and there are only
+                // MaxConnections of them.
+                for (var served = 0; served < 200 && !token.IsCancellationRequested; served++)
+                {
+                    using var idle = CancellationTokenSource.CreateLinkedTokenSource(token);
+                    idle.CancelAfter(IdleTimeout);
+
+                    var request = await HttpRequest.ReadAsync(stream, idle.Token);
+
+                    if (request is null)
+                        return;
+
+                    var address = (client.Client.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None;
+
+                    if (!await HandleAsync(request, stream, address, token) || !request.KeepAlive)
+                        return;
+                }
+            }
+            finally
+            {
+                if (tls is not null)
+                    await tls.DisposeAsync();
+            }
+        }
+        catch (Exception e) when (e is IOException
+                                      or SocketException
+                                      or ObjectDisposedException
+                                      or OperationCanceledException
+                                      or AuthenticationException)
+        {
+            // A browser closing a tab, a TLS handshake from something that is not
+            // a browser, a phone leaving a tunnel. None of these is the server's
+            // problem and logging them would make the log useless.
+        }
+        catch (Exception e)
+        {
+            _log.Error("web admin: unhandled exception serving a request", e);
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _connections);
+            client.Dispose();
+        }
+    }
+
+    /// <summary>Routes one request. Returns false when the connection is finished.</summary>
+    private async Task<bool> HandleAsync(
+        HttpRequest request,
+        Stream stream,
+        IPAddress address,
+        CancellationToken token)
+    {
+        var session = _sessions.Validate(request.Cookie(CookieName));
+
+        switch (request.Method, request.Path)
+        {
+            case ("GET", "/"):
+                return await AssetAsync(stream, "index.html", "text/html; charset=utf-8", token);
+
+            case ("GET", "/app.css"):
+                return await AssetAsync(stream, "app.css", "text/css; charset=utf-8", token);
+
+            case ("GET", "/app.js"):
+                return await AssetAsync(stream, "app.js", "text/javascript; charset=utf-8", token);
+
+            case ("GET", "/common.js"):
+                return await AssetAsync(stream, "common.js", "text/javascript; charset=utf-8", token);
+
+            case ("GET", "/analytics.js"):
+                return await AssetAsync(stream, "analytics.js", "text/javascript; charset=utf-8", token);
+
+            case ("GET", "/favicon.svg"):
+                return await AssetAsync(stream, "favicon.svg", "image/svg+xml", token);
+
+            // ⚠️ Served WITHOUT a session, like the page and the stylesheet, and
+            // for the same reason: it is a static asset of the application, the
+            // same eighty kilobytes of public-domain coastline for every server
+            // in the world. It says nothing about this one. The analytics it is
+            // drawn with are behind the session, below.
+            case ("GET", "/world.json"):
+                return await AssetAsync(stream, "world.json", "application/json", token);
+
+            // The one endpoint that answers before sign-in, and it answers
+            // with as little as it can: whether this browser is signed in, and
+            // whether the connection is encrypted. The server's name is not a
+            // secret — it is on the wire to every game client and in the public
+            // lobby — but nothing else is offered.
+            case ("GET", "/api/session"):
+                return await JsonAsync(stream, 200, Json(
+                    $"\"authenticated\":{(session is not null ? "true" : "false")}",
+                    $"\"secure\":{(Secure ? "true" : "false")}",
+
+                    // The CSRF token is re-issued to a browser that already
+                    // holds a valid cookie, so a page reload does not mean
+                    // signing in again. Safe here and only here: no CORS headers
+                    // are sent, so only a page on this origin can read the reply,
+                    // and the SameSite=Strict cookie that authorised the request
+                    // is not attached to a cross-site one at all.
+                    session is null ? "\"csrf\":null" : $"\"csrf\":\"{session.Csrf}\"",
+                    $"\"name\":\"{ControlCommands.Escape(_server.Options.ServerName)}\""), token);
+
+            case ("POST", "/api/login"):
+                return await LoginAsync(request, stream, address, token);
+
+            case ("POST", "/api/logout"):
+                _sessions.SignOut(request.Cookie(CookieName));
+                return await JsonAsync(stream, 200, "{\"ok\":true}", token, ClearCookie);
+        }
+
+        if (session is null)
+            return await JsonAsync(stream, 401, Error("sign in first"), token);
+
+        // Every state-changing request must echo the token issued at sign-in.
+        // The SameSite=Strict cookie already stops a cross-site post from
+        // carrying credentials; this stops anything that gets past it, because a
+        // page on another origin cannot read the token out of the login reply.
+        if (request.Method != "GET"
+            && !string.Equals(request.Header("X-CSRF-Token"), session.Csrf, StringComparison.Ordinal))
+        {
+            return await JsonAsync(stream, 403, Error("bad or missing CSRF token"), token);
+        }
+
+        switch (request.Method, request.Path)
+        {
+            case ("GET", "/api/state"):
+                return await JsonAsync(stream, 200, await ExecuteAsync("{\"cmd\":\"state\"}"), token);
+
+            case ("GET", "/api/events"):
+                await EventsAsync(stream, token);
+                return false;
+
+            case ("GET", "/api/maps"):
+                return await JsonAsync(stream, 200, MapList(), token);
+
+            case ("GET", "/api/map.png"):
+                return await MapImageAsync(request, stream, token);
+
+            case ("GET", "/api/log"):
+                return await JsonAsync(stream, 200, LogSince(request.Q("after")), token);
+
+            // Answered on THIS thread, not through the queue: it touches the
+            // OS and the runtime, never the game. It is the one route that does.
+            case ("GET", "/api/system"):
+                return await JsonAsync(stream, 200, SystemInfo.ToJson(_server.Options), token);
+
+            case ("GET", "/api/perf"):
+                return await JsonAsync(
+                    stream,
+                    200,
+                    _perf.ToJson(long.TryParse(request.Q("after"), out var after) ? after : -1),
+                    token);
+
+            // ⚠️ Through the QUEUE like every other mutating request, even though
+            // "config" only reads: it reads GameServer.Options, and reading that
+            // from a socket thread while the tick thread is between stages is the
+            // race this whole class is shaped to avoid. It is not on a timer —
+            // the settings page fetches it when it is opened.
+            case ("GET", "/api/config"):
+                return await JsonAsync(stream, 200, await ExecuteAsync("{\"cmd\":\"config\"}"), token);
+
+            // ⚠️ Through the QUEUE, like "config" and for the same reason: it
+            // walks the analytics tables, which the tick thread writes on every
+            // join and leave. It is fetched when the Analytics view is opened
+            // and on a slow refresh, never on the state cadence — a walk over
+            // twenty thousand player records is not a per-tick cost.
+            case ("GET", "/api/analytics"):
+                return await JsonAsync(stream, 200, await ExecuteAsync("{\"cmd\":\"analytics\"}"), token);
+
+            case ("POST", "/api/command"):
+                return await JsonAsync(stream, 200, await ExecuteAsync(request.Body), token);
+
+            default:
+                return await JsonAsync(stream, 404, Error($"no {request.Method} {request.Path}"), token);
+        }
+    }
+
+    private async Task<bool> LoginAsync(
+        HttpRequest request,
+        Stream stream,
+        IPAddress address,
+        CancellationToken token)
+    {
+        var remaining = _sessions.LockoutRemaining(address);
+
+        if (remaining > TimeSpan.Zero)
+        {
+            return await JsonAsync(
+                stream,
+                429,
+                Error($"too many attempts — try again in {(int)remaining.TotalSeconds + 1}s"),
+                token);
+        }
+
+        string password;
+
+        try
+        {
+            password = JsonDocument.Parse(request.Body).RootElement
+                .TryGetProperty("password", out var value) && value.ValueKind == JsonValueKind.String
+                ? value.GetString()!
+                : string.Empty;
+        }
+        catch (JsonException)
+        {
+            return await JsonAsync(stream, 400, Error("not JSON"), token);
+        }
+
+        var session = _sessions.SignIn(address, password);
+
+        if (session is null)
+        {
+            // Paid on every failure, before the answer goes out. See
+            // AdminSessions.FailureDelay.
+            await Task.Delay(AdminSessions.FailureDelay, token);
+            _log.Warn($"web admin: failed sign-in from {address}");
+            return await JsonAsync(stream, 401, Error("wrong password"), token);
+        }
+
+        _log.Info($"web admin: signed in from {address}");
+
+        // HttpOnly so script cannot read it, SameSite=Strict so another site
+        // cannot make the browser send it, and Secure only under TLS — a Secure
+        // cookie on plain HTTP is simply dropped, which would make the panel
+        // impossible to sign in to rather than more secure.
+        var cookie =
+            $"Set-Cookie: {CookieName}={session.Token}; HttpOnly; SameSite=Strict; Path=/"
+            + (Secure ? "; Secure" : string.Empty) + "\r\n";
+
+        return await JsonAsync(
+            stream,
+            200,
+            Json("\"ok\":true", $"\"csrf\":\"{session.Csrf}\""),
+            token,
+            cookie);
+    }
+
+    /// <summary>
+    /// The live stream the dashboard runs on: state snapshots and log lines.
+    /// </summary>
+    /// <remarks>
+    /// <b>Server-sent events rather than WebSockets</b>, because everything
+    /// here flows one way and SSE needs no handshake, no framing and no ping
+    /// protocol — about forty lines against several hundred, over a transport
+    /// that reconnects itself.
+    /// </remarks>
+    private async Task EventsAsync(Stream stream, CancellationToken token)
+    {
+        Interlocked.Increment(ref _watchers);
+
+        try
+        {
+            await HttpResponse.StartEventStreamAsync(stream, token);
+
+            var seenVersion = -1L;
+            var seenLog = -1L;
+            var seenPerf = -1L;
+            var idle = 0;
+
+            while (!token.IsCancellationRequested)
+            {
+                var version = Interlocked.Read(ref _snapshotVersion);
+
+                // `> 0` as well as "changed": zero means the tick thread has
+                // not published yet, and the placeholder is not a state object.
+                if (version != seenVersion && version > 0)
+                {
+                    seenVersion = version;
+                    await SendEventAsync(stream, "state", Volatile.Read(ref _snapshot), token);
+                    idle = 0;
+                }
+
+                // `> 0 &&`, and the sequence is read ONCE. Without the first
+                // guard a ring with nothing in it compares unequal to the -1 this
+                // starts at on every pass, resets `idle` every 100 ms, and the
+                // keep-alive below never fires.
+                var logSequence = _logRing.Sequence;
+
+                if (logSequence > 0 && logSequence - 1 != seenLog)
+                {
+                    var lines = _logRing.Since(seenLog, out _);
+                    seenLog = logSequence - 1;
+
+                    if (lines.Count > 0)
+                    {
+                        await SendEventAsync(stream, "log", LogJson(lines), token);
+                        idle = 0;
+                    }
+                }
+
+                // The backlog goes out on the FIRST pass too — seenPerf starts
+                // at -1 — so a browser that has just connected is handed the last
+                // five minutes in one event and draws a full graph immediately
+                // rather than an empty one that fills in over five minutes.
+                var perfSequence = _perf.Sequence;
+
+                if (perfSequence > 0 && perfSequence - 1 != seenPerf)
+                {
+                    // A sample can land between these two lines, in which case
+                    // it is sent again on the next pass. The panel keys on `seq`
+                    // and ignores one it already has — a duplicate is cheaper
+                    // than the lock this would otherwise need on the tick
+                    // thread's own writer.
+                    var samples = _perf.ToJson(seenPerf);
+                    seenPerf = perfSequence - 1;
+
+                    await SendEventAsync(stream, "perf", samples, token);
+                    idle = 0;
+                }
+
+                // A comment line every ~15s. Without it a proxy or a NAT with
+                // an idle timeout drops a quiet stream and the panel's only
+                // symptom is that it silently stops updating.
+                if (++idle >= 150)
+                {
+                    idle = 0;
+                    await stream.WriteAsync(": keep-alive\n\n"u8.ToArray(), token);
+                    await stream.FlushAsync(token);
+                }
+
+                await Task.Delay(100, token);
+            }
+        }
+        catch (Exception e) when (e is IOException
+                                      or SocketException
+                                      or ObjectDisposedException
+                                      or OperationCanceledException)
+        {
+            // The tab was closed. Normal.
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _watchers);
+        }
+    }
+
+    private static async Task SendEventAsync(
+        Stream stream,
+        string name,
+        string json,
+        CancellationToken token)
+    {
+        // The payload is one line of JSON with no newlines in it — every
+        // string in it went through JsonEncodedText — so it needs no folding into
+        // several `data:` lines. A raw newline here would silently truncate the
+        // event, which is why every producer of these strings escapes.
+        var bytes = Encoding.UTF8.GetBytes($"event: {name}\ndata: {json}\n\n");
+
+        await stream.WriteAsync(bytes, token);
+        await stream.FlushAsync(token);
+    }
+
+    /// <summary>
+    /// Queues a command for the tick thread and waits for its answer.
+    /// </summary>
+    /// <remarks>
+    /// <b>The seam.</b> This is the only way anything on a socket thread
+    /// reaches the game, and it is why nothing in this class needs a lock.
+    /// </remarks>
+    private async Task<string> ExecuteAsync(string body)
+    {
+        if (Interlocked.Increment(ref _queued) > MaxQueuedCommands)
+        {
+            Interlocked.Decrement(ref _queued);
+            return Error("the server is not draining commands — is it still ticking?");
+        }
+
+        var pending = new Pending { Body = body };
+        _queue.Enqueue(pending);
+
+        var completed = await Task.WhenAny(pending.Result.Task, Task.Delay(CommandTimeout));
+
+        if (completed != pending.Result.Task)
+        {
+            return Error(
+                $"timed out after {CommandTimeout.TotalSeconds:0}s waiting for the tick thread. "
+                + "The server may be stopped, or wedged.");
+        }
+
+        return await pending.Result.Task;
+    }
+
+    private async Task<bool> AssetAsync(
+        Stream stream,
+        string name,
+        string contentType,
+        CancellationToken token)
+    {
+        var bytes = WebAssets.Read(name);
+
+        // no-store rather than a long cache: the page is a few kilobytes off
+        // localhost or a LAN, and an operator who upgraded the server and got the
+        // old panel out of a browser cache would have no way to tell.
+        await HttpResponse.WriteAsync(stream, 200, contentType, bytes, token, NoStore);
+        return true;
+    }
+
+    private async Task<bool> MapImageAsync(HttpRequest request, Stream stream, CancellationToken token)
+    {
+        var name = request.Q("name") ?? string.Empty;
+
+        // An allowlist of characters, not a check for "..". This path is
+        // joined to a directory and handed to the filesystem; a map name in this
+        // game is [a-z0-9_] and anything else is somebody trying.
+        if (name.Length is 0 or > 64 || !name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_'))
+            return await JsonAsync(stream, 400, Error("not a map name"), token);
+
+        var path = Path.Combine(_server.Options.MapDirectory, name + ".png");
+
+        if (!File.Exists(path))
+            return await JsonAsync(stream, 404, Error($"no map '{name}'"), token);
+
+        // Read on this thread, not the tick thread. The map directory is
+        // read-only to the running server and the file is a few tens of KB.
+        var bytes = await File.ReadAllBytesAsync(path, token);
+
+        // Immutable for the life of the process: a map PNG on disk does not
+        // change under a running server, and the panel redraws it on every map
+        // change.
+        await HttpResponse.WriteAsync(
+            stream, 200, "image/png", bytes, token, "Cache-Control: private, max-age=3600\r\n");
+
+        return true;
+    }
+
+    /// <summary>The maps this server could be asked to change to.</summary>
+    /// <remarks>
+    /// Read off disk rather than from a compiled-in list, so a server started
+    /// with <c>--maps</c> pointing somewhere else offers what it can actually
+    /// load. The rotation is listed separately so the panel can mark it.
+    /// </remarks>
+    private string MapList()
+    {
+        var json = new StringBuilder(1024);
+
+        json.Append("{\"ok\":true,\"maps\":[");
+
+        try
+        {
+            var first = true;
+
+            foreach (var file in Directory.EnumerateFiles(_server.Options.MapDirectory, "*.png")
+                         .Select(Path.GetFileNameWithoutExtension)
+                         .Where(name => name is not null)
+                         .OrderBy(name => name, StringComparer.Ordinal))
+            {
+                json.Append(first ? "\"" : ",\"").Append(ControlCommands.Escape(file!)).Append('"');
+                first = false;
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // An empty list and a working panel beats a 500 and a blank page.
+        }
+
+        json.Append("],\"rotation\":[");
+
+        for (var i = 0; i < _server.Options.MapRotation.Count; i++)
+        {
+            json.Append(i == 0 ? "\"" : ",\"")
+                .Append(ControlCommands.Escape(_server.Options.MapRotation[i])).Append('"');
+        }
+
+        json.Append("]}");
+        return json.ToString();
+    }
+
+    private string LogSince(string? after)
+    {
+        var from = long.TryParse(after, out var parsed) ? parsed : -1;
+        var lines = _logRing.Since(from, out var dropped);
+
+        return "{\"ok\":true,\"dropped\":" + dropped + ",\"lines\":" + LogJson(lines) + "}";
+    }
+
+    private static string LogJson(IReadOnlyList<LogRing.Entry> lines)
+    {
+        var json = new StringBuilder(lines.Count * 96 + 2);
+
+        json.Append('[');
+
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (i > 0)
+                json.Append(',');
+
+            json.Append("{\"seq\":").Append(lines[i].Sequence);
+            json.Append(",\"at\":\"").Append(lines[i].Utc.ToString("O")).Append('"');
+            json.Append(",\"text\":\"").Append(ControlCommands.Escape(lines[i].Text)).Append("\"}");
+        }
+
+        json.Append(']');
+        return json.ToString();
+    }
+
+    private const string CookieName = "gg2_admin";
+
+    private const string NoStore = "Cache-Control: no-store\r\n";
+
+    private const string ClearCookie =
+        NoStore + $"Set-Cookie: {CookieName}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0\r\n";
+
+    private static string Json(params string[] fields) => "{" + string.Join(',', fields) + "}";
+
+    private static string Error(string message) => ControlCommands.Error(message);
+
+    private static async Task<bool> JsonAsync(
+        Stream stream,
+        int status,
+        string body,
+        CancellationToken token,
+        string extra = NoStore)
+    {
+        await HttpResponse.TextAsync(stream, status, "application/json", body, token, extra);
+        return true;
+    }
+
+    public void Dispose()
+    {
+        _stopping.Cancel();
+        _listener?.Stop();
+        _listener?.Dispose();
+        _listener = null;
+        _certificate?.Dispose();
+        _certificate = null;
+        _stopping.Dispose();
+    }
+}

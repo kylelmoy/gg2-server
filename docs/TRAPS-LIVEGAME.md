@@ -328,7 +328,7 @@ and reading the result back.
 
 The samplers and probes live in the separate `gg2-samplers` repo, a sibling
 checkout of this one. Each writes its fixture into this repo's
-`tests/Gg2.Tests/Fixtures/`; `GG2_SERVER` says where this repo is when it is not
+`tests/GG2.Tests/Fixtures/`; `GG2_SERVER` says where this repo is when it is not
 `../gg2-server`.
 
 `gg2-samplers/sample-collision.js`, `gg2-samplers/sample-physics.js`, `gg2-samplers/sample-rng.js`,

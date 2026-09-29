@@ -14,7 +14,7 @@ New-Item -ItemType Directory -Force $WorkDir | Out-Null
 $WorkDir = Resolve-Path $WorkDir
 
 foreach ($p in @(
-        @('src\Gg2.Host\Gg2.Host.csproj', 'host'),
+        @('src\GG2.Host\GG2.Host.csproj', 'host'),
         @('tools\loadprobe\loadprobe.csproj', 'probe'),
         @('tools\soak\soak-players.csproj', 'soak'))) {
     dotnet publish -c Release (Join-Path $repo $p[0]) -o (Join-Path $WorkDir "bin\$($p[1])") | Out-Null

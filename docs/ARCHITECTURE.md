@@ -33,25 +33,25 @@ Everything below is in service of not breaking that rule.
 ## Projects
 
 ```
-Gg2.Protocol      framing, message codecs, the constant table.  Pure, no I/O.
-Gg2.Maps          walkmask / level-data decoding, entity extraction.  Pure.
-Gg2.Simulation    physics, characters, weapons, projectiles, gamemodes.  Pure.
-Gg2.Bots          bot input generation.  Pure. Depends on Simulation for reads.
-Gg2.Server        sockets, tick loop, session lifecycle, config.  The only I/O.
-Gg2.Parity        trace recorder, trace replayer, drift reporting.
-Gg2.Tests         xunit; unit tests plus the parity fixtures.
-Gg2.Host          console entry point.
+GG2.Protocol      framing, message codecs, the constant table.  Pure, no I/O.
+GG2.Maps          walkmask / level-data decoding, entity extraction.  Pure.
+GG2.Simulation    physics, characters, weapons, projectiles, gamemodes.  Pure.
+GG2.Bots          bot input generation.  Pure. Depends on Simulation for reads.
+GG2.Server        sockets, tick loop, session lifecycle, config.  The only I/O.
+GG2.Parity        trace recorder, trace replayer, drift reporting.
+GG2.Tests         xunit; unit tests plus the parity fixtures.
+GG2.Host          console entry point.
 ```
 
-`Gg2.Simulation` must not reference `Gg2.Server`. Enforce it with project
+`GG2.Simulation` must not reference `GG2.Server`. Enforce it with project
 references and keep it that way — the moment the physics can read a socket, the
 parity harness stops being able to run it.
 
-⚠️ **`Gg2.Server` references `Gg2.Bots`, and not the other way round.** The bot
+⚠️ **`GG2.Server` references `GG2.Bots`, and not the other way round.** The bot
 *population manager* is server-side in the reference (`botPopulationUpdate` is
 called from `GameServer`'s Begin Step) because only the server has a roster, a
-config file and a socket to broadcast a join on — so `Gg2.Server.BotPopulationService`
-drives `Gg2.Bots.BotPopulation`'s decisions. `Gg2.Bots` stays pure and gains
+config file and a socket to broadcast a join on — so `GG2.Server.BotPopulationService`
+drives `GG2.Bots.BotPopulation`'s decisions. `GG2.Bots` stays pure and gains
 nothing from the edge, and the rule above is untouched. The `IInputSource` seam
 still means the *simulation* never special-cases a bot.
 
@@ -186,7 +186,7 @@ shape.** `tools/bench/README.md` has the measurement traps.
   sooner. The two only work together — inflating the heuristic without the
   closed-set skip makes the search slower, not faster, because an inconsistent
   heuristic re-opens far more nodes. This is a behaviour change (not just a
-  speed win) and is allowed: `CLAUDE.md` puts `src/Gg2.Bots/` outside "the
+  speed win) and is allowed: `CLAUDE.md` puts `src/GG2.Bots/` outside "the
   reference is the specification". Route *completeness* is unaffected (every
   reachable goal still finds a route); only which equal-or-near-cost route comes
   back can differ. `NavRouteIdentityTests` digests every route over all shipped
@@ -226,8 +226,8 @@ public interface IInputSource {
 }
 ```
 
-`Gg2.Simulation.IInputSource`, `WorldView`, `PlayerCommand`;
-`Gg2.Server.NetworkInputSource`, `GameServer.GatherInputs` / `ServiceBots` /
+`GG2.Simulation.IInputSource`, `WorldView`, `PlayerCommand`;
+`GG2.Server.NetworkInputSource`, `GameServer.GatherInputs` / `ServiceBots` /
 `AddBot` / `RemoveBot`. Gated by `InputSourceTests` and `WorldViewTests`.
 
 It is a transcription of a shape the reference already has:
@@ -324,11 +324,11 @@ Two things carried over rather than reinvented:
 
 - **The nav graph generator lives outside the game**, and the port **reads its
   cache** (phase 7 item 2): `gg2-nav-gen` builds `botnav/<map>_a<area>.txt`
-  offline — checked into this repo's `nav/` (gzipped) — and `Gg2.Bots.NavCache`
-  loads it and `Gg2.Bots.NavGraph` is the model, with the coordinate
+  offline — checked into this repo's `nav/` (gzipped) — and `GG2.Bots.NavCache`
+  loads it and `GG2.Bots.NavGraph` is the model, with the coordinate
   conversions, the node lookup, the gate rules and the two indices
   `navCacheLoad.gml` derives rather than stores. Moving *generation* into
-  `Gg2.Bots` is a natural consolidation later; it is not done and is not
+  `GG2.Bots` is a natural consolidation later; it is not done and is not
   needed. `docs/TRAPS-BOTS.md`, "the nav cache reader", has the format traps
   (including the column-major `ds_grid_write` layout and the feet-row rounding
   direction).
@@ -438,7 +438,7 @@ quoting any of this as "Linux support".
   the 15.6 ms quantum — measured: 15% of ticks arrived ~14 ms late without it.
   Linux has no such knob; its granularity is the kernel's. The late-tick rate
   on Linux is unknown and is the first thing to look at on a real run.
-- ✅ **`nav/` travels with a publish.** `Gg2.Host.csproj` copies `maps/*.png`
+- ✅ **`nav/` travels with a publish.** `GG2.Host.csproj` copies `maps/*.png`
   and `nav/*` alike, with no flag needed; a published directory is 2.9 MB.
 - ⚠️ **Case-sensitive filesystems** make `MapExists` stricter than it is on
   Windows: a map name typed with the wrong case resolves there and not here.

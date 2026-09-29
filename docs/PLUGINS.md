@@ -168,7 +168,7 @@ fails if the pin is edited, so at least it cannot move by accident.
 
 ## The seam
 
-`src/Gg2.Server/Plugins/`.
+`src/GG2.Server/Plugins/`.
 
 | Type | What it is |
 |---|---|

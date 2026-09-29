@@ -16,7 +16,7 @@ import socket
 import sys
 import time
 
-# The handshake, from Gg2.Protocol.MessageType and GameConstants.
+# The handshake, from GG2.Protocol.MessageType and GameConstants.
 HELLO = 0
 PLAYER_JOIN = 1
 RESERVE_SLOT = 60

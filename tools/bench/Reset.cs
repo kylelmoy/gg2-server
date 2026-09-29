@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using Gg2.Bots;
+using GG2.Bots;
 
 namespace Bench;
 
@@ -34,13 +34,13 @@ public static class ResetBench
         Console.WriteLine($"  File.ReadAllBytes          {sw.Elapsed.TotalMilliseconds / 200:0.000} ms ({bytes.Length} bytes)");
 
         sw.Restart();
-        for (var i = 0; i < 200; i++) Gg2.Maps.LevelMap.FromPng(MAP, bytes).ForArea(1);
+        for (var i = 0; i < 200; i++) GG2.Maps.LevelMap.FromPng(MAP, bytes).ForArea(1);
         sw.Stop();
         Console.WriteLine($"  LevelMap.FromPng+ForArea   {sw.Elapsed.TotalMilliseconds / 200:0.000} ms");
 
-        var level = Gg2.Maps.LevelMap.FromPng(MAP, bytes).ForArea(1);
+        var level = GG2.Maps.LevelMap.FromPng(MAP, bytes).ForArea(1);
         sw.Restart();
-        for (var i = 0; i < 200; i++) _ = new Gg2.Simulation.CollisionWorld(level);
+        for (var i = 0; i < 200; i++) _ = new GG2.Simulation.CollisionWorld(level);
         sw.Stop();
         Console.WriteLine($"  new CollisionWorld         {sw.Elapsed.TotalMilliseconds / 200:0.000} ms");
     }

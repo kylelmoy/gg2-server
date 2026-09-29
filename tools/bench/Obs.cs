@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
-using Gg2.Bots;
-using Gg2.Protocol;
-using Gg2.Simulation;
+using GG2.Bots;
+using GG2.Protocol;
+using GG2.Simulation;
 
 namespace Bench;
 

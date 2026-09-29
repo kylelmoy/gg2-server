@@ -8,7 +8,7 @@ attacks cannot reach their limit over loopback at all, and both report so rather
 than reporting a pass — a harness whose "not dropped" reads like a failure is
 how a real regression gets waved through next time.
 
-Not in `Gg2.sln`, like `tools/bench/`. It needs Python 3 and nothing else.
+Not in `GG2.sln`, like `tools/bench/`. It needs Python 3 and nothing else.
 
 ## Running it
 

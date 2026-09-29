@@ -32,7 +32,7 @@ it ships with the game and is covered by the ordinary map gates.)
   are nav-invisible — `gg2-nav-gen` skips the type outright, and the nav graph
   is byte-identical with and without them (measured).
 - **A stock client can join it.** `gg_debug2` is not one of
-  `Gg2.Maps.InternalMaps`' 22 names, so the server advertises **its MD5**
+  `GG2.Maps.InternalMaps`' 22 names, so the server advertises **its MD5**
   rather than the empty string that means "built into the client", and
   answers `DOWNLOAD_MAP` by streaming the file — a `uint` length then the
   bytes, rate-limited across ticks and shared between simultaneous

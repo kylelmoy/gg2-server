@@ -1,0 +1,79 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The only project with I/O in it. docs/ARCHITECTURE.md:
+       GG2.Simulation must never reference this one. The dependency runs one
+       way, which is what keeps the simulation runnable with no server at all
+       and therefore replayable by GG2.Parity. -->
+  <PropertyGroup>
+    <RootNamespace>GG2.Server</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GG2.Protocol\GG2.Protocol.csproj" />
+    <ProjectReference Include="..\GG2.Maps\GG2.Maps.csproj" />
+    <ProjectReference Include="..\GG2.Simulation\GG2.Simulation.csproj" />
+
+    <!--
+      ⚠️ GG2.Server depends on GG2.Bots, and NOT the other way round. The
+      population manager is server-side in the reference (botPopulationUpdate is
+      called from GameServer's Begin Step) because only the server has a roster,
+      a config file and a socket to broadcast a join on. GG2.Bots stays pure and
+      gains nothing from this edge.
+
+      docs/ARCHITECTURE.md's one hard rule is that GG2.Simulation must not
+      reference GG2.Server, and that is untouched.
+    -->
+    <ProjectReference Include="..\GG2.Bots\GG2.Bots.csproj" />
+
+    <!--
+      The nav-graph generator, so a map with no checked-in graph still gets one
+      (BotPopulationService.MapChanged). GG2.Nav does NOT reference GG2.Bots:
+      it produces the cache file's text and NavCache.Parse turns that into a
+      NavGraph, which is the same call a file off disk gets. One direction, no
+      cycle, and an on-the-fly graph is the file's graph by construction.
+    -->
+    <ProjectReference Include="..\GG2.Nav\GG2.Nav.csproj" />
+  </ItemGroup>
+
+
+  <!--
+    The web admin panel's five files, compiled in. WebAssets says why they are
+    embedded rather than served off disk; the short version is that a deployment
+    cannot then have a working binary and a missing page, and that there is no
+    directory to traverse.
+    ⚠️ LogicalName is set by hand rather than left to the default
+    <RootNamespace>.<folder>.<file> derivation, because that derivation mangles a
+    name with a dot in it and every one of these has one.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Web\Assets\index.html" LogicalName="GG2.Server.Web.Assets.index.html" />
+    <EmbeddedResource Include="Web\Assets\app.css" LogicalName="GG2.Server.Web.Assets.app.css" />
+    <EmbeddedResource Include="Web\Assets\app.js" LogicalName="GG2.Server.Web.Assets.app.js" />
+    <EmbeddedResource Include="Web\Assets\common.js" LogicalName="GG2.Server.Web.Assets.common.js" />
+    <EmbeddedResource Include="Web\Assets\analytics.js" LogicalName="GG2.Server.Web.Assets.analytics.js" />
+    <EmbeddedResource Include="Web\Assets\favicon.svg" LogicalName="GG2.Server.Web.Assets.favicon.svg" />
+
+    <!--
+      gg2-server config edit's page — ConfigEditorServer. It runs on the
+      operator's machine, not a server, and borrows app.css and the favicon.
+    -->
+    <EmbeddedResource Include="Web\Assets\editor.html" LogicalName="GG2.Server.Web.Assets.editor.html" />
+    <EmbeddedResource Include="Web\Assets\editor.css" LogicalName="GG2.Server.Web.Assets.editor.css" />
+    <EmbeddedResource Include="Web\Assets\editor.js" LogicalName="GG2.Server.Web.Assets.editor.js" />
+
+    <!--
+      The analytics map's geometry: Natural Earth coastlines, country markers
+      and US states, already projected into a unit box. Public domain, generated
+      by tools/gen-geo-assets.js, and CHECKED IN rather than fetched at runtime —
+      the panel has to work on a machine with no route to the internet, which is
+      the same argument that keeps everything above out of a CDN.
+    -->
+    <EmbeddedResource Include="Web\Assets\world.json" LogicalName="GG2.Server.Web.Assets.world.json" />
+  </ItemGroup>
+
+  <!-- So IdleServerTests can read PacingInterval without timing Run(). -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="GG2.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -14,7 +14,7 @@ traces/
 # without this a fresh clone fails two tests that pass on the machine that
 # recorded them. docs/PARITY.md says parity fixtures live with the tests and
 # run in CI; this is what makes that true.
-!tests/Gg2.Tests/Fixtures/*.trace
+!tests/GG2.Tests/Fixtures/*.trace
 
 # Claude Code session automation: the hooks, settings.json and commands that
 # carry a handoff from one session to the next.

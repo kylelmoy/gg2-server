@@ -38,12 +38,12 @@ nobody solves them twice:
 - `IInputSource` as the seam, with network clients and bots on the same
   interface - which is already true in the reference (`botInputUpdate.gml`
   writes `keyState`/`aimDirection` exactly as `processClientCommands.gml:267`
-  does for a socket): `Gg2.Simulation.IInputSource`,
-  `Gg2.Server.NetworkInputSource`, `GameServer.GatherInputs`. See
+  does for a socket): `GG2.Simulation.IInputSource`,
+  `GG2.Server.NetworkInputSource`, `GameServer.GatherInputs`. See
   docs/ARCHITECTURE.md, "Bots", for what it settled.
 - Determinism, independent `WorldState`s across cores, headless
   faster-than-real-time, per-slot think-rate.
-- `Gg2.Parity`'s trace recorder and replayer.
+- `GG2.Parity`'s trace recorder and replayer.
 
 What follows is the delta.
 
@@ -82,7 +82,7 @@ Enumerating an `IReadOnlyList<T>` via `foreach` allocates a boxed enumerator
 where enumerating the concrete array does not, and an **empty** collection's
 enumerator is a cached singleton that measures zero — so a `foreach` that
 measures zero today may only be walking an empty list on the fixture that
-exercised it. Inside `Gg2.Simulation`, a collection the tick walks must arrive as
+exercised it. Inside `GG2.Simulation`, a collection the tick walks must arrive as
 an array or a span, or be indexed. `BotAiConstraintsTests.ASteadyStateTickAllocatesNothing`.
 
 ## 2. Snapshot and restore, not just replay-from-start
@@ -113,7 +113,7 @@ order. `BotAiConstraintsTests.AStateRoundTripsThroughBytesAndGoesOnTickingIdenti
 
 ## 3. The parity trace format is the training data format
 
-**Requirement.** Whatever `Gg2.Parity` records for trace replay - per tick, per
+**Requirement.** Whatever `GG2.Parity` records for trace replay - per tick, per
 slot: `keyState`, `netAimDirection`, `aimDistance`, plus periodic full state
 snapshots - is what a live server can be configured to record from **human**
 players, to disk, on a real game.
@@ -137,7 +137,7 @@ reads a six-bot game as 27,989 messages, framed cleanly to the last byte.
 
 `Recorder` is a passive spectator client: it connects to any host and port,
 sends no `INPUTSTATE`, and writes down every byte
-(`src/Gg2.Parity/Recorder.cs:7-22`). So `gg2-parity record --host
+(`src/GG2.Parity/Recorder.cs:7-22`). So `gg2-parity record --host
 <public-server> --port <n>` captures human play on somebody else's GM8 server —
 the cheapest route to the *opponent* distribution this item wants, independent
 of whether this port has its own public game.
@@ -190,7 +190,7 @@ came off the running game and have no bots in them.
 ### From a trace to training rows
 
 `gg2-env dataset <trace|dir>... --out <dir>` replays a recording through
-`Gg2.Parity`'s `Replayer` — the same replay the parity fixtures run, so there
+`GG2.Parity`'s `Replayer` — the same replay the parity fixtures run, so there
 is one path from a trace to a world — and writes `(observation, action)` as
 `.npy`. Human rows only unless `--include-bots`, and every row carries its own
 participant column either way.
@@ -365,7 +365,7 @@ invalidates every checkpoint. That is correct.
 to stamp before the physics exists. Do not defer it past that: a stamp added
 after the first checkpoints are trained cannot tell you which ones were valid.
 
-**Built.** `Gg2.Simulation.SimulationStamp`, gated by `SimulationStampTests`.
+**Built.** `GG2.Simulation.SimulationStamp`, gated by `SimulationStampTests`.
 `Require` **throws** on a mismatch, naming both stamps so an operator can tell
 which side is stale.
 
@@ -394,7 +394,7 @@ policy after a restart.
 a broken test.** The question to answer before editing that line is which
 checkpoints it just invalidated.
 
-## 10. A `Gg2.Env` project
+## 10. A `GG2.Env` project
 
 **Requirement.** A batch-stepping surface: N worlds advanced by one decision
 step per call, observations and rewards returned as one contiguous block; reset
@@ -405,7 +405,7 @@ and termination reason out (item 7).
 **Why here rather than in the trainer.** It needs `WorldState` internals and it
 has to be fast in the tick loop. Extracting features across a process boundary
 means shipping raw world state per bot per tick, which is the one thing the
-batching exists to avoid. `Gg2.Parity` is the precedent for a non-serving
+batching exists to avoid. `GG2.Parity` is the precedent for a non-serving
 project living in this repo.
 
 Start with a local socket and length-prefixed binary frames. Shared memory is an
@@ -427,7 +427,7 @@ given map, with no gamemode running, and step them.
 asks for a socket-free runner of *full matches*; this is the smaller case, and
 it is the one the sample budget actually spends its time in.
 
-**Satisfied.** `Gg2.Bots.ScenarioWorld` — load a map for an area, `Place` any
+**Satisfied.** `GG2.Bots.ScenarioWorld` — load a map for an area, `Place` any
 number of characters of given classes and teams at exact positions, `Drive` each
 with an `IInputSource`, `Step`. A library type rather than a test fixture,
 because a self-play evaluator wants exactly this. ⚠️ **What makes it
@@ -439,11 +439,11 @@ observable at one instant each.
 
 ## 12. The rollout-search bot
 
-**Requirement.** An `IInputSource` in `Gg2.Bots` that, on each decision, forks
+**Requirement.** An `IInputSource` in `GG2.Bots` that, on each decision, forks
 the world, plays candidate short action sequences forward 15-30 ticks, scores
 each from the emitted damage events, restores, and plays the first action of the
 best sequence - replanning next decision rather than committing to the plan. Its
-action space is the same `EnvAction` heads `Gg2.Env` decodes, so a decision it
+action space is the same `EnvAction` heads `GG2.Env` decodes, so a decision it
 logs is valid data for a policy and vice versa.
 
 **Why it is here and not in `gg2-rl`.** **It is a bot in its own right.** It
@@ -467,7 +467,7 @@ the same tick), item 6's `WorldView` queries, item 7's damage accumulators (the
 score), and item 11's `ScenarioWorld` (a fight, not a match). **Nothing new is
 required from the simulation.** This item is assembly, not capability.
 
-**Built.** `Gg2.Bots.RolloutSearch`. 2.94 ms a decision in Release and 11-0-1
+**Built.** `GG2.Bots.RolloutSearch`. 2.94 ms a decision in Release and 11-0-1
 against `ScriptedBot` over twelve duels; `docs/TRAPS-BOTS.md`, "Item 12", has the
 rest.
 
@@ -508,7 +508,7 @@ expert iteration, and it arrives as weights behind a seam that already exists.
   behind an `IInputSource` (`HybridBot` driving a `PolicyController`) — a
   `Dense` loop and an argmax per head, no tensor library and no dependency.
 - **No training loop, replay buffer, or environment API. Those live outside the
-  server.** `gg2-rl/env/Gg2.Env/` is a *seam* — a socket and an observation writer —
+  server.** `gg2-rl/env/GG2.Env/` is a *seam* — a socket and an observation writer —
   not a trainer; the loop is `gg2-rl`'s.
 - **No end-to-end learned bot. The realistic target is a hybrid**: the scripted
   macro layer keeps objective selection, class choice and routing - roughly 2,000

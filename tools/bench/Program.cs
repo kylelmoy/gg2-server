@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
-using Gg2.Bots;
-using Gg2.Simulation;
-using Gg2.Protocol;
+using GG2.Bots;
+using GG2.Simulation;
+using GG2.Protocol;
 
 // The reference's Included Files when GG2_REFERENCE is set, otherwise this
 // repo's checked-in maps/ — byte-identical to them, which MapCopyTests gates.
@@ -14,11 +14,11 @@ static string RepositoryMaps()
 {
     for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
     {
-        if (File.Exists(Path.Combine(directory.FullName, "Gg2.sln")))
+        if (File.Exists(Path.Combine(directory.FullName, "GG2.sln")))
             return Path.Combine(directory.FullName, "maps");
     }
 
-    throw new DirectoryNotFoundException("no Gg2.sln above the bench binary; set GG2_REFERENCE");
+    throw new DirectoryNotFoundException("no GG2.sln above the bench binary; set GG2_REFERENCE");
 }
 
 // Both flight modes want a nav directory and are meaningless without one, so
@@ -231,15 +231,15 @@ if (Environment.GetEnvironmentVariable("BENCH_CONST") == "1")
 {
     Console.WriteLine($"ObservationWriter.Length = {ObservationWriter.Length}");
     Console.WriteLine($"ActionDecoder.AimBins   = {ActionDecoder.AimBins}");
-    Console.WriteLine($"SimulationStamp.Uuid    = {Gg2.Simulation.SimulationStamp.Uuid}");
+    Console.WriteLine($"SimulationStamp.Uuid    = {GG2.Simulation.SimulationStamp.Uuid}");
 
     // The un-gated half. gg2-rl reads BOTH here: the first says whether a
     // checkpoint is refused, the second says whether the world it was fitted to
     // has moved underneath it.
     Console.WriteLine(
-        $"SimulationStamp.Routing = {Gg2.Simulation.SimulationStamp.RoutingUuid} (reported, not gated)");
-    Console.WriteLine($"ActionEncodingVersion   = {Gg2.Simulation.SimulationStamp.ActionEncodingVersion}");
-    Console.WriteLine($"ObservationLayoutVersion= {Gg2.Simulation.SimulationStamp.ObservationLayoutVersion}");
+        $"SimulationStamp.Routing = {GG2.Simulation.SimulationStamp.RoutingUuid} (reported, not gated)");
+    Console.WriteLine($"ActionEncodingVersion   = {GG2.Simulation.SimulationStamp.ActionEncodingVersion}");
+    Console.WriteLine($"ObservationLayoutVersion= {GG2.Simulation.SimulationStamp.ObservationLayoutVersion}");
     return;
 }
 
@@ -282,5 +282,5 @@ if (Environment.GetEnvironmentVariable("BENCH_RESET") == "1")
 }
 
 Console.Error.WriteLine("no mode selected: set one of the BENCH_* variables in README.md.");
-Console.Error.WriteLine("The Gg2.Env throughput benchmark this used to run lives in gg2-rl, env/bench.");
+Console.Error.WriteLine("The GG2.Env throughput benchmark this used to run lives in gg2-rl, env/bench.");
 return;

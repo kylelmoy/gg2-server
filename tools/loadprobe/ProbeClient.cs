@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using System.Net.Sockets;
-using Gg2.Protocol;
+using GG2.Protocol;
 
 namespace LoadProbe;
 
@@ -9,7 +9,7 @@ namespace LoadProbe;
 /// arrive.
 /// </summary>
 /// <remarks>
-/// <b>Why this is not <c>Gg2.Parity.Recorder</c>, which already joins a remote
+/// <b>Why this is not <c>GG2.Parity.Recorder</c>, which already joins a remote
 /// server and timestamps its chunks.</b> That type polls with
 /// <c>Thread.Sleep(1)</c>, and a Windows sleep rounds up to the system timer
 /// resolution — 1 to 15 ms depending on what else has raised it. The signal
@@ -74,7 +74,7 @@ public sealed class ProbeClient : IDisposable
     /// <summary>
     /// Speaks the handshake and joins as a spectator. The sequence is
     /// docs/PROTOCOL.md, "Handshake"; it is the same one
-    /// <c>Gg2.Parity.Recorder.Join</c> walks.
+    /// <c>GG2.Parity.Recorder.Join</c> walks.
     /// </summary>
     public void Join(string name)
     {
@@ -243,7 +243,7 @@ public sealed class ProbeClient : IDisposable
         for (var i = 0; i < length; i++)
             bytes[i] = ReadByte();
 
-        return Gg2Text.Decode(bytes);
+        return GG2Text.Decode(bytes);
     }
 
     public void Dispose() => _socket.Dispose();

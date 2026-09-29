@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Pure decoding: bytes in, geometry out. The caller does the file reading. -->
+  <PropertyGroup>
+    <RootNamespace>GG2.Maps</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GG2.Protocol\GG2.Protocol.csproj" />
+  </ItemGroup>
+
+</Project>

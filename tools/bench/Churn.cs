@@ -1,6 +1,6 @@
-using Gg2.Bots;
-using Gg2.Simulation;
-using Gg2.Protocol;
+using GG2.Bots;
+using GG2.Simulation;
+using GG2.Protocol;
 
 namespace Bench;
 

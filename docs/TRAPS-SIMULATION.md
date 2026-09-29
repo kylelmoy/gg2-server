@@ -16,24 +16,24 @@ session spends a day arriving where it started.
 
 ### What each project is, and the ordering facts that came with it
 
-- `Gg2.Protocol`, `Gg2.Maps` — phase 0. Every built-in map decodes
+- `GG2.Protocol`, `GG2.Maps` — phase 0. Every built-in map decodes
   cell-for-cell against the JavaScript walkmask decoder.
-- `Gg2.Server`, `Gg2.Host` — phase 1. A stock GM8 client joins and reaches the
+- `GG2.Server`, `GG2.Host` — phase 1. A stock GM8 client joins and reaches the
   team-select screen; `gg2-parity` shows this server's broadcast stream is
   byte-identical to the reference's, including the CTF round timer.
-- `Gg2.Parity` — phase 2. Recorder, byte diff, stream framer, trace format,
+- `GG2.Parity` — phase 2. Recorder, byte diff, stream framer, trace format,
   replayer and drift report. `gg2-parity replay <trace>` runs a recording
   against `EmptySimulation` and reports every divergence by tick, slot, field
   and signed delta. Phase 4 replaces that stand-in by implementing
   `ITraceSimulation`.
-- `Gg2.Simulation` — phase 3. `PlaceFree` agrees with the running game exactly
+- `GG2.Simulation` — phase 3. `PlaceFree` agrees with the running game exactly
   across 26,496 samples on three maps, gates and player walls included, and
   `good_move_contact_solid`, `move_outside_solid` and `characterHitObstacle` are
   transcribed. `PlaceMeeting` is not written; nothing needs it yet.
   `CollisionLine` **is** written, as phase 5's third oracle — see below.
-- `Gg2.Simulation.CharacterPhysics` — phase 4. The character update reproduces
+- `GG2.Simulation.CharacterPhysics` — phase 4. The character update reproduces
   the running engine **bit for bit** across 64 trajectories on two maps
-  (`tests/Gg2.Tests/Fixtures/physics-samples.json`, regenerate with
+  (`tests/GG2.Tests/Fixtures/physics-samples.json`, regenerate with
   `node gg2-samplers/sample-physics.js`), and replays the checked-in 898-tick bot trace
   closed-loop with **zero** error on both axes, hp included. No nudges, no
   tolerances.
@@ -45,12 +45,12 @@ event, which is a later stage) reads this tick's. Measured: a same-tick rocket
 jump deals 28.15385 instead of 30 with the pass in the wrong place.
 `docs/SIMULATION.md`, "the projectile pass sees the world as it was last tick".
 
-`Gg2.Server` runs the simulation as of phase 4: a player who picks a team gets
+`GG2.Server` runs the simulation as of phase 4: a player who picks a team gets
   a character at a real spawn point, `MatchSimulation.Tick` advances it, and
   `StateUpdateWriter` serialises it. Tick order is the reference's —
   `processClientCommands`, then `serializeState`, then the character update — so
   one update carries this tick's input with last tick's position.
-- `Gg2.Maps.SpawnPoints` — what made that last part reachable. A `PLAYER_SPAWN`
+- `GG2.Maps.SpawnPoints` — what made that last part reachable. A `PLAYER_SPAWN`
   carries a spawn point id and a group rather than a position
   (`sendEventSpawn.gml`), so a replay resolves it against the map exactly as the
   client does and starts the character on an integer coordinate with both speeds
@@ -63,12 +63,12 @@ assume one of them applies where another does.
 
 | Where | Rule | Use |
 |---|---|---|
-| A real onto the wire | half **away from zero**, then clamp | `Gg2.Protocol.WireQuantise` |
-| GML's own `round()` | half to **even** | `Gg2.Protocol.Gml.Round` |
-| A position into a collision box | half to **even** | `Gg2.Simulation.CollisionWorld.RoundPosition` |
-| A scaled sprite's extent into a bbox | half to **even** | `Gg2.Simulation.SolidRect.FromEntity` |
-| A **rotated** sprite's extent into a bbox | half to **even**, per edge | `Gg2.Simulation.Aabb.ForRotatedSprite` |
-| `move_outside_solid`'s allowance | half to **even** | `Gg2.Simulation.Movement.MoveOutsideSolid` |
+| A real onto the wire | half **away from zero**, then clamp | `GG2.Protocol.WireQuantise` |
+| GML's own `round()` | half to **even** | `GG2.Protocol.Gml.Round` |
+| A position into a collision box | half to **even** | `GG2.Simulation.CollisionWorld.RoundPosition` |
+| A scaled sprite's extent into a bbox | half to **even** | `GG2.Simulation.SolidRect.FromEntity` |
+| A **rotated** sprite's extent into a bbox | half to **even**, per edge | `GG2.Simulation.Aabb.ForRotatedSprite` |
+| `move_outside_solid`'s allowance | half to **even** | `GG2.Simulation.Movement.MoveOutsideSolid` |
 
 `docs/SIMULATION.md` has the measurements. The reference applies GML's `round()`
 to *some* serialised fields and not others, so the call site has to say which it
@@ -80,19 +80,19 @@ Combat needs primitives phases 0-4 did not. All three are now measured and exact
 Do not re-derive any of them.
 
 - **GM8's RNG is Delphi's** — `seed' = seed*0x08088405 + 1 mod 2^32`, then
-  `random(x) = x*seed'/2^32`. `Gg2.Protocol.GmlRandom`, regenerate the fixture
+  `random(x) = x*seed'/2^32`. `GG2.Protocol.GmlRandom`, regenerate the fixture
   with `node gg2-samplers/sample-rng.js`. It is **contract, not incidental**: a weapon
   puts the *seed* on the wire and every client re-derives the shot spread itself,
   so `docs/SIMULATION.md`'s "server-side RNG is free" does not cover weapon fire.
   `Minigun` and `Blade` are exempt — they `randomize()` and send no seed.
-- **`distance_to_object` and `place_meeting`** — `Gg2.Simulation.Aabb`,
+- **`distance_to_object` and `place_meeting`** — `GG2.Simulation.Aabb`,
   regenerate with `node gg2-samplers/sample-primitives.js`. Both exact over 722 samples.
   ⚠️ `distance_to_object` uses the **facing-inflated** bounding box and
   `place_meeting` does not, so **splash damage depends on which way the victim is
   facing**. And do not reach for `double.Hypot`; it rescales and loses the last
   bit.
 - **`collision_line` clips, rounds, then walks pixels** —
-  `Gg2.Simulation.CollisionLine`, regenerate with
+  `GG2.Simulation.CollisionLine`, regenerate with
   `node gg2-samplers/sample-collision-line.js`. Exact over 9,014 segments.
   ⚠️ **It is not a segment-versus-rectangle intersection.** GM8 clips the segment
   to the instance's horizontal span, rounds the clipped endpoints half to even,
@@ -124,7 +124,7 @@ Do not re-derive any of them.
 
 ### The four motion variables, measured — and the one place exactness ends
 
-`Gg2.Simulation.Motion`, regenerate with `node gg2-samplers/sample-motion.js`. **All
+`GG2.Simulation.Motion`, regenerate with `node gg2-samplers/sample-motion.js`. **All
 four of `hspeed`, `vspeed`, `direction` and `speed` are stored**, and writing any
 one rewrites the others. A character never writes `direction`, which is why
 phase 4 got away with two fields; a projectile writes it three times before it
@@ -243,7 +243,7 @@ a coordinate back.**
 ### The alarm stage, now measured
 
 - **An alarm set to `n` fires `n` ticks later, and one set to `0` never fires.**
-  `Gg2.Simulation.Timers`, transcribed from OpenGMK and measured against the
+  `GG2.Simulation.Timers`, transcribed from OpenGMK and measured against the
   running game. The stage runs between Begin Step and Step and is
   **alarm-index major**: every instance's alarm 0 before any instance's alarm 1.
   ⚠️ **A weapon fires in Begin Step, which is *before* this stage** — so a shot
@@ -256,7 +256,7 @@ a coordinate back.**
 
 ### Phase 5 stage 3: the Scattergun, and three things that had to be right
 
-`Gg2.Simulation.Weapons` and `Gg2.Simulation.Projectiles`. Confirmed by an exact
+`GG2.Simulation.Weapons` and `GG2.Simulation.Projectiles`. Confirmed by an exact
 898-tick closed-loop replay containing six blasts, so these are measured, not
 read.
 
@@ -284,8 +284,8 @@ read.
   `0.15` a tick, and it is destroyed the moment it is inside a wall — at the
   muzzle on its first pass, at the destination on every pass. A pellet that
   reaches somebody *through* a wall still deals no damage; it just rarely gets
-  that far now. `Gg2.Simulation.Projectiles.Move`,
-  `tests/Gg2.Tests/ProjectileMoveTests.cs`.
+  that far now. `GG2.Simulation.Projectiles.Move`,
+  `tests/GG2.Tests/ProjectileMoveTests.cs`.
 - ⚠️ **A `Shot`'s trajectory is invisible to the parity harness.** It is
   never serialised, so the 898-tick trace replays with zero error whether or not
   a pellet falls. Every rule above was gated by deleting its line and watching
@@ -303,7 +303,7 @@ read.
 
 ### Phase 5 stage 4: death, and the gate that had to exist first
 
-`Gg2.Simulation.Deaths`, `Character.events/End Step.xml:34-47`. Confirmed by the
+`GG2.Simulation.Deaths`, `Character.events/End Step.xml:34-47`. Confirmed by the
 same 898-tick replay, whose two deaths land on ticks 431 and 432.
 
 - ⚠️ **The `hp <= 0` check `exit`s, and where it sits is observable.** After
@@ -338,7 +338,7 @@ same 898-tick replay, whose two deaths land on ticks 431 and 432.
 
 ### Phase 5 stage 5: the Rocketlauncher, and the biggest event in the game
 
-`Gg2.Simulation.Explosions`, `Projectiles.MoveRocket`,
+`GG2.Simulation.Explosions`, `Projectiles.MoveRocket`,
 `Weapons.FireRocketlauncher`. `docs/SIMULATION.md`, "Settled: the rocket", has
 the full rules; these are the ones that will bite a change.
 
@@ -435,7 +435,7 @@ work has ever been able to make. `docs/PARITY.md` has the recipe.
   reports nothing. That is exactly what tick 1274 is: the port has slot 1 at
   14125.5014 wire units against a reference below 14125.5 — **0.0003 world
   pixels** — and the replay is clean again until **t1673**, where the first real
-  divergence is 12.7 wire units. `Gg2.Parity.SubWireProbe` reports the continuous
+  divergence is 12.7 wire units. `GG2.Parity.SubWireProbe` reports the continuous
   quantity; at a tolerance of one wire unit the same fixture gives **756 ticks**.
   ⚠️ It does **not** replace the exact window — a boundary is the one place an
   integer comparison is more sensitive than any tolerance, and dropping the
@@ -449,7 +449,7 @@ work has ever been able to make. `docs/PARITY.md` has the recipe.
   a tick early. The signature: the reference's *horizontal* state at t1673 and
   t1680 matches the port's at t1672 and t1679 while the *vertical* is in step —
   one axis running a tick early, which only a discrete event can cause.
-  `Gg2.Parity.BinSweep` tells that from a rule error by sweeping the anchor
+  `GG2.Parity.BinSweep` tells that from a rule error by sweeping the anchor
   across its own quantisation bin and counting what reproduces the tick: **34 of
   49** for the port, **0 of 49** with `good_move_contact_solid` broken. Do not
   re-derive this, and ⚠️ **do not try to close it by testing the residuals for a
@@ -478,7 +478,7 @@ recipe.
 
 ### Phase 5 stage 6: the Minegun, and an ordering inside Begin Step
 
-`Gg2.Simulation.Weapons.FireMinegun` / `SpecialStep`, `Projectiles.MoveMine`,
+`GG2.Simulation.Weapons.FireMinegun` / `SpecialStep`, `Projectiles.MoveMine`,
 `Explosions.DetonateMine`. `docs/SIMULATION.md`, "the mine, which is not a small
 rocket", has the comparison table; these are the traps.
 
@@ -506,7 +506,7 @@ rocket", has the comparison table; these are the traps.
 
 ### Phase 5 stage 7: the Medigun, which is a stored target rather than a shot
 
-`Gg2.Simulation.Healing`, `Weapons.FireNeedleOrUber`. `docs/SIMULATION.md`,
+`GG2.Simulation.Healing`, `Weapons.FireNeedleOrUber`. `docs/SIMULATION.md`,
 "Settled: the Medigun", has the full rules; these are the ones that will bite.
 
 - ⚠️ **The attack key does not fire this weapon.** `Medigun`'s `User Event 1` is
@@ -556,7 +556,7 @@ which is the only way to see bytes that were never written.
 
 ### Phase 5 stage 8: afterburn, the Flamethrower, and a correction to the alarm stage
 
-`Gg2.Simulation.Afterburn`, `FlameStats`, `Weapons.FireFlamethrower` /
+`GG2.Simulation.Afterburn`, `FlameStats`, `Weapons.FireFlamethrower` /
 `RefillFlamethrower`, `Projectiles.MoveBurning` / `BurningHitCharacter`.
 `docs/SIMULATION.md`, "Settled: afterburn", has the full rules.
 
@@ -598,7 +598,7 @@ which is the only way to see bytes that were never written.
 
 ### Phase 5 stage 9: the Shotgun, which is the Scattergun with four numbers changed
 
-`Gg2.Simulation.Weapons.FireScattergun` serves both. `docs/SIMULATION.md`,
+`GG2.Simulation.Weapons.FireScattergun` serves both. `docs/SIMULATION.md`,
 "Settled: the Shotgun". The two `User Event 3`s are line for line identical; what
 differs is 5 pellets rather than 6, 7 damage rather than 8, a `random(11) - 5.5`
 cone rather than `random(15) - 7.5`, and —
@@ -625,7 +625,7 @@ Its preconditions use `collision_circle`, which is now measured — see below.
 
 ### Phase 5 stage 11: the sentry, and the one weapon that fires from End Step
 
-`Gg2.Simulation.Sentries`, `SentryState`. `docs/SIMULATION.md`, "Settled: the
+`GG2.Simulation.Sentries`, `SentryState`. `docs/SIMULATION.md`, "Settled: the
 sentry", has the full rules; these are the traps:
 
 - ⚠️ **The turret fires from End Step**, after every character's — so a
@@ -730,7 +730,7 @@ has the full rules; these are the traps:
 
 ### Phase 6 groundwork: the player in the state, and the respawn
 
-`Gg2.Simulation.PlayerState`, `PlayerCommands`, the alarm-5 respawn stage in
+`GG2.Simulation.PlayerState`, `PlayerCommands`, the alarm-5 respawn stage in
 `Timers`. `docs/SIMULATION.md`, "Settled: the player, the respawn, and a change
 of class or team", has the full rules; these are the traps:
 
@@ -762,7 +762,7 @@ of class or team", has the full rules; these are the traps:
 
 ### Phase 6: the intel, and the four events that move it
 
-`Gg2.Simulation.Intel`, `IntelState`, `WorldState.{RedIntel, BlueIntel,
+`GG2.Simulation.Intel`, `IntelState`, `WorldState.{RedIntel, BlueIntel,
 RedCaps, BlueCaps}`. `docs/SIMULATION.md`, "Settled: the intel", has the full
 rules; these are the traps:
 
@@ -824,7 +824,7 @@ recording is worth far less per tick than a short one on a loud one.
 
 ### Phase 6: the round, and the ten seconds after it
 
-`Gg2.Simulation.Rounds`, `WorldState`'s round fields, `GameServer.ServeRoundEnd`
+`GG2.Simulation.Rounds`, `WorldState`'s round fields, `GameServer.ServeRoundEnd`
 / `OpenMap`. `docs/SIMULATION.md`, "Settled: the round", has the full rules;
 these are the traps:
 
@@ -866,7 +866,7 @@ these are the traps:
 
 ### Phase 6: the control point, and King of the Hill
 
-`Gg2.Simulation.ControlPoints`, `ControlPointState`, `Rounds.StepKoth`,
+`GG2.Simulation.ControlPoints`, `ControlPointState`, `Rounds.StepKoth`,
 `CollisionWorld.CaptureZones`. `docs/SIMULATION.md`, "Settled: the control
 point", has the full rules; these are the traps:
 
@@ -1022,7 +1022,7 @@ HUD's. `docs/SIMULATION.md`, "Settled: Dual King of the Hill".
 
 ### Phase 6: map areas, the control points and Invasion
 
-`Gg2.Maps.LevelMap.ForArea`, `Rounds.StepControlPoints` / `StepInvasion`,
+`GG2.Maps.LevelMap.ForArea`, `Rounds.StepControlPoints` / `StepInvasion`,
 `ControlPoints.RelockNeighbour` / `CapTimeFor` / `AssignStartingOwners`.
 `docs/SIMULATION.md`, "Settled: map areas" and "Settled: the control points,
 attack/defend, and Invasion", have the full rules; these are the traps:
@@ -1065,7 +1065,7 @@ attack/defend, and Invasion", have the full rules; these are the traps:
 
 ### Phase 6: Arena, and a framing bug it exposed
 
-`Gg2.Simulation.Arena`, `ArenaState`, the arena arm of
+`GG2.Simulation.Arena`, `ArenaState`, the arena arm of
 `ControlPoints.StepOne`. `docs/SIMULATION.md`, "Settled: Arena", has the full
 rules; these are the traps:
 
@@ -1109,7 +1109,7 @@ rules; these are the traps:
 
 ### Phase 6: the generator, and a third message that shortens itself
 
-`Gg2.Simulation.Generators`, `GeneratorState`, `Rounds.StepGenerator`, the
+`GG2.Simulation.Generators`, `GeneratorState`, `Rounds.StepGenerator`, the
 generator arms of `Projectiles.CollideOne` and `Explosions`.
 `docs/SIMULATION.md`, "Settled: the generator", has the full rules; these are
 the traps:
@@ -1149,7 +1149,7 @@ the traps:
 
 ### Phase 6: Team Deathmatch, and a fuzzy comparison that had to be fuzzy
 
-`Gg2.Simulation.DamageApi`, `Rounds.StepTeamDeathmatch`,
+`GG2.Simulation.DamageApi`, `Rounds.StepTeamDeathmatch`,
 `Deaths.CountTeamDeathmatchKill`, `CharacterState.DeathmatchInvulnerable`,
 `PlayerState.DeathmatchRespawnBypass`. `docs/SIMULATION.md`, "Settled: Team
 Deathmatch", has the full rules; these are the traps:
@@ -1174,7 +1174,7 @@ Deathmatch", has the full rules; these are the traps:
 - ⚠️ **Dying while still protected respawns you next tick with what was left**
   (`Destroy.xml:37`), so killing somebody through their spawn bubble buys
   nothing. The `else` arm zeroes the carry, so it cannot be hoarded.
-- ⚠️ **`Gg2.Simulation.DamageApi.Deal` is `dealDamage` and every character damage
+- ⚠️ **`GG2.Simulation.DamageApi.Deal` is `dealDamage` and every character damage
   path goes through it now.** Its return value is deliberately ignored at every
   site: a blocked hit still resets `timeUnscathed` and still does its assist
   bookkeeping, exactly as `damageCharacter.gml:3-7` does. The one path that
@@ -1186,7 +1186,7 @@ Deathmatch", has the full rules; these are the traps:
 
 ### Phase 6: the scoreboard, and the two arrays behind it
 
-`Gg2.Simulation.Scoring`, `StatBuffer`, `PlayerState.{Stats, RoundStats}`.
+`GG2.Simulation.Scoring`, `StatBuffer`, `PlayerState.{Stats, RoundStats}`.
 `docs/SIMULATION.md`, "Settled: the scoreboard", has the full rules; these are
 the traps:
 
@@ -1223,7 +1223,7 @@ the traps:
 
 ### Phase 6: autobalance, and a fourth self-shortening message
 
-`Gg2.Simulation.TeamBalance`, `Classlimits`, `ClassLimitBuffer`.
+`GG2.Simulation.TeamBalance`, `Classlimits`, `ClassLimitBuffer`.
 `docs/SIMULATION.md`, "Settled: autobalance", has the full rules; these are the
 traps:
 
@@ -1263,7 +1263,7 @@ traps:
 
 ### Phase 6: the domination kill table, the only 2-D thing in the state
 
-`Gg2.Simulation.Dominations`, `WorldState.DominationKills`.
+`GG2.Simulation.Dominations`, `WorldState.DominationKills`.
 `docs/SIMULATION.md`, "Settled: the domination kill table", has the full rules;
 these are the traps:
 
@@ -1288,7 +1288,7 @@ these are the traps:
 
 ### The Minigun, and a line that is worth one tick
 
-`Gg2.Simulation.Weapons.{FireMinigun, WeaponBeginStep}`. `docs/SIMULATION.md`,
+`GG2.Simulation.Weapons.{FireMinigun, WeaponBeginStep}`. `docs/SIMULATION.md`,
 "Settled: the Minigun", has the full rules; these are the traps:
 
 - ⚠️ **The muzzle drop is outside the `lengthdir`**: twenty pixels along the
@@ -1314,7 +1314,7 @@ these are the traps:
 
 ### The Rifle, the scope, and the heavy's Step
 
-`Gg2.Simulation.Weapons.{FireRifle, RifleBeginStep, Hitscan}`,
+`GG2.Simulation.Weapons.{FireRifle, RifleBeginStep, Hitscan}`,
 `PlayerCommands.ToggleZoom`, `CharacterPhysics.HeavyStep`.
 `docs/SIMULATION.md`, "Settled: the sniper's Rifle" and "Settled: the heavy
 slows down while firing", have the full rules; these are the traps:
@@ -1342,7 +1342,7 @@ slows down while firing", have the full rules; these are the traps:
 
 ### Quote's Blade: two weapons on one magazine, and a projectile that steers
 
-`Gg2.Simulation.Weapons.{FireBubble, ThrowBlade, BladeThrowDamage}`,
+`GG2.Simulation.Weapons.{FireBubble, ThrowBlade, BladeThrowDamage}`,
 `Projectiles.{MoveBlade, BubbleBeginStep, BubbleStep, BladeEndStep,
 BubbleCollide, ResolveBubblePair}`. `docs/SIMULATION.md`, "Settled: Quote's
 Blade", has the full rules; these are the traps:
@@ -1388,7 +1388,7 @@ Blade", has the full rules; these are the traps:
 
 ### The spy: a cloak on the right click, and a knife that arrives late
 
-`Gg2.Simulation.Weapons.{FireRevolver, TryStab, StabAnimStep, CreateStabMask}`,
+`GG2.Simulation.Weapons.{FireRevolver, TryStab, StabAnimStep, CreateStabMask}`,
 `Projectiles.{StabStep, StabConnects, StabHitCharacter}`,
 `CharacterPhysics.CloakStep`. `docs/SIMULATION.md`, "Settled: the spy, the cloak
 and the knife that arrives late", has the full rules; these are the traps:
@@ -1437,7 +1437,7 @@ and the knife that arrives late", has the full rules; these are the traps:
 
 ### The spawn room, and the two ways the reference asks about it
 
-`Gg2.Simulation.{SpawnRooms, Cabinets}`,
+`GG2.Simulation.{SpawnRooms, Cabinets}`,
 `CollisionWorld.{PointInSpawnRoom, MeetsSpawnRoom, MeetsCabinet}`,
 `CharacterState.OnCabinet`. `docs/SIMULATION.md`, "Settled: the spawn room and
 the healing cabinet", has the full rules; these are the traps:
@@ -1468,7 +1468,7 @@ the healing cabinet", has the full rules; these are the traps:
 
 ### The three boxes that kill you, and the flag they send home
 
-`Gg2.Simulation.KillBoxes`, and the return arm in `Deaths.Kill`.
+`GG2.Simulation.KillBoxes`, and the return arm in `Deaths.Kill`.
 `docs/SIMULATION.md`, "Settled: the three boxes that kill you", has the full
 rules; these are the traps:
 
@@ -1497,7 +1497,7 @@ rules; these are the traps:
 
 ### The four boxes that shove you
 
-`Gg2.Simulation.MoveBoxes`, one line in `MatchSimulation`'s collision stage.
+`GG2.Simulation.MoveBoxes`, one line in `MatchSimulation`'s collision stage.
 `docs/SIMULATION.md`, "Settled: the four boxes that shove you", has the full
 rules; these are the traps:
 
@@ -2038,7 +2038,7 @@ soldiers) holds three `DESTROY_SENTRY`s: one **weapon kill** (cause 9, killer 4)
 which the port reproduces **exactly, on the tick**, and two **self-destructs**
 (cause 0, killer 255) which it does not. The self-destruct fires one tick after
 the sentry is built; only the first is evidence, being inside the trajectory
-window. **An open finding for the lane that owns `src/Gg2.Simulation`** —
+window. **An open finding for the lane that owns `src/GG2.Simulation`** —
 `docs/PARITY.md`, "`Fields.Sentries`, and the divergence it found on its first
 run", has the two candidate causes and what is already ruled out.
 
@@ -2078,7 +2078,7 @@ prints what a recording holds and which message framing stopped on.
 
 ### Two things about GM8 arithmetic that are not optional
 
-Both measured against the running game, both in `Gg2.Protocol.Gml`, and both
+Both measured against the running game, both in `GG2.Protocol.Gml`, and both
 change trajectories rather than last digits:
 
 - **GM8 parses some decimal literals one ULP above the IEEE nearest** — `0.6`,
@@ -2086,7 +2086,7 @@ change trajectories rather than last digits:
   `baseFriction` and two rocket-jump control factors. Never write a physics
   constant as a plain C# decimal; take it from `Gml`.
 - **GML's comparisons are fuzzy to `1e-13`, and so is `sign()`.** Every
-  real-to-real comparison in `Gg2.Simulation` goes through `Gml.Equal`,
+  real-to-real comparison in `GG2.Simulation` goes through `Gml.Equal`,
   `Gml.Greater`, `Gml.Sign` and friends. A raw `!= 0` on a value that ordinary
   cancellation left at `-2.7e-14` moves a character six pixels.
 
@@ -2335,7 +2335,7 @@ slot 2's bounding box*.
 ✅ **CAUSE FOUND, and it was the third candidate: GM8's overlap primitives use
 the PRECISE MASK for a rotated projectile, where this port uses the bounding
 box.** Measured with `collision_point(..., precise)` — nine sprites by eighteen
-angles, `tests/Gg2.Tests/Fixtures/rotated-mask-samples.json`, regenerate with
+angles, `tests/GG2.Tests/Fixtures/rotated-mask-samples.json`, regenerate with
 `node gg2-samplers/sample-rotated-mask.js`.
 
 ⚠️ **The split runs through the middle of one GML line, and it is sharper than
@@ -2379,7 +2379,7 @@ for a rotated sprite (1,008 boxes) and not what the overlap primitives **use**.
 **Ask what a fixture cannot reach**, the same rule as "when adding a fixture,
 ask what state it cannot reach".
 
-✅ **FIXED** — `Gg2.Simulation.ProjectileMask`, wired into
+✅ **FIXED** — `GG2.Simulation.ProjectileMask`, wired into
 `Projectiles.CollideOne` (characters, sentries, generators) and
 `BackOutOfCharacter`. The model inverse-rotates each candidate world pixel into
 sprite space, floors, and tests the sprite's own bbox rectangle, with the
@@ -2932,7 +2932,7 @@ below the 33.33 target — because the loop catches up on the ticks after each
 overshoot. Only the distribution shows the problem, which is why "average tick
 time looks fine" is not an answer to a report of hitching.
 
-`Gg2.Server.TimerResolution` holds the window open for the life of the run.
+`GG2.Server.TimerResolution` holds the window open for the life of the run.
 ⚠️ **Pacing only, never simulation**: a tick computes the same thing whenever it
 runs, so docs/SIMULATION.md's contract is untouched.
 
@@ -3692,7 +3692,7 @@ any of them.
 
 `MovingPlatforms.Build` reads exactly one entity type, `EntityTypes.MovingPlatform`
 = `"moving_platform"`. Counted across the checked-in oracle
-(`tests/Gg2.Tests/Fixtures/maps.json`, 22 shipped maps): **zero occurrences.**
+(`tests/GG2.Tests/Fixtures/maps.json`, 22 shipped maps): **zero occurrences.**
 
 ⚠️ **Two entities look like it and are not.** `tdm_mantic` carries 4
 `dropdownPlatform` (the jump-through kind) and 15 `MoveBoxUp`/`MoveBoxDown`.
@@ -3907,7 +3907,7 @@ retire, not a general "check it works":
 **Phase A — the mask, at scale 1.** The core, and it retires 1, 2 and 6 on its
 own.
 
-1. Copy `tests/Gg2.Tests/Fixtures/sprite-{ji.png,eleplat.png,bubble1.gif}` and
+1. Copy `tests/GG2.Tests/Fixtures/sprite-{ji.png,eleplat.png,bubble1.gif}` and
    `grem` into the game's working directory.
 2. In the game, do exactly what the reference does —
    `s = sprite_add(file, 1, 1, 0, 0, 0)` — then attach it:
@@ -3952,7 +3952,7 @@ stale.
 #### ✅ RUN 2026-09-01 — three of the six retired, and the GIF model was wrong twice
 
 `probe-platform-mask.js` against a dedicated server. The oracle is checked in as
-`tests/Gg2.Tests/Fixtures/sprite-mask-samples.json` and
+`tests/GG2.Tests/Fixtures/sprite-mask-samples.json` and
 `SpriteMaskOracleTests` holds the decoders to it pixel for pixel.
 
 ✅ **1 and 2 — `removeback` samples the BOTTOM-LEFT pixel, and it applies on top

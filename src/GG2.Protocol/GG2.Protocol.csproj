@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Pure. No I/O, no sockets, no clock. See docs/ARCHITECTURE.md. -->
+  <PropertyGroup>
+    <RootNamespace>GG2.Protocol</RootNamespace>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+</Project>

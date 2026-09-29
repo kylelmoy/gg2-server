@@ -10,7 +10,7 @@ the network, and everything below follows from that.
 
 ```powershell
 # local only, password printed at startup
-dotnet run --project src/Gg2.Host -- --map ctf_truefort --bots 8 --web 8191
+dotnet run --project src/GG2.Host -- --map ctf_truefort --bots 8 --web 8191
 
 # reachable from the network, over TLS, with a password you chose
 gg2-server --web 8191 --web-bind 0.0.0.0 --web-password "$PANEL_PASSWORD" `
@@ -238,7 +238,7 @@ message names the bot count as the thing to change instead.
 
 ## The page
 
-`Web/Assets/`, five files, embedded in `Gg2.Server.dll`. Hand-written HTML, CSS
+`Web/Assets/`, five files, embedded in `GG2.Server.dll`. Hand-written HTML, CSS
 and JavaScript that a browser runs as-is: no build step, no framework, no CDN —
 a LAN server's panel has to work on a machine with no route to the internet.
 About 120 KB in total, of which 81 KB is `world.json` — the analytics map's
@@ -700,7 +700,7 @@ and the per-connection serve second.
 
 ### Why the tests raise the ThreadPool floor
 
-`tests/Gg2.Tests/Gg2.Tests.csproj` sets `ThreadPoolMinThreads` to 128, which
+`tests/GG2.Tests/GG2.Tests.csproj` sets `ThreadPoolMinThreads` to 128, which
 reaches the test process as `System.Threading.ThreadPool.MinThreads` in its
 `runtimeconfig.json`. Below the floor the pool hands out a thread immediately;
 above it the thread is what the suite waits one-to-two seconds each for, and the

@@ -1,5 +1,5 @@
-using Gg2.Bots;
-using Gg2.Protocol;
+using GG2.Bots;
+using GG2.Protocol;
 
 namespace Bench;
 
@@ -16,7 +16,7 @@ namespace Bench;
 /// reported twice with one of them labelled the policy — a clean, plausible null.
 /// <para>
 /// ⚠️ <b>The roster is the only place that failure is visible</b>, and
-/// <c>tools/bench</c> is not in <c>Gg2.sln</c> and has no tests, so nothing in a
+/// <c>tools/bench</c> is not in <c>GG2.sln</c> and has no tests, so nothing in a
 /// suite can hold it. Printing it unconditionally is what turns a check somebody
 /// has to remember into one they cannot miss: the training lane's pre-flight step
 /// for a first run against a new checkpoint family is to read this line against

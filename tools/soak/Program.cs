@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Net.Sockets;
 using System.Text;
-using Gg2.Protocol;
+using GG2.Protocol;
 
 // A fleet of synthetic players that join, play, switch teams and classes, and
 // leave, over and over, against a running server.

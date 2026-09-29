@@ -323,7 +323,7 @@ const raftPng = makePng(RAFT_W, RAFT_H, [
 
 // A GGON single-quoted string holding arbitrary bytes: the tokenizer's five
 // escapes cover everything that cannot appear raw, and Latin-1 round-trips
-// the rest (ggon_parse_tokens.gml; Gg2.Maps.Ggon is the transcription).
+// the rest (ggon_parse_tokens.gml; GG2.Maps.Ggon is the transcription).
 function ggonBytes(buffer) {
   let out = "'";
   for (const b of buffer) {

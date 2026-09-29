@@ -21,10 +21,10 @@
 // re-anchors the moment the true input lands, so error grows from nothing to
 // the h-tick figure and resets. The number reported is the end of that cycle.
 using System.Globalization;
-using Gg2.Maps;
-using Gg2.Parity;
-using Gg2.Protocol;
-using Gg2.Server;
+using GG2.Maps;
+using GG2.Parity;
+using GG2.Protocol;
+using GG2.Server;
 
 namespace InputPredict;
 

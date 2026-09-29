@@ -8,15 +8,15 @@
     <RootNamespace>LoadProbe</RootNamespace>
 
     <!-- Like tools/bench, NOT warnings-as-errors and deliberately NOT in
-         Gg2.sln: `dotnet test` should not build a load generator and CI should
+         GG2.sln: `dotnet test` should not build a load generator and CI should
          not run one. Build it explicitly. -->
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
-    <!-- Gg2.Protocol only. It has no I/O, and the probe needs exactly three
+    <!-- GG2.Protocol only. It has no I/O, and the probe needs exactly three
          things from it: the PROTOCOL_UUID bytes, the message type numbers and
          a writer for string1. Everything the probe MEASURES is timing, which
          shares no implementation with the server. -->
-    <ProjectReference Include="../../src/Gg2.Protocol/Gg2.Protocol.csproj" />
+    <ProjectReference Include="../../src/GG2.Protocol/GG2.Protocol.csproj" />
   </ItemGroup>
 </Project>

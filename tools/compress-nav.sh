@@ -6,8 +6,8 @@
 # the shipped .txt.gz, deletes any stale .txt beside it, and rewrites
 # manifest.tsv — one command, no second half to forget:
 #
-#   dotnet run --project src/Gg2.Host -- navgen
-#   dotnet test Gg2.sln
+#   dotnet run --project src/GG2.Host -- navgen
+#   dotnet test GG2.sln
 #
 # What is left for this script is the OTHER generator. gg2-nav-gen (the Node
 # one, still its own repository) writes <map>_a<area>.txt straight into
@@ -18,8 +18,8 @@
 #
 #   npx gg2navgen build --all        # or however you drive the generator
 #   tools/compress-nav.sh
-#   GG2_UPDATE_NAV_MANIFEST=1 dotnet test Gg2.sln --filter NavManifestTests
-#   dotnet test Gg2.sln
+#   GG2_UPDATE_NAV_MANIFEST=1 dotnet test GG2.sln --filter NavManifestTests
+#   dotnet test GG2.sln
 #
 # ⚠️ The manifest step is NOT optional if the maps moved. It records what each
 # graph was built from; skipping it leaves the old pairing recorded and the new
@@ -66,5 +66,5 @@ done
 
 echo
 echo "compressed ${#plain[@]} graph(s). Next:"
-echo "  GG2_UPDATE_NAV_MANIFEST=1 dotnet test Gg2.sln --filter NavManifestTests"
-echo "  dotnet test Gg2.sln"
+echo "  GG2_UPDATE_NAV_MANIFEST=1 dotnet test GG2.sln --filter NavManifestTests"
+echo "  dotnet test GG2.sln"

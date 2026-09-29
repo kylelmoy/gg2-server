@@ -47,7 +47,7 @@ Each of these was a real, reachable failure. None of them needed a modified
 client or a malformed byte — which is why none was caught by the parity work,
 where the bytes are the whole subject.
 
-### Resource exhaustion — `src/Gg2.Server/ConnectionLimits.cs`
+### Resource exhaustion — `src/GG2.Server/ConnectionLimits.cs`
 
 Every buffer in the transport had the same shape: grow on demand, for ever.
 
@@ -66,7 +66,7 @@ bytes out of the middle of a command stream would leave the framer reading a
 payload as a command byte for ever after. A silently desynchronised client is
 worse than a disconnected one, and it looks exactly like a port bug.
 
-### Slot squatting — `src/Gg2.Server/JoiningConnection.cs`
+### Slot squatting — `src/GG2.Server/JoiningConnection.cs`
 
 **The reference's 30-second handshake timeout is an IDLE timeout, and
 `PING` resets it.** `serviceJoiningPlayer.gml:1` drops a connection when
@@ -129,7 +129,7 @@ in-memory state.
 that has already happened**, even though the server carried on; the stack trace
 is in the log at error level.
 
-### Log injection — `src/Gg2.Server/LogText.cs`
+### Log injection — `src/GG2.Server/LogText.cs`
 
 A player name is up to twenty arbitrary bytes decoded as Latin-1, including
 `\n`, `\r` and ESC — nothing on the join path rejects them, because the
@@ -142,7 +142,7 @@ the operator's terminal.
 desynchronise every other client's roster. The web panel needed nothing — every
 string it emits goes through `JsonEncodedText` under a `default-src 'self'` CSP.
 
-### The log as the amplifier — `src/Gg2.Server/LogThrottle.cs`
+### The log as the amplifier — `src/GG2.Server/LogThrottle.cs`
 
 Writing a log line happens on the tick thread and is synchronous.
 `Console.WriteLine` takes a lock and can block on a pipe. That is fine for
@@ -156,7 +156,7 @@ that quietly omits the evidence during the incident being investigated makes a
 flood look like a handful of connections, which is worse than a long log because
 it is wrong rather than merely long.
 
-### Connection rate — `src/Gg2.Server/ConnectionRateLimiter.cs`
+### Connection rate — `src/GG2.Server/ConnectionRateLimiter.cs`
 
 **`--multi-client-limit` is not this and the two get confused.** That is the
 reference's answer to a household behind one NAT: how many connections one
@@ -180,7 +180,7 @@ the denial of service. Saturation is logged once per episode, because a limiter
 that has quietly stopped limiting is worse than one that was never on: the
 configuration still says it is on.
 
-### Bans — `src/Gg2.Server/BanList.cs`
+### Bans — `src/GG2.Server/BanList.cs`
 
 **Read this before relying on it: an address is not a person.** The protocol
 has no account and no durable identity — a name is twenty bytes the client

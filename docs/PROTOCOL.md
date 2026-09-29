@@ -50,7 +50,7 @@ IntType converted = clipped_cast<IntType>(round(value));
 
 **Round half away from zero, then clamp to the type's range.** Both C# defaults
 are the opposite answer — `Math.Round` is half-to-even, and an integer cast
-wraps — so this has its own transcription in `Gg2.Protocol.WireQuantise` and
+wraps — so this has its own transcription in `GG2.Protocol.WireQuantise` and
 `NetWriter.Write*FromReal`. `docs/SIMULATION.md`, "Settled: how a real becomes
 an integer on the wire", has the consequences, including the two that bite:
 `Character` and `Intelligence` quantise the same coordinate differently, and the
@@ -341,7 +341,7 @@ at **1**: needlegun, rifle, charged rifle, minegun, minigun, flamethrower,
 scattergun, shotgun, rocketlauncher, revolver, sentry turret, blade, bubble,
 reflected rocket, reflected sticky, knife, backstab, flare, reflected flare, kill
 box, frag box, pitfall, finished off, finished off gib, bid farewell, generator
-explosion. `Gg2.Protocol.DamageSource` has them; 0 is free and is used there for
+explosion. `GG2.Protocol.DamageSource` has them; 0 is free and is used there for
 the reference's `lastDamageSource = -1`. Reordering that script renumbers the
 wire.
 
@@ -518,7 +518,7 @@ ushort  blueTimer
 creates the same `ControlPoint` instances from it, so it knows how many to read
 — the same self-describing-by-the-map arrangement the moving platforms use. Get
 the number or the order wrong and the stream desynchronises rather than showing
-a wrong number; `Gg2.Simulation.ControlPoints.Place` fixes the order once at
+a wrong number; `GG2.Simulation.ControlPoints.Place` fixes the order once at
 load (numbered points by number, DKotH red then blue).
 
 ⚠️ **`team` and `cappingTeam` are signed**, and the tick a point changes hands
@@ -684,7 +684,7 @@ always takes two loses the stream, and surfaces hundreds of bytes later as "no
 framing for server message N".
 
 A client stays in step because it destroys its own instance on the message.
-`Gg2.Protocol.WorldShape.GeneratorCount` is how anything else does — it is the
+`GG2.Protocol.WorldShape.GeneratorCount` is how anything else does — it is the
 one field in a `WorldShape` a map cannot settle for good, and a consumer has to
 decrement it on each `GENERATOR_DESTROY`.
 
@@ -815,7 +815,7 @@ Not everything in the reference is load-bearing for a private headless server.
   no plugins kicks every sender and a server with two kicks any id above 1.
   Unreachable from a stock client whose list matches the greeting's.
   `PluginPacketTests`, `PluginWireTests`.
-- **Map download** — implemented. A map that is not in `Gg2.Maps.InternalMaps`
+- **Map download** — implemented. A map that is not in `GG2.Maps.InternalMaps`
   is advertised with its MD5 and served on `DOWNLOAD_MAP` as a `uint` length
   followed by the raw file, rate-limited across ticks and shared between
   simultaneous downloaders (`serviceJoiningPlayer.gml:8-24`, `:131-144`).
@@ -857,7 +857,7 @@ tree, so the list above is a *complete* accounting rather than a plausible one:
   server kicks.
 - **Every map entity type** registered by `builder_init.gml`'s `addEntity` block
   is in `EntityTypes.cs`; every simulation-bearing object in `InGameElements`
-  and `GameElements` has a home in `Gg2.Simulation`.
+  and `GameElements` has a home in `GG2.Simulation`.
 - **All ten classes**, `Quote` included.
 
 **Client-only, so absent on purpose**, each settled by grep from the

@@ -1,13 +1,13 @@
 # The nav-graph generator
 
-`src/Gg2.Nav` builds a bot nav graph from a map PNG, with no game running and no
+`src/GG2.Nav` builds a bot nav graph from a map PNG, with no game running and no
 reference checkout. It is the reason a **custom map** is navigable at all.
 
 Two entry points, and they are the same code:
 
 ```powershell
-dotnet run --project src/Gg2.Host -- navgen --help    # the offline tool
-dotnet run --project src/Gg2.Host -- --map ctf_truefort   # a server, which builds what it misses
+dotnet run --project src/GG2.Host -- navgen --help    # the offline tool
+dotnet run --project src/GG2.Host -- --map ctf_truefort   # a server, which builds what it misses
 ```
 
 ## Why it exists here
@@ -71,7 +71,7 @@ of 23 maps:
 
 ```
 map PNG ──zTXt chunk──> walkmask (1 bit per cell) + entity list (GGON)
-                              │                    [Gg2.Maps: LevelMap, Walkmask]
+                              │                    [GG2.Maps: LevelMap, Walkmask]
               entities ──> instances ──> stamp solid / platform / lethal / door / gate
                               │                    [NavInstances]
                         clearance dilation by the character box
@@ -149,11 +149,11 @@ the double jump and changes objective reachability on zero maps — so
 ## Running it
 
 ```powershell
-dotnet run --project src/Gg2.Host -- navgen                # every map in maps/
-dotnet run --project src/Gg2.Host -- navgen --map koth_valley
-dotnet run --project src/Gg2.Host -- navgen --map .\mymap.png    # a custom map, by path
-dotnet run --project src/Gg2.Host -- navgen --map cp_dirtbowl --area 2
-dotnet run --project src/Gg2.Host -- navgen --check        # did anything I changed move a graph?
+dotnet run --project src/GG2.Host -- navgen                # every map in maps/
+dotnet run --project src/GG2.Host -- navgen --map koth_valley
+dotnet run --project src/GG2.Host -- navgen --map .\mymap.png    # a custom map, by path
+dotnet run --project src/GG2.Host -- navgen --map cp_dirtbowl --area 2
+dotnet run --project src/GG2.Host -- navgen --check        # did anything I changed move a graph?
 ```
 
 **One command does the whole cycle**: it writes the shipped `.txt.gz`
@@ -264,13 +264,13 @@ a match that happened", and it is why the nav column exists at all.
   agree on a number that is not about geometry. Change one and the graph and the
   bot stop describing the same jump.
 - **The four collider sprite sizes are restated** in `NavInstances`, because
-  `Gg2.Nav` deliberately does not reference `Gg2.Simulation`. `NavInstanceTests`
+  `GG2.Nav` deliberately does not reference `GG2.Simulation`. `NavInstanceTests`
   asserts they agree with `ColliderSprites` and that the reference's sprite XML
   still declares origin (0, 0) with a full-image RECTANGLE mask.
 - **The field layout is versioned.** `NAV_CACHE_VERSION` is 15; `NavCache.Parse`
   refuses a file that declares anything else rather than reading columns that mean
   something else. Bump it whenever a field moves.
-- **`Gg2.Nav` does not reference `Gg2.Bots`.** Its product is the cache file's
+- **`GG2.Nav` does not reference `GG2.Bots`.** Its product is the cache file's
   text, and the caller turns that into a `NavGraph` with `NavCache.Parse` — the
   same call a file off disk gets. So an on-the-fly graph and a generated file
   are the same graph by construction rather than by two code paths agreeing.

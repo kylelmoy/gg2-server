@@ -126,7 +126,7 @@ map of where the ideas came from. Every other section of this file indexes the
 stock tree and is accurate.
 
 **Nav graph generation is no longer in the game.** It lives in this repo's
-`src/Gg2.Nav` (`gg2-server navgen`), which writes `botnav/<map>_a<area>.txt`
+`src/GG2.Nav` (`gg2-server navgen`), which writes `botnav/<map>_a<area>.txt`
 into `nav/` (or wherever `GG2_NAVCACHE` points). The cache format is documented
 in the JavaScript nav-graph decoder — it is `ds_grid_write`'s column-major
 layout with sixteen-byte cells and the double four bytes in, which is not the

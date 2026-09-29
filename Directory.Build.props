@@ -3,7 +3,7 @@
   <!-- Everything in the repo is net10.0, nullable, and warnings-as-errors.
        docs/ARCHITECTURE.md, "Runtime settings".
        ⚠️ tools/bench/bench.csproj carries its OWN copy of this TFM, because it
-       is deliberately not in Gg2.sln. Move both or the bench stops building. -->
+       is deliberately not in GG2.sln. Move both or the bench stops building. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <LangVersion>latest</LangVersion>

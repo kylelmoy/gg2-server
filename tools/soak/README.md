@@ -1,7 +1,7 @@
 # `soak-players` — a fleet of synthetic players
 
 Real TCP clients that join, play, switch teams and classes, and leave, over and
-over, against a running server. Built explicitly; not in `Gg2.sln`, the same way
+over, against a running server. Built explicitly; not in `GG2.sln`, the same way
 `tools/bench` is not.
 
 ```powershell

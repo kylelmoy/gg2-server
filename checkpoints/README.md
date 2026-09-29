@@ -28,7 +28,7 @@ without retraining.** The whole-file md5s as handed over were
 `3c6f997b222c37ce5cdc8eabbf724f90` and `4229edb1b53cab8fc72315b343c5e36f`; they
 are now `244961de4e9580f3a06aa80d706665e7` and `810334446f95d9fc36ed9eaf55631059`.
 The same edit was applied to the four fixtures under
-`tests/Gg2.Tests/Fixtures/policy/`.
+`tests/GG2.Tests/Fixtures/policy/`.
 
 **What moved was the surface, not the simulation.** `BotConstants` left
 `SimulationStamp`'s gating surface for its routing one, which deletes 117 lines
@@ -57,7 +57,7 @@ stops being true.
 ## Running them
 
 ```powershell
-dotnet run --project src/Gg2.Host -- `
+dotnet run --project src/GG2.Host -- `
   --map ctf_truefort --bots 12 --bot-mode policy `
   --policy checkpoints/tier0_combat4_s2.npz `
   --policy checkpoints/tier2_pyro_rest3_s0.npz
@@ -147,7 +147,7 @@ on both.
 ## Maintenance
 
 - `tier0_combat4_s2.npz` is byte-identical to
-  `tests/Gg2.Tests/Fixtures/policy/combat4_s2_iter12000.npz`, and
+  `tests/GG2.Tests/Fixtures/policy/combat4_s2_iter12000.npz`, and
   `ShippedCheckpointTests.TheShippedTierZeroIsTheSameFileAsTheDefaultSetFixture`
   asserts it. The two are duplicated because their goals differ: a fixture wants
   a stable test input, a shipped artefact wants the best available policy. They

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 //
-// Regenerates src/Gg2.Server/Web/Assets/world.json — the geometry the admin
+// Regenerates src/GG2.Server/Web/Assets/world.json — the geometry the admin
 // panel's analytics map draws.
 //
 //   node tools/gen-geo-assets.js [--in <dir>] [--out <path>] [--check]
 //
 // The output is CHECKED IN. This script exists so the asset can be rebuilt and
 // diffed rather than hand-edited, the same arrangement gg2-samplers/gen-map-fixture.js
-// has with tests/Gg2.Tests/Fixtures/maps.json. Running it with no changes to
+// has with tests/GG2.Tests/Fixtures/maps.json. Running it with no changes to
 // the sources must produce an empty diff.
 //
 // Sources, all public domain (Natural Earth's own terms: "no permission needed"):
@@ -419,7 +419,7 @@ function buildUnitedStates(states) {
 
 (async () => {
   const cache = arg('--in', path.join(require('os').tmpdir(), 'gg2-geo-sources'));
-  const out = arg('--out', path.join(__dirname, '..', 'src', 'Gg2.Server', 'Web', 'Assets', 'world.json'));
+  const out = arg('--out', path.join(__dirname, '..', 'src', 'GG2.Server', 'Web', 'Assets', 'world.json'));
 
   const [land, countries, states] = await Promise.all([
     load(cache, 'land-110m.json'),

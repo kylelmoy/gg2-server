@@ -14,7 +14,7 @@ a number that goes stale in one place.
 ## The one rule that makes this area different
 
 ⛔ **The reference's bot layer is treated as INCOMPLETE, not as a specification.**
-This reverses the project's central rule for `src/Gg2.Bots/` only. A bot's
+This reverses the project's central rule for `src/GG2.Bots/` only. A bot's
 decisions are this project's own: improve them where the fix is straightforward
 and measured, write the hard ones down as known issues rather than chasing them.
 
@@ -49,7 +49,7 @@ near them", has the state rules that apply to everyone, bot work included.
 
 | | where | gated by |
 |---|---|---|
-| the scripted bot — nav, A\*, path following, targeting, combat, objectives, population | `src/Gg2.Bots/` | `ScenarioSuiteTests`, `BotObjectiveTests`, `PathFollowerFixtureTests` |
+| the scripted bot — nav, A\*, path following, targeting, combat, objectives, population | `src/GG2.Bots/` | `ScenarioSuiteTests`, `BotObjectiveTests`, `PathFollowerFixtureTests` |
 | the learned policy — loads a `gg2-rl` `.npz`, 211→64→64→27, argmax per head | `PolicyNetwork.cs` | `PolicyNetworkTests` — logit-for-logit against their numpy |
 | the hybrid — a controller takes keys and aim inside an engagement window, scripted layer keeps movement, routing, objectives, class | `HybridBot.cs` | `PolicyMatchTests`, `SearchBotTests`, `HybridBotSeamTests` |
 | **the controller seam** — how a new bot implementation drops in | `IMicroController.cs`, `BotBrainSpec.cs` | `HybridBotSeamTests` |
@@ -59,10 +59,10 @@ near them", has the state rules that apply to everyone, bot work included.
 | the next-hop route table (CPD-Search) and the exact A\* heuristic — **ON by default**, `--no-nav-distances` | `NavDistances.cs`, `NavDistanceSet.cs`, `NavSearch.cs` | `NavDistancesTests`, `NavDistanceSetTests`, `NavSearchTests` |
 | the tables **on disk** — `nav/<key>.dist.gz`, next-hop only, cost rebuilt on load | `NavDistanceFile.cs`, `NavDistances.FromNextHops` | `NavDistanceFileTests` |
 | route dispersion: occupancy (on) and static lanes (measured, not adopted), `--no-bot-occupancy` | `BotLanes.cs`, `BotRoles.cs`, `ScriptedBot.cs` | `BotLanesTests`, `BotOccupancyFlagTests`, `RouteDiversityTests` |
-| the training environment seam | `gg2-rl/env/Gg2.Env/`, in the `gg2-rl` repo | `EnvProtocolTests`, in `gg2-rl` |
+| the training environment seam | `gg2-rl/env/GG2.Env/`, in the `gg2-rl` repo | `EnvProtocolTests`, in `gg2-rl` |
 | **is the nav graph followable** — every edge of every shipped graph flown by a real bot, and whole routes sampled | `EdgeFlights.SweepAll`, `BENCH_FLIGHT` | `EdgeFlightTests` — the corpus tally pinned on **both** routing arms, plus the node census |
 | **can a body be where a node says** — 66.6% of nodes overlap the floor at `StandY`; all are free one pixel up | `EdgeFlights.StandingY` | `EdgeFlightTests.EveryShippedNodeCanHoldACharacter` |
-| the measurement instrument | `tools/bench/` | not in `Gg2.sln`; build explicitly |
+| the measurement instrument | `tools/bench/` | not in `GG2.sln`; build explicitly |
 
 ⚠️ **There is nothing to be "ported" against.** Stock GG2 ships no bots; this
 layer is this port's own, measured against itself.
@@ -175,7 +175,7 @@ A trained policy ships in `checkpoints/`: two `HybridBot` tiers at 150px under
 | — | sniper, spy, engineer, medic stay scripted |
 
 ```powershell
-dotnet run --project src/Gg2.Host -- --map ctf_truefort --bots 12 --bot-mode policy `
+dotnet run --project src/GG2.Host -- --map ctf_truefort --bots 12 --bot-mode policy `
   --policy checkpoints/tier0_combat4_s2.npz --policy checkpoints/tier2_pyro_rest3_s0.npz
 ```
 
@@ -211,7 +211,7 @@ that the weights take the wheel. It says nothing about whether either checkpoint
 plays well.
 
 **Current state, verified 2026-09-06 at `6126b34`: trained checkpoints for
-this build EXIST.** All four files in `tests/Gg2.Tests/Fixtures/policy/` carry
+this build EXIST.** All four files in `tests/GG2.Tests/Fixtures/policy/` carry
 `SIM_UUID f10afbdadc795d77`, which is exactly what `SimulationStampTests`
 pins this build's stamp to, and `rest3_s1_iter12000.npz` loads through
 `PolicyNetwork.Load` with **no** `ignoreSimulationStamp` (`TrainedClassesTests`,
@@ -232,7 +232,7 @@ when it is not. What would show this has gone stale in the other direction is
 ⚠️ **`ppo_final.npz` is still the UNTRAINED forward-pass fixture** — its
 weights are a He-normal draw kept for `PolicyNetwork`'s arithmetic and nothing
 else, and it records no class set (seven metadata fields)
-(`tests/Gg2.Tests/PolicyFixture.cs`; `gg2-rl/gg2-rl/docs/ENV.md`, "The checkpoint is a
+(`tests/GG2.Tests/PolicyFixture.cs`; `gg2-rl/gg2-rl/docs/ENV.md`, "The checkpoint is a
 FIXTURE, not a policy"). ⛔ **A checkpoint loading cleanly is still not
 evidence that it plays**, which is the opposite of the reassurance a green
 stamp usually gives, and nothing in the suite depends on `gg2-rl` producing
@@ -342,7 +342,7 @@ burst of handovers inside the throttle window shows as one bubble.
 that asked for it.
 
 `HandoverBubbleTests` gates the mapping, the wrapper's transitions, the
-off-by-default control, and — the claim nothing inside `Gg2.Bots` could make —
+off-by-default control, and — the claim nothing inside `GG2.Bots` could make —
 that the bubble reaches the wire, by decoding the server's own broadcast.
 Confirmed against a stock GM8 client: a pyro driven by the policy tier put up
 bubble 20 and a search-driven bot put up 22 and 21, and all three draw as
@@ -367,8 +367,8 @@ once per 900-tick window), creep it back up after a quiet window, never above
 the loop supplies the factor.
 
 ⛔ **A duel has no arbiter, so nothing on this path reaches `gg2-rl`.**
-`Gg2.Env` references `Gg2.Protocol`, `Gg2.Maps`, `Gg2.Simulation` and
-`Gg2.Bots` — **not `Gg2.Server`** — and nothing in `gg2-rl/env/Gg2.Env/` mentions
+`GG2.Env` references `GG2.Protocol`, `GG2.Maps`, `GG2.Simulation` and
+`GG2.Bots` — **not `GG2.Server`** — and nothing in `gg2-rl/env/GG2.Env/` mentions
 `IMicroArbiter` or `BotBrainSpec`. `HybridBot.Choose` short-circuits at
 `_arbiter is null`, `DecisionCostFor` is never called, and a duel cannot be
 moved by the cost model or the budget however wrong either is.
@@ -538,7 +538,7 @@ that method goes red with no semantic change**.
 ⚠️ **Flagging a move is a courtesy on top of that gate, never a substitute.**
 
 `SIM_UUID` covers the constants, the action encoding, the observation layout
-and the simulation behaviour version — **not `Gg2.Bots`**. So a bot change does
+and the simulation behaviour version — **not `GG2.Bots`**. So a bot change does
 not invalidate a checkpoint, and a change to what an observation *means* does.
 
 ---
@@ -547,7 +547,7 @@ not invalidate a checkpoint, and a change to what an observation *means* does.
 
 | you are touching | read |
 |---|---|
-| anything in `src/Gg2.Bots/` | `docs/TRAPS-BOTS.md` — one section per phase-7 item, by name |
+| anything in `src/GG2.Bots/` | `docs/TRAPS-BOTS.md` — one section per phase-7 item, by name |
 | adding or swapping a bot implementation | "Swapping the bot logic out" above — `IMicroController` and nothing else |
 | the nav format, A\*, the path follower | same, items 2, 4a, 4b-i, 4b-ii |
 | a route table, the A\* heuristic, route dispersion | same — "Shipping the tables", "CPD-Search", "Two ways to spend a next-hop table", "Route variety, scored". ⚠️ **Both ship ON now.** ⛔ The three pinned measurements and the 25 digests do NOT exercise the tables — `ScenarioWorld` sets no `Distances` — so those say nothing about the arm a server runs; see "The gates measure a DIFFERENT ARM". ✅ **`EdgeFlightTests`' corpus sweep is the one gate that does**, and pins both arms so the difference is visible |

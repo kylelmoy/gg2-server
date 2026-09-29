@@ -29,7 +29,7 @@ whole specification.
 
 ## Tier 0 — the recorder
 
-`Gg2.Parity`, the `gg2-parity` console app. `record` joins a server as a passive
+`GG2.Parity`, the `gg2-parity` console app. `record` joins a server as a passive
 spectator and writes its broadcast stream to a file; `diff` compares two
 recordings and reports the first differing byte with a window either side;
 `census` prints what a recording contains and where framing stopped.
@@ -38,7 +38,7 @@ Speaks the handshake from `PROTOCOL.md`, `RESERVE_SLOT`, `PLAYER_JOIN`, then
 never sends an `INPUTSTATE` of its own — it parses the inbound stream into a
 list of framed messages and writes it to disk with a tick index.
 
-Framing lives in `Gg2.Protocol.ServerStream` and `StateUpdateReader`. The
+Framing lives in `GG2.Protocol.ServerStream` and `StateUpdateReader`. The
 stream is **not self-delimiting**, and this is the part worth knowing before
 touching a reader: a state update's width comes from three places at once.
 
@@ -70,14 +70,14 @@ Measured on the running engine (`global.serializeBuffer`, `event_user(12)`,
 no `action_inherited`; `Minegun`'s does. That distinction is invisible in the
 GML text and was only found by measuring buffer sizes directly.
 
-`tests/Gg2.Tests/Fixtures/reference-ctf_truefort-combat.trace` is the fixture
+`tests/GG2.Tests/Fixtures/reference-ctf_truefort-combat.trace` is the fixture
 that exercises a character inside a `FULL_UPDATE` at all — every recording made
 by joining immediately captures state before any bot has spawned, so a
 `FULL_UPDATE` containing a live character was unreached until a fixture was
 recorded with six bots already spawned (medic, demoman and four ordinary
 weapons in one update, eight `WEAPON_FIRE`s, one `PLAYER_LEAVE`).
 
-`tests/Gg2.Tests/Fixtures/reference-ctf_truefort-spectator.bin` is a recording
+`tests/GG2.Tests/Fixtures/reference-ctf_truefort-spectator.bin` is a recording
 of the real GM8 server on `ctf_truefort`, and the test that frames it to the
 last byte is what would notice any of the above being wrong.
 
@@ -86,7 +86,7 @@ found nearly every framing bug in this project.
 
 ### The trace format
 
-`Gg2.Protocol.Trace` and `TraceParser`. **The trace is the raw stream**, with a
+`GG2.Protocol.Trace` and `TraceParser`. **The trace is the raw stream**, with a
 header naming the map, the reference version and where it came from — not a
 parsed structure. Three reasons:
 
@@ -230,7 +230,7 @@ rectangle's own corners.
 
 ## Tier 2 — trace replay, the main event
 
-`Gg2.Parity.Replayer` and `DriftReport`, driven by `gg2-parity replay <trace>`.
+`GG2.Parity.Replayer` and `DriftReport`, driven by `gg2-parity replay <trace>`.
 
 The simulation it talks to is `ITraceSimulation`, deliberately tiny and living
 in the harness rather than in the simulation, so the shape of `WorldState` is
@@ -306,7 +306,7 @@ Do not chase these — exclude them and say so in the report:
 - **A spawn *position* is not on that list.** `PLAYER_SPAWN` carries a **spawn
   point id and a group**, not coordinates (`sendEventSpawn.gml`), and the
   client resolves the pair against the map itself (`doEventSpawn.gml`). Do the
-  same: `Gg2.Maps.SpawnPoints` reproduces `offloadSpawnPoints.gml`'s lists, and
+  same: `GG2.Maps.SpawnPoints` reproduces `offloadSpawnPoints.gml`'s lists, and
   the result is an integer coordinate with both speeds zero — an anchor that
   passed through no wire at all. Resynchronising instead from a broadcast
   `QUICK_UPDATE` position (quantised to a fifth of a pixel, sent every seventh
@@ -338,10 +338,10 @@ spawn point, not exact from the wire.
 
 ### The fixture corpus
 
-All fixtures live in `tests/Gg2.Tests/Fixtures/`. This table is the current
+All fixtures live in `tests/GG2.Tests/Fixtures/`. This table is the current
 inventory — map, roster, what each is for, and its measured closed-loop
 exact-window length where one applies. Regenerate the row after changing
-anything in `src/Gg2.Simulation` or the harness; a window that does not move
+anything in `src/GG2.Simulation` or the harness; a window that does not move
 when it should have is itself a finding (CLAUDE.md, "the other direction").
 
 | fixture | map / mode | roster | closed-loop? | what it gates |
@@ -453,7 +453,7 @@ fires the reference's self-destruct one tick after the sentry is built, and
 the port's guard does not reproduce it at the same tick.
 `SentryKillFixtureTests.ThePortStillMissesBothOfTheReferencesSentrySelfDestructs`
 pins both ticks so a fix must edit this test on purpose. Owed to whoever owns
-`src/Gg2.Simulation`; not this document's fix to make.
+`src/GG2.Simulation`; not this document's fix to make.
 
 ### Move boxes on `tdm_mantic`: cannot currently be recorded
 
@@ -553,7 +553,7 @@ reference disagree about an *integer*.** An observation is the reference's own
 position rounded to a fifth of a pixel (`WireQuantise`, half away from zero),
 so an apparent divergence can be the port sitting a fraction of a wire unit
 past a rounding boundary while the underlying physics is still exact.
-`Gg2.Parity.SubWireProbe` (an `ITraceSimulation` decorator over
+`GG2.Parity.SubWireProbe` (an `ITraceSimulation` decorator over
 `PortedSimulation`) reports the un-rounded residual (`port*5 - observed` for
 position, `port*8.5 - observed` for velocity) so this can be told apart from a
 real bug: `closedcombat`'s apparent divergence at t1274 is 0.0014 wire units
@@ -570,7 +570,7 @@ before vs. after the character move) collapses **both** to 336. Both gates are
 kept for this reason (`PhysicsParityTests.ThePortStaysWithinAWireUnitOfARealFight`).
 
 **A genuine physics *threshold* — not a rounding artefact — can also end an
-exact window without being a bug.** `Gg2.Parity.BinSweep` anchors one slot from
+exact window without being a bug.** `GG2.Parity.BinSweep` anchors one slot from
 the wire and sweeps it across the quantisation bin the observation was rounded
 from (0.1 px position, 1/17 px/tick velocity), counting how many of those
 states reproduce the target tick exactly. Wide coverage (measured: 34/49 at
@@ -611,7 +611,7 @@ to 240).
 A roster index is positional: a player leaving renumbers everybody above them,
 and the reference's own state updates are already compacted by the time a
 recorder sees them. `ITraceSimulation.RemoveSlot` /
-`Gg2.Simulation.WorldState.RemoveSlot` do the compaction and renumber every
+`GG2.Simulation.WorldState.RemoveSlot` do the compaction and renumber every
 stored roster index (a projectile's owner, a last damage dealer, who set
 somebody on fire, a medic's heal target). Any per-slot state the harness keeps
 outside `WorldState` (`PortedSimulation` keeps a departed player's class/team,
@@ -1152,8 +1152,8 @@ clean — do not redo this from scratch; this is the record.
 
 The oracle is the pair `Scripts/Client/ClientBeginStep.gml`'s
 `receiveCompleteMessage(socket, N, ...)` sizes and the `write_*` calls behind
-them, against `src/Gg2.Protocol/ServerMessages.cs` and
-`src/Gg2.Server/StateUpdateWriter.cs`. Checked and agreeing:
+them, against `src/GG2.Protocol/ServerMessages.cs` and
+`src/GG2.Server/StateUpdateWriter.cs`. Checked and agreeing:
 
 - **Every fixed-width message.** `HELLO`, `JOIN_UPDATE` (2), `PLAYER_JOIN`,
   `PLAYER_LEAVE` (1), `PLAYER_DEATH` (4), `BALANCE` (1, or 1+1 on a switch),
@@ -1176,7 +1176,7 @@ them, against `src/Gg2.Protocol/ServerMessages.cs` and
   port's `GameModes.Of` walks the same if/else chain in the same order over the
   **narrowed** map, which is what the client sees.
 
-**`Gg2Text` is 1:1 Latin-1 and throws rather than substituting**, so a name
+**`GG2Text` is 1:1 Latin-1 and throws rather than substituting**, so a name
 cannot desynchronise a length prefix from its payload; `WriteString1`/`2`
 range-check the prefix. That closes the classic UTF-8-bytes-versus-char-count
 slip by construction.
@@ -1348,7 +1348,7 @@ behaviour, on `port-gg_debug-anchoronplatform.trace` (this server's own
 recording, checked in at 34 KB), asserting p99 y < 20 where the stale value
 scores 90. Both gate the replayer, not the simulation: the trace is the
 port's own recording replayed by the port, so green means the harness anchors
-correctly, not that anything changed in `Gg2.Simulation`. No checked-in
+correctly, not that anything changed in `GG2.Simulation`. No checked-in
 fixture anchors onto a dropdown platform, which is why no existing fixture
 caught this.
 
@@ -1382,7 +1382,7 @@ fingerprint computed independently on each side**, not a trace diff.
 static, and the thing that goes red on a regression. Build this first.
 
 **2. A framed recording, for a lead/trail fingerprint.** `FlushFrames` and
-`FlushFingerprint` (`src/Gg2.Parity/FlushFrames.cs`); `gg2-parity record`
+`FlushFingerprint` (`src/GG2.Parity/FlushFrames.cs`); `gg2-parity record`
 writes a `.frames` sidecar alongside the `.trace` (kept as a sidecar rather
 than changed trace format, so every existing recording stays valid).
 `FlushFingerprintTests` is the gate; `FlushFingerprintTests.ATickIsExactlyOneFlush`

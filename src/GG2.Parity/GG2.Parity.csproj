@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The parity harness: recorder, trace format, replayer and drift report.
+       Has I/O, which is exactly why it is not GG2.Simulation's problem - the
+       dependency goes this way and never back. docs/PARITY.md. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>GG2.Parity</RootNamespace>
+    <AssemblyName>gg2-parity</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="GG2.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GG2.Protocol\GG2.Protocol.csproj" />
+    <ProjectReference Include="..\GG2.Maps\GG2.Maps.csproj" />
+    <ProjectReference Include="..\GG2.Simulation\GG2.Simulation.csproj" />
+  </ItemGroup>
+
+</Project>

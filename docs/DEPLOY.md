@@ -196,7 +196,7 @@ commands against a live game.
 ## Building and shipping it
 
 ```bash
-dotnet publish src/Gg2.Host/Gg2.Host.csproj \
+dotnet publish src/GG2.Host/GG2.Host.csproj \
   -c Release -r linux-x64 --self-contained false \
   -o out/
 ```
@@ -293,7 +293,7 @@ release name and be wrong with it. `--allow-dirty` says you mean it.
 **It does not run the tests.** Gate on the suite's exit code yourself:
 
 ```bash
-if dotnet test Gg2.sln > log; then scripts/deploy.sh; else cat log; fi
+if dotnet test GG2.sln > log; then scripts/deploy.sh; else cat log; fi
 ```
 
 **A restart drops everyone connected.** The graceful path still runs — the
@@ -587,13 +587,13 @@ loads per-round or eagerly for a rotation.
 
 #### Regenerating them — one command
 
-The generator is in this repository (`src/Gg2.Nav`, `docs/NAVGEN.md`), and
+The generator is in this repository (`src/GG2.Nav`, `docs/NAVGEN.md`), and
 `gg2-server navgen` does the whole cycle:
 
 ```bash
-dotnet run --project src/Gg2.Host -- navgen          # every map in maps/
-dotnet run --project src/Gg2.Host -- navgen --check  # did anything move? exit 1 if so
-dotnet test Gg2.sln
+dotnet run --project src/GG2.Host -- navgen          # every map in maps/
+dotnet run --project src/GG2.Host -- navgen --check  # did anything move? exit 1 if so
+dotnet test GG2.sln
 ```
 
 It writes the shipped `.txt.gz`, deletes a stale `.txt` beside it, and rewrites
@@ -742,7 +742,7 @@ could not see a door or a gate move. `NavManifestTests.EntitiesAreInTheHash`.
 Regenerating nav means regenerating this:
 
 ```bash
-GG2_UPDATE_NAV_MANIFEST=1 dotnet test Gg2.sln --filter NavManifestTests
+GG2_UPDATE_NAV_MANIFEST=1 dotnet test GG2.sln --filter NavManifestTests
 ```
 
 **That run fails on purpose** after rewriting the file, so a manifest cannot
@@ -845,7 +845,7 @@ Under `ProtectSystem=strict` the log directory has to be in
 
 ### Garbage collection
 
-`Gg2.Host.csproj` sets `ServerGarbageCollection=true` and
+`GG2.Host.csproj` sets `ServerGarbageCollection=true` and
 `ConcurrentGarbageCollection=false` (`docs/ARCHITECTURE.md`, "Runtime settings").
 Server GC sizes its heaps per core and is tuned for throughput; the tick loop is
 single-threaded and latency-sensitive.
@@ -868,7 +868,7 @@ server runs on Alpine/musl without `icu-libs`. Nothing to configure.
 
 ### Reference checkouts
 
-None needed. Constants are compiled into `Gg2.Protocol`, the maps ship in the
+None needed. Constants are compiled into `GG2.Protocol`, the maps ship in the
 publish output, and `GG2_REFERENCE` is read only by the **test** suite. A
 deployed server has no dependency on a Gang Garrison 2 checkout of any kind.
 

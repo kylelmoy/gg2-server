@@ -3,7 +3,7 @@
 ## ⚠️ The bot layer is not held to the reference (2026-08-27)
 
 **The user's call, and it reverses CLAUDE.md's standing "the reference is the
-specification" rule for `src/Gg2.Bots/` only:**
+specification" rule for `src/GG2.Bots/` only:**
 
 > "The reference bot implementation should be considered incomplete. We began
 > this C# port project precisely because testing and troubleshooting the GML
@@ -80,7 +80,7 @@ which tests gate it, and the traps that were paid for on the way.
 **This file is the distillation, not the specification.** `docs/BOTAI.md` is the
 structural contract the bot layer has to satisfy and `docs/ARCHITECTURE.md` has
 the seam; what is here is the part a session needs *in front of it* while it
-edits `src/Gg2.Bots/`.
+edits `src/GG2.Bots/`.
 
 ⚠️ **Nothing here may be re-derived.** A measurement quoted here was taken
 against the running game or against a pinned fixture, and several of them are
@@ -89,8 +89,8 @@ broken test.
 
 ### Phase 7 item 1: the input seam, and a second place every command now lives
 
-`Gg2.Simulation.{IInputSource, IBatchInputSource, WorldView, PlayerCommand,
-PlayerCommandBuffer, ICommandSource}`, `Gg2.Server.NetworkInputSource`,
+`GG2.Simulation.{IInputSource, IBatchInputSource, WorldView, PlayerCommand,
+PlayerCommandBuffer, ICommandSource}`, `GG2.Server.NetworkInputSource`,
 `GameServer.{GatherInputs, ServiceBots, AddBot, RemoveBot, Execute*}`.
 `docs/ARCHITECTURE.md`, "Bots", has the full rules; these are the traps:
 
@@ -133,13 +133,13 @@ PlayerCommandBuffer, ICommandSource}`, `Gg2.Server.NetworkInputSource`,
 
 ### Phase 7 item 2: the nav cache reader, and a format that is not the obvious one
 
-`src/Gg2.Bots/` — `NavCache`, `NavGraph`, `NavTypes`. Gated by `NavCacheTests`
+`src/GG2.Bots/` — `NavCache`, `NavGraph`, `NavTypes`. Gated by `NavCacheTests`
 (built bytes) and `NavGraphFixtureTests` (all 24 real caches). The reference is
 `Scripts/BotNav/`; the JavaScript nav-graph decoder documents the format.
 
 - ✅ **The `NAV_*` and `BOT_*` constants are already ported** —
-  `Gg2.Protocol.{NavConstants, BotConstants}`, pinned to `Constants.xml` by
-  `ConstantsTests`. Check `Gg2.Protocol` before transcribing anything from
+  `GG2.Protocol.{NavConstants, BotConstants}`, pinned to `Constants.xml` by
+  `ConstantsTests`. Check `GG2.Protocol` before transcribing anything from
   `Constants.xml`. The one number genuinely not there is the 23-pixel feet
   offset, a literal in the GML; it lives on `NavGraph.FeetOffset`.
 - ⚠️ **A `ds_grid_write` string is not doubles packed end to end.** It is a
@@ -189,7 +189,7 @@ PlayerCommandBuffer, ICommandSource}`, `Gg2.Server.NetworkInputSource`,
 
 ### Phase 7 item 3: the scenario harness, and a world with no gamemode in it
 
-`Gg2.Bots.{ScenarioWorld, ScenarioRunner, Scenario, Scenarios}`. Gated by
+`GG2.Bots.{ScenarioWorld, ScenarioRunner, Scenario, Scenarios}`. Gated by
 `ScenarioWorldTests` and `ScenarioDefinitionTests`. The reference is
 the original JavaScript scenario runner and scenarios.
 
@@ -272,12 +272,12 @@ platforms lane's independent 18/70 on `gg_debug2`, node-for-node):
 ⚠️ **The multi-area row is the general trap**: on any staged map, roughly
 two-thirds of every per-area graph is other stages' terrain. A node draw on
 `cp_dirtbowl_a1` lands outside the played stage more often than inside it.
-`tests/Gg2.Tests/MovingPlatformTests.ReachableFromSpawns` is the checked-in
+`tests/GG2.Tests/MovingPlatformTests.ReachableFromSpawns` is the checked-in
 flood; the census itself was a scratch diagnostic (this table is its record).
 
 ### Phase 7 item 4a: A* over the nav graph
 
-`Gg2.Bots.{NavSearch, NavQuery}`, `NavGraph.EdgeKey`. Gated by `NavSearchTests`
+`GG2.Bots.{NavSearch, NavQuery}`, `NavGraph.EdgeKey`. Gated by `NavSearchTests`
 (hand-built shapes) and `NavSearchFixtureTests` (all 24 shipped graphs). The
 reference is `Scripts/BotNav/navFindPath.gml`, whose header is the best
 documentation in the bot layer — read it before changing anything here.
@@ -367,7 +367,7 @@ reddens only this one.
 
 ### Phase 7 item 4b-i: the path follower's spine, and the ground edges
 
-`Gg2.Bots.{PathFollower, BotPathState}`. Gated by `PathFollowerTests` (decisions,
+`GG2.Bots.{PathFollower, BotPathState}`. Gated by `PathFollowerTests` (decisions,
 physics taken out) and `PathFollowerFixtureTests` (a real leg walked on
 `ctf_truefort` through `ScenarioWorld`). The reference is `botPathKeys.gml`
 (1,014 lines, 394 of code) and `botPathPlan.gml`.
@@ -434,7 +434,7 @@ end.
 
 ### Phase 7 item 4b-ii: the jump branch, and a budget that could not be spent
 
-`Gg2.Bots.{JumpModel, PathFollower}`'s jump case, `BotPathState`'s per-arc
+`GG2.Bots.{JumpModel, PathFollower}`'s jump case, `BotPathState`'s per-arc
 fields. Gated by `PathFollowerTests` and `PathFollowerFixtureTests`. The
 reference is `botPathKeys.gml:408-1014`, `botJumpReach.gml` and
 `botRunupCol.gml`.
@@ -510,7 +510,7 @@ and fly as something else.
 
 ### Phase 7 item 4c-i: what to shoot at, and where to point
 
-`Gg2.Bots.{BotTargeting, BotAim}`. Gated by `BotTargetingTests` and
+`GG2.Bots.{BotTargeting, BotAim}`. Gated by `BotTargetingTests` and
 `BotAimTests`. The reference is `botFindTarget.gml`, `botClassRange.gml`,
 `botClassMinBand.gml`, `botEnemyWithin.gml`, `botAngleDelta.gml`,
 `botAimSolve.gml`, `botAimLead.gml`, `botWeaponBallistics.gml` and
@@ -553,7 +553,7 @@ where to point but presses no key.
 - ⚠️ **The ballistics table is the bot's MODEL, not the weapon** — a
   scattergun blast is six pellets with spread; the aim model calls it one
   13 px/tick projectile falling at 0.15. **Do not "fix" it to match
-  `Gg2.Simulation.Projectiles`** — tuned against play, and real numbers make
+  `GG2.Simulation.Projectiles`** — tuned against play, and real numbers make
   a different bot. Speed **zero** means "do not lead" (Rifle, Medigun).
 - ⚠️ **Drop is `g·t·(t+1)/2`, not `g·t²/2`** — discrete ticks give the
   triangular number, not the integral; 2.5px on a thirty-tick shot, exactly
@@ -585,7 +585,7 @@ where to point but presses no key.
 
 ### Phase 7 item 4c-ii: the combat controller, and a bot that finally fires
 
-`Gg2.Bots.{BotCombat, BotCombatState, BotClassKeys, BotClassProfile, BotSkill}`.
+`GG2.Bots.{BotCombat, BotCombatState, BotClassKeys, BotClassProfile, BotSkill}`.
 Gated by `BotCombatTests`. The reference is `botCombatUpdate.gml`,
 `botClassKeys.gml`, `botClassProfile.gml`, `botSkillApply.gml`,
 `botSkillLerp.gml` and `botAimSpread.gml`.
@@ -672,7 +672,7 @@ held four and crashed the test host. Build one per helper call.
 
 ### Phase 7 item 4d: the bot itself, and a stream that must not be the match's
 
-`Gg2.Bots.ScriptedBot`. Gated by `ScriptedBotTests`. The reference is
+`GG2.Bots.ScriptedBot`. Gated by `ScriptedBotTests`. The reference is
 `botInputUpdate.gml`.
 
 ✅ **A bot walks to a goal, acquires an enemy, fires and hurts it.** It is an
@@ -735,7 +735,7 @@ of the time and fails occasionally.
 
 ### Phase 7 item 4e: the scenario suite runs, and eight of fourteen legs pass
 
-`Gg2.Bots.{IScenarioSubject, ScenarioRunner, ScenarioWorld}` and
+`GG2.Bots.{IScenarioSubject, ScenarioRunner, ScenarioWorld}` and
 `ScenarioSuiteTests`. The reference is the original JavaScript scenario runner.
 
 ✅ **The fourteen scenarios are executable assertions now**, driven by
@@ -787,7 +787,7 @@ newly-passing "unmet" leg fails the build with "delete its entry".
 
 ### Phase 7 item 4f: one cast, and the fourteen scenarios all pass
 
-`Gg2.Bots.{NavCache, NavGraph}` — `NavEdge.Bucket` is a `double` now. Gated by
+`GG2.Bots.{NavCache, NavGraph}` — `NavEdge.Bucket` is a `double` now. Gated by
 `NavGraphFixtureTests.AJumpEdgesVelocityIsARealAndSurvivesTheLoad` and by the
 whole scenario suite.
 
@@ -850,7 +850,7 @@ the current, load-bearing reading — see item 4b-ii.
 
 ### Phase 7 item 4g: the objective layer, and a bot that plays the game
 
-`Gg2.Bots.{BotObjective, BotGoal, BotRoles, BotRole, BotGoalSpot, BotLos,
+`GG2.Bots.{BotObjective, BotGoal, BotRoles, BotRole, BotGoalSpot, BotLos,
 BotSpot}`, `ScriptedBot`'s objective cadence. Gated by `BotObjectiveTests`. The
 reference is `botObjectiveUpdate.gml` (707 lines), `botRoleAssign`,
 `botGoalSpot`, `botSetGoalNode`, `botEnemySpawn` and `botPointContested`.
@@ -1077,7 +1077,7 @@ node 260 is a genuine one-way trap — it reaches **3 of 261** nodes.
 
 **Not chased, and the reason is where the fix lives.** Either the graphs grow
 ground routes to those objectives (`docs/NAVGEN.md`, and the generator is
-`src/Gg2.Nav`), or the objective layer learns to ask "can this profile reach
+`src/GG2.Nav`), or the objective layer learns to ask "can this profile reach
 that?" before committing — which `NavDistanceSet`'s per-profile tables could
 answer in O(1), but only on the arm that loads them, and `--no-nav-distances` is
 a different arm rather than a slower one.
@@ -1221,9 +1221,9 @@ argument alone would be widening an authorisation past its evidence. Open."
 
 | question | answer |
 |---|---|
-| does any of `src/Gg2.Simulation` read a `BOT_*` constant? | **no** — so none can change what an action does |
+| does any of `src/GG2.Simulation` read a `BOT_*` constant? | **no** — so none can change what an action does |
 | does the inference path? (`ObservationWriter`, `ActionDecoder`, `PolicyNetwork`, `PolicyController`, `HybridBot`, `Handover`) | **no** |
-| who does, then? | `src/Gg2.Bots`, `src/Gg2.Nav`, `HandoverRule` — 27 files |
+| who does, then? | `src/GG2.Bots`, `src/GG2.Nav`, `HandoverRule` — 27 files |
 
 That is verbatim the routing surface's own description: which states the policy
 is asked about, and when it is handed the wheel. `BotConstants` is now on it.
@@ -1233,7 +1233,7 @@ scan.** A `const` is inlined by the compiler, so a read of
 `BotConstants.EngageTicks` leaves *nothing* in the IL — no member reference, and
 not even an assembly reference if it is the only use. Reflection, Cecil and an
 assembly-reference walk are all blind by construction. Confirmed to fire by
-adding one read to `Gg2.Simulation/Deaths.cs` and watching it name the file.
+adding one read to `GG2.Simulation/Deaths.cs` and watching it name the file.
 
 #### ⚠️ Removing a source moves the digest exactly as adding a constant does
 
@@ -1246,7 +1246,7 @@ cheaper; it is the same price, deferred, and paid again on every later
 bot-tuning edit.
 
 The two shipped checkpoints and the four fixtures under
-`tests/Gg2.Tests/Fixtures/policy/` were **re-stamped rather than retrained**:
+`tests/GG2.Tests/Fixtures/policy/` were **re-stamped rather than retrained**:
 sixteen ASCII characters in `meta.npy`, verified member by member, every weight
 byte-identical. `checkpoints/README.md` records the original stamp and the
 original md5s, because the re-stamp is the operation that destroys the evidence
@@ -1280,8 +1280,8 @@ now produce different failures instead of the same one.
 
 ### Phase 7 item 4h: a server that fills itself, and the headroom number
 
-`Gg2.Bots.{BotPopulation, BotPopulationOptions}`,
-`Gg2.Server.BotPopulationService`, `ScriptedBot.SetMap`, `GameServer`'s roster
+`GG2.Bots.{BotPopulation, BotPopulationOptions}`,
+`GG2.Server.BotPopulationService`, `ScriptedBot.SetMap`, `GameServer`'s roster
 accessors and `--bots`. Gated by `BotPopulationTests`. The reference is
 `botPopulationUpdate.gml`, `botPickTeam`, `botPickClass` and `botReteamAll`.
 
@@ -1296,11 +1296,11 @@ and fighting, the whole simulation, the state serialiser and the broadcast.
 budget, because the claim is an order of magnitude rather than a digit and a CI
 machine under load is not a benchmark.
 
-⚠️ **`Gg2.Server` references `Gg2.Bots` now, and that edge is deliberate.** The
+⚠️ **`GG2.Server` references `GG2.Bots` now, and that edge is deliberate.** The
 population manager is server-side in the reference — only the server has a
-roster, a config file and a socket to broadcast a join on. `Gg2.Bots` stays pure
-and gains nothing; docs/ARCHITECTURE.md's one hard rule (`Gg2.Simulation` must
-not reference `Gg2.Server`) is untouched, and the `IInputSource` seam still means
+roster, a config file and a socket to broadcast a join on. `GG2.Bots` stays pure
+and gains nothing; docs/ARCHITECTURE.md's one hard rule (`GG2.Simulation` must
+not reference `GG2.Server`) is untouched, and the `IInputSource` seam still means
 the *simulation* never special-cases a bot.
 
 - ⚠️ **`if(!global.botsEnabled) exit;` means DO NOTHING, not "the target is
@@ -1405,7 +1405,7 @@ what a human player would do.
 
 ### Phase 7 item 4i: the rocket jump, and a law with no friction under it
 
-`Gg2.Bots.RocketModel`, `PathFollower`'s rocket branches, `ScriptedBot`'s
+`GG2.Bots.RocketModel`, `PathFollower`'s rocket branches, `ScriptedBot`'s
 hand-off. Gated by `PathFollowerTests` and `ScriptedBotTests`. The reference is
 `botRocketReach.gml`, `botPathKeys.gml:608-760, 846, 967-981` and
 `botInputUpdate.gml:301-312`.
@@ -1492,7 +1492,7 @@ launch vs. run-up.
 
 ### Phase 7 item 4j: the medic's ally, and one script with two callers
 
-`Gg2.Bots.BotAlly`, the medic exception in `BotCombat.Step`, the medic case in
+`GG2.Bots.BotAlly`, the medic exception in `BotCombat.Step`, the medic case in
 `BotClassKeys`, and the follow-goal in `BotObjective`. Gated by `BotAllyTests`.
 The reference is `botFindAlly.gml`, `botCombatUpdate.gml:175-198` and
 `botObjectiveUpdate.gml:83-133`.
@@ -1567,7 +1567,7 @@ real medic bot and reading which side of its ally the goal landed on.
 
 ### Phase 7 item 4k: the airblast and the dodge, and two radius tests that were wrong
 
-`Gg2.Bots.BotReflex`, the pyro branch in `BotClassKeys`, the no-target branch in
+`GG2.Bots.BotReflex`, the pyro branch in `BotClassKeys`, the no-target branch in
 `BotCombat` and the evade press in `ScriptedBot`. Gated by `BotReflexTests`. The
 reference is `botInBlastBeam.gml`, `botIncomingProjectile.gml`,
 `botRocketDodge.gml` and `botInputUpdate.gml:192-194`.
@@ -1648,7 +1648,7 @@ where the standing box spans −21..+31 and one tick of jump (8px) gives −29..
 
 ### Phase 7 item 4l: suppression, and a live flag that is not the target's
 
-`Gg2.Bots.BotSuppress`, the suppression block in `BotCombat.SolveAim`,
+`GG2.Bots.BotSuppress`, the suppression block in `BotCombat.SolveAim`,
 `BotCombatState.{SuppressNode, SuppressAt}`. Gated by `BotSuppressTests`. The
 reference is `botSuppressSpot.gml` and `botCombatUpdate.gml:294-328`.
 
@@ -1720,7 +1720,7 @@ index or a mis-read gate would break.
 
 ### Phase 7 item 4m: the arc, and a fixture that has to separate two questions
 
-`Gg2.Bots.BotArc`, the arc gate in `BotClassKeys`. Gated by `BotArcTests`. The
+`GG2.Bots.BotArc`, the arc gate in `BotClassKeys`. Gated by `BotArcTests`. The
 reference is `botArcClear.gml` and `botClassKeys.gml:47-68`.
 
 ✅ **A demoman no longer fires into the ceiling.**
@@ -1786,7 +1786,7 @@ the arc unrelated to the target.
 
 ### Phase 7 item 4n: the mined doorway, and a radius that is not the one on the tin
 
-`Gg2.Bots.BotMines`, the detonation in `BotClassKeys`. Gated by `BotMinesTests`.
+`GG2.Bots.BotMines`, the detonation in `BotClassKeys`. Gated by `BotMinesTests`.
 The reference is `botMinesArmed.gml` and `botClassKeys.gml:89-93`.
 
 ✅ **A demoman springs a mined doorway on whoever walks into it.**
@@ -1849,7 +1849,7 @@ the detonation made to wait for a target.
 
 ### Phase 7 item 4o: the close-in step, and the one press no route validated
 
-`Gg2.Bots.BotStep`, the close-in branch in `ScriptedBot.ApplyHolds`. Gated by
+`GG2.Bots.BotStep`, the close-in branch in `ScriptedBot.ApplyHolds`. Gated by
 `BotStepTests`. The reference is `botStepSafe.gml` and
 `botInputUpdate.gml:225-245`.
 
@@ -1904,7 +1904,7 @@ flipped.
 
 ### Phase 7 item 4p: the spot ban, and a two-component graph that had to be built
 
-`Gg2.Bots.ScriptedBot.SpotBanUntil` and the notice in `UpdateObjective`. Gated by
+`GG2.Bots.ScriptedBot.SpotBanUntil` and the notice in `UpdateObjective`. Gated by
 `SpotBanTests`. The reference is `botObjectiveUpdate.gml`'s spot handling.
 
 ✅ **The last ungated branch in the bot layer is gated**, and no behaviour changed
@@ -1962,7 +1962,7 @@ dropped, and the check moved below the period gate.
 
 ### Phase 7 item 4q: edge occupancy, and why a team stops walking in single file
 
-`Gg2.Bots.BotOccupancy`, `BotPathState.OccupiedTeam`, the two calls in
+`GG2.Bots.BotOccupancy`, `BotPathState.OccupiedTeam`, the two calls in
 `PathFollower.Plan`, the arrival and death removals, and
 `BotPopulationService.Occupancy`. Gated by `BotOccupancyTests`. The reference is
 `botOccupancyAdd.gml`, `botOccupancyMap.gml` and `botOccupancyReset.gml`.
@@ -2040,8 +2040,8 @@ bot would leave its whole route crowded for ever.
 
 ### Route variety, scored: what occupancy is worth and why lanes do not replace it
 
-`Gg2.Tests.RouteDiversity`, `RouteDiversityTests`, `RouteDiversityMatchTests`,
-`LaneWalkingTimeTests`, `Gg2.Bots.BotLanes`, `BotLanesTests`. Measured
+`GG2.Tests.RouteDiversity`, `RouteDiversityTests`, `RouteDiversityMatchTests`,
+`LaneWalkingTimeTests`, `GG2.Bots.BotLanes`, `BotLanesTests`. Measured
 2026-09-04 against `fa9e87a`, Release.
 
 ⛔ **Everything that checked route variety before this tested the MECHANISM, not
@@ -2176,7 +2176,7 @@ frame. Choose it on how the bots should play.
 
 ### Precomputing Dijkstra: the routes cannot be stored, the distances can
 
-`Gg2.Bots.NavDistances`, `NavSearch.Find`'s `distances` argument, gated by
+`GG2.Bots.NavDistances`, `NavSearch.Find`'s `distances` argument, gated by
 `NavDistancesTests`. Measured 2026-09-04, Release.
 
 ⛔ **Storing the ROUTES does not work on a live server, and the reason is
@@ -2278,7 +2278,7 @@ in the shipped path passes it, and the route digests are untouched.
 
 ### Shipping the precomputed distances: `--nav-distances`
 
-`Gg2.Bots.NavDistanceSet`, `PathFollower.Distances`, `ScriptedBot.Distances`,
+`GG2.Bots.NavDistanceSet`, `PathFollower.Distances`, `ScriptedBot.Distances`,
 `ServerOptions.NavDistances`, `HeadlessMatchOptions.NavDistances`. Gated by
 `NavDistanceSetTests`; measured by
 `RouteDiversityMatchTests.WhatThePrecomputedHeuristicCostsInRouteCost` and by
@@ -2411,7 +2411,7 @@ re-reading "Route variety, scored" above.
 
 ### CPD-Search: the next-hop table as the ANSWER, verified per query
 
-`Gg2.Bots.NavDistances.NextHop`, the CPD branch of `NavSearch.Find`. Gated by
+`GG2.Bots.NavDistances.NextHop`, the CPD branch of `NavSearch.Find`. Gated by
 `NavDistancesTests.TheNextHopChainPricesToTheDistance` and the `Cpd*` tests in
 `NavSearchTests`. Decided 2026-09-04 after a prior-art search; the search and
 the design reasoning are in `docs/PROPOSAL-ROUTE-TABLE.md`, "Decision".
@@ -2558,7 +2558,7 @@ is impossible; here it is 0.9 MB.
 
 ### Shipping the tables: `.dist.gz`, and the half that is NOT stored
 
-`Gg2.Bots.NavDistanceFile`, `NavDistances.FromNextHops`,
+`GG2.Bots.NavDistanceFile`, `NavDistances.FromNextHops`,
 `NavDistanceSet.LoadOrDerive`, `NavGen`'s `--no-distances`. Gated by
 `NavDistanceFileTests`. Measured 2026-09-04, Release, over all 25 shipped
 graphs.
@@ -2793,7 +2793,7 @@ with it.
 
 ### Phase 7 item 4s: the stab window, and the last unported script
 
-`Gg2.Bots.BotStab`, the stab branch in `BotClassKeys.SpyKeys`. Gated by
+`GG2.Bots.BotStab`, the stab branch in `BotClassKeys.SpyKeys`. Gated by
 `BotStabTests`. The reference is `botStabWindow.gml` and
 `botClassKeys.gml:146-163`.
 
@@ -2851,7 +2851,7 @@ claim mean less than the work of closing it cost.
 
 ### Phase 7 item 4t: auditing docs/BOTAI.md against the shipped code
 
-`Gg2.Tests.BotAiConstraintsTests`, and the four indexed loops it forced in
+`GG2.Tests.BotAiConstraintsTests`, and the four indexed loops it forced in
 `SpawnRooms`, `KillBoxes`, `MoveBoxes` and `ControlPoints`.
 
 Most of `docs/BOTAI.md` is design-intent prose no test can hold, but five items
@@ -2895,7 +2895,7 @@ capture zones (no CTF map has one). All four are indexed loops now: an interface
 call per element, no allocation, and these lists are a handful of rectangles.
 
 ⚠️ **`IReadOnlyList<T>` on a per-tick path is the trap, not `foreach`.** The rule
-worth carrying: inside `Gg2.Simulation`, a collection that the tick walks must
+worth carrying: inside `GG2.Simulation`, a collection that the tick walks must
 arrive as an array or a span, or be indexed — and a `foreach` that measures zero
 today may only be walking an empty list.
 
@@ -2913,11 +2913,11 @@ rather than a convention.
 item 3 (recording human play with the parity recorder — the only item with a
 deadline, since data not collected during the first public games does not exist
 afterwards), item 8 (the socketless match runner, which is phase 8's), item 9
-(`SIM_UUID` and refusing a mismatched policy), and item 10 (`Gg2.Env`).
+(`SIM_UUID` and refusing a mismatched policy), and item 10 (`GG2.Env`).
 
 ### Phase 7 item 4u: SIM_UUID, and a surface that is chosen rather than swept
 
-`Gg2.Simulation.SimulationStamp`. Gated by `SimulationStampTests`. The
+`GG2.Simulation.SimulationStamp`. Gated by `SimulationStampTests`. The
 specification is `docs/BOTAI.md` item 9; the idiom is the reference's own
 `PROTOCOL_UUID`.
 
@@ -2961,7 +2961,7 @@ entries**, and `Require` throws on a mismatch.
   stamp built on it changes every time the server restarts, so it would refuse
   every policy including one this build had just trained. This is a change
   detector rather than a security boundary, so a non-cryptographic hash is right
-  and pulling `System.Security.Cryptography` into `Gg2.Simulation` would not be.
+  and pulling `System.Security.Cryptography` into `GG2.Simulation` would not be.
 - ⚠️ **Reflection's field order is unspecified**, so the constants are sorted by
   name — a stamp that depended on it would move between runtimes for nothing.
   Measured: reversing the order fails the pinned test.
@@ -3071,7 +3071,7 @@ hiding something; the sweep is what established that the third was not.
 
 ### Item 12: the rollout-search bot, and the assumption it is built on
 
-`Gg2.Bots.RolloutSearch`, built for `gg2-rl` phase 1. `docs/BOTAI.md` item 12 is
+`GG2.Bots.RolloutSearch`, built for `gg2-rl` phase 1. `docs/BOTAI.md` item 12 is
 the requirement; this is what it cost and what to know before touching it.
 
 **What it is.** On each decision it copies the `WorldState`, plays every
@@ -3195,7 +3195,7 @@ does not work.** `BotClassKeys` refuses to fire inside
 deliberately does **not** move the bot away, because *"where this bot stands is
 the objective layer's decision rather than this one's"*. So a goal of the enemy's
 own position walks a soldier to point blank and leaves it there, not firing:
-measured in `Gg2.Env`'s duels as **250 decisions of walking, arrival 59px away
+measured in `GG2.Env`'s duels as **250 decisions of walking, arrival 59px away
 against a band of 110, and zero shots**.
 
 The spot search fixes it and is machinery that already existed for the generator
@@ -3232,7 +3232,7 @@ bug hid:
 Deaths across those three seeds went **42 → 50** at the same time. The bots spread
 out *and* killed each other more. `MatchActuallyHappensTests` gates both halves.
 
-#### ✅ And `Gg2.Env`'s duels use the same branch
+#### ✅ And `GG2.Env`'s duels use the same branch
 
 A duel runs on `ScenarioWorld`, a world with no gamemode at all, so it falls to
 this branch like any TDM map. ⚠️ **`DuelEnv` had a hand-rolled `GoalLocked` chase
@@ -3441,7 +3441,7 @@ flight anomaly is ruled out; look elsewhere.
 
 ### ✅ The flight harness — `EdgeFlights`, and the honest number
 
-`src/Gg2.Bots/EdgeFlights.cs` is a sweep harness, in the library beside
+`src/GG2.Bots/EdgeFlights.cs` is a sweep harness, in the library beside
 `ScenarioWorld` rather than in a test, because the lane that generates a cache
 is the one that wants to sweep it:
 
@@ -4316,7 +4316,7 @@ undecided before, so the routing fix did not resolve it either way.
 MATCH HARNESS.** Eight identical mirror cells across a pin move say the physics
 and the duel path did not drift — and the duel path is not what changed on
 2026-09-06. `tools/bench`'s match-level modes were rewritten that day (the class
-roster, the arm construction, two null dereferences), they are not in `Gg2.sln`,
+roster, the arm construction, two null dereferences), they are not in `GG2.sln`,
 and they have no tests. **So a green re-score is not clearance for a match-level
 number**, and the two are easy to read as one result because they arrived
 together. The rule the training lane wrote for their first match-level run after
@@ -5090,7 +5090,7 @@ after the pregame, or with bots of one team on a locked hill.
 ## ⚠️ The observation encoder lied twice, and neither lie could go red
 
 Found 2026-09-03 by the `gg2-rl` lane auditing what the policy actually sees,
-against `src/Gg2.Bots/ObservationWriter.cs`. Both bugs were silent by
+against `src/GG2.Bots/ObservationWriter.cs`. Both bugs were silent by
 construction, both had been shipping for the whole of phase 9, and **no test in
 either repo could have caught either one** — which is the reason they are written
 down here rather than left to the fixtures.
@@ -5269,18 +5269,18 @@ engagement window. The roster of each run was read off all eight runs rather
 than assumed.
 
 **Cleared to `6126b34` over the whole dependency closure, not the stamp** (see
-the next section for why the stamp is not enough): `src/Gg2.Bots` has **0
-non-comment changed lines** across the range; `Gg2.Env`, `Gg2.Maps`, `Gg2.Nav`,
+the next section for why the stamp is not enough): `src/GG2.Bots` has **0
+non-comment changed lines** across the range; `GG2.Env`, `GG2.Maps`, `GG2.Nav`,
 `nav/` and `maps/` do not appear in the diff at all; `tools/bench`'s only
 non-comment change is the new `Smoke.cs` plus an 8-line `BENCH_SMOKE` guard
 that returns early. **Q21 ran `BENCH_SWEEP` → `RangeSweep.Run`** (`Program.cs`
 line 178; `BENCH_PERMAP` is a different mode it never invoked), and
 `RangeSweep.cs` is untouched across the range. The 64 non-comment lines in
-`src/Gg2.Server/BotBrain.cs` are **unreachable from the bench**: the project
-graph is `bench → {Gg2.Env, Gg2.Bots, Gg2.Simulation} → {Gg2.Protocol,
-Gg2.Maps} → Gg2.Protocol → nothing`, so no path reaches `Gg2.Server`.
+`src/GG2.Server/BotBrain.cs` are **unreachable from the bench**: the project
+graph is `bench → {GG2.Env, GG2.Bots, GG2.Simulation} → {GG2.Protocol,
+GG2.Maps} → GG2.Protocol → nothing`, so no path reaches `GG2.Server`.
 ⚠️ Verified **to the leaves**, not at the first edge — "bench.csproj does not
-reference `Gg2.Server`" is a statement about one file, and a closure is a
+reference `GG2.Server`" is a statement about one file, and a closure is a
 graph.
 
 | checkpoint | policy ticks | death share | Δ | 2·SE | t | round wins | Δ | 2·SE | t |
@@ -5346,18 +5346,18 @@ objective was visible, so a null would have been a real null rather than an
 instrument floor.
 
 
-### ⛔ A stamp chain is not a clearance: `SIM_UUID` is blind to `Gg2.Bots`
+### ⛔ A stamp chain is not a clearance: `SIM_UUID` is blind to `GG2.Bots`
 
 **2026-09-06.** Clearing a `gg2-rl` number to a newer commit, this repo checked
-`git diff c434229..6126b34 -- src/Gg2.Simulation src/Gg2.Env/ObservationWriter.cs`,
+`git diff c434229..6126b34 -- src/GG2.Simulation src/GG2.Env/ObservationWriter.cs`,
 found it empty, and concluded the number described the current build. The
 conclusion was right and **the evidence did not cover the question**: the bot
 layer had moved in that range (`PolicyController.cs` +9, `PolicyNetwork.cs`
 +20) and the check never looked there.
 
-⚠️ **`SIM_UUID` deliberately does not cover `src/Gg2.Bots`** — a policy is a
+⚠️ **`SIM_UUID` deliberately does not cover `src/GG2.Bots`** — a policy is a
 bot and this project's bots are its own — so **no stamp agreement can clear a
-bot-layer change**, and a clean `Gg2.Simulation` diff says nothing about it.
+bot-layer change**, and a clean `GG2.Simulation` diff says nothing about it.
 That is the same coverage gap that made `RocketModel.Capable` need a re-score
 with no stamp moving.
 
@@ -5374,7 +5374,7 @@ incomplete check and a sufficient one are indistinguishable from their
 output**; only the closure they cover tells them apart.
 
 **The rule, in order.** Widen to the layer the stamp cannot see — for a bench
-number that is `Gg2.Bots`, `Gg2.Env`, the maps and nav, and the bench mode
+number that is `GG2.Bots`, `GG2.Env`, the maps and nav, and the bench mode
 itself, plus a check that anything else which moved is not in the instrument's
 project closure. Then **read** the diff rather than characterise it. Named by
 the `gg2-rl` lane, which caught it in this repo's own clearance.
@@ -5382,7 +5382,7 @@ the `gg2-rl` lane, which caught it in this repo's own clearance.
 ⛔ **It took THREE passes to state that rule, and each pass was a strict subset
 of the next — which is the section's real content.** This repo checked what the
 SIMULATION runs on. `gg2-rl` widened to what the POLICY runs against
-(`Gg2.Bots`) and stopped, never looking at `tools/bench` — **the thing that
+(`GG2.Bots`) and stopped, never looking at `tools/bench` — **the thing that
 actually produced the number**. This repo then widened to the instrument but
 named the wrong mode in the write-up (`PerMap`; Q21 ran `BENCH_SWEEP` →
 `RangeSweep`), a wrong supporting sentence under a right conclusion, sending
@@ -5392,7 +5392,7 @@ is the INSTRUMENT'S project graph — not the stamp surface, and not one layer
 past it.**
 
 ⚠️ **A textual match is not a dependency, in that direction too.** Checking the
-closure by `grep -l "Gg2.Server"` over the csproj files hits three of them —
+closure by `grep -l "GG2.Server"` over the csproj files hits three of them —
 all XML comments stating the dependency is *deliberately absent*. A grep that
 would have reported the opposite of the truth, caught only by reading the
 lines. Same rule as reading the diff, pointing the other way.
@@ -6370,7 +6370,7 @@ Run-up repeats over the same corpus slice: `ctf_avanti` **412 to 90**, worst
 streak **35 to 5**, and the `178->165` family that dominated its table is gone.
 `koth_corinth` 155 to 155 and `ctf_truefort` 78 to 78, both byte-identical.
 
-`dotnet test Gg2.sln`: 3,502 passed, 0 failed, 14 skipped. **No pinned
+`dotnet test GG2.sln`: 3,502 passed, 0 failed, 14 skipped. **No pinned
 measurement moved** — the three end-to-end bot pins all live on `ctf_truefort`,
 which has no setup gates, and `BotObjectiveTests`' intel run stops at the grab.
 
@@ -6543,7 +6543,7 @@ corpus sweep is a measurement of.
 
 ## The cloak is not the whole of what a bot cannot see
 
-`Gg2.Bots.BotVisibility`, and the four candidate loops that call it —
+`GG2.Bots.BotVisibility`, and the four candidate loops that call it —
 `BotTargeting.EnemyWithin`, `BotTargeting.Find`, `BotCombat.StillWorthShootingAt`
 and `BotMines.AnyCharacterOn`. All four used to spell the question as
 `candidate.Cloak`, which is right for a spy walking and wrong for a spy stabbing.
@@ -6645,7 +6645,7 @@ decoration.
 
 ## The medic: who it beams, and the one role it never takes
 
-Three rules, all in `Gg2.Bots.BotAlly` and `BotClassProfile.DefendEvery`. They
+Three rules, all in `GG2.Bots.BotAlly` and `BotClassProfile.DefendEvery`. They
 arrived together from one report — a person playing spy and medic against bots —
 and each is independently gated.
 
@@ -6731,7 +6731,7 @@ soldiers either side of a medic against the same pair either side of a pyro.
 
 ### What did and did not move
 
-`dotnet test Gg2.sln`: 3,540 passed, 0 failed, 15 skipped. **None of the three
+`dotnet test GG2.sln`: 3,540 passed, 0 failed, 15 skipped. **None of the three
 pinned end-to-end measurements moved, and they could not have** — `Scenarios.cs`
 places only Soldier, Heavy and Sniper, so no scenario has a medic in it at all.
 That is the honest reason rather than an unmoved pin nobody checked.

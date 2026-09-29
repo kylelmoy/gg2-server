@@ -1,5 +1,5 @@
 using System.Globalization;
-using Gg2.Bots;
+using GG2.Bots;
 
 namespace Bench;
 

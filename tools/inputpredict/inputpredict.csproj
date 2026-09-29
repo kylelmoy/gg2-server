@@ -12,12 +12,12 @@
          projects it references keep the strict settings. -->
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
 
-    <!-- Deliberately NOT in Gg2.sln, like tools/bench. Build it explicitly. -->
+    <!-- Deliberately NOT in GG2.sln, like tools/bench. Build it explicitly. -->
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/Gg2.Protocol/Gg2.Protocol.csproj" />
-    <ProjectReference Include="../../src/Gg2.Maps/Gg2.Maps.csproj" />
-    <ProjectReference Include="../../src/Gg2.Server/Gg2.Server.csproj" />
-    <ProjectReference Include="../../src/Gg2.Parity/Gg2.Parity.csproj" />
+    <ProjectReference Include="../../src/GG2.Protocol/GG2.Protocol.csproj" />
+    <ProjectReference Include="../../src/GG2.Maps/GG2.Maps.csproj" />
+    <ProjectReference Include="../../src/GG2.Server/GG2.Server.csproj" />
+    <ProjectReference Include="../../src/GG2.Parity/GG2.Parity.csproj" />
   </ItemGroup>
 </Project>

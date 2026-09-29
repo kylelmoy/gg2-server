@@ -21,7 +21,7 @@ and new features rather than phases.
 | 6 | all eight gamemodes, round after round, every `FULL_UPDATE` field real | closed — a stock client has survived four gamemode changes in one session |
 | 7 | bots: the input seam, nav, A\*, the follower, combat, the objective layer, the population manager | closed, with a number |
 | 8 | unpaced ticking, the human-play recorder, the headless match runner, the control port | closed — 44 matches across all 22 maps in 3.3s, 3,548x real time |
-| 9 | a learned policy: `NpyFile`, `PolicyNetwork`, `HybridBot`, `tools/bench/`; the `Gg2.Env` seam now lives in `gg2-rl` | the runner is built and gated — see below for what a checkpoint has been measured to do |
+| 9 | a learned policy: `NpyFile`, `PolicyNetwork`, `HybridBot`, `tools/bench/`; the `GG2.Env` seam now lives in `gg2-rl` | the runner is built and gated — see below for what a checkpoint has been measured to do |
 
 **Every class is implemented.** All ten are armed: rockets, mines, healing
 beams, ubercharge, afterburn, the airblast, the sentry gun, the sniper's scope,
@@ -193,7 +193,7 @@ physics carry invalidated it, and this build is `f10afbdadc795d77`.
 
 **Re-measured against the current build on 2026-09-06** by the training lane
 (`gg2-rl`, pinned at `c434229`, cleared to master over the whole dependency
-closure — `src/Gg2.Bots` included, because `SIM_UUID` cannot see it; see
+closure — `src/GG2.Bots` included, because `SIM_UUID` cannot see it; see
 `TRAPS-BOTS.md`, "a stamp chain is not a clearance"). 21 maps × 200 matches an arm, four seeds, 150px window, 67,200
 matches: the `rest3` checkpoint improves death share by **−2.82 points**
 (2·SE 0.69, t −8.22) **and** round wins by **+3.02** (2·SE 2.14, t +2.83), all

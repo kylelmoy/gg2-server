@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    NOT in Gg2.sln, the same way tools/bench is not: this is a measurement and
-    stress instrument, not shipped code, and a `dotnet test Gg2.sln` should not
+    NOT in GG2.sln, the same way tools/bench is not: this is a measurement and
+    stress instrument, not shipped code, and a `dotnet test GG2.sln` should not
     build it. Build it explicitly, as tools/soak/README.md shows.
   -->
 
@@ -12,17 +12,17 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>soak-players</AssemblyName>
-    <RootNamespace>Gg2.Soak</RootNamespace>
+    <RootNamespace>GG2.Soak</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
     <!--
-      Gg2.Protocol and nothing else. The handshake, the message ids and the
+      GG2.Protocol and nothing else. The handshake, the message ids and the
       quantisation are already implemented and tested there; hand-rolling them
       here would be a second implementation of the wire whose bugs would read as
       the server's.
     -->
-    <ProjectReference Include="../../src/Gg2.Protocol/Gg2.Protocol.csproj" />
+    <ProjectReference Include="../../src/GG2.Protocol/GG2.Protocol.csproj" />
   </ItemGroup>
 
 </Project>

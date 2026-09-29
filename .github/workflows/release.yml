@@ -38,7 +38,7 @@ jobs:
       - name: Test
         env:
           GG2_REFERENCE: ${{ github.workspace }}/reference
-        run: dotnet test Gg2.sln -c Release
+        run: dotnet test GG2.sln -c Release
 
   build:
     needs: test
@@ -68,7 +68,7 @@ jobs:
       # carries the maps, nav graphs and policy checkpoints beside the binary.
       - name: Publish
         run: >
-          dotnet publish src/Gg2.Host/Gg2.Host.csproj
+          dotnet publish src/GG2.Host/GG2.Host.csproj
           -c Release -r ${{ matrix.rid }} --self-contained true
           -p:Version=${{ steps.version.outputs.version }}
           -o out/gg2-server

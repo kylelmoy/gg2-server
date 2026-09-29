@@ -1,5 +1,5 @@
-using Gg2.Bots;
-using Gg2.Protocol;
+using GG2.Bots;
+using GG2.Protocol;
 
 namespace Bench;
 
@@ -23,7 +23,7 @@ namespace Bench;
 /// "verified" by building.</b>
 /// </para>
 /// <para>
-/// ⛔ <b>It stays OUT of <c>Gg2.sln</c> and out of CI, deliberately</b>
+/// ⛔ <b>It stays OUT of <c>GG2.sln</c> and out of CI, deliberately</b>
 /// (<c>CLAUDE.md</c>: "dotnet test should not build a benchmark and CI should not
 /// run one"). This is one command a person runs after touching this directory,
 /// not a test. That is the whole design: the rule was never the problem — nobody

@@ -29,9 +29,9 @@
 // needs a snapshot/restore on `PortedSimulation`, which does not expose one
 // today.
 using System.Globalization;
-using Gg2.Maps;
-using Gg2.Protocol;
-using Gg2.Server;
+using GG2.Maps;
+using GG2.Protocol;
+using GG2.Server;
 
 namespace InputPredict;
 
