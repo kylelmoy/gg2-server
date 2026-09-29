@@ -17,6 +17,12 @@ Download the archive for your platform from
 ./gg2-server --map koth_valley --bots 12
 ```
 
+Or run the container image, which needs only Docker:
+
+```bash
+docker run -d --name gg2 -p 8190:8190 ghcr.io/kylelmoy/gg2-server:latest --map koth_valley --bots 12
+```
+
 To build from source instead, you need the **.NET 10 SDK**:
 
 ```powershell
@@ -92,16 +98,28 @@ and run `gg2-server`. The server also runs on Windows.
 Pushing a tag named `v<version>` builds and tests both platforms and publishes a
 release (`.github/workflows/release.yml`).
 
-Each release also pushes a container image to
-`ghcr.io/kylelmoy/gg2-server`. It runs the admin panel on 8191 by default, over
-plain HTTP and reachable from outside the container:
+### Docker
+
+Each release pushes an image to `ghcr.io/kylelmoy/gg2-server`, tagged with its
+version (`:1.0.1`) and `:latest`. Arguments after the image name are ordinary
+server options.
 
 ```bash
-docker run -d --restart on-failure -p 8190:8190 -p 8191:8191 ghcr.io/kylelmoy/gg2-server:latest --bots 8 --lobby
+docker run -d --name gg2 --restart on-failure   -p 8190:8190 -p 127.0.0.1:8191:8191   -v /srv/gg2:/data   ghcr.io/kylelmoy/gg2-server:latest --config /data/gg2.ini --bots 8 --lobby
 ```
 
-The panel password is printed in `docker logs`. `docs/DEPLOY.md`, "Running in
-Docker", has the rest.
+| | |
+|---|---|
+| Ports | `8190/tcp` is the game. `8191/tcp` is the admin panel, which is always on in the image. |
+| Admin panel | Plain HTTP, and listening on every interface inside the container. Publishing it as `127.0.0.1:8191:8191` (as above) keeps it off the network; reach it with `ssh -N -L 8191:127.0.0.1:8191 <host>`. Publish it as `8191:8191` only behind TLS (`--web-tls`, or a reverse proxy). |
+| Password | Printed in `docker logs gg2` unless `[Web] Password` in the config file sets one. A generated one changes every time the container is recreated. |
+| Config | `--config` pointing into a mounted directory, so the panel's settings page can save it. The file must exist. |
+| Lobby | Not listed unless `--lobby` is passed. |
+| Updating | `docker pull ghcr.io/kylelmoy/gg2-server:latest`, then remove and re-run the container. |
+| Stopping | `docker stop gg2` shuts down cleanly and takes the lobby listing down. |
+
+[`docs/DEPLOY.md`](docs/DEPLOY.md), "Running in Docker", has the rest. To build
+the image yourself: `docker build -t gg2-server .`
 
 [`docs/DEPLOY.md`](docs/DEPLOY.md) covers hardware sizing, a systemd unit,
 shutting down with SIGTERM, and updating several hosts. Read
