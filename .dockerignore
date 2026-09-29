@@ -1,0 +1,13 @@
+# The image builds src/GG2.Host and ships maps/, nav/, checkpoints/ and LICENSE.
+**/bin/
+**/obj/
+.git/
+.github/
+.claude/
+tests/
+tools/
+traces/
+deploy/
+docs/
+scripts/
+artifacts/

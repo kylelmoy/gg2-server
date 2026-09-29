@@ -92,6 +92,17 @@ and run `gg2-server`. The server also runs on Windows.
 Pushing a tag named `v<version>` builds and tests both platforms and publishes a
 release (`.github/workflows/release.yml`).
 
+Each release also pushes a container image to
+`ghcr.io/kylelmoy/gg2-server`. It runs the admin panel on 8191 by default, over
+plain HTTP and reachable from outside the container:
+
+```bash
+docker run -d --restart on-failure -p 8190:8190 -p 8191:8191 ghcr.io/kylelmoy/gg2-server:latest --bots 8
+```
+
+The panel password is printed in `docker logs`. `docs/DEPLOY.md`, "Running in
+Docker", has the rest.
+
 [`docs/DEPLOY.md`](docs/DEPLOY.md) covers hardware sizing, a systemd unit,
 shutting down with SIGTERM, and updating several hosts. Read
 [`docs/HARDENING.md`](docs/HARDENING.md) before putting the server on the public

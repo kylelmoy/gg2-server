@@ -224,6 +224,38 @@ ssh server chmod +x /opt/gg2-server/gg2-server
 **The executable bit does not survive `scp` from Windows**, which is what the
 second line is for.
 
+## Running in Docker
+
+Every tagged release also pushes an image to GHCR,
+`ghcr.io/<owner>/<repo>:<version>` and `:latest`, built from the `Dockerfile`
+at the root by `release.yml`'s `docker` job, behind the same test run as the
+archives. `docker build -t gg2-server .` builds the same image from a checkout.
+It is the self-contained linux-x64 publish on `dotnet/runtime-deps`, running as
+the non-root `app` user from `/app`.
+
+```bash
+docker run -d --name gg2 --restart on-failure   -p 8190:8190 -p 8191:8191 -v /srv/gg2:/data   ghcr.io/<owner>/<repo>:latest --config /data/gg2.ini --bots 8
+```
+
+| | |
+|---|---|
+| Ports | 8190/tcp the game, 8191/tcp the admin panel. |
+| Entrypoint | `gg2-server --web 8191 --web-bind 0.0.0.0`. Arguments after the image name are appended, so any flag works as it does on a bare host. |
+| The panel | **On and reachable by default, over plain HTTP.** Securing it is the operator's call: `-p 127.0.0.1:8191:8191` and an SSH tunnel, `--web-tls`, or a TLS-terminating proxy (`docs/WEBADMIN.md`). Because port and bind are flags, they beat the file: `[Web] Port` and `Bind` in a config file do nothing here. |
+| Password | Generated and printed to `docker logs` unless `[Web] Password` in the config file or `--web-password` sets one. A generated one survives the panel's restart button but not a container restart. |
+| Config | `--config` pointing into a mounted directory, not a mounted single file, so the settings page can rewrite it. A missing config file is a startup error. |
+| Writable state | `nav/` inside the image takes a custom map's graph built at the map change, and is lost with the container, which only costs rebuilding it. `--record`, `--analytics`, `--geoip` and `--log-file` paths should point into the mounted volume. |
+| Stopping | `docker stop` sends SIGTERM, which the server handles (section 2 below). |
+| Restarting | `--restart on-failure`, for the reason the systemd unit gives: exit 3 is the tick-fault budget, and exit 0 is an operator stopping it on purpose. |
+| Logs | stdout and stderr, so `docker logs`; no `--log-file` needed. |
+
+**What is not verified**: none of this has run on a live host. The publish the
+image wraps is the one the archives ship, and the lobby listing has not been
+checked for the port a container advertises behind `-p` with a different host
+port; `--network host` sidesteps the question. What would show a problem: a
+server that starts but never appears in the lobby, or appears with the wrong
+port.
+
 ## Updating many machines at once
 
 `scp -r` over a live install is the thing that stops scaling, and not because of
