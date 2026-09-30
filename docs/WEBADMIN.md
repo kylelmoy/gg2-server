@@ -347,7 +347,7 @@ All JSON, all under the session cookie except the first four.
 
 | | | |
 |---|---|---|
-| `GET /`, `/app.css`, `/common.js`, `/analytics.js`, `/app.js`, `/favicon.svg` | — | the page, embedded in the assembly |
+| `GET /`, `/app.css`, `/common.js`, `/analytics.js`, `/settings.js`, `/app.js`, `/favicon.svg` | — | the page, embedded in the assembly |
 | `GET /world.json` | — | the analytics map's coastlines and markers, embedded. **Served without a session**, like the page: it is the same public-domain geometry for every server in the world and says nothing about this one |
 | `GET /api/session` | — | signed in?, TLS?, server name, CSRF token if signed in |
 | `POST /api/login` | `{password}` | sets the cookie, returns the CSRF token |
@@ -493,6 +493,14 @@ panel and the config editor from the fixed table `WebAssets.Fonts`. Each stack
 ends in system faces, so a missing file degrades rather than breaks.
 `WebAdminTests.ThePageIsServedWithoutSigningIn` checks each font route returns
 WOFF2 bytes.
+
+**The mark is `favicon.svg`, and every logo on both pages is that file.** It is
+"gg2" in a hand-drawn 4-pixel console face, amber `#ffb347` on a near-black
+tile, drawn on a 16 × 16 grid with `shape-rendering="crispEdges"`. It is sharp
+only at whole multiples of 16 px, so it is placed at 32 (top bars) and 48 (the
+sign-in card). **The game's own icon (`Source/gg2/game icon.ico`) is not used**:
+it is a copy of the Team Fortress 2 logo, which is Valve's mark, and GG2's MPL
+licence cannot grant it.
 
 **The chart series are NOT theme tokens and do not move with the accent.**
 They are the data-viz palette's dark steps: worst all-pairs CVD ΔE 9.4, worst
