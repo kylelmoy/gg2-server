@@ -49,7 +49,6 @@
     </div>
 
     <div class="chips" id="chips">
-      <a class="chip chip-host" id="chip-host" href="/" title="Viewing a fleet member through the hub; back to the hub's own server" hidden><i class="chip-key">member</i><b id="chip-host-name">—</b></a>
       <span class="chip" id="chip-map" title="Current map"><i class="chip-key">map</i><b>—</b></span>
       <span class="chip" id="chip-mode" title="Gamemode"><i class="chip-key">mode</i><b>—</b></span>
     </div>
@@ -63,6 +62,10 @@
       <button class="btn btn-quiet" id="logout" type="button">Sign out</button>
     </div>
   </header>
+
+  <!-- Only on a hub: one tab per server, the hub's own first. A tab is a link to
+       /?host=<member>, so switching is the page load app.js relies on. -->
+  <nav class="hosts" id="hosts" aria-label="Servers" hidden></nav>
 
   <div class="banner" id="banner" hidden role="status"></div>
 

@@ -236,6 +236,11 @@ pairing code) and lists every member with its map, players, tick and build.
   `/h/<member>`; session, sign-in and sign-out stay on the hub, which is what the
   browser is signed in to. Switching member is a page load, so no graph, log or
   chat buffer can carry over from another server.
+- **A tab strip under the top bar switches server**: *Hub* first, then each
+  member, each tab a plain link to `?host=` with a dot for whether the hub
+  reached that member on its last overview. It re-reads `/api/fleet` every 20
+  seconds while the browser tab is visible — each read asks every member for a
+  full state, which is why it is not faster.
 - **The pass-through is an allowlist of member routes** (`ProxiedRoutes`), and
   `login` and `logout` are not on it. A route added to the panel is not
   reachable through a hub until it is added there.

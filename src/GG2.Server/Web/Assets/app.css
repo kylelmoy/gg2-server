@@ -1450,10 +1450,41 @@ kbd {
 
 /* ---------- fleet ---------------------------------------------------------- */
 
-/* The member chip is a link back to the hub's own server, so it reads as one. */
-.chip-host { color: var(--foreground); text-decoration: none; background: var(--accent-soft); }
-.chip-host:hover { background: var(--accent-soft-hover); }
-.chip-host[hidden] { display: none; }
+/* The server tabs: the .seg track and pill, but links, and they scroll sideways
+   rather than wrap or clip when a fleet outgrows the width. */
+.hosts {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--default);
+  border-radius: var(--radius-xl);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.hosts[hidden] { display: none; }
+
+.host-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  border-radius: var(--radius-lg);
+  color: var(--muted);
+  text-decoration: none;
+  font: 500 var(--text-tiny) var(--font-sans);
+  white-space: nowrap;
+  transition: background 0.15s var(--ease), color 0.15s var(--ease);
+}
+
+.host-tab:hover { color: var(--foreground); }
+.host-tab[aria-current="page"] { background: var(--segment); color: var(--foreground); }
+.host-tab:first-child span:last-child { font-family: var(--font-display); letter-spacing: 0.05em; text-transform: uppercase; }
+
+.host-dot { width: 6px; height: 6px; border-radius: var(--radius-pill); background: var(--success); flex: none; }
+.host-dot.is-down { background: var(--danger); }
 
 .fleet-table td.mono { font-family: var(--font-mono); }
 .fleet-table td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }

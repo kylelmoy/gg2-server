@@ -2353,17 +2353,76 @@ window.addEventListener('resize', () => {
  * own state object, fetched by the hub from all of them at once.
  */
 async function initFleet() {
-  if (member) {
-    $('chip-host').hidden = false;
-    $('chip-host-name').textContent = member;
-  }
+  let reply;
 
   try {
-    const reply = await (await fetch('/api/fleet')).json();
-    $('fleet-open').hidden = !reply.hub;
+    reply = await (await fetch('/api/fleet')).json();
   } catch {
     // No fleet controls is the right degradation for a panel that cannot tell.
+    return;
   }
+
+  $('fleet-open').hidden = !reply.hub;
+  if (!reply.hub) return;
+
+  renderHosts(reply.members || []);
+
+  // The dots are the only thing here that goes stale, and the overview asks
+  // every member for a full state, so this is slow on purpose and skipped while
+  // the tab is in the background.
+  setInterval(async () => {
+    if (document.hidden) return;
+    try {
+      const again = await (await fetch('/api/fleet')).json();
+      if (again.hub) renderHosts(again.members || []);
+    } catch {
+      // Keep the last tabs; the next round tries again.
+    }
+  }, 20000);
+}
+
+/**
+ * The server tabs under the top bar: the hub's own server, then each member,
+ * with a dot for whether the hub reached it on its last try. Each is a plain
+ * link, so a middle click opens a member in a new tab.
+ */
+function renderHosts(members) {
+  const tabs = [hostTab('', 'Hub', true, 'This server: the hub itself')];
+
+  for (const m of members) {
+    const s = m.state;
+    const map = s && (typeof s.map === 'string' ? s.map : (s.map && s.map.name));
+    const humans = s ? s.players.filter((p) => p.connected).length : 0;
+    const title = s
+      ? `${s.server.name} — ${map || 'no map'}, ${humans} player${humans === 1 ? '' : 's'}`
+      : (m.error || 'unreachable');
+    tabs.push(hostTab(m.name, m.name, !!s, title));
+  }
+
+  // A member removed since this page loaded still names where the page is.
+  if (member && !members.some((m) => m.name === member)) {
+    tabs.push(hostTab(member, member, false, 'not a member of this hub'));
+  }
+
+  $('hosts').replaceChildren(...tabs);
+  $('hosts').hidden = false;
+}
+
+function hostTab(name, label, up, title) {
+  const a = document.createElement('a');
+  a.className = 'host-tab';
+  a.href = name ? `/?host=${encodeURIComponent(name)}` : '/';
+  a.title = title;
+  if (name === member) a.setAttribute('aria-current', 'page');
+
+  const dot = document.createElement('span');
+  dot.className = up ? 'host-dot' : 'host-dot is-down';
+
+  const text = document.createElement('span');
+  text.textContent = label;
+
+  a.append(dot, text);
+  return a;
 }
 
 async function loadFleet() {
@@ -2422,6 +2481,7 @@ async function loadFleet() {
   });
 
   $('fleet-rows').replaceChildren(...rows);
+  renderHosts(reply.members || []);
   $('fleet-empty').hidden = rows.length > 0;
   $('fleet-sub').textContent = `${rows.length} member${rows.length === 1 ? '' : 's'}, each pinned to its own certificate.`;
 }
