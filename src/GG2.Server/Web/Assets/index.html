@@ -321,7 +321,7 @@
           <div class="control">
             <label for="map-pick" data-t="page.mapCard.changeTo"></label>
             <div class="row">
-              <input list="map-list" id="map-pick" data-t-placeholder="page.mapCard.search" spellcheck="false" autocomplete="off">
+              <input type="text" list="map-list" id="map-pick" data-t-placeholder="page.mapCard.search" spellcheck="false" autocomplete="off">
               <datalist id="map-list"></datalist>
               <button class="btn btn-primary" id="map-go" type="button" data-t="page.mapCard.go"></button>
             </div>
@@ -333,7 +333,7 @@
             <ol class="rot-list" id="rotation-list"></ol>
             <p class="hint" id="rotation-empty" data-t="page.mapCard.rotationEmpty"></p>
             <div class="row">
-              <input list="map-list" id="rotation-pick" data-t-placeholder="page.mapCard.addMap" spellcheck="false" autocomplete="off">
+              <input type="text" list="map-list" id="rotation-pick" data-t-placeholder="page.mapCard.addMap" spellcheck="false" autocomplete="off">
               <button class="btn" id="rotation-add" type="button" data-t="page.mapCard.add"></button>
             </div>
           </div>
@@ -346,7 +346,7 @@
         <p class="empty" id="chat-empty" data-t="page.chat.empty"></p>
         <form class="chat-form" id="chat-form" autocomplete="off">
           <div class="row">
-            <input id="chat-input" maxlength="255" data-t-placeholder="page.chat.placeholder" data-t-aria-label="page.chat.messageLabel">
+            <input type="text" id="chat-input" maxlength="255" data-t-placeholder="page.chat.placeholder" data-t-aria-label="page.chat.messageLabel">
             <button class="btn btn-primary" id="chat-send" type="submit" data-t="page.chat.send"></button>
           </div>
           <p class="hint" id="chat-hint"></p>
