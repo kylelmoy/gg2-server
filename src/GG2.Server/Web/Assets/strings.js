@@ -40,11 +40,11 @@ const STRINGS = {
       "metricPeak": "peak",
       "metricPlayers": "players",
       "metricPlaytime": "playtime",
-      "mostPlayed": "Most time played",
+      "mostPlayed": "Top by playtime",
       "perDay": "Per day",
       "place": "Place",
       "places": "Places",
-      "placesEmpty": "Nowhere resolved yet.",
+      "placesEmpty": "No places resolved.",
       "played": "Played",
       "player": "Player",
       "players": "Players",
@@ -53,10 +53,10 @@ const STRINGS = {
       "range90d": "90d",
       "rangeAll": "all",
       "title": "Analytics",
-      "topEmpty": "Nobody has connected yet.",
+      "topEmpty": "No connections yet.",
       "us": "United States",
-      "whatToPlot": "What to plot",
-      "where": "Where they connect from",
+      "whatToPlot": "Metric",
+      "where": "Connection origins",
       "world": "World"
     },
     "boot": {
@@ -64,14 +64,14 @@ const STRINGS = {
     },
     "bots": {
       "brain": "Brain",
-      "brainChange": "Changing it replaces every bot.",
+      "brainChange": "Changing it replaces all bots.",
       "brainKey": "brain",
       "brainLabel": "Bot brain",
       "fewer": "Fewer bots",
-      "fillHint": "Players in total, people and bots together. 0 turns bots off. Humans always displace bots.",
-      "fillTo": "Fill the server to",
+      "fillHint": "Target total players, humans + bots. 0 disables bots. Humans displace bots.",
+      "fillTo": "Fill target",
       "limit": "Bot limit",
-      "limitHint": "The most bots at once, whatever the fill.",
+      "limitHint": "Max concurrent bots, regardless of fill.",
       "lowerLimit": "Lower bot limit",
       "more": "More bots",
       "policy": "Policy",
@@ -83,9 +83,9 @@ const STRINGS = {
     },
     "brand": "gg2-server",
     "chat": {
-      "empty": "Nothing said yet.",
+      "empty": "No messages.",
       "messageLabel": "Message",
-      "placeholder": "Say something",
+      "placeholder": "Message",
       "send": "Send",
       "title": "Chat"
     },
@@ -99,29 +99,29 @@ const STRINGS = {
     "confirm": {
       "cancel": "Cancel",
       "confirm": "Confirm",
-      "title": "Are you sure?"
+      "title": "Confirm"
     },
     "fleet": {
-      "allOffline": "Take all offline",
-      "allOnline": "Bring all online",
+      "allOffline": "All offline",
+      "allOnline": "All online",
       "build": "Build",
-      "empty": "No members yet. Pair one below.",
-      "endRoundEverywhere": "End the round everywhere",
-      "everyServer": "Every server at once",
+      "empty": "No members. Pair one below.",
+      "endRoundEverywhere": "End round on all",
+      "everyServer": "All servers",
       "map": "Map",
       "member": "Member",
       "name": "Name",
       "namePlaceholder": "us-east",
       "pair": "Pair",
-      "pairHint": "On the server to add, set <code>[Web] Certificate=auto</code>, <code>FleetMember=1</code>, <code>Bind=0.0.0.0</code> and <code>AllowFrom=</code> this hub's address, then restart it. It prints a pairing code at startup.",
+      "pairHint": "On the member, set <code>[Web] Certificate=auto</code>, <code>FleetMember=1</code>, <code>Bind=0.0.0.0</code> and <code>AllowFrom=</code>&lt;hub address&gt;, then restart. The pairing code is printed at startup.",
       "pairTitle": "Pair a server",
       "pairingCode": "Pairing code",
       "players": "Players",
       "say": "Say",
-      "sayPlaceholder": "Say something on every server",
+      "sayPlaceholder": "Message to all servers",
       "server": "Server",
       "settings": "Fleet settings",
-      "sub": "The servers this hub manages.",
+      "sub": "Servers managed by this hub.",
       "tick": "Tick",
       "title": "Fleet",
       "url": "Panel URL",
@@ -134,16 +134,16 @@ const STRINGS = {
       "endRound": "End round",
       "fewerSeats": "Fewer seats",
       "joinPassword": "Join password",
-      "limitHint": "Seats for people, 1..48. Bots do not take one. Lowering it removes nobody.",
-      "liveNote": "Changes on this page apply now and last until the server restarts. They are not saved to the config file; Settings is for that.",
+      "limitHint": "Human seats, 1..48. Bots excluded. Lowering it kicks nobody.",
+      "liveNote": "Applied live until restart; not written to the config file. Use Settings for that.",
       "moreSeats": "More seats",
       "newPassword": "New password",
-      "offlineHint": "Disconnects every player, refuses new connections and removes the bots. This panel stays up; bring it back online from here.",
-      "passwordHint": "Asked of the next players to join; nobody already in is removed.",
+      "offlineHint": "Disconnects all players, refuses connections, removes bots. The panel stays up.",
+      "passwordHint": "Applies to new joins; connected players stay.",
       "passwordNone": "none",
       "playerLimit": "Player limit",
       "restartRound": "Restart round",
-      "roundHint": "End round goes to the next map in the rotation; restart plays this map again from the start. Both run the usual ten-second round end.",
+      "roundHint": "End round: next map in rotation. Restart round: same map from the start. Both run the 10 s round end.",
       "server": "Server",
       "set": "Set",
       "takeOffline": "Take offline",
@@ -155,7 +155,7 @@ const STRINGS = {
     "liveMap": {
       "empty": "no map loaded",
       "teleport": "Click to teleport",
-      "teleportTitle": "Click the map to move the selected player there",
+      "teleportTitle": "Click the map to teleport the selected player",
       "title": "Live map"
     },
     "log": {
@@ -163,23 +163,23 @@ const STRINGS = {
       "title": "Log"
     },
     "login": {
-      "insecure": "This connection is not encrypted. Your password crosses the network in the clear.",
+      "insecure": "Unencrypted connection: the password is sent in cleartext.",
       "password": "Password",
       "signIn": "Sign in"
     },
     "mapCard": {
       "add": "Add",
-      "addMap": "Add a map",
-      "changeHint": "Ends the round immediately for everyone on the server.",
+      "addMap": "Add map",
+      "changeHint": "Ends the current round immediately.",
       "changeTo": "Change to",
       "go": "Go",
       "rotation": "Rotation",
-      "rotationEmpty": "No rotation: the server stays on the map it is on.",
+      "rotationEmpty": "No rotation; the current map repeats.",
       "search": "Search maps",
       "title": "Map"
     },
     "perf": {
-      "fiveMinutesAgo": "5 minutes ago",
+      "fiveMinutesAgo": "5 min ago",
       "gcPerSecond": "gc/s",
       "lateTicks": "late ticks",
       "now": "now",
@@ -195,7 +195,7 @@ const STRINGS = {
       "caps": "Caps",
       "class": "Class",
       "deaths": "D",
-      "empty": "Nobody is connected.",
+      "empty": "No players connected.",
       "filter": "Filter",
       "filterLabel": "Filter players",
       "health": "Health",
@@ -213,7 +213,7 @@ const STRINGS = {
     },
     "settings": {
       "filter": "Filter settings",
-      "restartNote": "Saved settings take effect when the server restarts.",
+      "restartNote": "Saved settings apply on restart.",
       "revert": "Revert",
       "save": "Save",
       "saveRestart": "Save & restart",
@@ -225,7 +225,7 @@ const STRINGS = {
     },
     "tiles": {
       "connections": "connections",
-      "joinsNote": "joins since start, repeats counted",
+      "joinsNote": "joins since start, incl. repeats",
       "label": "Server health",
       "ms": "ms",
       "ofBudget": "of budget",
@@ -252,28 +252,28 @@ const STRINGS = {
     "toast": {
       "signedOut": "signed out",
       "refused": "refused",
-      "noAnswer": "the server did not answer"
+      "noAnswer": "no response from server"
     },
     "done": {
-      "botFill": "Bot fill set to {fill}",
-      "map": "Changing map to {name}",
+      "botFill": "Bot fill: {fill}",
+      "map": "Map change: {name}",
       "kick": "Kicked",
       "ban": "Banned",
       "offline": "Server offline",
       "online": "Server back online",
       "endRound": "Round ended",
-      "restartRound": "Restarting the round",
+      "restartRound": "Round restarting",
       "autobalanceOn": "Autobalance on",
       "autobalanceOff": "Autobalance off",
-      "playerLimit": "Player limit {value}",
+      "playerLimit": "Player limit: {value}",
       "passwordSet": "Join password set",
       "passwordRemoved": "Join password removed",
       "rotation": "Rotation updated",
       "team": "Moved to {team}",
-      "botLimit": "Bot limit {max}",
-      "botBrain": "Brain {mode}; bots replaced",
+      "botLimit": "Bot limit: {max}",
+      "botBrain": "Brain: {mode}; bots replaced",
       "teleport": "Teleported",
-      "configSet": "Settings saved",
+      "configSet": "Saved",
       "restart": "Restarting",
       "generic": "Done"
     },
@@ -283,7 +283,7 @@ const STRINGS = {
       "connecting": "connecting"
     },
     "banner": {
-      "changingMap": "Changing map to {map} in {seconds}s"
+      "changingMap": "Map change to {map} in {seconds}s"
     },
     "clock": {
       "stalemate": "stalemate",
@@ -303,47 +303,47 @@ const STRINGS = {
       },
       "offline": "offline",
       "frozen": "frozen",
-      "idle": "idle (2 Hz, nobody on)",
+      "idle": "idle (2 Hz, empty)",
       "running": "running",
       "slots": "/ {slots}"
     },
     "chat": {
-      "hintPlugin": "Sent as {name} through {plugin}.",
-      "theServer": "the server",
-      "hintNotice": "No chat plugin is loaded, so this shows as an on-screen notice to every player.",
+      "hintPlugin": "Sent as {name} via {plugin}.",
+      "theServer": "server",
+      "hintNotice": "No chat plugin loaded; sent as an on-screen notice to all players.",
       "teamOnly": "(team)"
     },
     "bots": {
       "suspended": {
-        "one": "A player turned the bots off with /bots for another {count} minute. Setting a bot count here ends it.",
-        "other": "A player turned the bots off with /bots for another {count} minutes. Setting a bot count here ends it."
+        "one": "Bots disabled via /bots for {count} more minute. Setting a bot count here cancels it.",
+        "other": "Bots disabled via /bots for {count} more minutes. Setting a bot count here cancels it."
       },
       "blocked": {
-        "one": "No bots will spawn until {count} human is connected (--bots-min-humans). There are {humans}.",
-        "other": "No bots will spawn until {count} humans are connected (--bots-min-humans). There are {humans}."
+        "one": "Bots held until {count} human connects (--bots-min-humans); {humans} connected.",
+        "other": "Bots held until {count} humans connect (--bots-min-humans); {humans} connected."
       }
     },
     "brain": {
-      "arbiter": "Arbiter {budget} µs a tick, {spent} spent on the last one.",
-      "noBots": "No bots are on the server, so nothing is driving.",
-      "humansOnly": "Controllers take the wheel against a human enemy only (--bot-engages-bots opens them to bot fights).",
+      "arbiter": "Arbiter: {budget} µs/tick budget, {spent} used last tick.",
+      "noBots": "No bots running.",
+      "humansOnly": "Controllers engage human enemies only (--bot-engages-bots enables bot-vs-bot).",
       "drives": "Drives {classes}.",
       "tierEmpty": "no bots",
       "tierBots": {
         "one": "{count} bot",
         "other": "{count} bots"
       },
-      "tierShare": "{driving} driving right now. {micro} of {polls} ticks driven since each bot spawned.",
-      "tierScripted": "The macro layer alone — every controller refuses these classes.",
-      "needsPolicy": "Needs a policy checkpoint (--policy) at startup",
-      "changeTitle": "Change the bot brain?",
-      "changeBody": "Every bot is removed and added back running {mode}. Search and the policy brains cost more tick time than scripted."
+      "tierShare": "{driving} driving now. {micro} of {polls} ticks driven since spawn.",
+      "tierScripted": "Macro layer only; no controller accepts these classes.",
+      "needsPolicy": "Requires --policy at startup",
+      "changeTitle": "Change bot brain?",
+      "changeBody": "All bots are removed and re-added running {mode}. Search and policy brains cost more tick time than scripted."
     },
     "roster": {
-      "noMatch": "No player matches that filter.",
-      "nobody": "Nobody is connected.",
+      "noMatch": "No players match.",
+      "nobody": "No players connected.",
       "botTag": "BOT",
-      "brainShare": "{brain} has driven {share}% of this bot's ticks ({micro} of {polls})",
+      "brainShare": "{brain}: {share}% of ticks ({micro}/{polls})",
       "intelTag": "INTEL",
       "actionsFor": "Actions for {name}"
     },
@@ -362,10 +362,10 @@ const STRINGS = {
     },
     "map": {
       "noImage": "no image for {name}",
-      "changeTitle": "Change the map?",
-      "changeBody": "Everyone on the server is moved to {name} and the round ends now.",
+      "changeTitle": "Change map?",
+      "changeBody": "Ends the round and moves all players to {name}.",
       "tip": "{name} · {class} · {hp} hp",
-      "selectFirst": "select a player in the table first"
+      "selectFirst": "select a player first"
     },
     "charts": {
       "tick": {
@@ -403,12 +403,12 @@ const STRINGS = {
         "bots": "bots",
         "humans": "humans"
       },
-      "aria": "{title} in {unit} over the last five minutes",
+      "aria": "{title} ({unit}), last 5 min",
       "minutesAgo": {
         "one": "{count} minute ago",
         "other": "{count} minutes ago"
       },
-      "waiting": "waiting for the first sample",
+      "waiting": "awaiting first sample",
       "caption": "{title} · {unit}"
     },
     "kpi": {
@@ -426,15 +426,15 @@ const STRINGS = {
     "menu": {
       "moveRed": "Move to Red",
       "moveBlue": "Move to Blue",
-      "moveSpectators": "Move to Spectators",
+      "moveSpectators": "Move to spectators",
       "kick": "Kick",
-      "kickTitle": "Kick this player?",
-      "kickBody": "{name} is disconnected immediately.",
+      "kickTitle": "Kick player?",
+      "kickBody": "Disconnects {name} immediately.",
       "ban": "Ban",
-      "banTitle": "Ban this player?",
-      "banBodyAddress": "{name} is disconnected and their address ({address}) is banned permanently. Anyone else on that address is banned too.",
-      "banBody": "{name} is disconnected and their address is banned permanently. Anyone else on that address is banned too.",
-      "gone": "{name} left or moved slot; nothing was done",
+      "banTitle": "Ban player?",
+      "banBodyAddress": "Disconnects {name} and permanently bans {address}, including anyone else on it.",
+      "banBody": "Disconnects {name} and permanently bans their address, including anyone else on it.",
+      "gone": "{name} left or changed slot; no action taken",
       "thatPlayer": "That player"
     },
     "system": {
@@ -494,15 +494,15 @@ const STRINGS = {
     "offline": {
       "bringOnline": "Bring online",
       "takeOffline": "Take offline",
-      "hintOffline": "Offline: connections are refused and no bots run. Settings changed here still apply.",
-      "hintOnline": "Disconnects every player, refuses new connections and removes the bots. This panel stays up; bring it back online from here.",
-      "askTitle": "Take the server offline?",
-      "askNobody": "Nobody is connected.",
+      "hintOffline": "Offline: connections refused, no bots. Live settings still apply.",
+      "hintOnline": "Disconnects all players, refuses connections, removes bots. The panel stays up.",
+      "askTitle": "Take server offline?",
+      "askNobody": "No players connected.",
       "askPeople": {
-        "one": "The {count} connected player is disconnected.",
-        "other": "All {count} connected players are disconnected."
+        "one": "Disconnects {count} player.",
+        "other": "Disconnects {count} players."
       },
-      "askBody": "New connections are refused and the bots are removed until you bring it back online. The process and this panel keep running."
+      "askBody": "Refuses connections and removes bots until brought back online. The process and panel keep running."
     },
     "password": {
       "set": "set",
@@ -510,58 +510,58 @@ const STRINGS = {
     },
     "settings": {
       "unsaved": {
-        "one": "{count} change not saved.",
-        "other": "{count} changes not saved."
+        "one": "{count} unsaved change.",
+        "other": "{count} unsaved changes."
       },
       "waiting": {
-        "one": "{count} saved setting is waiting for a restart.",
-        "other": "{count} saved settings are waiting for a restart."
+        "one": "{count} saved setting pending restart.",
+        "other": "{count} saved settings pending restart."
       },
-      "agree": "The file and the running server agree.",
-      "takeEffect": "Settings take effect when the server restarts.",
+      "agree": "File matches running server.",
+      "takeEffect": "Settings apply on restart.",
       "loading": "Loading…",
-      "noAnswer": "The server did not answer.",
-      "noFile": "no config file — started without --config",
-      "readonly": "This server was started without --config, so there is nowhere to save to. Restart it with --config <path> — the file does not have to exist yet — and these fields become editable.",
-      "managed": "This file is managed by scripts/deploy.sh --config. A save here applies to this server only, and the next push will stop for it until it is copied into deploy/config or the push is forced.",
-      "editedSincePush": "It has been edited here since it was last pushed.",
-      "pushWaiting": "A pushed configuration is waiting: the server applies it the next time nobody is connected.",
-      "noMatch": "Nothing matches that filter.",
+      "noAnswer": "No response from server.",
+      "noFile": "no config file (started without --config)",
+      "readonly": "Started without --config; nothing to save to. Restart with --config <path> (the file need not exist) to edit.",
+      "managed": "Managed by scripts/deploy.sh --config. Saves here affect this server only; the next push stops on them unless they are copied into deploy/config or the push is forced.",
+      "editedSincePush": "Edited here since the last push.",
+      "pushWaiting": "Pushed configuration pending; applied when the server is next empty.",
+      "noMatch": "No settings match.",
       "pendingTag": "restart pending",
-      "pendingTitle": "Saved; the running server still has the old value",
+      "pendingTitle": "Saved; running server still has the old value",
       "pinnedTag": "pinned",
-      "pinnedTitle": "Set by a command-line flag, which beats the file",
-      "pinnedNote": "Pinned on the command line: this server will keep using the flag’s value after a restart, whatever is saved here.",
-      "secretSet": "set — type to replace",
+      "pinnedTitle": "Set by a command-line flag, which overrides the file",
+      "pinnedNote": "Pinned by a command-line flag: the flag's value persists across restarts regardless of this file.",
+      "secretSet": "set; type to replace",
       "secretNotSet": "not set",
       "saved": {
         "one": "Saved {count} setting",
         "other": "Saved {count} settings"
       },
-      "stillPinned": "Still pinned on the command line: {names}"
+      "stillPinned": "Still pinned by command line: {names}"
     },
     "restart": {
-      "title": "Restart the server?",
-      "body": "Every player is disconnected and the round in progress is lost. The process stays up and comes back with the configuration file as it is now.",
-      "toast": "Restarting — the panel reconnects on its own",
-      "afterSave": "The settings you just saved will be applied."
+      "title": "Restart server?",
+      "body": "Disconnects all players and discards the current round. The process stays up and reloads the config file.",
+      "toast": "Restarting; the panel reconnects automatically",
+      "afterSave": "Saved settings will be applied."
     },
     "login": {
       "wrongPassword": "wrong password"
     },
     "analytics": {
-      "refused": "the server refused"
+      "refused": "refused by server"
     },
     "round": {
-      "endTitle": "End the round?",
-      "endBody": "Nobody wins, and the server moves on to the next map in the rotation after the usual ten seconds.",
-      "restartTitle": "Restart the round?",
-      "restartBody": "Nobody wins, and {map} starts again from the beginning after the usual ten seconds.",
+      "endTitle": "End round?",
+      "endBody": "No winner; advances to the next map in rotation after the 10 s round end.",
+      "restartTitle": "Restart round?",
+      "restartBody": "No winner; {map} restarts after the 10 s round end.",
       "thisMap": "this map"
     },
     "fleet": {
       "hubTab": "Hub",
-      "hubTitle": "This server: the hub itself",
+      "hubTitle": "This server (hub)",
       "tabTitle": {
         "one": "{name} — {map}, {count} player",
         "other": "{name} — {map}, {count} players"
@@ -569,32 +569,32 @@ const STRINGS = {
       "noMap": "no map",
       "unreachable": "unreachable",
       "notMember": "not a member of this hub",
-      "asking": "Asking every member…",
-      "hubNoAnswerSentence": "The hub did not answer.",
+      "asking": "Querying members…",
+      "hubNoAnswerSentence": "No response from hub.",
       "players": "{humans} + {bots} bots / {slots}",
       "tick": "{ms} ms",
       "open": "Open",
       "remove": "Remove",
       "members": {
-        "one": "{count} member, pinned to its own certificate.",
-        "other": "{count} members, each pinned to its own certificate."
+        "one": "{count} member, certificate-pinned.",
+        "other": "{count} members, certificate-pinned."
       },
       "removeTitle": "Remove {name}?",
-      "removeBody": "The hub forgets its token and stops managing it. The server itself keeps running; pairing it again needs its pairing code.",
+      "removeBody": "The hub discards its token and stops managing it. The server keeps running; re-pairing needs its pairing code.",
       "removed": "Removed {name}",
-      "hubNoAnswer": "the hub did not answer",
+      "hubNoAnswer": "no response from hub",
       "memberRefused": "{name}: {error}",
       "doneOn": {
         "one": "{done} on {count} server",
         "other": "{done} on {count} servers"
       },
       "said": "Said",
-      "offlineTitle": "Take every server offline?",
-      "offlineBody": "Everyone on every server is disconnected and new connections are refused until you bring them back online.",
+      "offlineTitle": "Take all servers offline?",
+      "offlineBody": "Disconnects all players on every server and refuses connections until brought back online.",
       "offline": "Offline",
       "online": "Online",
-      "endRoundTitle": "End the round everywhere?",
-      "endRoundBody": "Nobody wins; every server moves on to its next map.",
+      "endRoundTitle": "End round on all servers?",
+      "endRoundBody": "No winner; each server advances to its next map.",
       "roundEnded": "Round ended",
       "pairing": "Pairing…",
       "paired": "Paired with {name}",
@@ -605,7 +605,7 @@ const STRINGS = {
     }
   },
   "analytics": {
-    "off": "Analytics are off: nothing is counted and nothing is written. To turn them on, {hint}, then restart.",
+    "off": "Analytics disabled: nothing is recorded. To enable, {hint}, then restart.",
     "offHint": "set an analytics file",
     "notCollecting": "not collecting",
     "players": {
@@ -626,13 +626,13 @@ const STRINGS = {
       "joins": "joins",
       "joinsPerPlayer": "{rate} per player",
       "timePlayed": "time played",
-      "timePlayedNote": "connected time, everybody",
-      "peak": "peak at once",
+      "timePlayedNote": "total connected time",
+      "peak": "peak concurrent",
       "peakUtc": "{time} UTC",
       "peakOnHost": "{host}, {at}",
       "today": "today",
       "todayNew": "{count} new",
-      "todayNobody": "nobody yet",
+      "todayNobody": "none yet",
       "connected": "connected now",
       "connectedNote": {
         "one": "player",
@@ -640,21 +640,21 @@ const STRINGS = {
       }
     },
     "days": {
-      "none": "no days recorded yet",
+      "none": "no days recorded",
       "peak": "peak {count}"
     },
     "map": {
-      "noGeometry": "the map geometry could not be loaded",
+      "noGeometry": "map geometry failed to load",
       "onMap": {
         "one": "{n} player on the map",
         "other": "{n} players on the map"
       },
       "byState": "{n} placed by state",
-      "outOfView": "{n} outside the United States",
-      "noMarker": "{n} in a place this map has no marker for",
-      "noState": "{n} with no state — {type} is a country-level database",
-      "unresolved": "{n} the database could not place",
-      "noGeoip": "No geo database is loaded, so nobody can be placed. Pass --geoip <path.mmdb>",
+      "outOfView": "{n} outside the US",
+      "noMarker": "{n} in unmapped places",
+      "noState": "{n} without state ({type} is country-level)",
+      "unresolved": "{n} unresolved",
+      "noGeoip": "No geo database loaded; pass --geoip <path.mmdb>",
       "caption": "{parts}."
     },
     "places": {
@@ -667,15 +667,15 @@ const STRINGS = {
       "now": "now"
     },
     "foot": {
-      "player": "A \"player\" here is an address, hashed with a per-file salt — the protocol has no account, so everybody behind one address counts once and one person on a mobile network counts more than once.",
+      "player": "\"Player\" = source address, hashed with a per-file salt. The protocol has no accounts: players sharing an address count once; one person across changing addresses counts more than once.",
       "fleet": {
-        "one": "These are {count} server's figures added together. Each salts its hashes differently, so somebody who played on two of them is two players here, and a day's peak is the busiest single server's.",
-        "other": "These are {count} servers' figures added together. Each salts its hashes differently, so somebody who played on two of them is two players here, and a day's peak is the busiest single server's."
+        "one": "Sum of {count} server's figures. Salts differ per server, so a player seen on two servers counts twice; daily peak is the busiest single server's.",
+        "other": "Sum of {count} servers' figures. Salts differ per server, so a player seen on two servers counts twice; daily peak is the busiest single server's."
       },
-      "geoipRegions": "Geography from {type}, built {built} (with subdivisions).",
-      "geoipCountries": "Geography from {type}, built {built} (countries only).",
-      "noGeoip": "No geo database is loaded.",
-      "trimmed": "{n} of the oldest player records have been dropped to stay under the {cap} kept, so the all-time total counts a returning player from before that twice.",
+      "geoipRegions": "Geo: {type}, built {built} (subdivisions).",
+      "geoipCountries": "Geo: {type}, built {built} (countries only).",
+      "noGeoip": "No geo database loaded.",
+      "trimmed": "{n} oldest player records dropped to stay under {cap}; returning players from before then count twice in the all-time total.",
       "kept": "{n} of {cap} player records kept."
     }
   },
@@ -684,134 +684,134 @@ const STRINGS = {
   },
   "settingHelp": {
     "Settings": {
-      "HostingPort": "The game port clients connect to. 0 asks the OS for a free one.",
-      "PlayerLimit": "Seats for network clients, 1..48. Slot 0 and bots do not count against it.",
-      "MultiClientLimit": "Connections allowed from one address. Loopback is exempt.",
-      "PlayerName": "The name of reserved roster slot 0, a permanent spectator.",
-      "UseLobby": "Announce this server to ganggarrison.com so it appears in the client's server list. The only outbound connection this project makes.",
-      "Rewards": "Answer REWARD_REQUEST, relaying each player's reward id to the auth server."
+      "HostingPort": "Game port. 0 picks a free port.",
+      "PlayerLimit": "Network client seats, 1..48. Slot 0 and bots excluded.",
+      "MultiClientLimit": "Max connections per address. Loopback exempt.",
+      "PlayerName": "Name of reserved roster slot 0 (permanent spectator).",
+      "UseLobby": "Announce to the ganggarrison.com lobby (the client's server list). The only outbound connection this server makes.",
+      "Rewards": "Answer REWARD_REQUEST by relaying each player's reward id to the auth server."
     },
     "Server": {
-      "ServerName": "Shown in the client's server browser and on join.",
-      "WelcomeMessage": "Sent to each joiner. Empty means none.",
-      "ChatJoinMessage": "A chat line sent to each player as they join chat. Empty means none. Needs a chat plugin in ServerPluginList; a client without one never sees it.",
-      "Password": "The game password. Empty means none, and no PASSWORD_REQUEST.",
-      "Map": "The map to open on. Empty means the first entry of the rotation.",
-      "Rotation": "The map rotation, in order. A map may appear more than once.",
-      "ShuffleRotation": "How the rotation is ordered at startup. arena-last shuffles but does not open on an arena map.",
-      "VotableMaps": "Maps a plugin map vote may offer. Empty means the rotation, else every map in the maps directory.",
-      "ServerPluginList": "Server-sent plugins clients are asked to load, comma-separated.",
+      "ServerName": "Shown in the server browser and on join.",
+      "WelcomeMessage": "Sent to each joining player. Empty: none.",
+      "ChatJoinMessage": "Chat line sent to each player on joining chat. Empty: none. Requires a chat plugin in ServerPluginList.",
+      "Password": "Game password. Empty: none (no PASSWORD_REQUEST).",
+      "Map": "Starting map. Empty: first rotation entry.",
+      "Rotation": "Map rotation, in order. Duplicates allowed.",
+      "ShuffleRotation": "Rotation order at startup. arena-last shuffles but never opens on an arena map.",
+      "VotableMaps": "Maps a plugin map vote may offer. Empty: the rotation, else every map in the maps directory.",
+      "ServerPluginList": "Server-sent plugins clients load, comma-separated.",
       "ServerPluginsRequired": "Clients must load the plugin list to join.",
-      "AutoBalance": "Move a player across when one team is two larger.",
-      "CapLimit": "Captures that win a round, 1..255. 0 is clamped to 1, not to unlimited.",
-      "Time Limit": "Round length in minutes, 1..255. 0 is clamped to 1.",
-      "Deathmatch Kill Limit": "Kills that win a team-deathmatch round, 1..65535.",
-      "Team Deathmatch Invulnerability Seconds": "Spawn protection in team deathmatch. 0 really is none.",
-      "Respawn Time": "Seconds a dead player waits. 0 becomes a single tick.",
-      "Total bandwidth limit for map downloads in bytes per second": "TOTAL across every custom-map download in flight, not per client.",
-      "BanFile": "Where operator bans are kept. Empty means they do not survive a restart.",
-      "MapDirectory": "Where the map PNGs are read from.",
-      "RecordingDirectory": "Write replayable .trace recordings of this server's broadcast stream here. Empty records nothing — recording a game people are playing is a decision.",
-      "AuthServerHost": "The reward auth service. Only contacted when Rewards is on.",
-      "AuthServerPort": "That service's port."
+      "AutoBalance": "Move a player when one team leads by two.",
+      "CapLimit": "Captures to win a round, 1..255. 0 clamps to 1, not unlimited.",
+      "Time Limit": "Round length in minutes, 1..255. 0 clamps to 1.",
+      "Deathmatch Kill Limit": "Kills to win a team-deathmatch round, 1..65535.",
+      "Team Deathmatch Invulnerability Seconds": "Team-deathmatch spawn protection, seconds. 0 is none.",
+      "Respawn Time": "Respawn delay, seconds. 0 is one tick.",
+      "Total bandwidth limit for map downloads in bytes per second": "Total across all concurrent custom-map downloads, not per client.",
+      "BanFile": "Operator ban list. Empty: bans do not survive a restart.",
+      "MapDirectory": "Map PNG directory.",
+      "RecordingDirectory": "Write replayable .trace recordings of the broadcast stream here. Empty: disabled.",
+      "AuthServerHost": "Reward auth service host. Used only when Rewards is on.",
+      "AuthServerPort": "Reward auth service port."
     },
     "Analytics": {
-      "File": "Count who plays here and keep it across restarts. Empty counts nothing. Addresses are stored as salted hashes, never as addresses.",
-      "GeoIpDatabase": "A MaxMind .mmdb used to put players on the analytics map. None ships with this server. A country-level database resolves no US states."
+      "File": "Persistent player analytics. Empty: disabled. Addresses are stored as salted hashes only.",
+      "GeoIpDatabase": "MaxMind .mmdb for the analytics map. Not bundled. Country-level databases resolve no US states."
     },
     "Classlimits": {
-      "Scout": "How many Scouts ONE TEAM may hold. 255 is unlimited; 0 BANS the class.",
-      "Pyro": "How many Pyros ONE TEAM may hold. 255 is unlimited; 0 BANS the class.",
-      "Soldier": "How many Soldiers ONE TEAM may hold. 255 is unlimited; 0 BANS the class.",
-      "Heavy": "How many Heavys ONE TEAM may hold. 255 is unlimited; 0 BANS the class.",
-      "Demoman": "How many Demomans ONE TEAM may hold. 255 is unlimited; 0 BANS the class.",
-      "Medic": "How many Medics ONE TEAM may hold. 255 is unlimited; 0 BANS the class.",
-      "Engineer": "How many Engineers ONE TEAM may hold. 255 is unlimited; 0 BANS the class.",
-      "Spy": "How many Spys ONE TEAM may hold. 255 is unlimited; 0 BANS the class.",
-      "Sniper": "How many Snipers ONE TEAM may hold. 255 is unlimited; 0 BANS the class.",
-      "Quote": "How many Quotes ONE TEAM may hold. 255 is unlimited; 0 BANS the class."
+      "Scout": "Per-team limit for Scout. 255: unlimited; 0: class banned.",
+      "Pyro": "Per-team limit for Pyro. 255: unlimited; 0: class banned.",
+      "Soldier": "Per-team limit for Soldier. 255: unlimited; 0: class banned.",
+      "Heavy": "Per-team limit for Heavy. 255: unlimited; 0: class banned.",
+      "Demoman": "Per-team limit for Demoman. 255: unlimited; 0: class banned.",
+      "Medic": "Per-team limit for Medic. 255: unlimited; 0: class banned.",
+      "Engineer": "Per-team limit for Engineer. 255: unlimited; 0: class banned.",
+      "Spy": "Per-team limit for Spy. 255: unlimited; 0: class banned.",
+      "Sniper": "Per-team limit for Sniper. 255: unlimited; 0: class banned.",
+      "Quote": "Per-team limit for Quote. 255: unlimited; 0: class banned."
     },
     "Log": {
-      "File": "TEE the log into this file. The console sink stays wired — the console is the record an operator has when the thing that broke is the disk.",
-      "MaxBytes": "Rotate the log file at this size. At least 1024.",
-      "Keep": "Rotated log files to keep, 0..1000."
+      "File": "Also write the log to this file. Console output continues.",
+      "MaxBytes": "Rotate the log file at this size, bytes. Min 1024.",
+      "Keep": "Rotated log files kept, 0..1000."
     },
     "Limits": {
-      "MaxReceiveBufferBytes": "Unread bytes one client may have buffered before it is dropped. A stock client's steady state is a few bytes.",
-      "MaxReceiveBytesPerTick": "Bytes read from one socket in one tick, however many are waiting. This one is about the CLOCK, not about memory.",
-      "MaxSendBacklogBytes": "Queued bytes one client may leave unread before it is dropped. The bound on the cheapest attack there is: connect, join, stop reading.",
-      "MaxInvalidCommandBytes": "Garbage one connection may send before it is dropped.",
-      "MaxAcceptsPerTick": "New connections taken off the listener in one tick.",
-      "MaxJoiningConnections": "Half-finished handshakes held at once.",
-      "MaxHandshakeSeconds": "Longest a connection may take to finish joining, however active it is. NOT the 30s idle timeout — a PING resets that one and cannot reset this.",
-      "ConnectionBurstPerAddress": "Connections one address may open inside the window below. 0 turns the rate limit off.",
-      "ConnectionBurstWindowSeconds": "The window that burst is counted over.",
-      "ChatBubbleIntervalMs": "Smallest gap between one player's chat bubbles.",
-      "TcpKeepAlive": "Probe for peers that vanished. Off, a client whose machine dies holds a roster slot for ~15 minutes. A spectator sends nothing, so this is the mechanism rather than a heartbeat.",
-      "KeepAliveIdleSeconds": "Quiet seconds before the first keepalive probe.",
-      "KeepAliveIntervalSeconds": "Seconds between probes.",
-      "KeepAliveProbeCount": "Unanswered probes before the peer is declared gone."
+      "MaxReceiveBufferBytes": "Max unread bytes buffered per client before disconnect. A stock client holds a few bytes.",
+      "MaxReceiveBytesPerTick": "Max bytes read per socket per tick. Bounds tick time, not memory.",
+      "MaxSendBacklogBytes": "Max queued outbound bytes per client before disconnect. Bounds the connect-join-stop-reading attack.",
+      "MaxInvalidCommandBytes": "Max invalid bytes per connection before disconnect.",
+      "MaxAcceptsPerTick": "Max new connections accepted per tick.",
+      "MaxJoiningConnections": "Max concurrent incomplete handshakes.",
+      "MaxHandshakeSeconds": "Hard limit on join duration, regardless of activity. Separate from the 30 s idle timeout, which PING resets.",
+      "ConnectionBurstPerAddress": "Max connections per address within the burst window. 0 disables rate limiting.",
+      "ConnectionBurstWindowSeconds": "Burst window length, seconds.",
+      "ChatBubbleIntervalMs": "Min interval between one player's chat bubbles, ms.",
+      "TcpKeepAlive": "Detect vanished peers. Off: a dead client holds its slot ~15 min. Spectators send nothing, so this is the only liveness check.",
+      "KeepAliveIdleSeconds": "Idle seconds before the first keepalive probe.",
+      "KeepAliveIntervalSeconds": "Seconds between keepalive probes.",
+      "KeepAliveProbeCount": "Unanswered probes before the peer is dropped."
     },
     "Nav": {
-      "Directory": "Where the bot nav graphs are read from. Empty is legal: bots then fight but do not walk.",
-      "Generate": "Build a missing graph at the map change, which is what makes a custom map navigable. Held in memory unless Save is on.",
-      "Save": "Write a generated graph into the nav directory. Off by default because it writes files the operator did not ask for.",
-      "Distances": "Give A* exact node-to-node distances instead of a straight-line estimate. OFF IS A DIFFERENT ARM, not a slower one — the search is weighted, so this picks the route as well as the speed."
+      "Directory": "Bot nav graph directory. Empty is valid: bots fight but do not navigate.",
+      "Generate": "Build missing graphs on map change (required for custom maps). Kept in memory unless Save is on.",
+      "Save": "Write generated graphs to the nav directory. Off by default.",
+      "Distances": "Exact node-to-node A* heuristic instead of straight-line. Changes routes, not only speed: the search is weighted."
     },
     "Bots": {
-      "Enabled": "Manage a bot population at all.",
-      "FillToPlayers": "How many players the server wants IN TOTAL, humans included.",
-      "MaxBots": "A hard ceiling on top of the fill target.",
-      "MinHumans": "Humans that must be connected before ANY bot is spawned. Below it the target is ZERO, not the fill — an empty server full of bots looks full in the lobby list and is not.",
-      "Difficulty": "1 to 5. 5 is 'as good as the layer gets'; the lower tiers are a deliberate handicap ladder.",
-      "SuspendMinutes": "How long the /bots off chat command takes the bots away for, 0..1440. 0 means the command does not exist on this server. Needs a chat plugin in ServerPluginList - it is the only way a player can type /bots.",
-      "NamePrefix": "What a bot's name starts with.",
-      "ClassPolicy": "Class=name entries deciding who drives each class, where name is a checkpoint's file name without its extension or 'scripted'. Anything not named here keeps the default: whichever loaded checkpoint's own class set claims it, scripted if none does.",
-      "Occupancy": "Price an edge a team-mate is already walking above its honest cost, so a squad fans out. A BEHAVIOUR switch: off, match dispersion falls 0.785 to 0.634 and nothing replaces it.",
-      "EngageBots": "Run the expensive micro-controller in bot-vs-bot fights too. It does not make the bots better; it makes those fights cost more.",
-      "HandoverBubbles": "Bots put up a chat bubble whenever their brain changes hands: z1 a policy took the wheel, z3 the search did, z2 the scripted layer took it back. For debugging; every bubble is a broadcast.",
-      "AdaptiveBudget": "Let the server walk the controller budget down when ticks crowd their deadline. The arbiter setting stays an upper bound.",
-      "Mode": "Which of the four shipped brains runs. search is the better bot and the far more expensive one.",
-      "Policy": "The gg2-rl checkpoints policy and tiered modes load, one tier each. A checkpoint is DATED by the simulation it was trained against, and the classes it drives are read off the file.",
-      "PolicyIgnoreStamp": "BYPASS the SIM_UUID guard, which exists to stop a policy running against a simulation it was not trained on. The server prints both stamps.",
-      "Arbiter": "MICROSECONDS of bot-controller work per tick, against a 33,300us tick. Empty lets the mode pick its default.",
-      "SearchThreads": "Threads the rollout search uses. Threads change NO decision, so this is a pure cost knob."
+      "Enabled": "Manage a bot population.",
+      "FillToPlayers": "Target total players, humans included.",
+      "MaxBots": "Hard cap on bots, applied after the fill target.",
+      "MinHumans": "Humans required before any bot spawns. Below it the target is 0, so an empty server does not look full in the lobby.",
+      "Difficulty": "1..5. 5 is full strength; lower tiers are deliberate handicaps.",
+      "SuspendMinutes": "Duration of the /bots off chat command, 0..1440. 0 disables the command. Requires a chat plugin in ServerPluginList.",
+      "NamePrefix": "Bot name prefix.",
+      "ClassPolicy": "Class=name pairs choosing each class's driver; name is a checkpoint file name without extension, or 'scripted'. Unlisted classes: the loaded checkpoint that claims them, else scripted.",
+      "Occupancy": "Penalise edges teammates already use so squads spread out. Behavioural: off drops match dispersion 0.785 to 0.634.",
+      "EngageBots": "Run the micro-controller in bot-vs-bot fights too. Costs tick time; does not improve play.",
+      "HandoverBubbles": "Chat bubble on brain handover: z1 policy, z3 search, z2 scripted. Debug only; each bubble is a broadcast.",
+      "AdaptiveBudget": "Lower the controller budget when ticks approach their deadline. Arbiter remains the upper bound.",
+      "Mode": "Which of the four shipped brains runs. search plays best and costs most.",
+      "Policy": "gg2-rl checkpoints for the policy and tiered modes, one per tier. A checkpoint is tied to the simulation it was trained on; its classes are read from the file.",
+      "PolicyIgnoreStamp": "Bypass the SIM_UUID check that stops a policy running against a simulation it was not trained on. Both stamps are logged.",
+      "Arbiter": "Bot-controller budget per tick, µs (tick = 33,300 µs). Empty: mode default.",
+      "SearchThreads": "Rollout search threads. Affects cost only, never decisions."
     },
     "BotClasslimits": {
-      "Scout": "How many Scout BOTS one team may hold. Humans do not count and are not limited by this. 255 is unlimited; 0 keeps bots off the class.",
-      "Pyro": "How many Pyro BOTS one team may hold. Humans do not count and are not limited by this. 255 is unlimited; 0 keeps bots off the class.",
-      "Soldier": "How many Soldier BOTS one team may hold. Humans do not count and are not limited by this. 255 is unlimited; 0 keeps bots off the class.",
-      "Heavy": "How many Heavy BOTS one team may hold. Humans do not count and are not limited by this. 255 is unlimited; 0 keeps bots off the class.",
-      "Demoman": "How many Demoman BOTS one team may hold. Humans do not count and are not limited by this. 255 is unlimited; 0 keeps bots off the class.",
-      "Medic": "How many Medic BOTS one team may hold. Humans do not count and are not limited by this. 255 is unlimited; 0 keeps bots off the class.",
-      "Engineer": "How many Engineer BOTS one team may hold. Humans do not count and are not limited by this. 255 is unlimited; 0 keeps bots off the class.",
-      "Spy": "How many Spy BOTS one team may hold. Humans do not count and are not limited by this. 255 is unlimited; 0 keeps bots off the class.",
-      "Sniper": "How many Sniper BOTS one team may hold. Humans do not count and are not limited by this. 255 is unlimited; 0 keeps bots off the class."
+      "Scout": "Per-team bot limit for Scout. Humans are neither counted nor limited. 255: unlimited; 0: no bots on this class.",
+      "Pyro": "Per-team bot limit for Pyro. Humans are neither counted nor limited. 255: unlimited; 0: no bots on this class.",
+      "Soldier": "Per-team bot limit for Soldier. Humans are neither counted nor limited. 255: unlimited; 0: no bots on this class.",
+      "Heavy": "Per-team bot limit for Heavy. Humans are neither counted nor limited. 255: unlimited; 0: no bots on this class.",
+      "Demoman": "Per-team bot limit for Demoman. Humans are neither counted nor limited. 255: unlimited; 0: no bots on this class.",
+      "Medic": "Per-team bot limit for Medic. Humans are neither counted nor limited. 255: unlimited; 0: no bots on this class.",
+      "Engineer": "Per-team bot limit for Engineer. Humans are neither counted nor limited. 255: unlimited; 0: no bots on this class.",
+      "Spy": "Per-team bot limit for Spy. Humans are neither counted nor limited. 255: unlimited; 0: no bots on this class.",
+      "Sniper": "Per-team bot limit for Sniper. Humans are neither counted nor limited. 255: unlimited; 0: no bots on this class."
     },
     "Web": {
-      "Port": "The admin panel's port. Naming it at all turns the panel ON; 0 asks the OS for a free one.",
-      "Enabled": "Host the admin panel. Written explicitly so turning it OFF is expressible; a Port key on its own turns it on.",
-      "Bind": "Where the panel listens. 127.0.0.1 is local only; 0.0.0.0 is what makes it remote, and remote without a certificate sends the admin password in the clear.",
-      "Password": "The admin password. EMPTY DOES NOT MEAN NO PASSWORD — it means one is generated and printed to the console at startup. A generated one lasts as long as the process: a restart from this panel carries it, so pressing restart does not lock you out, and a new process generates a new one.",
-      "Certificate": "A PKCS#12 certificate to serve HTTPS with. Empty is plain HTTP. 'auto' makes a self-signed one on first start and keeps it beside the config file, so its fingerprint stays the same for a fleet hub to pin.",
-      "CertificatePassword": "That certificate's password, if it has one.",
-      "AllowFrom": "Addresses and CIDR blocks allowed to connect at all, comma-separated. Empty allows anyone. Loopback is always allowed. Checked before TLS or any HTTP, so on a fleet member this is normally just the hub's address.",
-      "FleetMember": "Let a fleet hub manage this server with a token instead of the password. Needs a Certificate (auto is fine). The pairing code to give the hub is printed at every start.",
-      "FleetDirectory": "Make this panel a fleet hub that manages other servers. The directory holds the member list (with every member's token), relative to the config file. Empty is not a hub. A hub bound beyond loopback needs a Certificate."
+      "Port": "Admin panel port. Setting it enables the panel; 0 picks a free port.",
+      "Enabled": "Host the admin panel. Explicit so it can be turned off; a Port key alone enables it.",
+      "Bind": "Listen address. 127.0.0.1: local only; 0.0.0.0: remote. Remote without a certificate sends the password in cleartext.",
+      "Password": "Admin password. Empty generates one, printed at startup; it survives a panel restart but not a new process.",
+      "Certificate": "PKCS#12 certificate for HTTPS. Empty: plain HTTP. 'auto': self-signed, created on first start beside the config file, with a stable fingerprint for hub pinning.",
+      "CertificatePassword": "Certificate password, if any.",
+      "AllowFrom": "Allowed addresses and CIDR blocks, comma-separated. Empty: any. Loopback always allowed. Checked before TLS; on a fleet member, usually the hub's address.",
+      "FleetMember": "Allow a fleet hub to manage this server by token. Requires a Certificate (auto works). The pairing code is printed at startup.",
+      "FleetDirectory": "Make this panel a fleet hub. Holds the member list and tokens, relative to the config file. Empty: not a hub. A non-loopback hub requires a Certificate."
     },
     "Runtime": {
-      "Speed": "Tick pacing. 1 is real time; 'max' is unpaced. MUST STAY AT 1 on a server anybody is connected to.",
-      "IdleWhenEmpty": "Drop to 2 Hz when nobody is connected and no bots are running. The round clock slows with it, which is why an idle server's round is not wall-clock Time Limit.",
-      "TickStats": "Log a histogram of tick intervals every 30 seconds. Pacing only, so it is safe with players on.",
-      "ControlPort": "The loopback-only JSON control port. Naming it at all turns it ON; 0 asks the OS for a free one. It executes commands against a live game.",
-      "ControlPortEnabled": "Open the control port at all. A ControlPort key on its own turns it on; this is how it is turned back off."
+      "Speed": "Tick pacing. 1: real time; 'max': unpaced. Must be 1 with players connected.",
+      "IdleWhenEmpty": "Tick at 2 Hz with no players or bots. The round clock slows with it.",
+      "TickStats": "Log a tick-interval histogram every 30 s. Safe with players on.",
+      "ControlPort": "Loopback-only JSON control port. Setting it enables it; 0 picks a free port. Executes commands against the live game.",
+      "ControlPortEnabled": "Open the control port. Explicit so it can be turned off; a ControlPort key alone enables it."
     }
   },
   "editorPage": {
     "adopt": {
       "common": "Into all servers",
       "host": "Into this server's overrides",
-      "note": "Where this server's own file differs from what the fleet settings would give it. Tick what to keep.",
+      "note": "Settings where this server's file differs from the fleet settings. Tick those to keep.",
       "open": "Adopt…",
       "title": "Adopt"
     },
@@ -823,7 +823,7 @@ const STRINGS = {
     "noChanges": "No changes.",
     "overriddenOnly": "overridden only",
     "preview": {
-      "note": "What this server is sent, as saved on disk — unsaved edits are not in it. Passwords are masked.",
+      "note": "Saved file as sent to this server; unsaved edits excluded. Passwords masked.",
       "open": "Preview gg2.ini",
       "title": "gg2.ini"
     },
@@ -832,12 +832,12 @@ const STRINGS = {
       "check": "Check",
       "deploy": "scripts/deploy.sh --config",
       "deployCheck": "scripts/deploy.sh --config --check",
-      "deployHint": "Saving writes files on this machine only. To send them to the servers:",
+      "deployHint": "Saving writes local files only. To deploy:",
       "open": "Push…",
       "server": "Server",
-      "sub": "Each server applies a push the next time nobody is connected.",
+      "sub": "Servers apply a push when next empty.",
       "title": "Push",
-      "unsaved": "Unsaved changes are not pushed. Save first."
+      "unsaved": "Unsaved changes are not pushed; save first."
     },
     "revert": "Revert",
     "save": "Save",
@@ -846,32 +846,32 @@ const STRINGS = {
     "title": "Server configuration — gg2-server"
   },
   "editor": {
-    "notRunning": "The editor is not running any more.",
+    "notRunning": "Editor stopped.",
     "allServers": "All servers",
-    "commonTabTitle": "common.ini — every server, unless it overrides a setting",
-    "hostTabTitle": "{name} — {file}",
-    "hostFile": "{name} — {file} — wins over common.ini",
-    "hostFileNotCreated": "{name} — {file} (not created yet) — wins over common.ini",
-    "commonFile": "common.ini — every server, unless a server overrides the setting",
+    "commonTabTitle": "common.ini: all servers, unless overridden",
+    "hostTabTitle": "{name}: {file}",
+    "hostFile": "{name}: {file}, overrides common.ini",
+    "hostFileNotCreated": "{name}: {file} (not created), overrides common.ini",
+    "commonFile": "common.ini: all servers, unless overridden",
     "thisServerGroup": "This server",
-    "noOverridesMatch": "This server overrides nothing that matches.",
-    "noMatch": "Nothing matches that filter.",
+    "noOverridesMatch": "No matching overrides on this server.",
+    "noMatch": "No settings match.",
     "hubPageTitle": "Fleet settings — gg2-server",
     "hubBrand": "Fleet settings",
     "notes": {
-      "noFleetSettings": "There are no fleet settings yet, so every value below is a default and Save creates them. To start from a server you already run, choose it above, use Adopt… and take its values into all servers. Paths and the [Web] section are not here: each server keeps its own, and a push never changes them.",
-      "noCommonIni": "There is no common.ini yet, so every value below is a default and Save creates the file. To start from a server's current configuration instead, copy its /opt/gg2-server/shared/gg2.ini to {path} and reload.",
+      "noFleetSettings": "No fleet settings yet: values below are defaults and Save creates them. To start from an existing server, select it and use Adopt… into all servers. Paths and [Web] are per-server and never pushed.",
+      "noCommonIni": "No common.ini yet: values below are defaults and Save creates it. To start from a server's config, copy its /opt/gg2-server/shared/gg2.ini to {path} and reload.",
       "commonError": "common.ini: {error}"
     },
     "placeholder": {
-      "secretSet": "set — type to replace",
+      "secretSet": "set; type to replace",
       "secretNotSet": "not set",
-      "commonResolved": "default — each server resolves its own",
-      "hostResolved": "default — this server resolves its own",
-      "hostSecretSet": "set on this server — type to replace",
+      "commonResolved": "default (resolved per server)",
+      "hostResolved": "default (resolved by this server)",
+      "hostSecretSet": "set on this server; type to replace",
       "hostSecretType": "type to set on this server",
-      "sharedSecretSet": "shared value set — type to override",
-      "sharedSecretNotSet": "not set — type to set here"
+      "sharedSecretSet": "shared value set; type to override",
+      "sharedSecretNotSet": "not set; type to set here"
     },
     "overrides": {
       "one": "{count} override",
@@ -879,85 +879,85 @@ const STRINGS = {
     },
     "overriddenOn": "Overridden on {names}",
     "overriddenNote": {
-      "one": "Overridden on {names} — a change here does not reach it.",
-      "other": "Overridden on {names} — a change here does not reach them."
+      "one": "Overridden on {names}; changes here do not apply there.",
+      "other": "Overridden on {names}; changes here do not apply there."
     },
     "sharedTag": "shared",
-    "sharedTagTitle": "From common.ini. Type a value to override it on this server.",
+    "sharedTagTitle": "From common.ini. Enter a value to override on this server.",
     "useShared": "use shared",
-    "useSharedTitle": "Remove this server’s own value; it goes back to common.ini’s.",
+    "useSharedTitle": "Remove this server's value and fall back to common.ini.",
     "status": {
       "clean": "No unsaved changes.",
       "dirty": {
-        "one": "{count} unsaved change. Saving checks every server's file before writing any.",
-        "other": "{count} unsaved changes. Saving checks every server's file before writing any."
+        "one": "{count} unsaved change. Save validates every server's file before writing.",
+        "other": "{count} unsaved changes. Save validates every server's file before writing."
       }
     },
     "toast": {
-      "saveNoAnswer": "The editor did not answer. Nothing was saved.",
+      "saveNoAnswer": "No response from editor; nothing saved.",
       "notSaved": "Not saved: {error}",
       "nothingToWrite": "Nothing to write",
       "saved": "Saved {files}",
       "hostError": "{name}: {error}",
-      "unsavedFirst": "Save or revert your unsaved changes first.",
-      "nothingTicked": "Nothing ticked.",
+      "unsavedFirst": "Save or revert unsaved changes first.",
+      "nothingTicked": "Nothing selected.",
       "notAdopted": "Not adopted: {error}",
       "adopted": {
         "one": "Adopted {count} setting from {name}",
         "other": "Adopted {count} settings from {name}"
       },
       "pushedRestarting": "{name}: pushed, restarting",
-      "pushed": "{name}: pushed; it applies the next time nobody is connected"
+      "pushed": "{name}: pushed; applies when next empty"
     },
     "preview": {
       "title": "{host} — gg2.ini",
       "sub": "{host} — sha256 {sha256}"
     },
     "push": {
-      "asking": "Asking every server…",
-      "noAnswer": "The hub did not answer.",
+      "asking": "Querying servers…",
+      "noAnswer": "No response from hub.",
       "upToDate": "Up to date.",
-      "sameSettings": "Same settings; a push only marks it managed.",
+      "sameSettings": "Settings identical; a push only marks it managed.",
       "changes": {
         "one": "{count} line change.",
         "other": "{count} lines change."
       },
       "changesNeverPushed": {
-        "one": "{count} line change — never pushed: replaces a hand-written file.",
-        "other": "{count} lines change — never pushed: replaces a hand-written file."
+        "one": "{count} line change; never pushed, replaces a hand-written file.",
+        "other": "{count} lines change; never pushed, replaces a hand-written file."
       },
       "changesEdited": {
-        "one": "{count} line change — edited on the server since the last push.",
-        "other": "{count} lines change — edited on the server since the last push."
+        "one": "{count} line change; edited on the server since the last push.",
+        "other": "{count} lines change; edited on the server since the last push."
       },
       "diff": "Diff",
       "overwrite": "Overwrite",
       "push": "Push",
       "pushRestart": "Push & restart",
-      "pushRestartTitle": "Restart at once, dropping anyone connected. Otherwise the server applies it the next time it is empty.",
+      "pushRestartTitle": "Restart immediately, disconnecting players. Otherwise applied when next empty.",
       "noMembers": "This hub has no members."
     },
     "adopt": {
       "button": "Adopt…",
-      "buttonTitle": "Take settings this server has that the fleet settings do not",
+      "buttonTitle": "Import settings this server has that the fleet settings lack",
       "title": "Adopt from {name}",
-      "nothingDiffers": "Nothing differs: this server already has what the fleet settings give it.",
+      "nothingDiffers": "No differences from the fleet settings.",
       "differ": {
         "one": "{count} setting differs",
         "other": "{count} settings differ"
       },
       "values": "fleet: {fleet}  →  this server: {member}",
       "empty": "(empty)",
-      "secrets": "Not compared, because a secret's value never leaves a server: {names}."
+      "secrets": "Secrets not compared (values never leave the server): {names}."
     },
     "diff": {
-      "title": "{name} — what a push changes",
+      "title": "{name}: push diff",
       "sub": "now {now} → after {after}",
       "none": "(no line changes)"
     },
     "confirm": {
-      "pushRestart": "Push to {name} and restart it now? Everyone connected to it is dropped.",
-      "overwrite": "Overwrite {name}'s configuration? Look at the diff first: what it loses is not kept anywhere but gg2.ini.prev."
+      "pushRestart": "Push to {name} and restart now? Connected players are dropped.",
+      "overwrite": "Overwrite {name}'s configuration? Check the diff first; the old file survives only as gg2.ini.prev."
     }
   }
 };
