@@ -850,6 +850,11 @@ internal static class CommandLine
                     options.Web = options.Web with { FleetMember = true };
                     break;
 
+                case "--web-fleet":
+                    webSetting = name;
+                    options.Web = options.Web with { FleetDirectory = cursor.Take() };
+                    break;
+
                 // ⚠️ Pacing only. Nothing about the simulation is rate-dependent
                 // — every duration in the game is counted in ticks — so this
                 // changes throughput and nothing else. It must stay at 1 on any
@@ -1270,6 +1275,8 @@ internal static class CommandLine
           --web-fleet-member
                             let a fleet hub manage this server with a token; needs
                             --web-tls. The pairing code is printed at startup.
+          --web-fleet <dir> make the panel a fleet hub managing other servers;
+                            <dir> holds the member list, relative to the config
           --tick-stats      log a histogram of tick intervals every 30s and at
                             shutdown; safe with clients connected
           --lobby           list this server publicly at ganggarrison.com, so it

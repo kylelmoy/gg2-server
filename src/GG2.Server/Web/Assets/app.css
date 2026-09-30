@@ -1447,3 +1447,33 @@ kbd {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------- fleet ---------------------------------------------------------- */
+
+/* The member chip is a link back to the hub's own server, so it reads as one. */
+.chip-host { color: var(--foreground); text-decoration: none; background: var(--accent-soft); }
+.chip-host:hover { background: var(--accent-soft-hover); }
+.chip-host[hidden] { display: none; }
+
+.fleet-table td.mono { font-family: var(--font-mono); }
+.fleet-table td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fleet-table .fleet-name { font-weight: 600; }
+.fleet-table .fleet-down { color: var(--danger); }
+.fleet-tools { text-align: right; white-space: nowrap; }
+.fleet-tools .btn { margin-left: 6px; }
+a.btn { text-decoration: none; display: inline-flex; align-items: center; }
+
+.fleet-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 0 16px;
+  margin-top: 14px;
+}
+
+.fleet-add .fleet-pairing,
+.fleet-add .btn-row,
+.fleet-add .login-error { grid-column: 1 / -1; }
+
+@media (max-width: 640px) {
+  .fleet-add { grid-template-columns: minmax(0, 1fr); }
+}

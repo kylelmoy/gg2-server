@@ -21,6 +21,21 @@
 
 /* ---------- transport ----------------------------------------------------- */
 
+/*
+ * Which server this page is showing. On a fleet hub, `?host=<member>` points
+ * every call about the SERVER at the hub's pass-through, /h/<member>/api/…, and
+ * the member answers it. Calls about the BROWSER — session, sign-in, sign-out —
+ * always go to the hub, because the hub is what the browser is signed in to.
+ * Switching member is a page load rather than an in-place swap: every graph,
+ * log and chat buffer here is one server's, and a reload is the one reset that
+ * cannot miss one.
+ */
+const member = new URLSearchParams(location.search).get('host') || '';
+const apiBase = member ? `/h/${encodeURIComponent(member)}` : '';
+
+/** A server-scoped API path, on this server or through the hub to a member. */
+function api(path) { return apiBase + path; }
+
 let csrf = '';
 let stream = null;
 let retry = 1000;
@@ -32,7 +47,7 @@ let chatSeen = -1;
 /** One command to the server. Returns the parsed reply; never throws. */
 async function send(body, quiet) {
   try {
-    const reply = await fetch('/api/command', {
+    const reply = await fetch(api('/api/command'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
       body: JSON.stringify(body),
@@ -89,7 +104,7 @@ function connect() {
   if (stream) stream.close();
 
   live('connecting');
-  stream = new EventSource('/api/events');
+  stream = new EventSource(api('/api/events'));
 
   stream.addEventListener('open', () => { retry = 1000; live('live'); });
 
@@ -590,7 +605,7 @@ function loadMapImage(name) {
   const image = new Image();
   image.onload = () => { if (mapImageName === name) { mapImage = image; drawMap(); } };
   image.onerror = () => { $('map-empty').textContent = `no image for ${name}`; };
-  image.src = `/api/map.png?name=${encodeURIComponent(name)}`;
+  image.src = api(`/api/map.png?name=${encodeURIComponent(name)}`);
 }
 
 /**
@@ -1341,7 +1356,7 @@ function appendLog(lines) {
 
 async function loadSystem(force) {
   try {
-    const info = await (await fetch('/api/system')).json();
+    const info = await (await fetch(api('/api/system'))).json();
     if (!info.ok) return;
 
     renderSystem(info);
@@ -1568,7 +1583,7 @@ function controls(s) {
 
 async function loadMaps() {
   try {
-    const list = await (await fetch('/api/maps')).json();
+    const list = await (await fetch(api('/api/maps'))).json();
     if (!list.ok) return;
 
     $('map-list').replaceChildren(...list.maps.map((name) => {
@@ -1710,7 +1725,7 @@ async function openSettings() {
   let config;
 
   try {
-    const reply = await fetch('/api/config');
+    const reply = await fetch(api('/api/config'));
     if (reply.status === 401) { $('settings').close(); showLogin(); return; }
     config = await reply.json();
   } catch {
@@ -1966,11 +1981,12 @@ function showApp() {
   buildCharts();
   connect();
   refreshLog();
+  initFleet();
 }
 
 async function refreshLog() {
   try {
-    const log = await (await fetch('/api/log')).json();
+    const log = await (await fetch(api('/api/log'))).json();
     if (log.ok) appendLog(log.lines);
   } catch { /* the stream will carry the rest */ }
 }
@@ -2048,7 +2064,7 @@ async function loadAnalytics() {
   let reply;
 
   try {
-    const response = await fetch('/api/analytics');
+    const response = await fetch(api('/api/analytics'));
 
     if (response.status === 401) { $('analytics').close(); showLogin(); return; }
 
@@ -2327,6 +2343,155 @@ $('teleport-mode').addEventListener('change', (event) => {
 window.addEventListener('resize', () => {
   if (state) drawMap();
   if (perf.length > 0) drawCharts();
+});
+
+/* ---------- fleet ----------------------------------------------------------- */
+
+/*
+ * Only on a hub. /api/fleet answers `hub:false` on a server that is not one, and
+ * the Fleet button stays hidden; on a hub it lists each member with that member's
+ * own state object, fetched by the hub from all of them at once.
+ */
+async function initFleet() {
+  if (member) {
+    $('chip-host').hidden = false;
+    $('chip-host-name').textContent = member;
+  }
+
+  try {
+    const reply = await (await fetch('/api/fleet')).json();
+    $('fleet-open').hidden = !reply.hub;
+  } catch {
+    // No fleet controls is the right degradation for a panel that cannot tell.
+  }
+}
+
+async function loadFleet() {
+  $('fleet-sub').textContent = 'Asking every member…';
+
+  let reply;
+
+  try {
+    const response = await fetch('/api/fleet');
+    if (response.status === 401) { $('fleet').close(); showLogin(); return; }
+    reply = await response.json();
+  } catch {
+    $('fleet-sub').textContent = 'The hub did not answer.';
+    return;
+  }
+
+  const rows = (reply.members || []).map((m) => {
+    const tr = document.createElement('tr');
+    const s = m.state;
+
+    tr.appendChild(cell(m.name, 'fleet-name'));
+
+    if (s) {
+      const humans = s.players.filter((p) => p.connected).length;
+      const bots = s.players.filter((p) => p.bot).length;
+      const map = typeof s.map === 'string' ? s.map : (s.map && s.map.name) || '—';
+
+      tr.appendChild(cell(s.server.name, ''));
+      tr.appendChild(cell(map, 'mono'));
+      tr.appendChild(cell(`${humans} + ${bots} bots / ${s.server.slots}`, 'num'));
+      tr.appendChild(cell(`${s.server.tickMs.toFixed(2)} ms`, 'num'));
+      tr.appendChild(cell(s.server.commit || s.server.version || '—', 'mono'));
+    } else {
+      const down = cell(m.error || 'unreachable', 'fleet-down');
+      down.colSpan = 5;
+      tr.appendChild(down);
+    }
+
+    const tools = document.createElement('td');
+    tools.className = 'fleet-tools';
+
+    const open = document.createElement('a');
+    open.className = 'btn btn-quiet';
+    open.textContent = 'Open';
+    open.href = `/?host=${encodeURIComponent(m.name)}`;
+
+    const remove = document.createElement('button');
+    remove.className = 'btn btn-quiet btn-warn';
+    remove.type = 'button';
+    remove.textContent = 'Remove';
+    remove.addEventListener('click', () => removeMember(m.name));
+
+    tools.append(open, remove);
+    tr.appendChild(tools);
+    return tr;
+  });
+
+  $('fleet-rows').replaceChildren(...rows);
+  $('fleet-empty').hidden = rows.length > 0;
+  $('fleet-sub').textContent = `${rows.length} member${rows.length === 1 ? '' : 's'}, each pinned to its own certificate.`;
+}
+
+async function fleetPost(path, body) {
+  const reply = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+    body: JSON.stringify(body),
+  });
+
+  if (reply.status === 401) { showLogin(); return { ok: false, error: 'signed out' }; }
+  return reply.json();
+}
+
+async function removeMember(name) {
+  const sure = await ask(
+    `Remove ${name}?`,
+    'The hub forgets its token and stops managing it. The server itself keeps running; '
+    + 'pairing it again needs its pairing code.');
+
+  if (!sure) return;
+
+  const reply = await fleetPost('/api/fleet/remove', { name });
+  if (!reply.ok) toast(reply.error || 'refused', 'bad');
+  else toast(`Removed ${name}`, 'good');
+  await loadFleet();
+}
+
+$('fleet-open').addEventListener('click', async () => {
+  $('fleet').showModal();
+  await loadFleet();
+});
+
+$('fleet-close').addEventListener('click', () => $('fleet').close());
+$('fleet-refresh').addEventListener('click', loadFleet);
+
+$('fleet-add').addEventListener('submit', async (event) => {
+  event.preventDefault();
+
+  const button = $('fleet-add-button');
+  const error = $('fleet-error');
+
+  button.disabled = true;
+  button.textContent = 'Pairing…';
+  error.hidden = true;
+
+  try {
+    const reply = await fleetPost('/api/fleet/add', {
+      name: $('fleet-name').value.trim(),
+      url: $('fleet-url').value.trim(),
+      pairing: $('fleet-pairing').value.trim(),
+    });
+
+    if (!reply.ok) {
+      error.textContent = reply.error || 'refused';
+      error.hidden = false;
+      return;
+    }
+
+    toast(`Paired with ${$('fleet-name').value.trim()}`, 'good');
+    $('fleet-add').reset();
+    await loadFleet();
+  } catch {
+    error.textContent = 'the hub did not answer';
+    error.hidden = false;
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Pair';
+  }
 });
 
 /* ---------- start ----------------------------------------------------------- */

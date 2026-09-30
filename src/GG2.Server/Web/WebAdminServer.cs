@@ -139,7 +139,21 @@ public sealed class WebAdminServer : IDisposable
         }
 
         _sessions = new AdminSessions(Password, memberToken: _memberToken);
+
+        if (options.FleetDirectory.Length != 0)
+        {
+            var directory = Path.IsPathRooted(options.FleetDirectory)
+                ? options.FleetDirectory
+                : Path.Combine(WebIdentity.Directory(server.Options), options.FleetDirectory);
+
+            _hub = new FleetHub(directory);
+        }
     }
+
+    private readonly FleetHub? _hub;
+
+    /// <summary>The fleet this panel manages, or null when it is not a hub.</summary>
+    internal FleetHub? Hub => _hub;
 
     private readonly IReadOnlyList<IpRange> _allowed;
     private readonly string? _memberToken;
@@ -552,8 +566,34 @@ public sealed class WebAdminServer : IDisposable
             return await JsonAsync(stream, 403, Error("bad or missing CSRF token"), token);
         }
 
+        // The hub's routes. A BROWSER's, never a token's: a member's token
+        // authenticates a hub to that member, and letting it drive this panel's
+        // own fleet would chain one member's credential into all of them.
+        if (_hub is not null && session is not null)
+        {
+            if (request.Path.StartsWith("/h/", StringComparison.Ordinal))
+                return await ProxyAsync(request, stream, token);
+
+            switch (request.Method, request.Path)
+            {
+                case ("GET", "/api/fleet"):
+                    return await JsonAsync(stream, 200, await _hub.OverviewJsonAsync(token), token);
+
+                case ("POST", "/api/fleet/add"):
+                    return await FleetAddAsync(request, stream, token);
+
+                case ("POST", "/api/fleet/remove"):
+                    return await FleetRemoveAsync(request, stream, token);
+            }
+        }
+
         switch (request.Method, request.Path)
         {
+            // Not a hub: says so, so the page can hide the fleet controls rather
+            // than show a 404 as an error.
+            case ("GET", "/api/fleet"):
+                return await JsonAsync(stream, 200, "{\"ok\":false,\"hub\":false}", token);
+
             case ("GET", "/api/state"):
                 return await JsonAsync(stream, 200, await ExecuteAsync("{\"cmd\":\"state\"}"), token);
 
@@ -604,6 +644,190 @@ public sealed class WebAdminServer : IDisposable
             default:
                 return await JsonAsync(stream, 404, Error($"no {request.Method} {request.Path}"), token);
         }
+    }
+
+    /// <summary>
+    /// The member routes a hub passes through, and only these.
+    /// </summary>
+    /// <remarks>
+    /// An allowlist, so a route added to the panel later is not reachable through
+    /// the hub until somebody decides it should be — and <c>login</c> and
+    /// <c>logout</c> are deliberately absent: the hub authenticates to a member
+    /// with its token, and a browser has no business with a member's sessions.
+    /// </remarks>
+    private static readonly HashSet<(string Method, string Path)> ProxiedRoutes =
+    [
+        ("GET", "/api/session"),
+        ("GET", "/api/state"),
+        ("GET", "/api/events"),
+        ("GET", "/api/maps"),
+        ("GET", "/api/map.png"),
+        ("GET", "/api/log"),
+        ("GET", "/api/system"),
+        ("GET", "/api/perf"),
+        ("GET", "/api/config"),
+        ("GET", "/api/analytics"),
+        ("POST", "/api/command"),
+    ];
+
+    /// <summary>The largest member reply the hub will relay, other than an event stream.</summary>
+    private const int MaxProxiedBytes = 16 * 1024 * 1024;
+
+    /// <summary>
+    /// <c>/h/&lt;member&gt;/api/…</c>: the same request, sent to that member with
+    /// the hub's token, and its answer relayed back.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>This is what lets the whole dashboard work for any member with no
+    /// second copy of it.</b> The page prefixes its API calls with the member's
+    /// path and everything else is the member's own <see cref="ControlCommands"/>;
+    /// the hub adds no verb.
+    /// </para>
+    /// <para>
+    /// The browser's session and CSRF token were checked by the caller, against
+    /// THIS panel. The member sees only the hub's bearer token.
+    /// </para>
+    /// </remarks>
+    private async Task<bool> ProxyAsync(HttpRequest request, Stream stream, CancellationToken token)
+    {
+        var rest = request.Path["/h/".Length..];
+        var slash = rest.IndexOf('/');
+        var name = slash < 0 ? rest : rest[..slash];
+        var path = slash < 0 ? "/" : rest[slash..];
+
+        if (!ProxiedRoutes.Contains((request.Method, path)))
+            return await JsonAsync(stream, 404, Error($"no {request.Method} {path} through the hub"), token);
+
+        var query = string.Join('&', request.Query.Select(pair =>
+            Uri.EscapeDataString(pair.Key) + "=" + Uri.EscapeDataString(pair.Value)));
+
+        var target = query.Length == 0 ? path : path + "?" + query;
+        var events = path == "/api/events";
+
+        HttpResponseMessage reply;
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+
+        if (!events)
+            timeout.CancelAfter(FleetHub.RequestTimeout);
+
+        try
+        {
+            reply = await _hub!.SendAsync(
+                name,
+                request.Method == "POST" ? HttpMethod.Post : HttpMethod.Get,
+                target,
+                request.Method == "POST" ? request.Body : null,
+                timeout.Token);
+        }
+        catch (KeyNotFoundException)
+        {
+            return await JsonAsync(stream, 404, Error($"no fleet member '{name}'"), token);
+        }
+        catch (Exception e) when (e is HttpRequestException or OperationCanceledException && !token.IsCancellationRequested)
+        {
+            return await JsonAsync(
+                stream, 502, Error($"{name} did not answer: {(e is OperationCanceledException ? "timed out" : e.Message)}"), token);
+        }
+
+        using (reply)
+        {
+            // Never relayed as a 401: the page reads a 401 as "THIS panel's
+            // session expired" and shows the sign-in card, which would send the
+            // operator round in circles over a member that has been re-keyed.
+            if (reply.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.TooManyRequests)
+            {
+                return await JsonAsync(
+                    stream, 502, Error($"{name} refused the hub's token ({(int)reply.StatusCode}) — re-pair it"), token);
+            }
+
+            var contentType = reply.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
+
+            if (events && reply.IsSuccessStatusCode)
+            {
+                await HttpResponse.StartEventStreamAsync(stream, token);
+
+                await using var upstream = await reply.Content.ReadAsStreamAsync(token);
+                var buffer = new byte[16 * 1024];
+
+                // Flushed after every read: an event held in a buffer here is an
+                // event the dashboard shows late, and the member already paces
+                // them. Ends when either side goes away.
+                int read;
+
+                while ((read = await upstream.ReadAsync(buffer, token)) > 0)
+                {
+                    await stream.WriteAsync(buffer.AsMemory(0, read), token);
+                    await stream.FlushAsync(token);
+                }
+
+                return false;
+            }
+
+            if (reply.Content.Headers.ContentLength > MaxProxiedBytes)
+                return await JsonAsync(stream, 502, Error($"{name}'s reply is too large to relay"), token);
+
+            byte[] body;
+
+            try
+            {
+                body = await reply.Content.ReadAsByteArrayAsync(timeout.Token);
+            }
+            catch (Exception e) when (e is HttpRequestException or OperationCanceledException && !token.IsCancellationRequested)
+            {
+                return await JsonAsync(stream, 502, Error($"{name} stopped answering"), token);
+            }
+
+            await HttpResponse.WriteAsync(stream, (int)reply.StatusCode, contentType, body, token, NoStore);
+            return true;
+        }
+    }
+
+    private async Task<bool> FleetAddAsync(HttpRequest request, Stream stream, CancellationToken token)
+    {
+        string name, url, pairing;
+
+        try
+        {
+            var root = JsonDocument.Parse(request.Body).RootElement;
+            name = root.TryGetProperty("name", out var n) ? n.GetString() ?? string.Empty : string.Empty;
+            url = root.TryGetProperty("url", out var u) ? u.GetString() ?? string.Empty : string.Empty;
+            pairing = root.TryGetProperty("pairing", out var p) ? p.GetString() ?? string.Empty : string.Empty;
+        }
+        catch (Exception e) when (e is JsonException or InvalidOperationException)
+        {
+            return await JsonAsync(stream, 400, Error("not JSON"), token);
+        }
+
+        var error = await _hub!.AddAsync(name.Trim(), url, pairing, token);
+
+        if (error is not null)
+            return await JsonAsync(stream, 200, Error(error), token);
+
+        _log.Info($"fleet: paired with {name.Trim()} at {url.Trim()}");
+        return await JsonAsync(stream, 200, "{\"ok\":true}", token);
+    }
+
+    private async Task<bool> FleetRemoveAsync(HttpRequest request, Stream stream, CancellationToken token)
+    {
+        string name;
+
+        try
+        {
+            var root = JsonDocument.Parse(request.Body).RootElement;
+            name = root.TryGetProperty("name", out var n) ? n.GetString() ?? string.Empty : string.Empty;
+        }
+        catch (Exception e) when (e is JsonException or InvalidOperationException)
+        {
+            return await JsonAsync(stream, 400, Error("not JSON"), token);
+        }
+
+        if (!_hub!.Remove(name))
+            return await JsonAsync(stream, 200, Error($"no fleet member '{name}'"), token);
+
+        _log.Info($"fleet: removed {name}");
+        return await JsonAsync(stream, 200, "{\"ok\":true}", token);
     }
 
     private async Task<bool> LoginAsync(
@@ -996,6 +1220,7 @@ public sealed class WebAdminServer : IDisposable
         _listener = null;
         _certificate?.Dispose();
         _certificate = null;
+        _hub?.Dispose();
         _stopping.Dispose();
     }
 }

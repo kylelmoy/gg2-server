@@ -824,6 +824,14 @@ public static class ServerSettings
             + "printed at every start.",
             probe: "1"));
 
+        settings.Add(PathRow(
+            "Web", "FleetDirectory", nameof(ServerOptions.Web),
+            o => o.Web.FleetDirectory, (o, v) => o.Web = o.Web with { FleetDirectory = v },
+            "fleet",
+            "Make this panel a fleet hub that manages other servers. The directory holds "
+            + "the member list (with every member's token), relative to the config file. "
+            + "Empty is not a hub. A hub bound beyond loopback needs a Certificate."));
+
         // --- [Runtime] --------------------------------------------------------
         //
         // This port's own section: pacing, telemetry and the loopback control port,

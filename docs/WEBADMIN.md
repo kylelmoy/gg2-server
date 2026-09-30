@@ -216,6 +216,53 @@ plugin site, which run as game code on players' machines, and the path settings
 choose where the server writes. `WebFleetMemberTests` covers the pinning, the
 token, the lockout and the allowlist.
 
+## The fleet hub
+
+`[Web] FleetDirectory=fleet` (or `--web-fleet fleet`) makes a panel a hub. The
+directory, relative to the config file's, holds `members.ini`: one section per
+member with its `Url` and `Pairing` code, written owner-only because it holds
+every member's token. The **Fleet** button pairs a member (name, panel URL,
+pairing code) and lists every member with its map, players, tick and build.
+
+| Route | What |
+|---|---|
+| `GET /api/fleet` | every member, each with its own `state` object or the error that stopped the hub getting it; `{"hub":false}` on a panel that is not a hub |
+| `POST /api/fleet/add` | `{name, url, pairing}`; verified against the member before anything is written |
+| `POST /api/fleet/remove` | `{name}` |
+| `/h/<member>/api/…` | the same request, sent to that member with its token; the reply relayed back |
+
+- **The whole dashboard works for any member with no second copy of it.** The
+  page reads `?host=<member>` and prefixes every server-scoped call with
+  `/h/<member>`; session, sign-in and sign-out stay on the hub, which is what the
+  browser is signed in to. Switching member is a page load, so no graph, log or
+  chat buffer can carry over from another server.
+- **The pass-through is an allowlist of member routes** (`ProxiedRoutes`), and
+  `login` and `logout` are not on it. A route added to the panel is not
+  reachable through a hub until it is added there.
+- **Only a browser session drives the hub's routes, never a bearer token.** A
+  member's token authenticates a hub to that member; accepting it here would chain
+  one member's credential into every other.
+- **CSRF is checked against the hub's session**, before anything is sent on. The
+  member sees only the hub's token, so a command needs no CSRF token there.
+- **A member's 401 is relayed as a 502** naming the member. The page reads a 401
+  as its own session expiring and would show the sign-in card for a member that
+  had been re-keyed.
+- **Every fleet route runs on the socket thread and none touches the game**:
+  calling a member is network I/O that can take seconds. The overview asks all
+  members at once with three seconds each; an ordinary pass-through gets ten; an
+  event stream has no deadline and is flushed after every read.
+- **A member's certificate is accepted by its SHA-256 and nothing else** — no
+  trust store, no name check. A mismatch fails the connection and the overview
+  says the certificate is not the one paired with.
+- **A hub bound beyond loopback with no certificate is refused at startup**,
+  unlike a plain panel, which is warned about: the hub's password opens every
+  member.
+
+`WebFleetHubTests` runs a real member over TLS and a real hub: pairing, a wrong
+pin, a wrong token, the overview, a read, a command with and without the hub's
+CSRF token, the relayed event stream and the route allowlist. What it does not
+cover is the page; that was checked in a browser against two local servers.
+
 ## The HTTP server
 
 Hand-written, in `Web/HttpExchange.cs`. **Not `HttpListener`, and the reason is

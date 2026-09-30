@@ -97,6 +97,18 @@ public readonly record struct WebAdminOptions(
     /// </remarks>
     public bool FleetMember { get; init; }
 
+    /// <summary>
+    /// Make this panel a fleet HUB: the directory its member list lives in,
+    /// relative to the config file's. Empty is not a hub.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A hub's password opens every member</b>, because the hub holds every
+    /// member's token. So a hub reachable from the network must serve TLS —
+    /// <see cref="Validate"/> refuses the combination rather than warning about
+    /// it, which is what the plain panel does.
+    /// </remarks>
+    public string FleetDirectory { get; init; } = string.Empty;
+
     /// <summary>Whether <see cref="CertificatePath"/> asks for the self-signed certificate.</summary>
     public bool AutoCertificateRequested =>
         string.Equals(CertificatePath.Trim(), AutoCertificate, StringComparison.OrdinalIgnoreCase);
@@ -145,6 +157,7 @@ public readonly record struct WebAdminOptions(
     {
         AllowFrom = string.Empty,
         FleetMember = false,
+        FleetDirectory = string.Empty,
     };
 
     /// <summary>Whether <see cref="Bind"/> reaches beyond this machine.</summary>
@@ -197,6 +210,15 @@ public readonly record struct WebAdminOptions(
                 "[Web] FleetMember needs TLS, or the hub's token crosses the network in the "
                 + "clear. Set [Web] Certificate=auto for a self-signed certificate the hub pins.",
                 nameof(FleetMember));
+        }
+
+        if (FleetDirectory.Length != 0 && IsRemote && CertificatePath.Length == 0)
+        {
+            throw new ArgumentException(
+                "[Web] FleetDirectory makes this panel a hub, whose password opens every member, "
+                + "and it is bound beyond loopback with no certificate. Set [Web] Certificate "
+                + "(auto is fine), or bind 127.0.0.1.",
+                nameof(FleetDirectory));
         }
     }
 }

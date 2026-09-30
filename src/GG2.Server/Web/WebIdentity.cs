@@ -88,7 +88,7 @@ public static class WebIdentity
     }
 
     /// <summary>The certificate's SHA-256, as lower-case hex — the value a hub pins.</summary>
-    public static string Fingerprint(X509Certificate2 certificate) =>
+    public static string Fingerprint(X509Certificate certificate) =>
         Convert.ToHexStringLower(certificate.GetCertHash(HashAlgorithmName.SHA256));
 
     /// <summary>
@@ -161,7 +161,7 @@ public static class WebIdentity
         return true;
     }
 
-    private static void WriteOwnerOnly(string path, byte[] bytes)
+    internal static void WriteOwnerOnly(string path, byte[] bytes, bool overwrite = false)
     {
         var temporary = path + ".tmp";
 
@@ -175,6 +175,6 @@ public static class WebIdentity
             stream.Write(bytes);
         }
 
-        File.Move(temporary, path, overwrite: false);
+        File.Move(temporary, path, overwrite);
     }
 }

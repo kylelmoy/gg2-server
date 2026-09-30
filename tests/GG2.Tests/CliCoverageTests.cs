@@ -226,6 +226,7 @@ public sealed class CliCoverageTests
             o => o.Web.CertificatePassword),
         ("Web", ["--web", "0", "--web-allow", "203.0.113.7"], o => o.Web.AllowFrom),
         ("Web", ["--web", "0", "--web-tls", "auto", "--web-fleet-member"], o => o.Web.FleetMember),
+        ("Web", ["--web", "0", "--web-fleet", "fleet"], o => o.Web.FleetDirectory),
     ];
 
     /// <summary>

@@ -474,6 +474,7 @@ from the network.
 | `CertificatePassword` | secret | *(empty)* | That certificate's password, if it has one. Refused with `auto`. |
 | `AllowFrom` | text | *(empty)* | Addresses and CIDR blocks allowed to connect at all, comma-separated. Empty allows anyone; loopback is always allowed. Checked when the connection is accepted, before TLS or any HTTP. On a fleet member this is normally the hub's address. |
 | `FleetMember` | boolean | `0` | Accept a fleet hub's token (`Authorization: Bearer`) as well as the password. Needs a `Certificate`. The token is generated on first start into `fleet-member.token` beside the config file, never in it, and the pairing code for the hub is printed at every start. `docs/WEBADMIN.md`, "Fleet members". |
+| `FleetDirectory` | path | *(empty)* | Make this panel a fleet hub. The directory, relative to the config file's, holds `members.ini` with every member's token. Empty is not a hub. A hub bound beyond loopback with no `Certificate` is refused, because its password opens every member. `docs/WEBADMIN.md`, "The fleet hub". |
 
 ### `[Runtime]`
 

@@ -1,0 +1,304 @@
+using System.Net;
+using System.Text;
+using System.Text.Json;
+using GG2.Server;
+
+namespace GG2.Tests;
+
+/// <summary>
+/// A hub managing a member: pairing, the overview, and the pass-through the
+/// whole dashboard runs on.
+/// </summary>
+/// <remarks>
+/// <b>Two real servers on loopback</b>, the member over TLS with its own
+/// self-signed certificate, and a browser-shaped client on the hub. Nothing is
+/// mocked, because the claim is that a request goes browser → hub → member and
+/// back with the right credential at each hop — which only the bytes can show.
+/// </remarks>
+public sealed class WebFleetHubTests : IDisposable
+{
+    private const string HubPassword = "hub-password-for-tests";
+
+    private readonly string _memberDirectory = TempDirectory("member");
+    private readonly string _hubDirectory = TempDirectory("hub");
+    private readonly ServerHarness _member;
+    private readonly ServerHarness _hub;
+    private readonly CancellationTokenSource _stopping = new();
+    private readonly Thread _ticker;
+    private readonly HttpClientHandler _handler;
+    private readonly HttpClient _http;
+
+    public WebFleetHubTests()
+    {
+        _member = new ServerHarness(o =>
+        {
+            o.ServerName = "The Member";
+            o.ConfigFile = Path.Combine(_memberDirectory, "gg2.ini");
+            o.Web = WebAdminOptions.Disabled with
+            {
+                Enabled = true,
+                Port = 0,
+                Password = "member-password-nobody-types",
+                CertificatePath = WebAdminOptions.AutoCertificate,
+                FleetMember = true,
+            };
+        });
+
+        _hub = new ServerHarness(o =>
+        {
+            o.ServerName = "The Hub";
+            o.ConfigFile = Path.Combine(_hubDirectory, "gg2.ini");
+            o.Web = WebAdminOptions.Disabled with
+            {
+                Enabled = true,
+                Port = 0,
+                Password = HubPassword,
+                FleetDirectory = "fleet",
+            };
+        });
+
+        _ticker = new Thread(() =>
+        {
+            while (!_stopping.IsCancellationRequested)
+            {
+                _member.Server.Tick();
+                _hub.Server.Tick();
+                Thread.Sleep(1);
+            }
+        }) { IsBackground = true };
+
+        _ticker.Start();
+
+        _handler = new HttpClientHandler { CookieContainer = new CookieContainer(), UseCookies = true };
+        _http = new HttpClient(_handler)
+        {
+            BaseAddress = new Uri($"http://127.0.0.1:{_hub.Server.WebBoundPort}/"),
+            Timeout = TimeSpan.FromSeconds(30),
+        };
+    }
+
+    public void Dispose()
+    {
+        _stopping.Cancel();
+        _ticker.Join(TimeSpan.FromSeconds(5));
+        _http.Dispose();
+        _handler.Dispose();
+        _hub.Dispose();
+        _member.Dispose();
+        _stopping.Dispose();
+
+        foreach (var directory in new[] { _memberDirectory, _hubDirectory })
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+        }
+    }
+
+    private string MemberUrl => $"https://127.0.0.1:{_member.Server.WebBoundPort}/";
+
+    [Fact]
+    public async Task APairedMemberIsManagedThroughTheHub()
+    {
+        var csrf = await SignInAsync();
+
+        var added = await PostAsync(csrf, "/api/fleet/add", new
+        {
+            name = "member",
+            url = MemberUrl,
+            pairing = _member.Server.WebPairingCode,
+        });
+
+        Assert.True(added.GetProperty("ok").GetBoolean(), added.ToString());
+
+        // The members file holds the token, so it is the hub's own record of
+        // the pairing — and survives the hub being rebuilt.
+        var members = File.ReadAllText(Path.Combine(_hubDirectory, "fleet", FleetHub.MembersFile));
+        Assert.Contains(_member.Server.WebPairingCode!, members, StringComparison.Ordinal);
+
+        // The overview carries the member's own state.
+        var overview = await GetJsonAsync("/api/fleet");
+        var entry = overview.GetProperty("members")[0];
+        Assert.Equal("member", entry.GetProperty("name").GetString());
+        Assert.Equal("The Member", entry.GetProperty("state").GetProperty("server").GetProperty("name").GetString());
+
+        // A read through the pass-through is the MEMBER's, not the hub's.
+        var state = await GetJsonAsync("/h/member/api/state");
+        Assert.Equal("The Member", state.GetProperty("server").GetProperty("name").GetString());
+
+        // A command needs the HUB's CSRF token: the hub is the panel the browser
+        // is signed in to, and the member only ever sees the hub's bearer token.
+        using (var bare = new HttpRequestMessage(HttpMethod.Post, "/h/member/api/command"))
+        {
+            bare.Content = new StringContent("""{"cmd":"config"}""", Encoding.UTF8, "application/json");
+            Assert.Equal(HttpStatusCode.Forbidden, (await _http.SendAsync(bare)).StatusCode);
+        }
+
+        var config = await PostAsync(csrf, "/h/member/api/command", new { cmd = "config" });
+        Assert.True(config.GetProperty("ok").GetBoolean(), config.ToString());
+
+        // The event stream is relayed as it comes.
+        using var events = await _http.GetAsync("/h/member/api/events", HttpCompletionOption.ResponseHeadersRead);
+        Assert.Equal(HttpStatusCode.OK, events.StatusCode);
+
+        using var reader = new StreamReader(await events.Content.ReadAsStreamAsync());
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+
+        string? line;
+
+        do
+        {
+            line = await reader.ReadLineAsync(deadline.Token);
+        }
+        while (line is not null && line != "event: state");
+
+        Assert.Equal("event: state", line);
+        var data = await reader.ReadLineAsync(deadline.Token);
+        Assert.Contains("The Member", data, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AWrongFingerprintIsNotPaired()
+    {
+        var csrf = await SignInAsync();
+
+        Assert.True(WebIdentity.TryParsePairingCode(_member.Server.WebPairingCode, out var token, out _));
+
+        // The right token, but a certificate pin that is not this member's:
+        // exactly what a man in the middle would present.
+        var reply = await PostAsync(csrf, "/api/fleet/add", new
+        {
+            name = "member",
+            url = MemberUrl,
+            pairing = WebIdentity.PairingCode(token, new string('0', 64)),
+        });
+
+        Assert.False(reply.GetProperty("ok").GetBoolean());
+        Assert.False(File.Exists(Path.Combine(_hubDirectory, "fleet", FleetHub.MembersFile)));
+    }
+
+    [Fact]
+    public async Task AWrongTokenIsNotPaired()
+    {
+        var csrf = await SignInAsync();
+
+        var reply = await PostAsync(csrf, "/api/fleet/add", new
+        {
+            name = "member",
+            url = MemberUrl,
+            pairing = WebIdentity.PairingCode(new string('x', 43), _member.Server.WebFingerprint!),
+        });
+
+        Assert.False(reply.GetProperty("ok").GetBoolean());
+        Assert.Contains("refused", reply.GetProperty("error").GetString(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("/h/member/api/login")]
+    [InlineData("/h/member/api/logout")]
+    [InlineData("/h/member/")]
+    [InlineData("/h/nobody/api/state")]
+    public async Task OnlyTheListedRoutesOfAKnownMemberPassThrough(string path)
+    {
+        var csrf = await SignInAsync();
+
+        await PostAsync(csrf, "/api/fleet/add", new
+        {
+            name = "member",
+            url = MemberUrl,
+            pairing = _member.Server.WebPairingCode,
+        });
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, path);
+        request.Headers.Add("X-CSRF-Token", csrf);
+        request.Content = new StringContent("""{"password":"x"}""", Encoding.UTF8, "application/json");
+
+        Assert.Equal(HttpStatusCode.NotFound, (await _http.SendAsync(request)).StatusCode);
+    }
+
+    [Fact]
+    public async Task TheFleetRoutesRefuseAnUnauthenticatedBrowser()
+    {
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _http.GetAsync("/api/fleet")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _http.GetAsync("/h/member/api/state")).StatusCode);
+    }
+
+    [Fact]
+    public void AHubReachableFromTheNetworkWithoutTlsIsRefused()
+    {
+        var options = WebAdminOptions.Disabled with { Enabled = true, Bind = "0.0.0.0", FleetDirectory = "fleet" };
+
+        Assert.Throws<ArgumentException>(options.Validate);
+
+        (options with { Bind = "127.0.0.1" }).Validate();
+        (options with { CertificatePath = WebAdminOptions.AutoCertificate }).Validate();
+    }
+
+    [Fact]
+    public void TheMembersFileSkipsWhatItCannotRead()
+    {
+        var pairing = WebIdentity.PairingCode(new string('a', 43), new string('b', 64));
+
+        var members = FleetHub.Parse(
+        [
+            "; comment",
+            "[good]",
+            "Url=https://203.0.113.7:8191/",
+            "Pairing=" + pairing,
+            "[plain-http]",
+            "Url=http://203.0.113.8:8191/",
+            "Pairing=" + pairing,
+            "[no/slashes]",
+            "Url=https://203.0.113.9:8191/",
+            "Pairing=" + pairing,
+            "[no-pairing]",
+            "Url=https://203.0.113.10:8191/",
+        ]);
+
+        Assert.Equal("good", Assert.Single(members).Name);
+    }
+
+    private static string TempDirectory(string role)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"gg2-fleet-{role}-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    private async Task<string> SignInAsync()
+    {
+        var reply = await _http.PostAsync(
+            "/api/login",
+            new StringContent(JsonSerializer.Serialize(new { password = HubPassword }), Encoding.UTF8, "application/json"));
+
+        reply.EnsureSuccessStatusCode();
+
+        using var document = JsonDocument.Parse(await reply.Content.ReadAsStringAsync());
+        return document.RootElement.GetProperty("csrf").GetString()!;
+    }
+
+    private async Task<JsonElement> GetJsonAsync(string path)
+    {
+        var reply = await _http.GetAsync(path);
+        var text = await reply.Content.ReadAsStringAsync();
+
+        Assert.True(reply.IsSuccessStatusCode, $"{path}: {(int)reply.StatusCode} {text}");
+        return JsonDocument.Parse(text).RootElement.Clone();
+    }
+
+    private async Task<JsonElement> PostAsync(string csrf, string path, object body)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, path);
+        request.Headers.Add("X-CSRF-Token", csrf);
+        request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+
+        var reply = await _http.SendAsync(request);
+        var text = await reply.Content.ReadAsStringAsync();
+
+        return JsonDocument.Parse(text).RootElement.Clone();
+    }
+}

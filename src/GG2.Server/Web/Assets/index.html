@@ -49,12 +49,14 @@
     </div>
 
     <div class="chips" id="chips">
+      <a class="chip chip-host" id="chip-host" href="/" title="Viewing a fleet member through the hub; back to the hub's own server" hidden><i class="chip-key">member</i><b id="chip-host-name">—</b></a>
       <span class="chip" id="chip-map" title="Current map"><i class="chip-key">map</i><b>—</b></span>
       <span class="chip" id="chip-mode" title="Gamemode"><i class="chip-key">mode</i><b>—</b></span>
     </div>
 
     <div class="topbar-right">
       <span class="live" id="live" data-state="connecting"><span class="live-dot"></span><span id="live-text">connecting</span></span>
+      <button class="btn btn-quiet" id="fleet-open" type="button" hidden>Fleet</button>
       <button class="btn btn-quiet" id="analytics-open" type="button">Analytics</button>
       <button class="btn btn-quiet" id="settings-open" type="button">Settings</button>
       <button class="btn btn-quiet btn-warn" id="restart" type="button">Restart</button>
@@ -520,6 +522,55 @@
 
       <p class="an-foot" id="an-foot"></p>
     </div>
+  </div>
+</dialog>
+
+<!--
+  The fleet: every server this hub manages, and pairing a new one. Only shown on
+  a hub ([Web] FleetDirectory). Opening a member reloads the page with ?host=,
+  which points the whole dashboard at that member through the hub.
+-->
+<dialog class="sheet sheet-wide" id="fleet" aria-labelledby="fleet-title">
+  <header class="sheet-head">
+    <div>
+      <h3 id="fleet-title">Fleet</h3>
+      <p class="sheet-sub" id="fleet-sub">The servers this hub manages.</p>
+    </div>
+    <div class="sheet-tools">
+      <button class="btn btn-quiet" id="fleet-refresh" type="button">Refresh</button>
+      <button class="btn btn-quiet" id="fleet-close" type="button" aria-label="Close">Close</button>
+    </div>
+  </header>
+
+  <div class="sheet-body">
+    <table class="roster fleet-table">
+      <thead>
+        <tr><th>Member</th><th>Server</th><th>Map</th><th>Players</th><th>Tick</th><th>Build</th><th></th></tr>
+      </thead>
+      <tbody id="fleet-rows"></tbody>
+    </table>
+    <p class="sheet-empty" id="fleet-empty" hidden>No members yet. Pair one below.</p>
+
+    <section class="sheet-group">
+      <h4>Pair a server</h4>
+      <p class="hint">
+        On the server to add, set <code>[Web] Certificate=auto</code>, <code>FleetMember=1</code>,
+        <code>Bind=0.0.0.0</code> and <code>AllowFrom=</code> this hub's address, then restart it.
+        It prints a pairing code at startup.
+      </p>
+      <form class="fleet-add" id="fleet-add" autocomplete="off">
+        <label class="field"><span>Name</span>
+          <input type="text" id="fleet-name" required maxlength="32" spellcheck="false" placeholder="us-east"></label>
+        <label class="field"><span>Panel URL</span>
+          <input type="text" id="fleet-url" required spellcheck="false" placeholder="https://203.0.113.7:8191/"></label>
+        <label class="field fleet-pairing"><span>Pairing code</span>
+          <input type="password" id="fleet-pairing" required spellcheck="false" autocomplete="off"></label>
+        <div class="btn-row btn-row-end">
+          <button class="btn btn-primary" id="fleet-add-button" type="submit">Pair</button>
+        </div>
+        <p class="login-error" id="fleet-error" role="alert" hidden></p>
+      </form>
+    </section>
   </div>
 </dialog>
 
