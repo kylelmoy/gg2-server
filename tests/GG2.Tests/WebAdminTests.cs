@@ -333,6 +333,7 @@ public sealed class WebAdminTests : IDisposable
     // the assertion: refused is fine, "unknown cmd" is not. What the verb actually
     // does is gated by ServerRestartTests, which owns a config file.
     [InlineData("""{"cmd":"config-set","settings":{"Server.ServerName":"x"}}""")]
+    [InlineData("""{"cmd":"config-install","content":"","dryRun":true}""")]
 
     // ⛔ NOT in this theory: "restart" tears the server down, and the harness is
     // running it. It is gated by RestartTests instead, which owns a server it is

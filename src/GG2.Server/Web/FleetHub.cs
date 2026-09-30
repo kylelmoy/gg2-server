@@ -78,6 +78,125 @@ public sealed class FleetHub : IDisposable
     /// <summary>Held around every <see cref="Config"/> call.</summary>
     public Lock ConfigLock { get; } = new();
 
+    /// <summary>
+    /// A member's <c>gg2.ini</c> as the fleet settings say it should be — before
+    /// the member puts its own host-local values back.
+    /// </summary>
+    /// <remarks>Throws <see cref="FormatException"/> naming the member when it would not start.</remarks>
+    public string Render(string name)
+    {
+        lock (ConfigLock)
+        {
+            var commonPath = FleetConfig.CommonPath(_directory);
+
+            if (!File.Exists(commonPath))
+                throw new FormatException("there are no fleet settings yet; save some on the Fleet settings page first");
+
+            var overlayPath = FleetConfig.OverlayPath(_directory, name);
+
+            return FleetConfig.Render(
+                File.ReadAllLines(commonPath),
+                File.Exists(overlayPath) ? File.ReadAllLines(overlayPath) : null,
+                name,
+                "the fleet hub");
+        }
+    }
+
+    /// <summary>One control command to a member; its JSON reply, or an error reply.</summary>
+    public async Task<string> CommandAsync(string name, string body, CancellationToken token)
+    {
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+            timeout.CancelAfter(RequestTimeout);
+
+            using var reply = await SendAsync(name, HttpMethod.Post, "/api/command", body, timeout.Token);
+            var text = await reply.Content.ReadAsStringAsync(timeout.Token);
+
+            return reply.IsSuccessStatusCode || text.StartsWith('{')
+                ? text
+                : ControlCommands.Error($"{name} answered {(int)reply.StatusCode}");
+        }
+        catch (Exception e) when (e is HttpRequestException or OperationCanceledException or KeyNotFoundException)
+        {
+            return ControlCommands.Error($"{name}: {Describe(e)}");
+        }
+    }
+
+    /// <summary>
+    /// What a push would do to every member: each one's <c>config-install</c>
+    /// dry run, or why there is none.
+    /// </summary>
+    public async Task<string> CheckJsonAsync(CancellationToken token)
+    {
+        var members = Members;
+        var replies = await Task.WhenAll(members.Select(async member =>
+        {
+            string content;
+
+            try
+            {
+                content = Render(member.Name);
+            }
+            catch (Exception e) when (e is FormatException or IOException)
+            {
+                return ControlCommands.Error(e.Message);
+            }
+
+            return await CommandAsync(
+                member.Name,
+                JsonSerializer.Serialize(new { cmd = "config-install", content, dryRun = true }),
+                token);
+        }));
+
+        var json = new StringBuilder(8192);
+        json.Append("{\"ok\":true,\"members\":[");
+
+        for (var i = 0; i < members.Count; i++)
+        {
+            if (i > 0)
+                json.Append(',');
+
+            json.Append("{\"name\":\"").Append(ControlCommands.Escape(members[i].Name)).Append("\",\"check\":")
+                .Append(replies[i]).Append('}');
+        }
+
+        json.Append("]}");
+        return json.ToString();
+    }
+
+    /// <summary>
+    /// Pushes the fleet settings to one member: renders again, installs against
+    /// the hash the operator previewed, and optionally restarts it at once.
+    /// </summary>
+    public async Task<string> PushAsync(string name, string expected, bool force, bool restart, CancellationToken token)
+    {
+        string content;
+
+        try
+        {
+            content = Render(name);
+        }
+        catch (Exception e) when (e is FormatException or IOException)
+        {
+            return ControlCommands.Error(e.Message);
+        }
+
+        var installed = await CommandAsync(
+            name,
+            JsonSerializer.Serialize(new { cmd = "config-install", content, expected, force }),
+            token);
+
+        if (!restart || !installed.Contains("\"ok\":true", StringComparison.Ordinal))
+            return installed;
+
+        var restarted = await CommandAsync(name, "{\"cmd\":\"restart\"}", token);
+
+        return restarted.Contains("\"ok\":true", StringComparison.Ordinal)
+            ? installed[..^1] + ",\"restarted\":true}"
+            : ControlCommands.Error($"installed, but the restart was refused: {restarted}");
+    }
+
     /// <summary>The fleet directory: <c>members.ini</c>, and later the shared config and overlays.</summary>
     public string DirectoryPath => _directory;
 

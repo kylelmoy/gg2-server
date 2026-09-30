@@ -165,6 +165,10 @@ public static class ControlCommands
 
         "config-set" => ConfigSet(server, request),
 
+        // A whole file from a fleet hub, with host-local keys kept and a
+        // compare-and-swap on the current file. ConfigInstall.
+        "config-install" => ConfigInstall.Run(server, request),
+
         "restart" => Do(server.RequestRestart),
 
         // --- live settings -----------------------------------------------------

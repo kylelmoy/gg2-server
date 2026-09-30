@@ -616,6 +616,14 @@ public sealed class WebAdminServer : IDisposable
                     lock (_hub.ConfigLock)
                         body = _hub.Config.Save(request.Body);
                     return await JsonAsync(stream, 200, body, token);
+
+                // What a push would change on every member, as each member's own
+                // dry run — POST, because it asks every member to do work.
+                case ("POST", "/api/fleet/push/check"):
+                    return await JsonAsync(stream, 200, await _hub.CheckJsonAsync(token), token);
+
+                case ("POST", "/api/fleet/push"):
+                    return await FleetPushAsync(request, stream, token);
             }
         }
 
@@ -671,6 +679,9 @@ public sealed class WebAdminServer : IDisposable
                 return await JsonAsync(stream, 200, await ExecuteAsync("{\"cmd\":\"analytics\"}"), token);
 
             case ("POST", "/api/command"):
+                if (member && HostLocalRefusal(request.Body) is { } refusal)
+                    return await JsonAsync(stream, 403, Error(refusal), token);
+
                 return await JsonAsync(stream, 200, await ExecuteAsync(request.Body), token);
 
             default:
@@ -816,6 +827,49 @@ public sealed class WebAdminServer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Why a hub's token may not send this command, or null if it may.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>A hub token never changes a host-local setting</b> — a path, or
+    /// anything in <c>[Web]</c>. <c>config-install</c> keeps them itself; this is
+    /// the same rule for <c>config-set</c>, so the one credential the hub holds
+    /// for every member cannot choose where a member writes or cut the hub off
+    /// from it. The member's own password still can, from its own panel.
+    /// </remarks>
+    internal static string? HostLocalRefusal(string body)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("cmd", out var cmd)
+                || cmd.GetString() != "config-set"
+                || !root.TryGetProperty("settings", out var settings)
+                || settings.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            foreach (var change in settings.EnumerateObject())
+            {
+                if (ServerSettings.Find(change.Name) is { HostLocal: true } setting)
+                {
+                    return $"{setting.Id} is host-local, and a fleet hub may not change it; "
+                        + "set it from this server's own panel";
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Dispatch answers malformed JSON itself.
+        }
+
+        return null;
+    }
+
     private async Task<bool> FleetAddAsync(HttpRequest request, Stream stream, CancellationToken token)
     {
         string name, url, pairing;
@@ -839,6 +893,32 @@ public sealed class WebAdminServer : IDisposable
 
         _log.Info($"fleet: paired with {name.Trim()} at {url.Trim()}");
         return await JsonAsync(stream, 200, "{\"ok\":true}", token);
+    }
+
+    private async Task<bool> FleetPushAsync(HttpRequest request, Stream stream, CancellationToken token)
+    {
+        string name, expected;
+        bool force, restart;
+
+        try
+        {
+            var root = JsonDocument.Parse(request.Body).RootElement;
+            name = root.GetProperty("name").GetString() ?? string.Empty;
+            expected = root.TryGetProperty("expected", out var x) ? x.GetString() ?? string.Empty : string.Empty;
+            force = root.TryGetProperty("force", out var f) && f.ValueKind == JsonValueKind.True;
+            restart = root.TryGetProperty("restart", out var r) && r.ValueKind == JsonValueKind.True;
+        }
+        catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException)
+        {
+            return await JsonAsync(stream, 400, Error("expected {name, expected, force?, restart?}"), token);
+        }
+
+        var reply = await _hub!.PushAsync(name, expected, force, restart, token);
+
+        if (reply.Contains("\"ok\":true", StringComparison.Ordinal))
+            _log.Info($"fleet: pushed the fleet settings to {name}{(force ? " (forced)" : string.Empty)}{(restart ? ", restarting it" : string.Empty)}");
+
+        return await JsonAsync(stream, 200, reply, token);
     }
 
     private async Task<bool> FleetRemoveAsync(HttpRequest request, Stream stream, CancellationToken token)

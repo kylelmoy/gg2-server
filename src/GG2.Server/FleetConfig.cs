@@ -155,14 +155,15 @@ public static class FleetConfig
     }
 
     /// <summary><see cref="Render(string, string)"/> over files already in memory.</summary>
-    public static string Render(string[] common, string[]? overlay, string destination)
+    public static string Render(
+        string[] common, string[]? overlay, string destination, string managedBy = "scripts/deploy.sh --config")
     {
         var text = new StringBuilder(4096);
 
         text.Append("; Rendered from ").Append(CommonFileName).Append(" and ")
             .Append(HostsDirectoryName).Append('/').Append(OverlayFileName(destination))
             .Append(" for ").Append(destination).Append(".\n");
-        text.Append("; Managed by scripts/deploy.sh --config. An edit here, or a save from the admin\n");
+        text.Append("; Managed by ").Append(managedBy).Append(". An edit here, or a save from the admin\n");
         text.Append("; panel, is kept - but the next push stops for this server until it is forced.\n");
         text.Append("; Where a key appears twice, the LAST one is the one in force.\n\n");
 

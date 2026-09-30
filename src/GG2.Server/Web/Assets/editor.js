@@ -74,13 +74,16 @@ function changeCount() {
 const onHub = location.pathname.startsWith('/fleet/');
 let hubCsrf = '';
 
+async function ensureCsrf() {
+  if (hubCsrf) return;
+  const session = await (await fetch('/api/session')).json();
+  if (!session.authenticated) { location.href = '/'; throw new Error('signed out'); }
+  hubCsrf = session.csrf || '';
+}
+
 async function api(path, options = {}) {
   if (onHub) {
-    if (!hubCsrf) {
-      const session = await (await fetch('/api/session')).json();
-      if (!session.authenticated) { location.href = '/'; throw new Error('signed out'); }
-      hubCsrf = session.csrf || '';
-    }
+    await ensureCsrf();
 
     const reply = await fetch(path.replace('/api/', '/api/fleet/config/'), {
       ...options,
@@ -489,6 +492,152 @@ async function preview() {
 
   $('ed-preview-dialog').showModal();
 }
+
+/* ---------- push (hub only) ----------------------------------------------- */
+
+/*
+ * Check asks every member for a DRY RUN of config-install: the member renders
+ * what it would write — with its own host-local values kept — and answers with
+ * the masked diff and the hash of its current file. Push then sends that hash
+ * back as `expected`, so a file that changed in between is refused rather than
+ * overwritten. A member whose file was never pushed, or was edited since, needs
+ * an explicit overwrite.
+ */
+let pushChecks = [];
+
+async function hubPost(path, body) {
+  await ensureCsrf();
+  const reply = await fetch(path, {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': hubCsrf, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}),
+  });
+  if (reply.status === 401) { location.href = '/'; throw new Error('signed out'); }
+  return reply.json();
+}
+
+async function checkPush() {
+  const list = $('ed-push-list');
+  list.replaceChildren(Object.assign(document.createElement('p'), { className: 'hint', textContent: 'Asking every server…' }));
+
+  let reply;
+  try {
+    reply = await hubPost('/api/fleet/push/check');
+  } catch {
+    list.replaceChildren(Object.assign(document.createElement('p'), { className: 'hint warn', textContent: 'The hub did not answer.' }));
+    return;
+  }
+
+  pushChecks = reply.members || [];
+  renderPush();
+}
+
+function renderPush() {
+  const list = $('ed-push-list');
+  list.replaceChildren();
+
+  const check = document.createElement('button');
+  check.type = 'button';
+  check.className = 'btn';
+  check.textContent = pushChecks.length ? 'Check again' : 'Check what a push would change';
+  check.addEventListener('click', checkPush);
+  list.appendChild(check);
+
+  if (changeCount() > 0 && pushChecks.length) {
+    list.appendChild(Object.assign(document.createElement('p'),
+      { className: 'hint warn', textContent: 'Unsaved changes are not pushed. Save first.' }));
+  }
+
+  for (const m of pushChecks) {
+    const row = document.createElement('div');
+    row.className = 'ed-push-row';
+
+    const title = Object.assign(document.createElement('strong'), { textContent: m.name });
+    const note = document.createElement('span');
+    row.append(title, note);
+
+    const c = m.check;
+
+    if (!c.ok) {
+      note.className = 'hint warn';
+      note.textContent = c.error;
+      list.appendChild(row);
+      continue;
+    }
+
+    const changes = c.diff.filter((d) => d.op === '+' || d.op === '-').length;
+
+    if (c.unchanged && c.managed && !c.editedSincePush) {
+      note.className = 'hint';
+      note.textContent = 'up to date';
+      list.appendChild(row);
+      continue;
+    }
+
+    const needsForce = !c.managed || c.editedSincePush;
+    note.className = needsForce ? 'hint warn' : 'hint';
+    note.textContent = c.unchanged
+      ? 'same settings; a push only marks it managed'
+      : `${changes} line${changes === 1 ? '' : 's'} change`
+        + (!c.managed ? ' — never pushed: replaces a hand-written file'
+          : c.editedSincePush ? ' — edited on the server since the last push' : '');
+
+    const tools = document.createElement('div');
+    tools.className = 'btn-row';
+
+    const diff = document.createElement('button');
+    diff.type = 'button';
+    diff.className = 'btn btn-quiet';
+    diff.textContent = 'Diff';
+    diff.addEventListener('click', () => showDiff(m));
+
+    const push = document.createElement('button');
+    push.type = 'button';
+    push.className = needsForce ? 'btn btn-warn' : 'btn btn-primary';
+    push.textContent = needsForce ? 'Overwrite' : 'Push';
+    push.addEventListener('click', () => doPush(m, needsForce, false));
+
+    const now = document.createElement('button');
+    now.type = 'button';
+    now.className = 'btn btn-quiet btn-warn';
+    now.textContent = 'Push & restart';
+    now.title = 'Restart at once, dropping anyone connected. Otherwise the server applies it the next time it is empty.';
+    now.addEventListener('click', () => doPush(m, needsForce, true));
+
+    tools.append(diff, push, now);
+    row.appendChild(tools);
+    list.appendChild(row);
+  }
+}
+
+function showDiff(m) {
+  $('ed-preview-title').textContent = `${m.name} — what a push changes`;
+  $('ed-preview-sub').textContent = `now ${m.check.current.slice(0, 12)} → after ${m.check.next.slice(0, 12)}`;
+  $('ed-preview-text').textContent = m.check.diff
+    .map((d) => (d.op === '…' ? '…' : `${d.op} ${d.text}`))
+    .join('\n') || '(no line changes)';
+  $('ed-preview-dialog').showModal();
+}
+
+async function doPush(m, force, restart) {
+  const warning = restart
+    ? `Push to ${m.name} and restart it now? Everyone connected to it is dropped.`
+    : force
+      ? `Overwrite ${m.name}'s configuration? Look at the diff first: what it loses is not kept anywhere but gg2.ini.prev.`
+      : null;
+
+  if (warning && !window.confirm(warning)) return;
+
+  const reply = await hubPost('/api/fleet/push', { name: m.name, expected: m.check.current, force, restart });
+
+  if (!reply.ok) toast(`${m.name}: ${reply.error}`, 'bad');
+  else if (reply.restarted) toast(`${m.name}: pushed, restarting`, 'good');
+  else toast(`${m.name}: pushed; it applies the next time nobody is connected`, 'good');
+
+  await checkPush();
+}
+
+if (onHub) renderPush();
 
 $('ed-save').addEventListener('click', save);
 $('ed-revert').addEventListener('click', () => { edits = freshEdits(); render(); });

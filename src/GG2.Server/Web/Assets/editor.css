@@ -113,3 +113,8 @@
   .ed-side { border-right: none; border-bottom: var(--border-width) solid var(--separator); }
   .sheet-fields { grid-template-columns: 1fr; }
 }
+
+/* The hub's push list, in the sidebar where config edit names deploy.sh. */
+#ed-push-list { display: flex; flex-direction: column; gap: 10px; }
+.ed-push-row { display: flex; flex-direction: column; gap: 4px; padding-top: 8px; border-top: 1px solid var(--separator); }
+.ed-push-row .btn-row { flex-wrap: wrap; gap: 6px; }

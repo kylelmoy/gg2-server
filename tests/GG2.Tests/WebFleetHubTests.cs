@@ -207,6 +207,84 @@ public sealed class WebFleetHubTests : IDisposable
         Assert.Contains("host-local", refused.GetProperty("error").GetString(), StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The whole push: a dry run with its diff, the refusal a hand-written file
+    /// gets, a forced install that keeps the member's host-local keys, the marker
+    /// the watcher reads, and a stale preview refused.
+    /// </summary>
+    [Fact]
+    public async Task APushInstallsTheFleetSettingsAndKeepsTheMembersOwn()
+    {
+        var memberFile = Path.Combine(_memberDirectory, "gg2.ini");
+
+        // A hand-written file on the member, with two host-local keys the fleet
+        // settings cannot name and one shared key they will change.
+        File.WriteAllText(memberFile, "[Settings]\nPlayerLimit=12\n\n[Web]\nAllowFrom=192.0.2.9\n\n[Server]\nBanFile=my-bans.txt\n");
+
+        var csrf = await SignInAsync();
+        await PostAsync(csrf, "/api/fleet/add", new { name = "member", url = MemberUrl, pairing = _member.Server.WebPairingCode });
+
+        await PostAsync(csrf, "/api/fleet/config/save", new
+        {
+            common = new Dictionary<string, string> { ["Settings.PlayerLimit"] = "20" },
+            hosts = new Dictionary<string, object>
+            {
+                ["member"] = new { set = new Dictionary<string, string> { ["Server.ServerName"] = "Renamed" } },
+            },
+        });
+
+        var check = (await PostAsync(csrf, "/api/fleet/push/check", new { })).GetProperty("members")[0].GetProperty("check");
+        Assert.True(check.GetProperty("ok").GetBoolean(), check.ToString());
+        Assert.False(check.GetProperty("managed").GetBoolean());
+        Assert.False(check.GetProperty("unchanged").GetBoolean());
+        Assert.Contains(check.GetProperty("diff").EnumerateArray(), d => d.GetProperty("op").GetString() == "-"
+            && d.GetProperty("text").GetString() == "PlayerLimit=12");
+
+        var current = check.GetProperty("current").GetString()!;
+
+        // Never pushed and hand-written: refused without force, and untouched.
+        var refused = await PostAsync(csrf, "/api/fleet/push", new { name = "member", expected = current });
+        Assert.False(refused.GetProperty("ok").GetBoolean());
+        Assert.Contains("PlayerLimit=12", File.ReadAllText(memberFile), StringComparison.Ordinal);
+
+        var pushed = await PostAsync(csrf, "/api/fleet/push", new { name = "member", expected = current, force = true });
+        Assert.True(pushed.GetProperty("ok").GetBoolean(), pushed.ToString());
+
+        var installed = File.ReadAllText(memberFile);
+        Assert.Contains("PlayerLimit=20", installed, StringComparison.Ordinal);
+        Assert.Contains("Renamed", installed, StringComparison.Ordinal);
+        Assert.Contains("AllowFrom=192.0.2.9", installed, StringComparison.Ordinal);
+        Assert.Contains("BanFile=my-bans.txt", installed, StringComparison.Ordinal);
+        Assert.DoesNotContain("PlayerLimit=12", installed, StringComparison.Ordinal);
+        Assert.Contains("PlayerLimit=12", File.ReadAllText(memberFile + ".prev"), StringComparison.Ordinal);
+
+        // The marker PushedConfigWatcher applies from: the new file's own hash.
+        Assert.Equal(
+            FleetConfig.Hash(File.ReadAllBytes(memberFile)),
+            File.ReadAllText(memberFile + FleetConfig.PushedSuffix).Trim());
+
+        // Now managed and in step.
+        var again = (await PostAsync(csrf, "/api/fleet/push/check", new { })).GetProperty("members")[0].GetProperty("check");
+        Assert.True(again.GetProperty("managed").GetBoolean());
+        Assert.True(again.GetProperty("unchanged").GetBoolean());
+
+        // A preview that has gone stale is refused, even forced.
+        var stale = await PostAsync(csrf, "/api/fleet/push", new { name = "member", expected = current, force = true });
+        Assert.False(stale.GetProperty("ok").GetBoolean());
+        Assert.Contains("changed since", stale.GetProperty("error").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AHubTokenMayNotSetAHostLocalSetting()
+    {
+        Assert.NotNull(WebAdminServer.HostLocalRefusal("""{"cmd":"config-set","settings":{"Web.AllowFrom":"0.0.0.0/0"}}"""));
+        Assert.NotNull(WebAdminServer.HostLocalRefusal("""{"cmd":"config-set","settings":{"Server.ServerName":"x","Web.FleetMember":"0"}}"""));
+
+        // The controls: a shared setting, and a different verb, pass.
+        Assert.Null(WebAdminServer.HostLocalRefusal("""{"cmd":"config-set","settings":{"Server.ServerName":"x"}}"""));
+        Assert.Null(WebAdminServer.HostLocalRefusal("""{"cmd":"state"}"""));
+    }
+
     [Fact]
     public async Task AWrongFingerprintIsNotPaired()
     {

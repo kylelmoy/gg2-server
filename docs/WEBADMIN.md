@@ -268,6 +268,24 @@ so. The three calls are `GET /api/fleet/config/model`, `GET
 /api/fleet/config/preview?host=` and `POST /api/fleet/config/save`, under the
 hub's session and CSRF token.
 
+**Pushing** is on the same page, in the sidebar. *Check* asks every member for a
+dry run of `config-install`; *Push* installs one member's; *Push & restart*
+restarts it at once instead of waiting for it to empty.
+
+| Piece | Rule |
+|---|---|
+| `config-install {content, expected, force?, dryRun?}` | The member's verb, in `ConfigInstall`, reachable from the control port like every other. Writes `gg2.ini`, `gg2.ini.prev` and the `.pushed` marker — what `deploy.sh --config` writes, so `PushedConfigWatcher` applies it at the first empty moment and `deploy.sh --status` reports it. |
+| Host-local keys | Removed from the incoming text and the member's current values put back, so a push never changes a path or `[Web]`. The page never offers them; this is what makes that true for a caller that uses the verb directly. |
+| `expected` | The hash of the member's file that the dry run reported. A file that changed since is refused, forced or not. |
+| `force` | Needed when the file was never pushed or was edited since its last push — `deploy.sh`'s two refusals. The page labels that button *Overwrite*. |
+| Validation | `ServerOptions.Validate`, which includes the bot-mode checks, before anything is written. |
+| The diff | Computed by the member with secrets masked, so no secret leaves it. |
+| Rendering | The hub renders `common.ini` + `hosts/<member>.ini` exactly as `FleetConfig.Render` does for `deploy.sh`. |
+
+**A hub token cannot set a host-local setting through `config-set` either**
+(`WebAdminServer.HostLocalRefusal`, a 403). The member's own password still can,
+from its own panel.
+
 `WebFleetHubTests` runs a real member over TLS and a real hub: pairing, a wrong
 pin, a wrong token, the overview, a read, a command with and without the hub's
 CSRF token, the relayed event stream and the route allowlist. What it does not
