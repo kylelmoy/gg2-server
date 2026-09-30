@@ -273,9 +273,15 @@ so. The three calls are `GET /api/fleet/config/model`, `GET
 /api/fleet/config/preview?host=` and `POST /api/fleet/config/save`, under the
 hub's session and CSRF token.
 
-**Pushing** is on the same page, in the sidebar. *Check* asks every member for a
-dry run of `config-install`; *Push* installs one member's; *Push & restart*
-restarts it at once instead of waiting for it to empty.
+The page is the dashboard's layout: its top bar, its server tabs (here *All
+servers*, then each member) and the Settings sheet's shell, drawn by the same
+`settings.js` — "The settings page" below.
+
+**Pushing** is the footer's *Push…* dialog, which checks every member when it
+opens. *Check* asks every member for a dry run of `config-install`; *Push*
+installs one member's; *Push & restart* restarts it at once instead of waiting
+for it to empty. Under `config edit` the same dialog names the `deploy.sh`
+commands instead.
 
 | Piece | Rule |
 |---|---|
@@ -572,6 +578,16 @@ replaces the character and leaves the player alone".
 beside each field. It renders `ServerSettings.All`, so **adding a setting needs
 no change here at all** — a new row appears on the page the day it is added to
 the table.
+
+**It and the fleet settings page are one design, drawn by one file.**
+`settings.js` owns the control, the field (label, tags, an action, help, notes),
+the grouping and the section rail; `app.js` and `editor.js` own only their rules
+— what a field starts with, what a change means, what Save sends. The rail
+jumps to a section, marks the one in view and puts a dot on any section holding
+an unsaved change, as a dot before the label marks the field. Tags are neutral
+for a fact (*shared*, *2 overrides*), the accent for a step outstanding
+(*restart pending*) and `--warning` for a save that will not take (*pinned*).
+Sections are kept whole even where `ServerSettings.All` interleaves them.
 
 **It edits the FILE, not the running server, and that is a decision rather
 than a gap.** Every subsystem reads its options exactly once, at

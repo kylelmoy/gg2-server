@@ -1214,7 +1214,11 @@ kbd {
 }
 
 .sheet-tools { display: flex; gap: 8px; align-items: center; flex: none; }
-.sheet-tools input { width: 180px; }
+.sheet-tools input:not([type='checkbox']) { width: 180px; }
+
+/* The title gives way before the tools do, and wraps rather than shrinking to
+   a column one word wide. */
+.sheet-head > div:first-child { flex: 1; min-width: 200px; }
 
 .sheet-note {
   margin: 0;
@@ -1248,46 +1252,174 @@ kbd {
   z-index: 1;
 }
 
+/* ---------- the settings shell -------------------------------------------- */
+
+/*
+ * What the Settings sheet and the settings page (/fleet/settings, `config edit`)
+ * share, drawn by settings.js: a rail of sections beside the fields, one field
+ * shape, and one set of tags. The sheet is a <dialog class="sheet cfg-sheet">;
+ * the page puts the same pieces in a .cfg-card (editor.css).
+ */
+
+/* A fixed height rather than the sheets' usual cap: with a rail beside the
+   fields, a dialog that shrank as the filter narrowed would move the rail out
+   from under the pointer on every keystroke. */
+.cfg-sheet { width: min(1040px, calc(100vw - 32px)); height: min(860px, calc(100vh - 48px)); }
+
+/* Notes read as one strip, however many there are, and are capped: a fleet
+   with a warning per server must not push the fields off the screen. */
+.cfg-notes {
+  max-height: 148px;
+  overflow-y: auto;
+  padding: 4px 0;
+  border-bottom: var(--border-width) solid var(--separator);
+}
+
+.cfg-notes:empty,
+.cfg-notes:not(:has(> :not([hidden]))) { display: none; }
+
+.cfg-note {
+  margin: 0;
+  padding: 6px 24px;
+  font-size: var(--text-tiny);
+  line-height: 1.5;
+}
+
+.cfg-note[hidden] { display: none; }
+.cfg-note.warn { color: var(--warning); }
+.cfg-note.bad { color: var(--danger); }
+.cfg-notes:has(> .cfg-note.warn:not([hidden])) { background: color-mix(in oklab, var(--warning) 8%, transparent); }
+.cfg-notes:has(> .cfg-note.bad:not([hidden])) { background: var(--danger-soft); }
+
+.cfg-main { flex: 1; min-height: 0; display: grid; grid-template-columns: 172px minmax(0, 1fr); }
+
+/* The rail: every section, the one in view marked, and a dot on any section
+   holding an unsaved change — which is how an edit scrolled out of sight stays
+   findable in sixty-odd fields. */
+.cfg-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 10px;
+  overflow-y: auto;
+  border-right: var(--border-width) solid var(--separator);
+}
+
+.cfg-rail-item {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+  padding: 7px 12px;
+  border-radius: var(--radius-lg);
+  font: 500 var(--text-tiny) var(--font-sans);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s var(--ease), color 0.15s var(--ease);
+}
+
+.cfg-rail-item:hover { color: var(--foreground); background: var(--default-soft); }
+.cfg-rail-item[aria-current='true'] { color: var(--foreground); background: var(--default); }
+.cfg-rail-item.is-dirty::after { content: ''; width: 6px; height: 6px; border-radius: var(--radius-pill); background: var(--accent); flex: none; }
+
+/* position: relative so a group's offsetTop is measured from here, which is
+   what the rail scrolls to and spies on. */
+.cfg-body { position: relative; overflow-y: auto; padding: 0 24px 24px; }
+
 /* Two columns where there is room. A settings list one field wide is a very long
    scroll; three columns makes the help text unreadably narrow. */
-.sheet-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 20px; }
+.cfg-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 20px; }
 
-.sheet-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cfg-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 
-.sheet-field > label {
+.cfg-field-head { display: flex; align-items: center; gap: 8px; min-height: 20px; }
+
+.cfg-field-head label {
   font-size: var(--text-small);
   font-weight: 500;
   color: var(--foreground);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.sheet-field input:not([type='checkbox']),
-.sheet-field select { width: 100%; }
+.cfg-tags { display: flex; align-items: center; gap: 4px; margin-left: auto; flex: none; }
 
-.sheet-check { width: 18px; height: 18px; accent-color: var(--accent); align-self: flex-start; }
-
-/* A setting the command line has pinned. Marked rather than disabled: saving it
-   is still the right thing to do before the flag is removed, and a field that
-   simply did not respond would read as a broken page. */
-.sheet-field.is-overridden > label::after {
-  content: 'pinned';
-  margin-left: 8px;
+/* HeroUI Chip, flat and small. Neutral for a fact ("shared"), the accent for a
+   step outstanding ("restart pending"), --warning for a save that will not take
+   ("pinned"). */
+.cfg-tag {
   font: var(--label);
   letter-spacing: var(--label-tracking);
   text-transform: uppercase;
-  color: var(--warning);
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--default-soft);
+  color: var(--muted);
+  white-space: nowrap;
 }
 
-/* Saved into the file and not yet applied. The accent rather than --warning:
-   nothing is wrong, a step is outstanding — and the two must not look the same,
-   because "pinned" means the save will never take and this means it has not yet. */
-.sheet-field.is-pending > label::before {
-  content: 'restart pending';
-  float: right;
-  font: var(--label);
-  letter-spacing: var(--label-tracking);
-  text-transform: uppercase;
+.cfg-tag.accent { background: var(--accent-soft); color: var(--accent); }
+.cfg-tag.warn { background: var(--warning-soft); color: var(--warning); }
+
+.cfg-action {
+  appearance: none;
+  border: 0;
+  background: transparent;
   color: var(--accent);
+  font: var(--label);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
 }
+
+.cfg-action:hover { background: var(--accent-soft); }
+
+.cfg-field input:not([type='checkbox']),
+.cfg-field select { width: 100%; }
+
+/* A choice looks like the text fields beside it, not like the platform's. */
+.cfg-field select {
+  appearance: none;
+  padding: 9px 34px 9px 12px;
+  background: var(--field-background)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23a29ea8' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E")
+    no-repeat right 12px center;
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-field);
+  color: var(--foreground);
+  font: inherit;
+  cursor: pointer;
+}
+
+.cfg-field select:hover { border-color: var(--segment); }
+.cfg-field select:focus { outline: 2px solid var(--focus); outline-offset: 2px; border-color: var(--accent); }
+.cfg-field select option { background: var(--overlay); color: var(--foreground); }
+
+.cfg-check { width: 18px; height: 18px; accent-color: var(--accent); align-self: flex-start; }
+
+/* Edited and not saved: a dot before the label, the rail's dot at field size. */
+.cfg-field.is-dirty .cfg-field-head label::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 7px;
+  vertical-align: middle;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+
+/* The settings page: a server's own value, against one it takes from the
+   shared settings. Inherited values are shown, and typing one makes it own. */
+.cfg-field.is-own .cfg-field-head label { color: var(--accent); }
+.cfg-field.is-inherited :is(input, select):not(:focus) { opacity: 0.55; }
 
 .sheet-foot {
   display: flex;
@@ -1400,7 +1532,12 @@ kbd {
 }
 
 @media (max-width: 720px) {
-  .sheet-fields { grid-template-columns: minmax(0, 1fr); }
+  .cfg-fields { grid-template-columns: minmax(0, 1fr); }
+
+  /* The rail becomes a row of sections above the fields. */
+  .cfg-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .cfg-rail { flex-direction: row; overflow-x: auto; padding: 8px 12px; border-right: 0; border-bottom: var(--border-width) solid var(--separator); }
+  .cfg-body { padding: 0 16px 20px; }
   .sheet-head { flex-direction: column; }
   .sheet-tools input { width: 100%; }
   .sheet-foot { flex-direction: column; align-items: stretch; }
@@ -1467,6 +1604,10 @@ kbd {
 .hosts[hidden] { display: none; }
 
 .host-tab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 7px;

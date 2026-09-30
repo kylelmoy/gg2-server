@@ -13,34 +13,32 @@
 <body>
 
 <!--
-  gg2-server config edit. Writes deploy/config/common.ini and one overlay per
-  host; scripts/deploy.sh --config pushes the result. FleetConfigEditor is the
-  logic and the rules; this page only draws them.
+  The settings page: common.ini and one overlay per server, in the layout
+  deploy/config uses. A fleet hub serves it at /fleet/settings and pushes over
+  HTTPS; `gg2-server config edit` serves it for scripts/deploy.sh --config.
+  FleetConfigEditor is the logic and the rules; this page only draws them, in
+  the same shell as the dashboard's Settings sheet (settings.js).
 -->
-<div class="ed">
-  <aside class="ed-side">
-    <div class="ed-brand">
-      <h1>Server configuration</h1>
-      <p class="sheet-sub" id="ed-directory">—</p>
+<div class="app cfg-page">
+  <header class="topbar">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 32 32" width="26" height="26" aria-hidden="true" focusable="false"><rect x="1" y="1" width="30" height="30" rx="9" fill="#2d2926" stroke="#463d36"/><path d="M7.5 23.5 16 6.5 16 23.5Z" fill="#ea6a5f"/><path d="M16 6.5 24.5 23.5 16 23.5Z" fill="#7ea6c2"/><path d="M7.5 23.5h17" stroke="#ef9849" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <div class="brand-text">
+        <strong id="ed-brand">Server configuration</strong>
+        <span class="brand-sub" id="ed-directory">—</span>
+      </div>
     </div>
 
-    <nav class="ed-scopes" id="ed-scopes" aria-label="What to edit"></nav>
-
-    <div class="ed-push" id="ed-hub" hidden>
-      <a class="btn btn-quiet" href="/">Back to the dashboard</a>
-      <p class="hint">Saving writes the hub's fleet settings. Push sends them to the servers.</p>
-      <div id="ed-push-list"></div>
+    <div class="topbar-right">
+      <a class="btn btn-quiet" id="ed-back" href="/" hidden>Dashboard</a>
     </div>
+  </header>
 
-    <div class="ed-push" id="ed-deploy">
-      <p class="hint">Saving writes files on this machine only. To send them to the servers:</p>
-      <code>scripts/deploy.sh --config --check</code>
-      <code>scripts/deploy.sh --config</code>
-      <p class="hint">Each server applies a push the next time nobody is connected.</p>
-    </div>
-  </aside>
+  <!-- What to edit: the shared settings, then each server. The dashboard's
+       server tabs, so the two pages read as one. -->
+  <nav class="hosts" id="ed-scopes" aria-label="What to edit"></nav>
 
-  <main class="ed-main">
+  <section class="cfg-card">
     <header class="sheet-head">
       <div>
         <h3 id="ed-title">—</h3>
@@ -48,27 +46,61 @@
       </div>
       <div class="sheet-tools">
         <label class="ed-only" id="ed-only-wrap" hidden>
-          <input type="checkbox" id="ed-only" class="sheet-check"> overridden only
+          <input type="checkbox" id="ed-only" class="cfg-check"> overridden only
         </label>
         <input type="search" id="ed-filter" placeholder="Filter settings"
                spellcheck="false" autocomplete="off" aria-label="Filter settings">
         <button class="btn btn-quiet" id="ed-preview" type="button" hidden>Preview gg2.ini</button>
+        <button class="btn btn-quiet" id="ed-adopt" type="button" hidden>Adopt…</button>
       </div>
     </header>
 
-    <div id="ed-notes"></div>
+    <div class="cfg-notes" id="ed-notes"></div>
 
-    <div class="sheet-body" id="ed-body"><p class="sheet-empty">Loading…</p></div>
+    <div class="cfg-main">
+      <nav class="cfg-rail" id="ed-rail" aria-label="Sections"></nav>
+      <div class="cfg-body" id="ed-body"><p class="sheet-empty">Loading…</p></div>
+    </div>
 
     <footer class="sheet-foot">
       <p class="hint" id="ed-status">No changes.</p>
       <div class="btn-row">
         <button class="btn" id="ed-revert" type="button" disabled>Revert</button>
         <button class="btn btn-primary" id="ed-save" type="button" disabled>Save</button>
+        <button class="btn" id="ed-push-open" type="button">Push…</button>
       </div>
     </footer>
-  </main>
+  </section>
 </div>
+
+<!-- Sending the saved settings to the servers: over HTTPS from a hub, or the
+     deploy.sh commands that do it for `config edit`. -->
+<dialog class="sheet" id="ed-push-dialog" aria-labelledby="ed-push-title">
+  <header class="sheet-head">
+    <div>
+      <h3 id="ed-push-title">Push</h3>
+      <p class="sheet-sub" id="ed-push-sub">Each server applies a push the next time nobody is connected.</p>
+    </div>
+    <div class="sheet-tools">
+      <button class="btn btn-quiet" id="ed-push-check" type="button">Check</button>
+      <button class="btn btn-quiet" id="ed-push-close" type="button">Close</button>
+    </div>
+  </header>
+  <p class="sheet-note warn" id="ed-push-unsaved" hidden>Unsaved changes are not pushed. Save first.</p>
+  <div class="sheet-body">
+    <div id="ed-hub" hidden>
+      <table class="roster ed-push-table">
+        <thead><tr><th>Server</th><th>What a push changes</th><th></th></tr></thead>
+        <tbody id="ed-push-list"></tbody>
+      </table>
+    </div>
+    <div class="ed-deploy" id="ed-deploy">
+      <p class="hint">Saving writes files on this machine only. To send them to the servers:</p>
+      <code>scripts/deploy.sh --config --check</code>
+      <code>scripts/deploy.sh --config</code>
+    </div>
+  </div>
+</dialog>
 
 <dialog class="sheet" id="ed-preview-dialog" aria-labelledby="ed-preview-title">
   <header class="sheet-head">
@@ -109,6 +141,8 @@
 
 <div class="toasts" id="toasts" aria-live="polite"></div>
 
+<script src="/common.js"></script>
+<script src="/settings.js"></script>
 <script src="/editor.js"></script>
 </body>
 </html>

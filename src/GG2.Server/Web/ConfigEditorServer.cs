@@ -150,6 +150,12 @@ public sealed class ConfigEditorServer : IDisposable
             case ("GET", "/editor.css"):
                 await AssetAsync(stream, "editor.css", "text/css; charset=utf-8", token);
                 return;
+            case ("GET", "/common.js"):
+                await AssetAsync(stream, "common.js", "text/javascript; charset=utf-8", token);
+                return;
+            case ("GET", "/settings.js"):
+                await AssetAsync(stream, "settings.js", "text/javascript; charset=utf-8", token);
+                return;
             case ("GET", "/app.css"):
                 await AssetAsync(stream, "app.css", "text/css; charset=utf-8", token);
                 return;

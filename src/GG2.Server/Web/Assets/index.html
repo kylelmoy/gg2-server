@@ -379,7 +379,7 @@
   once, at startup, so a half-applied change is a server nobody can reason about.
   The footer says so and the restart button beside it is what applies them.
 -->
-<dialog class="sheet" id="settings" aria-labelledby="settings-title">
+<dialog class="sheet cfg-sheet" id="settings" aria-labelledby="settings-title">
   <header class="sheet-head">
     <div>
       <h3 id="settings-title">Settings</h3>
@@ -392,16 +392,21 @@
     </div>
   </header>
 
-  <p class="sheet-note warn" id="settings-readonly" hidden></p>
-  <p class="sheet-note" id="settings-managed" hidden></p>
+  <div class="cfg-notes">
+    <p class="cfg-note warn" id="settings-readonly" hidden></p>
+    <p class="cfg-note" id="settings-managed" hidden></p>
+  </div>
 
-  <div class="sheet-body" id="settings-body"></div>
+  <div class="cfg-main">
+    <nav class="cfg-rail" id="settings-rail" aria-label="Sections"></nav>
+    <div class="cfg-body" id="settings-body"></div>
+  </div>
 
   <footer class="sheet-foot">
     <p class="hint" id="settings-status">
       Saved settings take effect when the server restarts.
     </p>
-    <div class="btn-row btn-row-end">
+    <div class="btn-row">
       <button class="btn" id="settings-revert" type="button" disabled>Revert</button>
       <button class="btn btn-primary" id="settings-save" type="button" disabled>Save</button>
       <button class="btn btn-warn" id="settings-save-restart" type="button" disabled>Save &amp; restart</button>
@@ -605,6 +610,7 @@
      fleet page, scripts/fleet-analytics.sh. -->
 <script src="/common.js" defer></script>
 <script src="/analytics.js" defer></script>
+<script src="/settings.js" defer></script>
 <script src="/app.js" defer></script>
 </body>
 </html>

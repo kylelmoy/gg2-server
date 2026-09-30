@@ -51,12 +51,55 @@ public sealed class WebAssetTests
     [InlineData("app.js")]
     [InlineData("common.js")]
     [InlineData("analytics.js")]
+    [InlineData("settings.js")]
+    [InlineData("editor.html")]
+    [InlineData("editor.css")]
+    [InlineData("editor.js")]
     [InlineData("favicon.svg")]
     [InlineData("world.json")]
     public void EveryAssetIsEmbedded(string name) => Assert.NotEmpty(Asset(name));
 
     /// <summary>The panel's scripts, in the order index.html loads them.</summary>
-    private static readonly string[] PanelScripts = ["common.js", "analytics.js", "app.js"];
+    private static readonly string[] PanelScripts = ["common.js", "analytics.js", "settings.js", "app.js"];
+
+    /// <summary>The settings page's scripts, in the order editor.html loads them.</summary>
+    private static readonly string[] EditorScripts = ["common.js", "settings.js", "editor.js"];
+
+    /// <summary>
+    /// Both pages load the scripts their script tags name, in that order — the
+    /// lists above are what the two checks below scan, so a page that stopped
+    /// loading one would otherwise be checked against a set it does not run.
+    /// </summary>
+    [Theory]
+    [InlineData("index.html")]
+    [InlineData("editor.html")]
+    public void TheScriptListsAreWhatThePagesLoad(string page)
+    {
+        var loaded = Regex.Matches(Asset(page), @"<script src=""/([^""]+)""").Select(m => m.Groups[1].Value);
+        Assert.Equal(page == "index.html" ? PanelScripts : EditorScripts, loaded);
+    }
+
+    /// <summary>The settings page's scripts declare no name twice, as the panel's do not.</summary>
+    [Fact]
+    public void TheSettingsPageDeclaresNoNameTwice()
+    {
+        var declared = Declarations(EditorScripts.Select(name => (name, Asset(name))).ToArray());
+        Assert.True(declared > 30, $"only {declared} top-level names found — the scan is broken");
+    }
+
+    /// <summary>Every element the settings page's scripts ask for by a literal id is in editor.html.</summary>
+    [Fact]
+    public void EveryIdTheSettingsPageAsksForIsInIt()
+    {
+        var present = Ids(Asset("editor.html"));
+        var wanted = WantedIds(string.Concat(EditorScripts.Select(Asset)));
+
+        Assert.True(wanted.Count > 25, $"only {wanted.Count} literal ids found — the scan is broken");
+
+        var missing = wanted.Where(id => !present.Contains(id)).ToList();
+
+        Assert.True(missing.Count == 0, $"not in editor.html: {string.Join(", ", missing)}");
+    }
 
     /// <summary>
     /// The line <c>scripts/fleet-analytics.sh</c> cuts the analytics sheet out

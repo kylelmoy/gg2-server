@@ -1,103 +1,31 @@
 /*
- * gg2-server config edit. The panel's app.css supplies the tokens, buttons,
- * fields and the settings sheet's field grid; this is only the two-column frame
- * around them and the host-override affordances.
+ * The settings page (/fleet/settings and `config edit`). app.css supplies the
+ * tokens, the top bar, the server tabs and the whole settings shell (.cfg-*);
+ * this is only the page frame around it and what the push and adopt dialogs add.
  */
 
-.ed { display: grid; grid-template-columns: 280px minmax(0, 1fr); height: 100dvh; }
+/* The page is the viewport's height and only the fields scroll, as in the
+   Settings sheet: sixty-odd fields and a save button that scrolls off the bottom
+   is a save button people do not find. */
+.cfg-page { height: 100dvh; padding-bottom: 16px; }
 
-.ed-side {
+.cfg-card {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 20px 16px;
-  border-right: var(--border-width) solid var(--separator);
-  background: var(--surface);
-  overflow-y: auto;
-}
-
-.ed-brand h1 { font-size: var(--text-medium); margin-bottom: 4px; }
-
-.ed-scopes { display: flex; flex-direction: column; gap: 4px; }
-
-.ed-scope {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--foreground);
-  text-align: left;
-  padding: 10px 12px;
-  border-radius: var(--radius-xl);
-  cursor: pointer;
-  font: inherit;
-}
-
-.ed-scope:hover { background: var(--default-soft); }
-.ed-scope[aria-current='true'] { background: var(--accent-soft); }
-
-.ed-scope strong { display: block; font-weight: 500; }
-.ed-scope span { display: block; font: var(--text-tiny) var(--font-mono); color: var(--muted); word-break: break-all; }
-.ed-scope.is-dirty strong::after { content: ' •'; color: var(--accent); }
-.ed-scope.is-bad span { color: var(--danger); }
-
-.ed-scopes-label {
-  font: var(--label);
-  letter-spacing: var(--label-tracking);
-  text-transform: uppercase;
-  color: var(--muted);
-  margin: 12px 12px 4px;
-}
-
-.ed-push { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
-
-.ed-push code {
-  font: var(--text-tiny) var(--font-mono);
-  background: var(--background);
+  background: var(--overlay);
   border: var(--border-width) solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 6px 8px;
-  user-select: all;
+  border-radius: var(--radius-3xl);
+  overflow: hidden;
 }
 
-.ed-main { display: flex; flex-direction: column; min-height: 0; background: var(--overlay); }
+/* A scope with unsaved edits, and a server whose overlay cannot be read. */
+.host-tab.is-dirty span:last-child::after { content: ' •'; color: var(--accent); }
+.host-tab.is-bad { color: var(--danger); }
 
-.ed-only { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--text-tiny); white-space: nowrap; }
-.ed-only .sheet-check { align-self: center; }
-
-.ed-note {
-  margin: 0;
-  padding: 10px 24px;
-  font-size: var(--text-tiny);
-  border-bottom: var(--border-width) solid var(--separator);
-}
-
-.ed-note.warn { color: var(--warning); background: color-mix(in oklab, var(--warning) 8%, transparent); }
-.ed-note.bad { color: var(--danger); background: var(--danger-soft); }
-
-.ed-row-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-
-.ed-override {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font: var(--label);
-  letter-spacing: var(--label-tracking);
-  text-transform: uppercase;
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: var(--radius-sm);
-}
-
-.ed-override:hover { color: var(--foreground); background: var(--default-soft); }
-
-/* A host's own value. Accent, because it is the thing this page exists to show. */
-.sheet-field.is-host > label { color: var(--accent); }
-.sheet-field.is-host .ed-override { color: var(--accent); }
-
-/* Inherited from common.ini: shown, not editable until overridden. */
-.sheet-field.is-inherited input:disabled,
-.sheet-field.is-inherited select:disabled { opacity: 0.55; }
+.ed-only { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--text-tiny); white-space: nowrap; cursor: pointer; }
+.ed-only .cfg-check { align-self: center; }
 
 .ed-where { font-size: var(--text-tiny); color: var(--muted); }
 
@@ -108,16 +36,28 @@
   word-break: break-all;
 }
 
-@media (max-width: 760px) {
-  .ed { grid-template-columns: 1fr; height: auto; }
-  .ed-side { border-right: none; border-bottom: var(--border-width) solid var(--separator); }
-  .sheet-fields { grid-template-columns: 1fr; }
-}
+/* The push dialog. */
+.ed-push-table { margin-top: 12px; }
+.ed-push-table td { vertical-align: middle; }
+.ed-push-table .ed-push-name { font-weight: 600; white-space: nowrap; }
+.ed-push-table .btn-row { justify-content: flex-end; flex-wrap: nowrap; gap: 6px; }
+.ed-push-table .hint { overflow-wrap: anywhere; }
 
-/* The hub's push list, in the sidebar where config edit names deploy.sh. */
-#ed-push-list { display: flex; flex-direction: column; gap: 10px; }
-.ed-push-row { display: flex; flex-direction: column; gap: 4px; padding-top: 8px; border-top: 1px solid var(--separator); }
-.ed-push-row .btn-row { flex-wrap: wrap; gap: 6px; }
+.ed-deploy { display: flex; flex-direction: column; gap: 8px; padding: 16px 0; }
+.ed-deploy[hidden] { display: none; }
+
+.ed-deploy code {
+  font: var(--text-tiny) var(--font-mono);
+  background: var(--background);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 6px 8px;
+  user-select: all;
+}
 
 .ed-adopt-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; padding: 8px 0; border-bottom: 1px solid var(--separator); cursor: pointer; }
 .ed-adopt-row .hint { grid-column: 2; overflow-wrap: anywhere; }
+
+@media (max-width: 720px) {
+  .ed-push-table .btn-row { flex-wrap: wrap; }
+}

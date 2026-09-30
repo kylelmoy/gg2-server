@@ -508,6 +508,9 @@ public sealed class WebAdminServer : IDisposable
             case ("GET", "/analytics.js"):
                 return await AssetAsync(stream, "analytics.js", "text/javascript; charset=utf-8", token);
 
+            case ("GET", "/settings.js"):
+                return await AssetAsync(stream, "settings.js", "text/javascript; charset=utf-8", token);
+
             case ("GET", "/favicon.svg"):
                 return await AssetAsync(stream, "favicon.svg", "image/svg+xml", token);
 

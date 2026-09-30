@@ -37,7 +37,7 @@
 
 
   <!--
-    The web admin panel's five files, compiled in. WebAssets says why they are
+    The web admin panel's files, compiled in. WebAssets says why they are
     embedded rather than served off disk; the short version is that a deployment
     cannot then have a working binary and a missing page, and that there is no
     directory to traverse.
@@ -51,6 +51,7 @@
     <EmbeddedResource Include="Web\Assets\app.js" LogicalName="GG2.Server.Web.Assets.app.js" />
     <EmbeddedResource Include="Web\Assets\common.js" LogicalName="GG2.Server.Web.Assets.common.js" />
     <EmbeddedResource Include="Web\Assets\analytics.js" LogicalName="GG2.Server.Web.Assets.analytics.js" />
+    <EmbeddedResource Include="Web\Assets\settings.js" LogicalName="GG2.Server.Web.Assets.settings.js" />
     <EmbeddedResource Include="Web\Assets\favicon.svg" LogicalName="GG2.Server.Web.Assets.favicon.svg" />
 
     <!--
@@ -65,7 +66,9 @@
 
     <!--
       gg2-server config edit's page — ConfigEditorServer. It runs on the
-      operator's machine, not a server, and borrows app.css and the favicon.
+      operator's machine, not a server, and borrows app.css, common.js,
+      settings.js and the favicon. A fleet hub serves the same page at
+      /fleet/settings.
     -->
     <EmbeddedResource Include="Web\Assets\editor.html" LogicalName="GG2.Server.Web.Assets.editor.html" />
     <EmbeddedResource Include="Web\Assets\editor.css" LogicalName="GG2.Server.Web.Assets.editor.css" />

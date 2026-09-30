@@ -1689,7 +1689,13 @@ function edits() {
 }
 
 function settingsDirty() {
-  const count = Object.keys(edits()).length;
+  const changed = edits();
+  const count = Object.keys(changed).length;
+
+  for (const setting of settings) {
+    cfgMarkDirty($('settings-body'), $('settings-rail'), setting.id, setting.id in changed);
+  }
+
   const blocked = !settingsWritable;
   const waiting = settings.filter((s) => s.pending).length;
 
@@ -1721,6 +1727,7 @@ function settingsDirty() {
 async function openSettings() {
   $('settings').showModal();
   $('settings-body').innerHTML = '<p class="sheet-empty">Loading…</p>';
+  $('settings-rail').replaceChildren();
 
   let config;
 
@@ -1786,66 +1793,26 @@ async function openSettings() {
 
 function renderSettings() {
   const filter = $('settings-filter').value.trim().toLowerCase();
-  const body = $('settings-body');
-  body.innerHTML = '';
 
-  let section = null;
-  let list = null;
-  let shown = 0;
+  const items = settings
+    .filter((setting) => cfgMatches(setting, filter))
+    .map((setting) => ({ heading: setting.section, node: settingField(setting) }));
 
-  for (const setting of settings) {
-    // Matched against the id and the help text, so "password" finds the three
-    // that are one and "keepalive" finds the four that mention it.
-    if (filter && !`${setting.id} ${setting.help}`.toLowerCase().includes(filter)) continue;
-
-    if (setting.section !== section) {
-      section = setting.section;
-
-      const group = document.createElement('section');
-      group.className = 'sheet-group';
-
-      const title = document.createElement('h4');
-      title.textContent = section;
-      group.appendChild(title);
-
-      list = document.createElement('div');
-      list.className = 'sheet-fields';
-      group.appendChild(list);
-      body.appendChild(group);
-    }
-
-    list.appendChild(field(setting));
-    shown++;
-  }
-
-  if (shown === 0) {
-    body.appendChild(Object.assign(
-      document.createElement('p'),
-      { className: 'sheet-empty', textContent: 'Nothing matches that filter.' }));
-  }
-
+  cfgRenderGroups($('settings-body'), $('settings-rail'), items, 'Nothing matches that filter.');
   settingsDirty();
 }
 
-function field(setting) {
-  const wrap = document.createElement('div');
-  wrap.className = 'sheet-field';
+function settingField(setting) {
+  const tags = [];
+  const notes = [];
 
-  const label = document.createElement('label');
-  label.htmlFor = `set:${setting.id}`;
-  label.textContent = setting.key;
-  wrap.appendChild(label);
-
-  const input = control(setting);
-  input.id = `set:${setting.id}`;
-  input.disabled = !settingsWritable;
-  input.addEventListener('input', settingsDirty);
-  input.addEventListener('change', settingsDirty);
-  wrap.appendChild(input);
-
-  if (setting.help) {
-    wrap.appendChild(Object.assign(
-      document.createElement('p'), { className: 'hint', textContent: setting.help }));
+  // Saved into the file and not yet applied. Tagged per field rather than only
+  // counted in the footer, because "which one have I not restarted for" is the
+  // question an operator actually has when they come back to this page. The
+  // accent rather than --warning: nothing is wrong, a step is outstanding —
+  // and "pinned" means the save will never take, which must not look the same.
+  if (setting.pending) {
+    tags.push({ text: 'restart pending', kind: 'accent', title: 'Saved; the running server still has the old value' });
   }
 
   // ⚠️ The warning that stops this page lying. A flag beats the config file, so
@@ -1853,65 +1820,25 @@ function field(setting) {
   // line — the field stays editable, because saving it is still the right thing
   // to do before removing the flag, but the page says what will happen.
   if (overridden.has(setting.id)) {
-    wrap.classList.add('is-overridden');
-    wrap.appendChild(Object.assign(document.createElement('p'), {
-      className: 'hint warn',
-      textContent: 'Pinned on the command line: this server will keep using the flag’s '
+    tags.push({ text: 'pinned', kind: 'warn', title: 'Set by a command-line flag, which beats the file' });
+    notes.push({
+      kind: 'warn',
+      text: 'Pinned on the command line: this server will keep using the flag’s '
         + 'value after a restart, whatever is saved here.',
-    }));
+    });
   }
 
-  // Saved into the file and not yet applied. Marked per field rather than only
-  // counted in the footer, because "which one have I not restarted for" is the
-  // question an operator actually has when they come back to this page.
-  if (setting.pending) wrap.classList.add('is-pending');
-
-  return wrap;
-}
-
-function control(setting) {
-  if (setting.kind === 'boolean') {
-    const box = document.createElement('input');
-    box.type = 'checkbox';
-    box.className = 'sheet-check';
-    box.checked = setting.value === '1';
-    return box;
-  }
-
-  if (setting.kind === 'choice') {
-    const select = document.createElement('select');
-
-    for (const choice of setting.choices || []) {
-      const option = document.createElement('option');
-      option.value = choice;
-      option.textContent = choice;
-      option.selected = choice === setting.value;
-      select.appendChild(option);
-    }
-
-    return select;
-  }
-
-  const input = document.createElement('input');
-
-  if (setting.secret) {
-    input.type = 'password';
-    input.autocomplete = 'new-password';
-    input.value = '';
-
-    // ⛔ Whether one is SET, never what it is. The server does not send a
-    // secret's value at all, so there is nothing here to leak into a screenshot,
-    // a browser's password manager or a cached page.
-    input.placeholder = setting.set ? 'set — type to replace' : 'not set';
-  } else {
-    input.type = setting.kind === 'integer' ? 'number' : 'text';
-    input.value = setting.value;
-    input.spellcheck = false;
-
-    if (setting.kind === 'list') input.placeholder = 'comma,separated';
-  }
-
-  return input;
+  return cfgField(setting, {
+    id: `set:${setting.id}`,
+    // ⛔ Whether a secret is SET, never what it is: the server does not send
+    // its value, so the field starts empty on every open (see edits()).
+    value: setting.secret ? '' : setting.value,
+    placeholder: setting.secret ? (setting.set ? 'set — type to replace' : 'not set') : '',
+    disabled: !settingsWritable,
+    tags,
+    notes,
+    onChange: settingsDirty,
+  });
 }
 
 /**
@@ -2103,7 +2030,10 @@ window.addEventListener('resize', () => {
 
 $('settings-open').addEventListener('click', openSettings);
 $('settings-close').addEventListener('click', () => $('settings').close());
-$('settings-filter').addEventListener('input', renderSettings);
+$('settings-filter').addEventListener('input', () => {
+  $('settings-body').scrollTop = 0;
+  renderSettings();
+});
 
 // Revert is a re-fetch rather than a form reset, so it also picks up anything
 // another operator changed while this dialog was open.
