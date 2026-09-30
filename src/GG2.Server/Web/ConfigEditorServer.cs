@@ -156,6 +156,9 @@ public sealed class ConfigEditorServer : IDisposable
             case ("GET", "/favicon.svg"):
                 await AssetAsync(stream, "favicon.svg", "image/svg+xml", token);
                 return;
+            case ("GET", var path) when WebAssets.Fonts.TryGetValue(path, out var font):
+                await AssetAsync(stream, font, "font/woff2", token);
+                return;
         }
 
         // Constant time, like every other secret comparison in this project.

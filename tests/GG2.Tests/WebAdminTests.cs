@@ -529,6 +529,13 @@ public sealed class WebAdminTests : IDisposable
     // world — and says nothing about this one. What is drawn ON it is behind
     // /api/analytics, which is in the refusal theory above.
     [InlineData("/world.json", "application/json", "\"views\"")]
+
+    // The stylesheet's fonts. "wOF2" is the WOFF2 magic number, so a route
+    // that served the wrong bytes under the right type still fails.
+    [InlineData("/fonts/oswald.woff2", "font/woff2", "wOF2")]
+    [InlineData("/fonts/rubik.woff2", "font/woff2", "wOF2")]
+    [InlineData("/fonts/space-mono-400.woff2", "font/woff2", "wOF2")]
+    [InlineData("/fonts/space-mono-700.woff2", "font/woff2", "wOF2")]
     public async Task ThePageIsServedWithoutSigningIn(string path, string type, string contains)
     {
         var reply = await _http.GetAsync(path);

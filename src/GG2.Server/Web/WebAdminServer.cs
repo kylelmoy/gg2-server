@@ -374,6 +374,10 @@ public sealed class WebAdminServer : IDisposable
             case ("GET", "/favicon.svg"):
                 return await AssetAsync(stream, "favicon.svg", "image/svg+xml", token);
 
+            // Served without a session, like the stylesheet that names them.
+            case ("GET", var path) when WebAssets.Fonts.TryGetValue(path, out var font):
+                return await AssetAsync(stream, font, "font/woff2", token);
+
             // ⚠️ Served WITHOUT a session, like the page and the stylesheet, and
             // for the same reason: it is a static asset of the application, the
             // same eighty kilobytes of public-domain coastline for every server

@@ -54,6 +54,16 @@
     <EmbeddedResource Include="Web\Assets\favicon.svg" LogicalName="GG2.Server.Web.Assets.favicon.svg" />
 
     <!--
+      The panel's three typefaces, latin subset, SIL Open Font License 1.1 (the
+      licence files sit beside them). Embedded for the no-CDN reason above;
+      WebAssets.Fonts is the route table.
+    -->
+    <EmbeddedResource Include="Web\Assets\fonts\oswald.woff2" LogicalName="GG2.Server.Web.Assets.fonts.oswald.woff2" />
+    <EmbeddedResource Include="Web\Assets\fonts\rubik.woff2" LogicalName="GG2.Server.Web.Assets.fonts.rubik.woff2" />
+    <EmbeddedResource Include="Web\Assets\fonts\space-mono-400.woff2" LogicalName="GG2.Server.Web.Assets.fonts.space-mono-400.woff2" />
+    <EmbeddedResource Include="Web\Assets\fonts\space-mono-700.woff2" LogicalName="GG2.Server.Web.Assets.fonts.space-mono-700.woff2" />
+
+    <!--
       gg2-server config edit's page — ConfigEditorServer. It runs on the
       operator's machine, not a server, and borrows app.css and the favicon.
     -->

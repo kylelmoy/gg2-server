@@ -4,46 +4,70 @@
  * Hand-written, no framework, no build step, no CDN — a LAN server's panel has
  * to work on a machine with no route to the internet.
  *
- * ── The look ──────────────────────────────────────────────────────────────
+ * ── The look: "Mann Co." ──────────────────────────────────────────────────
  *
- * This imitates HeroUI v3 WITHOUT the library: the token names, the OKLCH
- * ladder, the color-mix() derivations and the radius scale below are HeroUI's
- * own, read out of @heroui/styles@3.2.4 (dist/themes/default/variables.css and
- * dist/themes/shared/theme.css) and re-hued to the theme this server's operator
- * picked in their builder:
+ * Built from the Team Fortress 2 palette Gang Garrison borrows its art from
+ * (lospec.com/palette-list/team-fortress-2-official): chocolate-brown surfaces,
+ * cream ink, a tan secondary ink, the HUD's orange as the accent, and condensed
+ * uppercase headings. The TOKEN NAMES and the color-mix() derivations are still
+ * HeroUI v3's (read out of @heroui/styles@3.2.4), because everything below the
+ * token block is written against them; only the values changed.
  *
- *     lightness 0.77  chroma 0.13  hue 302.636371990466  radius small  base 0.0043
+ * ⚠️ TEAM RED AND BLU ARE LIGHTER THAN THE PALETTE'S. The palette's #bd3b3b and
+ * #5b7a8c are 2.6:1 and 3.2:1 on --surface, which is unreadable for a player's
+ * name in the roster or the chat. #ea6a5f and #7ea6c2 keep the hues at 4.6:1
+ * and 5.6:1. Measured, like every ratio in the comments below.
  *
- * ⚠️ WHY THIS IS TOKENS AND NOT A COPIED STYLESHEET. HeroUI ships ~403 KB of
- * CSS for a component set this page does not have. What makes it look like
- * HeroUI is the token system — the surface ladder, the hairline borders, the
- * soft-variant fills, the focus ring — and that is about ninety declarations.
- * Everything below the token block is this panel's own markup wearing them.
+ * ⚠️ DANGER IS TWO TOKENS. As text on a brown card a red has to be light
+ * (--danger, 3.8:1 on --surface); as a button fill under cream text it has to be
+ * dark (--danger-fill, 5.4:1). One value cannot do both on this ground.
  *
- * ⚠️ `base` is the neutral CHROMA. Stock HeroUI dark builds its greys at
- * chroma 0.004-0.006 around hue 286; the builder's hue slider moves the whole
- * theme, so the greys here are the same LIGHTNESS ladder at chroma 0.0043,
- * hue 302.64 — a grey that is faintly the accent's colour rather than neutral.
- *
- * ⚠️ `--radius: 0.375rem` is an INFERENCE. The builder page is a client-side app
- * and could not be read; HeroUI's default is 0.5rem and "small" is a step below.
- * Everything derives from this one line, so it is one line to correct.
- *
- * ⚠️ oklch() and color-mix() are used directly, as HeroUI does. Both are
- * baseline in every browser since 2023. There are no hex fallbacks: with one
- * that lacked them the page would render unstyled rather than wrongly.
+ * Fonts: Oswald for headings and labels, Rubik for running text, Space Mono for
+ * numbers. Latin subsets, SIL OFL 1.1, embedded (fonts/, WebAssets.Fonts) —
+ * never fetched, for the no-CDN reason above. Each stack ends in system faces,
+ * so a missing file degrades to the old look rather than to Times.
  */
+
+@font-face {
+  font-family: "Oswald";
+  src: url("/fonts/oswald.woff2") format("woff2");
+  font-weight: 200 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Rubik";
+  src: url("/fonts/rubik.woff2") format("woff2");
+  font-weight: 300 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Space Mono";
+  src: url("/fonts/space-mono-400.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Space Mono";
+  src: url("/fonts/space-mono-700.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
 
 :root {
   color-scheme: dark;
 
   /* ── primitives ─────────────────────────────────────────────────────── */
-  --snow: oklch(0.9911 0 0);
-  --eclipse: oklch(0.2103 0.0059 285.89);
+  --cream: #f5e7de;
+  --cocoa: #231f1c;
 
   /* ── layout ─────────────────────────────────────────────────────────── */
   --border-width: 1px;
-  --radius: 0.375rem;
+
+  /* Squarer than HeroUI's: TF2's menus are near-rectangular panels. */
+  --radius: 0.1875rem;
 
   --radius-xs: calc(var(--radius) * 0.25);
   --radius-sm: calc(var(--radius) * 0.5);
@@ -56,38 +80,36 @@
   --radius-pill: 9999px;
 
   /* ── the surface ladder ─────────────────────────────────────────────── */
-  --background: oklch(0.12 0.0043 302.64);
-  --surface: oklch(0.2103 0.0043 302.64);
-  --surface-secondary: oklch(0.257 0.0043 302.64);
-  --surface-tertiary: oklch(0.2721 0.0043 302.64);
-  --overlay: oklch(0.2103 0.0043 302.64);
-  --default: oklch(0.274 0.0043 302.64);
-  --segment: oklch(0.3964 0.01 302.64);
+  --background: #1c1916;
+  --surface: #2d2926;
+  --surface-secondary: #37322e;
+  --surface-tertiary: #3f3934;
+  --overlay: #332e2a;
+  --default: #3d3632;
+  --segment: #5a4e45;
 
-  --separator: oklch(0.25 0.0043 302.64);
-  --border: oklch(0.28 0.0043 302.64);
+  --separator: #3a342f;
+  --border: #463d36;
 
   /* ── ink ────────────────────────────────────────────────────────────── */
-  --foreground: var(--snow);          /* 17.3:1 on --surface */
-  --muted: oklch(0.705 0.015 302.64); /*  6.7:1 */
+  --foreground: var(--cream);  /* 11.9:1 on --surface */
+  --muted: #c1a18a;            /*  6.0:1 */
 
   /* ── semantic ───────────────────────────────────────────────────────── */
-  --accent: oklch(0.77 0.13 302.64);
-  --success: oklch(0.7329 0.1935 150.81);
-  --warning: oklch(0.8203 0.1388 76.34);
-  --danger: oklch(0.594 0.1967 24.63);
+  --accent: #ef9849;           /* TF2 HUD orange, 6.4:1 */
+  --success: #a8bb78;          /* olive, 6.9:1 */
+  --warning: #f0c75e;          /* gold, kept apart from the orange accent */
+  --danger: #e05548;           /* red as TEXT, 3.8:1 */
+  --danger-fill: #a8352c;      /* red as a FILL, cream on it 5.4:1 */
 
-  /* ⚠️ DARK text on the accent, not white: this accent is L 0.77, so --snow
-     over it is 2.13:1 and --eclipse is 8.16:1. Measured, not assumed — it is
-     the one thing a light accent gets wrong. */
-  --accent-foreground: var(--eclipse);
-  --success-foreground: var(--eclipse);
-  --warning-foreground: var(--eclipse);
-  --danger-foreground: var(--snow);
+  --accent-foreground: var(--cocoa);   /* 7.2:1 */
+  --success-foreground: var(--cocoa);
+  --warning-foreground: var(--cocoa);
+  --danger-foreground: var(--cream);
   --default-foreground: var(--foreground);
 
   --focus: var(--accent);
-  --backdrop: rgb(0 0 0 / 0.6);
+  --backdrop: rgb(10 8 6 / 0.65);
 
   /* ── HeroUI's own derivations, formula for formula ──────────────────── */
   --default-soft: color-mix(in oklab, var(--default) 50%, transparent);
@@ -99,40 +121,38 @@
   --warning-soft: color-mix(in oklab, var(--warning) 15%, transparent);
   --success-soft: color-mix(in oklab, var(--success) 15%, transparent);
 
-  --default-hover: color-mix(in oklab, var(--default) 96%, var(--foreground) 4%);
-  --accent-hover: color-mix(in oklab, var(--accent) 90%, var(--accent-foreground) 10%);
-  --danger-hover: color-mix(in oklab, var(--danger) 90%, var(--danger-foreground) 10%);
+  --default-hover: color-mix(in oklab, var(--default) 94%, var(--foreground) 6%);
+  --accent-hover: color-mix(in oklab, var(--accent) 88%, var(--cream) 12%);
+  --danger-hover: color-mix(in oklab, var(--danger-fill) 88%, var(--cream) 12%);
 
   --surface-hover: color-mix(in oklab, var(--surface) 92%, var(--foreground) 8%);
-  --field-background: var(--surface);
+  --field-background: var(--background);
 
-  /* ⚠️ HeroUI's dark theme is FLAT — its --surface-shadow is literally
-     `0 0 0 0 transparent inset`. Cards are separated by the lightness ladder
-     and a hairline border, never by a drop shadow. The only real shadow on
-     this page is under things that float over it. */
+  /* Flat, like HeroUI's dark theme: cards separate by the ladder and a
+     hairline border. The only real shadow is under things that float. */
   --surface-shadow: 0 0 0 0 transparent inset;
-  --overlay-shadow: 0 0 1px 0 rgb(255 255 255 / 0.3) inset;
-  --float-shadow: 0 8px 30px -12px rgb(0 0 0 / 0.7);
+  --overlay-shadow: 0 0 1px 0 rgb(245 231 222 / 0.25) inset;
+  --float-shadow: 0 10px 30px -12px rgb(0 0 0 / 0.75);
 
   /* ── the two colours this page did not get to choose ────────────────── */
-  /* GG2's teams. Semantic to the GAME, so they sit outside the theme and do
-     not move with the accent. */
-  --team-red: #e2564f;
-  --team-blue: #4f92dc;
+  /* GG2's teams. Semantic to the GAME, so they sit outside the accent. */
+  --team-red: #ea6a5f;
+  --team-blue: #7ea6c2;
 
   /* ── type ───────────────────────────────────────────────────────────── */
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI Variable Text",
-    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: ui-monospace, "Cascadia Mono", "SF Mono", "JetBrains Mono", Consolas, monospace;
+  --font-sans: "Rubik", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-display: "Oswald", "Arial Narrow", "Roboto Condensed", ui-sans-serif, sans-serif;
+  --font-mono: "Space Mono", ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
 
   --text-tiny: 0.75rem;     /* 12px */
   --text-small: 0.875rem;   /* 14px */
   --text-medium: 1rem;      /* 16px */
   --text-large: 1.125rem;   /* 18px */
 
-  /* Uppercase micro-labels: the one thing that carries the console feel. */
-  --label: 600 0.6875rem/1 var(--font-sans);
-  --label-tracking: 0.08em;
+  /* Uppercase micro-labels in the condensed face: the TF2 menu voice. Oswald
+     is narrow, so it runs a size up from the old sans labels. */
+  --label: 500 0.8125rem/1 var(--font-display);
+  --label-tracking: 0.07em;
 
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -199,7 +219,7 @@ h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
 
 .login-mark { display: flex; justify-content: center; margin-bottom: 16px; }
-.login-card h1 { font-size: var(--text-large); }
+.login-card h1 { font: 600 1.5rem/1.1 var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; }
 
 .login-name {
   margin: 6px 0 24px;
@@ -275,7 +295,9 @@ input:focus {
   color: var(--default-foreground);
   padding: 8px 14px;
   border-radius: var(--radius-field);
-  font: 500 var(--text-small) / 1.25 var(--font-sans);
+  font: 500 var(--text-small) / 1.25 var(--font-display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   cursor: pointer;
   transition: background 0.15s var(--ease), opacity 0.15s var(--ease), transform 0.08s var(--ease);
   white-space: nowrap;
@@ -290,7 +312,7 @@ input:focus {
 .btn-primary { background: var(--accent); color: var(--accent-foreground); font-weight: 600; }
 .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
 
-.btn-danger { background: var(--danger); color: var(--danger-foreground); font-weight: 600; }
+.btn-danger { background: var(--danger-fill); color: var(--danger-foreground); font-weight: 600; }
 .btn-danger:hover:not(:disabled) { background: var(--danger-hover); }
 
 /* HeroUI's "light" variant: nothing until you touch it. */
@@ -338,7 +360,7 @@ kbd {
 
 .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
 .brand-text { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
-.brand-text strong { font-size: var(--text-small); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brand-text strong { font: 600 1.0625rem/1.1 var(--font-display); letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .brand-sub { font: 0.6875rem var(--font-mono); color: var(--muted); }
 
 .chips { display: flex; gap: 6px; flex: 1; min-width: 0; overflow: hidden; }
@@ -427,7 +449,7 @@ kbd {
 .score-blue { justify-content: flex-end; }
 
 .score-team {
-  font: 600 var(--text-tiny) / 1 var(--font-sans);
+  font: 600 var(--text-small) / 1 var(--font-display);
   letter-spacing: 0.14em;
   padding: 5px 9px;
   border-radius: var(--radius-md);
@@ -745,9 +767,9 @@ kbd {
 /* ---------- performance charts -------------------------------------------
  *
  * ⚠️ The series colours are NOT theme tokens and do not move with the accent.
- * They are the data-viz palette's dark steps, re-validated against this
- * theme's --surface (#19181a): worst all-pairs CVD ΔE 9.4, worst normal-vision
- * ΔE 24.6, all ≥ 3:1. Swapping violet for blue was tried and is WORSE
+ * They are the data-viz palette's dark steps: worst all-pairs CVD ΔE 9.4, worst
+ * normal-vision ΔE 24.6. On this theme's --surface (#2d2926) the lowest
+ * contrast is orange at 3.7:1, still ≥ 3:1. Swapping violet for blue was tried and is WORSE
  * (tritan ΔE 4.0 against 9.4), so violet stays even though the accent is also
  * purple — they never appear as peers, and the legend keys every series.
  */
@@ -962,7 +984,7 @@ kbd {
   place-items: center;
   font: 600 0.625rem var(--font-sans);
   flex: none;
-  color: var(--eclipse);
+  color: var(--cocoa);
 }
 
 .avatar.red { background: var(--team-red); }

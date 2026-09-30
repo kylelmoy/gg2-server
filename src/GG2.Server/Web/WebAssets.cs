@@ -23,6 +23,23 @@ namespace GG2.Server;
 /// </remarks>
 internal static class WebAssets
 {
+    /// <summary>
+    /// The font files <c>app.css</c> names, by URL path, to their resource names.
+    /// </summary>
+    /// <remarks>
+    /// A fixed table rather than a pattern on the path, like every other route
+    /// here: nothing a request says is ever joined into a resource name. Both
+    /// servers that serve <c>app.css</c> serve these, because a stylesheet whose
+    /// fonts 404 silently falls back to system faces.
+    /// </remarks>
+    public static IReadOnlyDictionary<string, string> Fonts { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["/fonts/oswald.woff2"] = "fonts.oswald.woff2",
+        ["/fonts/rubik.woff2"] = "fonts.rubik.woff2",
+        ["/fonts/space-mono-400.woff2"] = "fonts.space-mono-400.woff2",
+        ["/fonts/space-mono-700.woff2"] = "fonts.space-mono-700.woff2",
+    };
+
     private static readonly ConcurrentDictionary<string, byte[]> Cache = new(StringComparer.Ordinal);
 
     /// <summary>One asset's bytes, read once and kept.</summary>
