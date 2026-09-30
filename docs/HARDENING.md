@@ -243,10 +243,15 @@ absorbed at all.
   anything in this process, because it costs the kernel a hash lookup and costs
   this process an accept, an allocation and a roster walk.
 
-What the fleet runs: `ufw` with `DEFAULT_INPUT_POLICY=DROP` and two inbound
-rules, `22/tcp` and `8190/tcp`. The panel's 8191 is loopback-bound and
-deliberately has no rule, which a connect from off-box confirms rather than
-assumes.
+What the fleet runs: `ufw` with `DEFAULT_INPUT_POLICY=DROP` and three inbound
+rules on each VPS member, `22/tcp`, `8190/tcp`, and `8191/tcp` from the fleet
+hub's public address only. The panel there is a fleet member (TLS, `AllowFrom`
+naming the same address), so it is locked twice. A connect to 8191 from another
+VPS times out, which is the check that the rule is live rather than assumed. The
+hub, on the home LAN, admits `192.168.x.0/24` and has no forwarded port. If the
+hub's public address changes, every member refuses it until both `AllowFrom`
+and the `ufw` rule are updated; an ssh tunnel to loopback still reaches each
+member's panel.
 
 **`systemctl is-active ufw` does not answer whether the firewall is up.** The
 unit is `Type=oneshot` with `RemainAfterExit=yes` and the `ufw` CLI loads rules

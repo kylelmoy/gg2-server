@@ -185,7 +185,7 @@ FleetMember=1
 |---|---|---|
 | Certificate | Self-signed ECDSA P-256, ten years, made on first start | `web-cert.pfx` beside the config file |
 | Token | 256 random bits, base64url, made on first start | `fleet-member.token` beside the config file |
-| Pairing code | `<token>.<certificate SHA-256 hex>`, printed at every start | the log |
+| Pairing code | `<token>.<certificate SHA-256 hex>`, printed at every start | the log only, so on a host where the operator cannot read the service's journal it needs sudo: `ssh -t host "sudo journalctl -u gg2 -g pairing -n 1"` |
 
 - **The hub pins the certificate by its SHA-256**, as ssh pins a host key. That
   is what makes a self-signed certificate worth having without a CA or a domain,
