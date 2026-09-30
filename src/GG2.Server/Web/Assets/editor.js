@@ -178,6 +178,7 @@ function renderNotes() {
 
   if (!model.commonExists && onHub) {
     add('There are no fleet settings yet, so every value below is a default and Save creates them. '
+      + 'To start from a server you already run, use Adopt… on it and take its values into all servers. '
       + 'Paths and the [Web] section are not here: each server keeps its own, and a push never changes them.',
     'warn');
   } else if (!model.commonExists) {
@@ -561,6 +562,7 @@ function renderPush() {
     if (!c.ok) {
       note.className = 'hint warn';
       note.textContent = c.error;
+      row.appendChild(adoptButton(m.name));
       list.appendChild(row);
       continue;
     }
@@ -570,6 +572,7 @@ function renderPush() {
     if (c.unchanged && c.managed && !c.editedSincePush) {
       note.className = 'hint';
       note.textContent = 'up to date';
+      row.appendChild(adoptButton(m.name));
       list.appendChild(row);
       continue;
     }
@@ -604,11 +607,81 @@ function renderPush() {
     now.title = 'Restart at once, dropping anyone connected. Otherwise the server applies it the next time it is empty.';
     now.addEventListener('click', () => doPush(m, needsForce, true));
 
-    tools.append(diff, push, now);
+    tools.append(diff, push, now, adoptButton(m.name));
     row.appendChild(tools);
     list.appendChild(row);
   }
 }
+
+let adopting = null;
+
+function adoptButton(name) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'btn btn-quiet';
+  button.textContent = 'Adopt…';
+  button.title = 'Take settings this server has that the fleet settings do not';
+  button.addEventListener('click', () => openAdopt(name));
+  return button;
+}
+
+async function openAdopt(name) {
+  const reply = await hubPost('/api/fleet/adopt', { name });
+
+  if (!reply.ok) { toast(`${name}: ${reply.error}`, 'bad'); return; }
+
+  adopting = name;
+  $('ed-adopt-title').textContent = `Adopt from ${name}`;
+  $('ed-adopt-sub').textContent = reply.differences.length === 0
+    ? 'Nothing differs: this server already has what the fleet settings give it.'
+    : `${reply.differences.length} setting${reply.differences.length === 1 ? '' : 's'} differ`;
+
+  const body = $('ed-adopt-body');
+  body.replaceChildren();
+
+  for (const d of reply.differences) {
+    const label = document.createElement('label');
+    label.className = 'ed-adopt-row';
+
+    const box = Object.assign(document.createElement('input'), { type: 'checkbox', checked: true, value: d.id });
+    const id = Object.assign(document.createElement('strong'), { textContent: d.id });
+    const values = Object.assign(document.createElement('span'), {
+      className: 'hint',
+      textContent: `fleet: ${d.fleet === '' ? '(empty)' : d.fleet}  →  this server: ${d.member === '' ? '(empty)' : d.member}`,
+    });
+
+    label.append(box, id, values);
+    body.appendChild(label);
+  }
+
+  $('ed-adopt-secrets').textContent = reply.secrets.length
+    ? `Not compared, because a secret's value never leaves a server: ${reply.secrets.join(', ')}.`
+    : '';
+
+  $('ed-adopt-common').disabled = reply.differences.length === 0;
+  $('ed-adopt-host').disabled = reply.differences.length === 0;
+  $('ed-adopt-dialog').showModal();
+}
+
+async function adopt(into) {
+  if (changeCount() > 0) { toast('Save or revert your unsaved changes first.', 'bad'); return; }
+
+  const ids = [...$('ed-adopt-body').querySelectorAll('input:checked')].map((box) => box.value);
+  if (ids.length === 0) { toast('Nothing ticked.', 'bad'); return; }
+
+  const reply = await hubPost('/api/fleet/adopt', { name: adopting, ids, into });
+
+  if (!reply.ok) { toast(`Not adopted: ${reply.error}`, 'bad'); return; }
+
+  toast(`Adopted ${ids.length} setting${ids.length === 1 ? '' : 's'} from ${adopting}`, 'good');
+  $('ed-adopt-dialog').close();
+  await load();
+  if (pushChecks.length) await checkPush();
+}
+
+$('ed-adopt-close').addEventListener('click', () => $('ed-adopt-dialog').close());
+$('ed-adopt-common').addEventListener('click', () => adopt('common'));
+$('ed-adopt-host').addEventListener('click', () => adopt('host'));
 
 function showDiff(m) {
   $('ed-preview-title').textContent = `${m.name} — what a push changes`;

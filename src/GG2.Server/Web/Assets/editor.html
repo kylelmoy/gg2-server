@@ -84,6 +84,29 @@
   <div class="sheet-body"><pre class="ed-pre" id="ed-preview-text"></pre></div>
 </dialog>
 
+<!-- Hub only: a member's own values that differ from the fleet settings,
+     to write into its overrides or into the shared settings. -->
+<dialog class="sheet" id="ed-adopt-dialog" aria-labelledby="ed-adopt-title">
+  <header class="sheet-head">
+    <div>
+      <h3 id="ed-adopt-title">Adopt</h3>
+      <p class="sheet-sub" id="ed-adopt-sub">—</p>
+    </div>
+    <div class="sheet-tools">
+      <button class="btn btn-quiet" id="ed-adopt-close" type="button">Close</button>
+    </div>
+  </header>
+  <p class="sheet-note" id="ed-adopt-note">Where this server's own file differs from what the fleet settings would give it. Tick what to keep.</p>
+  <div class="sheet-body" id="ed-adopt-body"></div>
+  <footer class="sheet-foot">
+    <p class="hint" id="ed-adopt-secrets"></p>
+    <div class="btn-row">
+      <button class="btn" id="ed-adopt-common" type="button">Into all servers</button>
+      <button class="btn btn-primary" id="ed-adopt-host" type="button">Into this server's overrides</button>
+    </div>
+  </footer>
+</dialog>
+
 <div class="toasts" id="toasts" aria-live="polite"></div>
 
 <script src="/editor.js"></script>

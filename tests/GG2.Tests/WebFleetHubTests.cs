@@ -274,6 +274,41 @@ public sealed class WebFleetHubTests : IDisposable
         Assert.Contains("changed since", stale.GetProperty("error").GetString(), StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A fleet started from a server it already runs: adopt into the shared
+    /// settings, which then match, with host-local settings never taken.
+    /// </summary>
+    [Fact]
+    public async Task AdoptingIntoTheSharedSettingsStartsAFleetFromAServer()
+    {
+        File.WriteAllText(
+            Path.Combine(_memberDirectory, "gg2.ini"),
+            "[Settings]\nPlayerLimit=14\n\n[Server]\nWelcomeMessage=hello from the member\n\n[Web]\nAllowFrom=192.0.2.9\n");
+
+        var csrf = await SignInAsync();
+        await PostAsync(csrf, "/api/fleet/add", new { name = "member", url = MemberUrl, pairing = _member.Server.WebPairingCode });
+
+        var listed = await PostAsync(csrf, "/api/fleet/adopt", new { name = "member" });
+        Assert.True(listed.GetProperty("ok").GetBoolean(), listed.ToString());
+
+        var ids = listed.GetProperty("differences").EnumerateArray().Select(d => d.GetProperty("id").GetString()!).ToList();
+        Assert.Contains("Settings.PlayerLimit", ids);
+        Assert.Contains("Server.WelcomeMessage", ids);
+        Assert.DoesNotContain(ids, id => ServerSettings.Find(id) is { HostLocal: true });
+
+        var adopted = await PostAsync(csrf, "/api/fleet/adopt", new { name = "member", ids, into = "common" });
+        Assert.True(adopted.GetProperty("ok").GetBoolean(), adopted.ToString());
+
+        var common = File.ReadAllText(Path.Combine(_hubDirectory, "fleet", "common.ini"));
+        Assert.Contains("PlayerLimit=14", common, StringComparison.Ordinal);
+        Assert.Contains("hello from the member", common, StringComparison.Ordinal);
+        Assert.DoesNotContain("192.0.2.9", common, StringComparison.Ordinal);
+
+        // Nothing left to adopt: the member and the fleet now agree.
+        var after = await PostAsync(csrf, "/api/fleet/adopt", new { name = "member" });
+        Assert.Empty(after.GetProperty("differences").EnumerateArray());
+    }
+
     [Fact]
     public void AHubTokenMayNotSetAHostLocalSetting()
     {

@@ -166,6 +166,124 @@ public sealed class FleetHub : IDisposable
     }
 
     /// <summary>
+    /// Adopt: where a member's own file differs from what the fleet settings
+    /// would give it, and — with <paramref name="ids"/> — writes those values
+    /// into its overrides or into the shared settings.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Read from the member's <c>config</c> verb</b>, which reports the FILE's
+    /// values, so a setting pinned by a flag on the member is compared by what its
+    /// file says. Host-local settings are skipped, being the member's anyway.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Secrets cannot be adopted</b>: <c>config</c> never sends a secret's
+    /// value, only whether one is set, and a hub that could read them back would
+    /// make every member's password one stolen hub session away. They are listed
+    /// as "cannot compare" when the member has one set, and set on the settings
+    /// page by hand.
+    /// </para>
+    /// <para>
+    /// With no shared settings yet, the comparison is against the defaults — so
+    /// "adopt into common" on one server is how a fleet starts from it.
+    /// </para>
+    /// </remarks>
+    public async Task<string> AdoptAsync(string name, IReadOnlyList<string>? ids, bool intoCommon, CancellationToken token)
+    {
+        var reply = await CommandAsync(name, "{\"cmd\":\"config\"}", token);
+        var memberValues = new Dictionary<string, string>(StringComparer.Ordinal);
+        var memberSecrets = new List<string>();
+
+        try
+        {
+            using var document = JsonDocument.Parse(reply);
+            var root = document.RootElement;
+
+            if (!root.TryGetProperty("ok", out var ok) || !ok.GetBoolean())
+                return reply;
+
+            if (!root.GetProperty("writable").GetBoolean())
+                return ControlCommands.Error($"{name} was started without --config, so it has no file to adopt from");
+
+            foreach (var setting in root.GetProperty("settings").EnumerateArray())
+            {
+                var id = setting.GetProperty("id").GetString()!;
+
+                if (setting.TryGetProperty("value", out var value))
+                    memberValues[id] = value.GetString() ?? string.Empty;
+                else if (setting.TryGetProperty("set", out var set) && set.GetBoolean())
+                    memberSecrets.Add(id);
+            }
+        }
+        catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException)
+        {
+            return ControlCommands.Error($"{name}'s config reply could not be read: {e.Message}");
+        }
+
+        ServerOptions fleet;
+
+        try
+        {
+            fleet = File.Exists(FleetConfig.CommonPath(_directory))
+                ? FleetConfig.Load(Render(name), _directory)
+                : ServerOptions.CreateDefault();
+        }
+        catch (FormatException e)
+        {
+            return ControlCommands.Error(e.Message);
+        }
+
+        var differences = new List<(ServerSetting Setting, string Fleet, string Member)>();
+
+        foreach (var setting in ServerSettings.All)
+        {
+            if (setting.HostLocal || setting.Secret || !memberValues.TryGetValue(setting.Id, out var memberValue))
+                continue;
+
+            var fleetValue = setting.Get(fleet);
+
+            if (fleetValue != memberValue)
+                differences.Add((setting, fleetValue, memberValue));
+        }
+
+        if (ids is not null)
+        {
+            var chosen = differences.Where(d => ids.Contains(d.Setting.Id, StringComparer.Ordinal)).ToList();
+
+            if (chosen.Count == 0)
+                return ControlCommands.Error("none of those settings differ any more; check again");
+
+            var values = chosen.ToDictionary(d => d.Setting.Id, d => d.Member, StringComparer.Ordinal);
+            var body = intoCommon
+                ? JsonSerializer.Serialize(new { common = values })
+                : JsonSerializer.Serialize(new { hosts = new Dictionary<string, object> { [name] = new { set = values } } });
+
+            lock (ConfigLock)
+                return Config.Save(body);
+        }
+
+        var json = new StringBuilder(4096);
+        json.Append("{\"ok\":true,\"name\":\"").Append(ControlCommands.Escape(name)).Append("\",\"differences\":[");
+
+        for (var i = 0; i < differences.Count; i++)
+        {
+            if (i > 0)
+                json.Append(',');
+
+            json.Append("{\"id\":\"").Append(ControlCommands.Escape(differences[i].Setting.Id))
+                .Append("\",\"fleet\":\"").Append(ControlCommands.Escape(differences[i].Fleet))
+                .Append("\",\"member\":\"").Append(ControlCommands.Escape(differences[i].Member)).Append("\"}");
+        }
+
+        json.Append("],\"secrets\":[");
+        json.Append(string.Join(',', memberSecrets
+            .Where(id => ServerSettings.Find(id) is { HostLocal: false })
+            .Select(id => "\"" + ControlCommands.Escape(id) + "\"")));
+        json.Append("]}");
+        return json.ToString();
+    }
+
+    /// <summary>
     /// Pushes the fleet settings to one member: renders again, installs against
     /// the hash the operator previewed, and optionally restarts it at once.
     /// </summary>

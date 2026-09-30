@@ -282,6 +282,16 @@ restarts it at once instead of waiting for it to empty.
 | The diff | Computed by the member with secrets masked, so no secret leaves it. |
 | Rendering | The hub renders `common.ini` + `hosts/<member>.ini` exactly as `FleetConfig.Render` does for `deploy.sh`. |
 
+**Adopt** (`POST /api/fleet/adopt {name, ids?, into?}`, the *Adopt…* button
+beside each server in the push list) compares a member's own file, read with its
+`config` verb, against what the fleet settings would give it, and writes the
+chosen values into that member's overrides or into the shared settings. It is
+also how a fleet starts: with no shared settings the comparison is against the
+defaults, so adopting one server into "all servers" makes its file the common
+one. Host-local settings are never compared. **Secrets cannot be adopted** —
+`config` never sends a secret's value — so the dialog names the ones the member
+has set and they are entered on the settings page by hand.
+
 **A hub token cannot set a host-local setting through `config-set` either**
 (`WebAdminServer.HostLocalRefusal`, a 403). The member's own password still can,
 from its own panel.

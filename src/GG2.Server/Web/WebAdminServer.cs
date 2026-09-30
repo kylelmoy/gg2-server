@@ -624,6 +624,9 @@ public sealed class WebAdminServer : IDisposable
 
                 case ("POST", "/api/fleet/push"):
                     return await FleetPushAsync(request, stream, token);
+
+                case ("POST", "/api/fleet/adopt"):
+                    return await FleetAdoptAsync(request, stream, token);
             }
         }
 
@@ -917,6 +920,35 @@ public sealed class WebAdminServer : IDisposable
 
         if (reply.Contains("\"ok\":true", StringComparison.Ordinal))
             _log.Info($"fleet: pushed the fleet settings to {name}{(force ? " (forced)" : string.Empty)}{(restart ? ", restarting it" : string.Empty)}");
+
+        return await JsonAsync(stream, 200, reply, token);
+    }
+
+    /// <summary><c>{name, ids?, into?: "host"|"common"}</c>; no <c>ids</c> lists the differences.</summary>
+    private async Task<bool> FleetAdoptAsync(HttpRequest request, Stream stream, CancellationToken token)
+    {
+        string name;
+        List<string>? ids = null;
+        bool intoCommon;
+
+        try
+        {
+            var root = JsonDocument.Parse(request.Body).RootElement;
+            name = root.GetProperty("name").GetString() ?? string.Empty;
+            intoCommon = root.TryGetProperty("into", out var into) && into.GetString() == "common";
+
+            if (root.TryGetProperty("ids", out var list) && list.ValueKind == JsonValueKind.Array)
+                ids = list.EnumerateArray().Select(id => id.GetString() ?? string.Empty).ToList();
+        }
+        catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException)
+        {
+            return await JsonAsync(stream, 400, Error("expected {name, ids?, into?}"), token);
+        }
+
+        var reply = await _hub!.AdoptAsync(name, ids, intoCommon, token);
+
+        if (ids is not null && reply.Contains("\"ok\":true", StringComparison.Ordinal))
+            _log.Info($"fleet: adopted {ids.Count} setting(s) from {name} into {(intoCommon ? "the shared settings" : "its overrides")}");
 
         return await JsonAsync(stream, 200, reply, token);
     }

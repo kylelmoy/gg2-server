@@ -118,3 +118,6 @@
 #ed-push-list { display: flex; flex-direction: column; gap: 10px; }
 .ed-push-row { display: flex; flex-direction: column; gap: 4px; padding-top: 8px; border-top: 1px solid var(--separator); }
 .ed-push-row .btn-row { flex-wrap: wrap; gap: 6px; }
+
+.ed-adopt-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; padding: 8px 0; border-bottom: 1px solid var(--separator); cursor: pointer; }
+.ed-adopt-row .hint { grid-column: 2; overflow-wrap: anywhere; }
