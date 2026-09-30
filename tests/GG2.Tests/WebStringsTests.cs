@@ -136,6 +136,37 @@ public sealed class WebStringsTests
     }
 
     /// <summary>
+    /// ⛔ <b>Every server setting has exactly one description, and nothing else
+    /// is under <c>settingHelp</c>.</b> The server sends the settings pages ids
+    /// alone; <c>settings.js</c> looks each one up as
+    /// <c>settingHelp.&lt;Section&gt;.&lt;Key&gt;</c>, so a setting added to
+    /// <c>ServerSettings.All</c> without a line here would show its key as its
+    /// description, and a removed one would leave a stale line.
+    /// </summary>
+    [Fact]
+    public void EverySettingHasOneDescription()
+    {
+        const string prefix = "settingHelp.";
+
+        var described = Leaves().Keys.Where(key => key.StartsWith(prefix, StringComparison.Ordinal))
+            .Select(key => key[prefix.Length..])
+            .ToHashSet(StringComparer.Ordinal);
+        var settings = ServerSettings.All.Select(setting => setting.Id).ToHashSet(StringComparer.Ordinal);
+
+        Assert.True(settings.Count > 50, $"only {settings.Count} settings — the table did not load");
+
+        var missing = settings.Except(described).Order().ToList();
+        var stale = described.Except(settings).Order().ToList();
+
+        Assert.True(missing.Count == 0, $"no description in strings.js: {string.Join(", ", missing)}");
+        Assert.True(stale.Count == 0, $"described in strings.js but not a setting: {string.Join(", ", stale)}");
+
+        // The page looks descriptions up by template; this is what makes the
+        // unused-key check treat every entry as used.
+        Assert.Contains(prefix, UsedPrefixes());
+    }
+
+    /// <summary>
     /// Every visible piece of text in both pages comes from the table: no text
     /// node and no text-bearing attribute with a letter in it.
     /// </summary>

@@ -682,6 +682,131 @@ const STRINGS = {
   "settings": {
     "listPlaceholder": "comma,separated"
   },
+  "settingHelp": {
+    "Settings": {
+      "HostingPort": "The game port clients connect to. 0 asks the OS for a free one.",
+      "PlayerLimit": "Seats for network clients, 1..48. Slot 0 and bots do not count against it.",
+      "MultiClientLimit": "Connections allowed from one address. Loopback is exempt.",
+      "PlayerName": "The name of reserved roster slot 0, a permanent spectator.",
+      "UseLobby": "Announce this server to ganggarrison.com so it appears in the client's server list. The only outbound connection this project makes.",
+      "Rewards": "Answer REWARD_REQUEST, relaying each player's reward id to the auth server."
+    },
+    "Server": {
+      "ServerName": "Shown in the client's server browser and on join.",
+      "WelcomeMessage": "Sent to each joiner. Empty means none.",
+      "ChatJoinMessage": "A chat line sent to each player as they join chat. Empty means none. Needs a chat plugin in ServerPluginList; a client without one never sees it.",
+      "Password": "The game password. Empty means none, and no PASSWORD_REQUEST.",
+      "Map": "The map to open on. Empty means the first entry of the rotation.",
+      "Rotation": "The map rotation, in order. A map may appear more than once.",
+      "ShuffleRotation": "How the rotation is ordered at startup. arena-last shuffles but does not open on an arena map.",
+      "VotableMaps": "Maps a plugin map vote may offer. Empty means the rotation, else every map in the maps directory.",
+      "ServerPluginList": "Server-sent plugins clients are asked to load, comma-separated.",
+      "ServerPluginsRequired": "Clients must load the plugin list to join.",
+      "AutoBalance": "Move a player across when one team is two larger.",
+      "CapLimit": "Captures that win a round, 1..255. 0 is clamped to 1, not to unlimited.",
+      "Time Limit": "Round length in minutes, 1..255. 0 is clamped to 1.",
+      "Deathmatch Kill Limit": "Kills that win a team-deathmatch round, 1..65535.",
+      "Team Deathmatch Invulnerability Seconds": "Spawn protection in team deathmatch. 0 really is none.",
+      "Respawn Time": "Seconds a dead player waits. 0 becomes a single tick.",
+      "Total bandwidth limit for map downloads in bytes per second": "TOTAL across every custom-map download in flight, not per client.",
+      "BanFile": "Where operator bans are kept. Empty means they do not survive a restart.",
+      "MapDirectory": "Where the map PNGs are read from.",
+      "RecordingDirectory": "Write replayable .trace recordings of this server's broadcast stream here. Empty records nothing — recording a game people are playing is a decision.",
+      "AuthServerHost": "The reward auth service. Only contacted when Rewards is on.",
+      "AuthServerPort": "That service's port."
+    },
+    "Analytics": {
+      "File": "Count who plays here and keep it across restarts. Empty counts nothing. Addresses are stored as salted hashes, never as addresses.",
+      "GeoIpDatabase": "A MaxMind .mmdb used to put players on the analytics map. None ships with this server. A country-level database resolves no US states."
+    },
+    "Classlimits": {
+      "Scout": "How many Scouts ONE TEAM may hold. 255 is unlimited; 0 BANS the class.",
+      "Pyro": "How many Pyros ONE TEAM may hold. 255 is unlimited; 0 BANS the class.",
+      "Soldier": "How many Soldiers ONE TEAM may hold. 255 is unlimited; 0 BANS the class.",
+      "Heavy": "How many Heavys ONE TEAM may hold. 255 is unlimited; 0 BANS the class.",
+      "Demoman": "How many Demomans ONE TEAM may hold. 255 is unlimited; 0 BANS the class.",
+      "Medic": "How many Medics ONE TEAM may hold. 255 is unlimited; 0 BANS the class.",
+      "Engineer": "How many Engineers ONE TEAM may hold. 255 is unlimited; 0 BANS the class.",
+      "Spy": "How many Spys ONE TEAM may hold. 255 is unlimited; 0 BANS the class.",
+      "Sniper": "How many Snipers ONE TEAM may hold. 255 is unlimited; 0 BANS the class.",
+      "Quote": "How many Quotes ONE TEAM may hold. 255 is unlimited; 0 BANS the class."
+    },
+    "Log": {
+      "File": "TEE the log into this file. The console sink stays wired — the console is the record an operator has when the thing that broke is the disk.",
+      "MaxBytes": "Rotate the log file at this size. At least 1024.",
+      "Keep": "Rotated log files to keep, 0..1000."
+    },
+    "Limits": {
+      "MaxReceiveBufferBytes": "Unread bytes one client may have buffered before it is dropped. A stock client's steady state is a few bytes.",
+      "MaxReceiveBytesPerTick": "Bytes read from one socket in one tick, however many are waiting. This one is about the CLOCK, not about memory.",
+      "MaxSendBacklogBytes": "Queued bytes one client may leave unread before it is dropped. The bound on the cheapest attack there is: connect, join, stop reading.",
+      "MaxInvalidCommandBytes": "Garbage one connection may send before it is dropped.",
+      "MaxAcceptsPerTick": "New connections taken off the listener in one tick.",
+      "MaxJoiningConnections": "Half-finished handshakes held at once.",
+      "MaxHandshakeSeconds": "Longest a connection may take to finish joining, however active it is. NOT the 30s idle timeout — a PING resets that one and cannot reset this.",
+      "ConnectionBurstPerAddress": "Connections one address may open inside the window below. 0 turns the rate limit off.",
+      "ConnectionBurstWindowSeconds": "The window that burst is counted over.",
+      "ChatBubbleIntervalMs": "Smallest gap between one player's chat bubbles.",
+      "TcpKeepAlive": "Probe for peers that vanished. Off, a client whose machine dies holds a roster slot for ~15 minutes. A spectator sends nothing, so this is the mechanism rather than a heartbeat.",
+      "KeepAliveIdleSeconds": "Quiet seconds before the first keepalive probe.",
+      "KeepAliveIntervalSeconds": "Seconds between probes.",
+      "KeepAliveProbeCount": "Unanswered probes before the peer is declared gone."
+    },
+    "Nav": {
+      "Directory": "Where the bot nav graphs are read from. Empty is legal: bots then fight but do not walk.",
+      "Generate": "Build a missing graph at the map change, which is what makes a custom map navigable. Held in memory unless Save is on.",
+      "Save": "Write a generated graph into the nav directory. Off by default because it writes files the operator did not ask for.",
+      "Distances": "Give A* exact node-to-node distances instead of a straight-line estimate. OFF IS A DIFFERENT ARM, not a slower one — the search is weighted, so this picks the route as well as the speed."
+    },
+    "Bots": {
+      "Enabled": "Manage a bot population at all.",
+      "FillToPlayers": "How many players the server wants IN TOTAL, humans included.",
+      "MaxBots": "A hard ceiling on top of the fill target.",
+      "MinHumans": "Humans that must be connected before ANY bot is spawned. Below it the target is ZERO, not the fill — an empty server full of bots looks full in the lobby list and is not.",
+      "Difficulty": "1 to 5. 5 is 'as good as the layer gets'; the lower tiers are a deliberate handicap ladder.",
+      "SuspendMinutes": "How long the /bots off chat command takes the bots away for, 0..1440. 0 means the command does not exist on this server. Needs a chat plugin in ServerPluginList - it is the only way a player can type /bots.",
+      "NamePrefix": "What a bot's name starts with.",
+      "ClassPolicy": "Class=name entries deciding who drives each class, where name is a checkpoint's file name without its extension or 'scripted'. Anything not named here keeps the default: whichever loaded checkpoint's own class set claims it, scripted if none does.",
+      "Occupancy": "Price an edge a team-mate is already walking above its honest cost, so a squad fans out. A BEHAVIOUR switch: off, match dispersion falls 0.785 to 0.634 and nothing replaces it.",
+      "EngageBots": "Run the expensive micro-controller in bot-vs-bot fights too. It does not make the bots better; it makes those fights cost more.",
+      "HandoverBubbles": "Bots put up a chat bubble whenever their brain changes hands: z1 a policy took the wheel, z3 the search did, z2 the scripted layer took it back. For debugging; every bubble is a broadcast.",
+      "AdaptiveBudget": "Let the server walk the controller budget down when ticks crowd their deadline. The arbiter setting stays an upper bound.",
+      "Mode": "Which of the four shipped brains runs. search is the better bot and the far more expensive one.",
+      "Policy": "The gg2-rl checkpoints policy and tiered modes load, one tier each. A checkpoint is DATED by the simulation it was trained against, and the classes it drives are read off the file.",
+      "PolicyIgnoreStamp": "BYPASS the SIM_UUID guard, which exists to stop a policy running against a simulation it was not trained on. The server prints both stamps.",
+      "Arbiter": "MICROSECONDS of bot-controller work per tick, against a 33,300us tick. Empty lets the mode pick its default.",
+      "SearchThreads": "Threads the rollout search uses. Threads change NO decision, so this is a pure cost knob."
+    },
+    "BotClasslimits": {
+      "Scout": "How many Scout BOTS one team may hold. Humans do not count and are not limited by this. 255 is unlimited; 0 keeps bots off the class.",
+      "Pyro": "How many Pyro BOTS one team may hold. Humans do not count and are not limited by this. 255 is unlimited; 0 keeps bots off the class.",
+      "Soldier": "How many Soldier BOTS one team may hold. Humans do not count and are not limited by this. 255 is unlimited; 0 keeps bots off the class.",
+      "Heavy": "How many Heavy BOTS one team may hold. Humans do not count and are not limited by this. 255 is unlimited; 0 keeps bots off the class.",
+      "Demoman": "How many Demoman BOTS one team may hold. Humans do not count and are not limited by this. 255 is unlimited; 0 keeps bots off the class.",
+      "Medic": "How many Medic BOTS one team may hold. Humans do not count and are not limited by this. 255 is unlimited; 0 keeps bots off the class.",
+      "Engineer": "How many Engineer BOTS one team may hold. Humans do not count and are not limited by this. 255 is unlimited; 0 keeps bots off the class.",
+      "Spy": "How many Spy BOTS one team may hold. Humans do not count and are not limited by this. 255 is unlimited; 0 keeps bots off the class.",
+      "Sniper": "How many Sniper BOTS one team may hold. Humans do not count and are not limited by this. 255 is unlimited; 0 keeps bots off the class."
+    },
+    "Web": {
+      "Port": "The admin panel's port. Naming it at all turns the panel ON; 0 asks the OS for a free one.",
+      "Enabled": "Host the admin panel. Written explicitly so turning it OFF is expressible; a Port key on its own turns it on.",
+      "Bind": "Where the panel listens. 127.0.0.1 is local only; 0.0.0.0 is what makes it remote, and remote without a certificate sends the admin password in the clear.",
+      "Password": "The admin password. EMPTY DOES NOT MEAN NO PASSWORD — it means one is generated and printed to the console at startup. A generated one lasts as long as the process: a restart from this panel carries it, so pressing restart does not lock you out, and a new process generates a new one.",
+      "Certificate": "A PKCS#12 certificate to serve HTTPS with. Empty is plain HTTP. 'auto' makes a self-signed one on first start and keeps it beside the config file, so its fingerprint stays the same for a fleet hub to pin.",
+      "CertificatePassword": "That certificate's password, if it has one.",
+      "AllowFrom": "Addresses and CIDR blocks allowed to connect at all, comma-separated. Empty allows anyone. Loopback is always allowed. Checked before TLS or any HTTP, so on a fleet member this is normally just the hub's address.",
+      "FleetMember": "Let a fleet hub manage this server with a token instead of the password. Needs a Certificate (auto is fine). The pairing code to give the hub is printed at every start.",
+      "FleetDirectory": "Make this panel a fleet hub that manages other servers. The directory holds the member list (with every member's token), relative to the config file. Empty is not a hub. A hub bound beyond loopback needs a Certificate."
+    },
+    "Runtime": {
+      "Speed": "Tick pacing. 1 is real time; 'max' is unpaced. MUST STAY AT 1 on a server anybody is connected to.",
+      "IdleWhenEmpty": "Drop to 2 Hz when nobody is connected and no bots are running. The round clock slows with it, which is why an idle server's round is not wall-clock Time Limit.",
+      "TickStats": "Log a histogram of tick intervals every 30 seconds. Pacing only, so it is safe with players on.",
+      "ControlPort": "The loopback-only JSON control port. Naming it at all turns it ON; 0 asks the OS for a free one. It executes commands against a live game.",
+      "ControlPortEnabled": "Open the control port at all. A ControlPort key on its own turns it on; this is how it is turned back off."
+    }
+  },
   "editorPage": {
     "adopt": {
       "common": "Into all servers",

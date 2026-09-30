@@ -108,9 +108,7 @@ function cfgField(setting, opts) {
 
   wrap.appendChild(input);
 
-  if (setting.help) {
-    wrap.appendChild(Object.assign(document.createElement('p'), { className: 'hint', textContent: setting.help }));
-  }
+  wrap.appendChild(Object.assign(document.createElement('p'), { className: 'hint', textContent: cfgHelp(setting) }));
 
   for (const n of opts.notes || []) {
     wrap.appendChild(Object.assign(document.createElement('p'), { className: `hint ${n.kind || ''}`, textContent: n.text }));
@@ -119,9 +117,18 @@ function cfgField(setting, opts) {
   return wrap;
 }
 
+/**
+ * A setting's one-line description, from strings.js by the setting's id. The
+ * server sends ids, not descriptions; WebStringsTests holds strings.js to
+ * exactly one entry per row of ServerSettings.All.
+ */
+function cfgHelp(setting) {
+  return t(`settingHelp.${setting.id}`);
+}
+
 /** Whether a setting survives the filter box: its id and its help, so "password" finds all three. */
 function cfgMatches(setting, filter) {
-  return !filter || `${setting.id} ${setting.help}`.toLowerCase().includes(filter);
+  return !filter || `${setting.id} ${cfgHelp(setting)}`.toLowerCase().includes(filter);
 }
 
 /**

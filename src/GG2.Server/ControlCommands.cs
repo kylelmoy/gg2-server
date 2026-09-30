@@ -416,7 +416,6 @@ public static class ControlCommands
             json.Append(",\"section\":\"").Append(Escape(setting.Section)).Append('"');
             json.Append(",\"key\":\"").Append(Escape(setting.Key)).Append('"');
             json.Append(",\"kind\":\"").Append(setting.Kind.ToString().ToLowerInvariant()).Append('"');
-            json.Append(",\"help\":\"").Append(Escape(setting.Help)).Append('"');
             json.Append(",\"secret\":").Append(setting.Secret ? "true" : "false");
 
             if (setting.Secret)

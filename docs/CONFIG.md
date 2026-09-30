@@ -96,9 +96,13 @@ is where a round-trip starts losing values.
    value.
 3. Add a flag and a `CliCoverageTests` row, or a reason to
    `CliCoverageTests.NotOnTheCommandLine`.
+4. Add its one-line description to `src/GG2.Server/Web/Assets/strings.js`, under
+   `settingHelp.<Section>.<Key>`.
 
 `ConfigFileCoverageTests` fails on a property with no row, so step 2 cannot be
-forgotten. Nothing has to be added to the admin panel: it renders the table.
+forgotten, and `WebStringsTests.EverySettingHasOneDescription` fails on a row
+with no description, so step 4 cannot be either. Nothing else has to be added
+to the admin panel: it renders the table.
 
 ## The gates
 

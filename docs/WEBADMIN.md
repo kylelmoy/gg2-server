@@ -476,9 +476,12 @@ text-bearing attribute of its own, and no script assigns a literal with a
 letter in it to `textContent`, `innerHTML`, `title`, `placeholder` or
 `ariaLabel`. That last one is a regular expression over the common shape, so
 text reaching the DOM another way (a literal passed to a helper) is not caught.
-What is NOT in the table: messages the server composes (command replies, the
-settings page's setting names and descriptions, which come from
-`ServerSettings`), and the fleet analytics page's own `fleet.js`.
+The settings pages' descriptions are in the table too, one per row of
+`ServerSettings.All` under `settingHelp.<Section>.<Key>`; the server sends ids
+and never text. What is NOT in the table: messages the server composes (command
+replies, errors), the setting names and choice values (they are the ini's own
+keys and values, and translating them would make the page disagree with the
+file), and the fleet analytics page's own `fleet.js`.
 
 Two rules hold `app.js` together: **state arrives on one event stream and is
 applied by `render()`** — nothing else writes to the DOM from a timer, so the
@@ -608,10 +611,11 @@ replaces the character and leaves the player alone".
 ## The settings page
 
 **Settings** in the top bar opens a modal over the dashboard: every key
-`docs/CONFIG.md` documents, grouped by section, filterable, with the help text
+`docs/CONFIG.md` documents, grouped by section, filterable, with a description
 beside each field. It renders `ServerSettings.All`, so **adding a setting needs
-no change here at all** — a new row appears on the page the day it is added to
-the table.
+no change here beyond its description in `strings.js`** — a new row appears on
+the page the day it is added to the table, and `WebStringsTests` fails until it
+is described.
 
 **It and the fleet settings page are one design, drawn by one file.**
 `settings.js` owns the control, the field (label, tags, an action, help, notes),
@@ -979,7 +983,7 @@ asserts behaviour on an unloaded socket, and the floor is what keeps the load ou
 |---|---|
 | `WebAdminTests` | over a real socket with a real HTTP client: every route refuses an unauthenticated request, the CSRF header is required, the map route takes a map name and nothing else, a command reaches the tick thread, every control-port verb is reachable, the page is served, the security headers are present, nobody watching means no snapshots but does mean a performance history, every sample row matches the declared fields, and an open stream gets both |
 | `BotBrainStateTests` | the brain block and the per-slot fields the Bots card and the roster are built from: a scripted server names the scripted brain and no tier, a policy server names each tier and the classes a live controller says it drives, a class no tier drives falls back by name, the counters that say a brain is consulted are sent, the engagement gate is reported both ways, and two policy tiers are told apart on the bot as well as on the card |
-| `WebStringsTests` | the text table: strict JSON, every key named is present and every key present is named, no text in either page outside it, and no literal text assigned in a script |
+| `WebStringsTests` | the text table: strict JSON, every key named is present and every key present is named, one description per row of `ServerSettings.All`, no text in either page outside it, and no literal text assigned in a script |
 | `WebAssetTests` | the panel's own files: no top-level name declared twice, every literal `$('id')` present in `index.html`, every asset actually embedded, and the analytics map's geometry — both views present, every ring an even number of coordinates, and no ring jumping the antimeridian |
 | `AdminSessionTests` | the password, the tokens, both timeouts, the lockout and its ceiling, per-address isolation, the session cap, and the generated password's alphabet — all on an injected clock, so no test sleeps |
 | `CliCoverageTests` | every `--web-*` flag moves the option it names; a settings flag with no `--web` is refused; `--web` alone is not remote; a config file alone overrides nothing and a flag beside it overrides exactly what it names |

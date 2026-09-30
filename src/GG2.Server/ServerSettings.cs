@@ -91,9 +91,6 @@ public sealed record ServerSetting
     /// </remarks>
     public required string Probe { get; init; }
 
-    /// <summary>One line for an operator reading the settings page.</summary>
-    public string Help { get; init; } = string.Empty;
-
     /// <summary>The legal values, for <see cref="SettingKind.Choice"/>.</summary>
     public IReadOnlyList<string> Choices { get; init; } = [];
 
@@ -217,23 +214,19 @@ public static class ServerSettings
         // would silently listen on the wrong port.
         settings.Add(IntRow(
             "Settings", "HostingPort", nameof(ServerOptions.Port),
-            o => o.Port, (o, v) => o.Port = v, "8191",
-            "The game port clients connect to. 0 asks the OS for a free one."));
+            o => o.Port, (o, v) => o.Port = v, "8191"));
 
         settings.Add(IntRow(
             "Settings", "PlayerLimit", nameof(ServerOptions.PlayerLimit),
-            o => o.PlayerLimit, (o, v) => o.PlayerLimit = v, "24",
-            "Seats for network clients, 1..48. Slot 0 and bots do not count against it."));
+            o => o.PlayerLimit, (o, v) => o.PlayerLimit = v, "24"));
 
         settings.Add(IntRow(
             "Settings", "MultiClientLimit", nameof(ServerOptions.MultiClientLimit),
-            o => o.MultiClientLimit, (o, v) => o.MultiClientLimit = v, "1",
-            "Connections allowed from one address. Loopback is exempt."));
+            o => o.MultiClientLimit, (o, v) => o.MultiClientLimit = v, "1"));
 
         settings.Add(TextRow(
             "Settings", "PlayerName", nameof(ServerOptions.ServerPlayerName),
-            o => o.ServerPlayerName, (o, v) => o.ServerPlayerName = v, "Referee",
-            "The name of reserved roster slot 0, a permanent spectator."));
+            o => o.ServerPlayerName, (o, v) => o.ServerPlayerName = v, "Referee"));
 
         // ⚠️ The default is NOT the reference's. See ServerOptions.AnnounceToLobby:
         // a headless binary must not publish its address because a config file it
@@ -241,9 +234,7 @@ public static class ServerSettings
         // honoured; leaving it out is not.
         settings.Add(BoolRow(
             "Settings", "UseLobby", nameof(ServerOptions.AnnounceToLobby),
-            o => o.AnnounceToLobby, (o, v) => o.AnnounceToLobby = v,
-            "Announce this server to ganggarrison.com so it appears in the client's "
-            + "server list. The only outbound connection this project makes."));
+            o => o.AnnounceToLobby, (o, v) => o.AnnounceToLobby = v));
 
         // No reference key to read: GG2 has no server-side rewards switch, because
         // its server answers every request. It is this port's own, for the same
@@ -251,19 +242,16 @@ public static class ServerSettings
         // identities to a third party is a decision somebody has to make.
         settings.Add(BoolRow(
             "Settings", "Rewards", nameof(ServerOptions.Rewards),
-            o => o.Rewards, (o, v) => o.Rewards = v,
-            "Answer REWARD_REQUEST, relaying each player's reward id to the auth server."));
+            o => o.Rewards, (o, v) => o.Rewards = v));
 
         // --- [Server] ---------------------------------------------------------
         settings.Add(TextRow(
             "Server", "ServerName", nameof(ServerOptions.ServerName),
-            o => o.ServerName, (o, v) => o.ServerName = v, "a test server",
-            "Shown in the client's server browser and on join."));
+            o => o.ServerName, (o, v) => o.ServerName = v, "a test server"));
 
         settings.Add(TextRow(
             "Server", "WelcomeMessage", nameof(ServerOptions.WelcomeMessage),
-            o => o.WelcomeMessage, (o, v) => o.WelcomeMessage = v, "hello",
-            "Sent to each joiner. Empty means none."));
+            o => o.WelcomeMessage, (o, v) => o.WelcomeMessage = v, "hello"));
 
         // ⚠️ A DIFFERENT channel from WelcomeMessage above, not a second spelling
         // of it: that one is a MESSAGE_STRING every client understands, this one
@@ -272,20 +260,15 @@ public static class ServerSettings
         // command belongs here rather than there.
         settings.Add(TextRow(
             "Server", "ChatJoinMessage", nameof(ServerOptions.ChatJoinMessage),
-            o => o.ChatJoinMessage, (o, v) => o.ChatJoinMessage = v, "type /help",
-            "A chat line sent to each player as they join chat. Empty means none. "
-            + "Needs a chat plugin in ServerPluginList; a client without one never "
-            + "sees it."));
+            o => o.ChatJoinMessage, (o, v) => o.ChatJoinMessage = v, "type /help"));
 
         settings.Add(SecretRow(
             "Server", "Password", nameof(ServerOptions.Password),
-            o => o.Password, (o, v) => o.Password = v, "hunter2",
-            "The game password. Empty means none, and no PASSWORD_REQUEST."));
+            o => o.Password, (o, v) => o.Password = v, "hunter2"));
 
         settings.Add(TextRow(
             "Server", "Map", nameof(ServerOptions.Map),
-            o => o.Map, (o, v) => o.Map = v, "koth_valley",
-            "The map to open on. Empty means the first entry of the rotation."));
+            o => o.Map, (o, v) => o.Map = v, "koth_valley"));
 
         // ⚠️ THE PORT'S OWN KEY, and it is checked BEFORE the reference's two
         // rotation sources — see ServerConfigFile.Apply. It has to win, because it
@@ -294,8 +277,7 @@ public static class ServerSettings
         // nothing.
         settings.Add(ListRow(
             "Server", "Rotation", nameof(ServerOptions.MapRotation),
-            o => o.MapRotation, (o, maps) => o.MapRotation = maps, "koth_valley,ctf_2dfort",
-            "The map rotation, in order. A map may appear more than once."));
+            o => o.MapRotation, (o, maps) => o.MapRotation = maps, "koth_valley,ctf_2dfort"));
 
         settings.Add(ChoiceRow(
             "Server", "ShuffleRotation", nameof(ServerOptions.ShuffleRotation),
@@ -307,49 +289,40 @@ public static class ServerSettings
                 _ => "any",
             },
             (o, v) => o.ShuffleRotation = Shuffle(v),
-            "any",
-            "How the rotation is ordered at startup. arena-last shuffles but does "
-            + "not open on an arena map."));
+            "any"));
 
         settings.Add(ListRow(
             "Server", "VotableMaps", nameof(ServerOptions.VotableMaps),
             o => o.VotableMaps, (o, maps) => o.VotableMaps = maps,
-            "ctf_truefort,koth_valley",
-            "Maps a plugin map vote may offer. Empty means the rotation, else every "
-            + "map in the maps directory."));
+            "ctf_truefort,koth_valley"));
 
         settings.Add(TextRow(
             "Server", "ServerPluginList", nameof(ServerOptions.ServerPluginList),
-            o => o.ServerPluginList, (o, v) => o.ServerPluginList = v, "chat_v2_pr",
-            "Server-sent plugins clients are asked to load, comma-separated."));
+            o => o.ServerPluginList, (o, v) => o.ServerPluginList = v, "chat_v2_pr"));
 
         settings.Add(BoolRow(
             "Server", "ServerPluginsRequired", nameof(ServerOptions.ServerPluginsRequired),
-            o => o.ServerPluginsRequired, (o, v) => o.ServerPluginsRequired = v,
-            "Clients must load the plugin list to join."));
+            o => o.ServerPluginsRequired, (o, v) => o.ServerPluginsRequired = v));
 
         settings.Add(BoolRow(
             "Server", "AutoBalance", nameof(ServerOptions.Autobalance),
-            o => o.Autobalance, (o, v) => o.Autobalance = v,
-            "Move a player across when one team is two larger."));
+            o => o.Autobalance, (o, v) => o.Autobalance = v));
 
         // The same max/min clamps game_init.gml applies, and they are not
         // decoration: `CapLimit=0` in the reference is a ONE-capture round, not an
         // endless one, because the floor is applied before anything sees it.
         settings.Add(IntRow(
             "Server", "CapLimit", nameof(ServerOptions.CapLimit),
-            o => o.CapLimit, (o, v) => o.CapLimit = (byte)Math.Clamp(v, 1, 255), "3",
-            "Captures that win a round, 1..255. 0 is clamped to 1, not to unlimited."));
+            o => o.CapLimit, (o, v) => o.CapLimit = (byte)Math.Clamp(v, 1, 255), "3"));
 
         settings.Add(IntRow(
             "Server", "Time Limit", nameof(ServerOptions.TimeLimitMinutes),
             o => o.TimeLimitMinutes, (o, v) => o.TimeLimitMinutes = (byte)Math.Clamp(v, 1, 255),
-            "20", "Round length in minutes, 1..255. 0 is clamped to 1."));
+            "20"));
 
         settings.Add(IntRow(
             "Server", "Deathmatch Kill Limit", nameof(ServerOptions.KillLimit),
-            o => o.KillLimit, (o, v) => o.KillLimit = (ushort)Math.Clamp(v, 1, 65535), "50",
-            "Kills that win a team-deathmatch round, 1..65535."));
+            o => o.KillLimit, (o, v) => o.KillLimit = (ushort)Math.Clamp(v, 1, 65535), "50"));
 
         // Floored at 0, not 1 — zero really is "no spawn protection" here, which is
         // the one limit in this section with no escape to worry about.
@@ -357,8 +330,7 @@ public static class ServerSettings
             "Server", "Team Deathmatch Invulnerability Seconds",
             nameof(ServerOptions.TdmInvulnerabilitySeconds),
             o => o.TdmInvulnerabilitySeconds,
-            (o, v) => o.TdmInvulnerabilitySeconds = Math.Clamp(v, 0, 3600), "0",
-            "Spawn protection in team deathmatch. 0 really is none."));
+            (o, v) => o.TdmInvulnerabilitySeconds = Math.Clamp(v, 0, 3600), "0"));
 
         // NOT clamped at 1, deliberately: game_init.gml reads Respawn Time raw and
         // GameServerCreate turns a 0 into a single tick. GameServer does the same,
@@ -366,18 +338,16 @@ public static class ServerSettings
         settings.Add(IntRow(
             "Server", "Respawn Time", nameof(ServerOptions.RespawnTimeSeconds),
             o => o.RespawnTimeSeconds, (o, v) => o.RespawnTimeSeconds = (byte)Math.Clamp(v, 0, 255),
-            "8", "Seconds a dead player waits. 0 becomes a single tick."));
+            "8"));
 
         settings.Add(IntRow(
             "Server", "Total bandwidth limit for map downloads in bytes per second",
             nameof(ServerOptions.MapDownloadBytesPerSecond),
-            o => o.MapDownloadBytesPerSecond, (o, v) => o.MapDownloadBytesPerSecond = v, "12345",
-            "TOTAL across every custom-map download in flight, not per client."));
+            o => o.MapDownloadBytesPerSecond, (o, v) => o.MapDownloadBytesPerSecond = v, "12345"));
 
         settings.Add(PathRow(
             "Server", "BanFile", nameof(ServerOptions.BanFile),
-            o => o.BanFile, (o, v) => o.BanFile = v, "bans.txt",
-            "Where operator bans are kept. Empty means they do not survive a restart."));
+            o => o.BanFile, (o, v) => o.BanFile = v, "bans.txt"));
 
         // --- [Analytics] ------------------------------------------------------
         //
@@ -387,36 +357,27 @@ public static class ServerSettings
         // place. docs/ANALYTICS.md.
         settings.Add(PathRow(
             "Analytics", "File", nameof(ServerOptions.AnalyticsFile),
-            o => o.AnalyticsFile, (o, v) => o.AnalyticsFile = v, "analytics.tsv",
-            "Count who plays here and keep it across restarts. Empty counts nothing. "
-            + "Addresses are stored as salted hashes, never as addresses."));
+            o => o.AnalyticsFile, (o, v) => o.AnalyticsFile = v, "analytics.tsv"));
 
         settings.Add(PathRow(
             "Analytics", "GeoIpDatabase", nameof(ServerOptions.GeoIpFile),
-            o => o.GeoIpFile, (o, v) => o.GeoIpFile = v, "GeoLite2-City.mmdb",
-            "A MaxMind .mmdb used to put players on the analytics map. None ships with "
-            + "this server. A country-level database resolves no US states."));
+            o => o.GeoIpFile, (o, v) => o.GeoIpFile = v, "GeoLite2-City.mmdb"));
 
         settings.Add(PathRow(
             "Server", "MapDirectory", nameof(ServerOptions.MapDirectory),
-            o => o.MapDirectory, (o, v) => o.MapDirectory = v, "some/other/maps",
-            "Where the map PNGs are read from."));
+            o => o.MapDirectory, (o, v) => o.MapDirectory = v, "some/other/maps"));
 
         settings.Add(PathRow(
             "Server", "RecordingDirectory", nameof(ServerOptions.RecordingDirectory),
-            o => o.RecordingDirectory, (o, v) => o.RecordingDirectory = v, "some/traces",
-            "Write replayable .trace recordings of this server's broadcast stream here. "
-            + "Empty records nothing — recording a game people are playing is a decision."));
+            o => o.RecordingDirectory, (o, v) => o.RecordingDirectory = v, "some/traces"));
 
         settings.Add(TextRow(
             "Server", "AuthServerHost", nameof(ServerOptions.AuthServerHost),
-            o => o.AuthServerHost, (o, v) => o.AuthServerHost = v, "auth.example",
-            "The reward auth service. Only contacted when Rewards is on."));
+            o => o.AuthServerHost, (o, v) => o.AuthServerHost = v, "auth.example"));
 
         settings.Add(IntRow(
             "Server", "AuthServerPort", nameof(ServerOptions.AuthServerPort),
-            o => o.AuthServerPort, (o, v) => o.AuthServerPort = v, "45099",
-            "That service's port."));
+            o => o.AuthServerPort, (o, v) => o.AuthServerPort = v, "45099"));
 
         // --- [Classlimits] ----------------------------------------------------
         //
@@ -432,8 +393,7 @@ public static class ServerSettings
                 "Classlimits", key, nameof(ServerOptions.ClassLimits),
                 o => o.ClassLimits[index],
                 (o, v) => o.ClassLimit(index, (byte)Math.Clamp(v, 0, 255)),
-                "1",
-                $"How many {key}s ONE TEAM may hold. 255 is unlimited; 0 BANS the class."));
+                "1"));
         }
 
         // --- [Log] ------------------------------------------------------------
@@ -443,19 +403,16 @@ public static class ServerSettings
         // deployment with neither.
         settings.Add(PathRow(
             "Log", "File", nameof(ServerOptions.LogFile),
-            o => o.LogFile, (o, v) => o.LogFile = v, "logs/server.log",
-            "TEE the log into this file. The console sink stays wired — the console "
-            + "is the record an operator has when the thing that broke is the disk."));
+            o => o.LogFile, (o, v) => o.LogFile = v, "logs/server.log"));
 
         settings.Add(IntRow(
             "Log", "MaxBytes", nameof(ServerOptions.LogMaxBytes),
             o => (int)Math.Min(o.LogMaxBytes, int.MaxValue), (o, v) => o.LogMaxBytes = v,
-            "1048576", "Rotate the log file at this size. At least 1024."));
+            "1048576"));
 
         settings.Add(IntRow(
             "Log", "Keep", nameof(ServerOptions.LogKeep),
-            o => o.LogKeep, (o, v) => o.LogKeep = v, "9",
-            "Rotated log files to keep, 0..1000."));
+            o => o.LogKeep, (o, v) => o.LogKeep = v, "9"));
 
         // --- [Limits] ---------------------------------------------------------
         //
@@ -468,41 +425,32 @@ public static class ServerSettings
         settings.Add(IntRow(
             "Limits", "MaxReceiveBufferBytes", nameof(ServerOptions.Limits),
             o => o.Limits.MaxReceiveBufferBytes,
-            (o, v) => o.Limits = o.Limits with { MaxReceiveBufferBytes = v }, "524288",
-            "Unread bytes one client may have buffered before it is dropped. A stock "
-            + "client's steady state is a few bytes."));
+            (o, v) => o.Limits = o.Limits with { MaxReceiveBufferBytes = v }, "524288"));
 
         settings.Add(IntRow(
             "Limits", "MaxReceiveBytesPerTick", nameof(ServerOptions.Limits),
             o => o.Limits.MaxReceiveBytesPerTick,
-            (o, v) => o.Limits = o.Limits with { MaxReceiveBytesPerTick = v }, "32768",
-            "Bytes read from one socket in one tick, however many are waiting. This "
-            + "one is about the CLOCK, not about memory."));
+            (o, v) => o.Limits = o.Limits with { MaxReceiveBytesPerTick = v }, "32768"));
 
         settings.Add(IntRow(
             "Limits", "MaxSendBacklogBytes", nameof(ServerOptions.Limits),
             o => o.Limits.MaxSendBacklogBytes,
-            (o, v) => o.Limits = o.Limits with { MaxSendBacklogBytes = v }, "2097152",
-            "Queued bytes one client may leave unread before it is dropped. The bound "
-            + "on the cheapest attack there is: connect, join, stop reading."));
+            (o, v) => o.Limits = o.Limits with { MaxSendBacklogBytes = v }, "2097152"));
 
         settings.Add(IntRow(
             "Limits", "MaxInvalidCommandBytes", nameof(ServerOptions.Limits),
             o => o.Limits.MaxInvalidCommandBytes,
-            (o, v) => o.Limits = o.Limits with { MaxInvalidCommandBytes = v }, "8192",
-            "Garbage one connection may send before it is dropped."));
+            (o, v) => o.Limits = o.Limits with { MaxInvalidCommandBytes = v }, "8192"));
 
         settings.Add(IntRow(
             "Limits", "MaxAcceptsPerTick", nameof(ServerOptions.Limits),
             o => o.Limits.MaxAcceptsPerTick,
-            (o, v) => o.Limits = o.Limits with { MaxAcceptsPerTick = v }, "16",
-            "New connections taken off the listener in one tick."));
+            (o, v) => o.Limits = o.Limits with { MaxAcceptsPerTick = v }, "16"));
 
         settings.Add(IntRow(
             "Limits", "MaxJoiningConnections", nameof(ServerOptions.Limits),
             o => o.Limits.MaxJoiningConnections,
-            (o, v) => o.Limits = o.Limits with { MaxJoiningConnections = v }, "64",
-            "Half-finished handshakes held at once."));
+            (o, v) => o.Limits = o.Limits with { MaxJoiningConnections = v }, "64"));
 
         // ⚠️ SEPARATE from the reference's 30-second idle timeout, which a PING
         // resets — a connection that pings holds a seat for ever, which is why
@@ -511,30 +459,25 @@ public static class ServerSettings
             "Limits", "MaxHandshakeSeconds", nameof(ServerOptions.Limits),
             o => (int)o.Limits.MaxHandshakeDuration.TotalSeconds,
             (o, v) => o.Limits = o.Limits with { MaxHandshakeDuration = TimeSpan.FromSeconds(v) },
-            "120",
-            "Longest a connection may take to finish joining, however active it is. "
-            + "NOT the 30s idle timeout — a PING resets that one and cannot reset this."));
+            "120"));
 
         // ⚠️ NOT MultiClientLimit. That bounds how many connections one address
         // holds at once; this bounds how fast it opens them.
         settings.Add(IntRow(
             "Limits", "ConnectionBurstPerAddress", nameof(ServerOptions.Limits),
             o => o.Limits.ConnectionBurstPerAddress,
-            (o, v) => o.Limits = o.Limits with { ConnectionBurstPerAddress = v }, "3",
-            "Connections one address may open inside the window below. 0 turns the "
-            + "rate limit off."));
+            (o, v) => o.Limits = o.Limits with { ConnectionBurstPerAddress = v }, "3"));
 
         settings.Add(IntRow(
             "Limits", "ConnectionBurstWindowSeconds", nameof(ServerOptions.Limits),
             o => (int)o.Limits.ConnectionBurstWindow.TotalSeconds,
             (o, v) => o.Limits = o.Limits with { ConnectionBurstWindow = TimeSpan.FromSeconds(v) },
-            "30", "The window that burst is counted over."));
+            "30"));
 
         settings.Add(IntRow(
             "Limits", "ChatBubbleIntervalMs", nameof(ServerOptions.Limits),
             o => o.Limits.ChatBubbleIntervalMs,
-            (o, v) => o.Limits = o.Limits with { ChatBubbleIntervalMs = v }, "500",
-            "Smallest gap between one player's chat bubbles."));
+            (o, v) => o.Limits = o.Limits with { ChatBubbleIntervalMs = v }, "500"));
 
         // ⚠️ Off is a REGRESSION, not a tuning choice: without keepalives a client
         // whose machine loses power holds a roster slot until TCP's own retransmit
@@ -543,47 +486,35 @@ public static class ServerSettings
         settings.Add(BoolRow(
             "Limits", "TcpKeepAlive", nameof(ServerOptions.Limits),
             o => o.Limits.TcpKeepAlive,
-            (o, v) => o.Limits = o.Limits with { TcpKeepAlive = v },
-            "Probe for peers that vanished. Off, a client whose machine dies holds a "
-            + "roster slot for ~15 minutes. A spectator sends nothing, so this is the "
-            + "mechanism rather than a heartbeat."));
+            (o, v) => o.Limits = o.Limits with { TcpKeepAlive = v }));
 
         settings.Add(IntRow(
             "Limits", "KeepAliveIdleSeconds", nameof(ServerOptions.Limits),
             o => o.Limits.KeepAliveIdleSeconds,
-            (o, v) => o.Limits = o.Limits with { KeepAliveIdleSeconds = v }, "60",
-            "Quiet seconds before the first keepalive probe."));
+            (o, v) => o.Limits = o.Limits with { KeepAliveIdleSeconds = v }, "60"));
 
         settings.Add(IntRow(
             "Limits", "KeepAliveIntervalSeconds", nameof(ServerOptions.Limits),
             o => o.Limits.KeepAliveIntervalSeconds,
-            (o, v) => o.Limits = o.Limits with { KeepAliveIntervalSeconds = v }, "20",
-            "Seconds between probes."));
+            (o, v) => o.Limits = o.Limits with { KeepAliveIntervalSeconds = v }, "20"));
 
         settings.Add(IntRow(
             "Limits", "KeepAliveProbeCount", nameof(ServerOptions.Limits),
             o => o.Limits.KeepAliveProbeCount,
-            (o, v) => o.Limits = o.Limits with { KeepAliveProbeCount = v }, "5",
-            "Unanswered probes before the peer is declared gone."));
+            (o, v) => o.Limits = o.Limits with { KeepAliveProbeCount = v }, "5"));
 
         // --- [Nav] ------------------------------------------------------------
         settings.Add(PathRow(
             "Nav", "Directory", nameof(ServerOptions.NavCacheDirectory),
-            o => o.NavCacheDirectory, (o, v) => o.NavCacheDirectory = v, "some/other/nav",
-            "Where the bot nav graphs are read from. Empty is legal: bots then fight "
-            + "but do not walk."));
+            o => o.NavCacheDirectory, (o, v) => o.NavCacheDirectory = v, "some/other/nav"));
 
         settings.Add(BoolRow(
             "Nav", "Generate", nameof(ServerOptions.NavGenerate),
-            o => o.NavGenerate, (o, v) => o.NavGenerate = v,
-            "Build a missing graph at the map change, which is what makes a custom "
-            + "map navigable. Held in memory unless Save is on."));
+            o => o.NavGenerate, (o, v) => o.NavGenerate = v));
 
         settings.Add(BoolRow(
             "Nav", "Save", nameof(ServerOptions.NavGenerateWrite),
-            o => o.NavGenerateWrite, (o, v) => o.NavGenerateWrite = v,
-            "Write a generated graph into the nav directory. Off by default because "
-            + "it writes files the operator did not ask for."));
+            o => o.NavGenerateWrite, (o, v) => o.NavGenerateWrite = v));
 
         // ⛔ OFF IS A DIFFERENT ARM, NOT A SLOWER ONE. NavConstants.SearchWeight makes
         // this a weighted A*: the heuristic decides which route is returned and not
@@ -591,43 +522,32 @@ public static class ServerSettings
         // comparable to one with it on. docs/TRAPS-BOTS.md, "Shipping the tables".
         settings.Add(BoolRow(
             "Nav", "Distances", nameof(ServerOptions.NavDistances),
-            o => o.NavDistances, (o, v) => o.NavDistances = v,
-            "Give A* exact node-to-node distances instead of a straight-line estimate. "
-            + "OFF IS A DIFFERENT ARM, not a slower one — the search is weighted, so "
-            + "this picks the route as well as the speed."));
+            o => o.NavDistances, (o, v) => o.NavDistances = v));
 
         // --- [Bots] -----------------------------------------------------------
         settings.Add(BoolRow(
             "Bots", "Enabled", "Bots",
-            o => o.Bots.Enabled, (o, v) => o.Bots = o.Bots with { Enabled = v },
-            "Manage a bot population at all."));
+            o => o.Bots.Enabled, (o, v) => o.Bots = o.Bots with { Enabled = v }));
 
         // ⚠️ A FILL target including humans, not a bot count: a server filling to 8
         // with 3 humans on it runs 5 bots and drops one every time somebody joins.
         settings.Add(IntRow(
             "Bots", "FillToPlayers", "Bots",
-            o => o.Bots.FillToPlayers, (o, v) => o.Bots = o.Bots with { FillToPlayers = v }, "12",
-            "How many players the server wants IN TOTAL, humans included."));
+            o => o.Bots.FillToPlayers, (o, v) => o.Bots = o.Bots with { FillToPlayers = v }, "12"));
 
         settings.Add(IntRow(
             "Bots", "MaxBots", "Bots",
-            o => o.Bots.MaxBots, (o, v) => o.Bots = o.Bots with { MaxBots = v }, "12",
-            "A hard ceiling on top of the fill target."));
+            o => o.Bots.MaxBots, (o, v) => o.Bots = o.Bots with { MaxBots = v }, "12"));
 
         // ⚠️ BELOW THIS THE TARGET IS ZERO rather than the fill, which is why a bot
         // count set on an empty server can look like a button that does nothing.
         settings.Add(IntRow(
             "Bots", "MinHumans", "Bots",
-            o => o.Bots.MinHumans, (o, v) => o.Bots = o.Bots with { MinHumans = v }, "2",
-            "Humans that must be connected before ANY bot is spawned. Below it the "
-            + "target is ZERO, not the fill — an empty server full of bots looks full "
-            + "in the lobby list and is not."));
+            o => o.Bots.MinHumans, (o, v) => o.Bots = o.Bots with { MinHumans = v }, "2"));
 
         settings.Add(IntRow(
             "Bots", "Difficulty", "Bots",
-            o => o.Bots.Difficulty, (o, v) => o.Bots = o.Bots with { Difficulty = v }, "3",
-            "1 to 5. 5 is 'as good as the layer gets'; the lower tiers are a "
-            + "deliberate handicap ladder."));
+            o => o.Bots.Difficulty, (o, v) => o.Bots = o.Bots with { Difficulty = v }, "3"));
 
         // ⚠️ ZERO MEANS THE COMMAND DOES NOT EXIST, and that is one key doing two
         // jobs on purpose: a separate boolean would let a server be configured
@@ -635,16 +555,12 @@ public static class ServerSettings
         // and does nothing.
         settings.Add(IntRow(
             "Bots", "SuspendMinutes", nameof(ServerOptions.BotSuspendMinutes),
-            o => o.BotSuspendMinutes, (o, v) => o.BotSuspendMinutes = v, "15",
-            "How long the /bots off chat command takes the bots away for, 0..1440. "
-            + "0 means the command does not exist on this server. Needs a chat plugin in "
-            + "ServerPluginList - it is the only way a player can type /bots."));
+            o => o.BotSuspendMinutes, (o, v) => o.BotSuspendMinutes = v, "15"));
 
         settings.Add(TextRow(
             "Bots", "NamePrefix", "Bots",
             o => o.Bots.NamePrefix ?? string.Empty,
-            (o, v) => o.Bots = o.Bots with { NamePrefix = v }, "[AI] ",
-            "What a bot's name starts with."));
+            (o, v) => o.Bots = o.Bots with { NamePrefix = v }, "[AI] "));
 
         // ⛔ WHICH CONTROLLER DRIVES A CLASS — a different question from which
         // classes bots play, which is [BotClasslimits]. Default is every
@@ -652,52 +568,36 @@ public static class ServerSettings
         settings.Add(ListRow(
             "Bots", "ClassPolicy", nameof(ServerOptions.BotClassPolicies),
             o => o.BotClassPolicies, (o, v) => o.BotClassPolicies = v,
-            "Sniper=scripted,Pyro=tier2_pyro_rest3_s0",
-            "Class=name entries deciding who drives each class, where name is a "
-                + $"checkpoint's file name without its extension or '{BotBrain.Scripted}'. "
-                + "Anything not named here keeps the default: whichever loaded checkpoint's "
-                + "own class set claims it, scripted if none does."));
+            "Sniper=scripted,Pyro=tier2_pyro_rest3_s0"));
 
         // ⛔ A BEHAVIOUR switch, not a performance one. Off, a team's routes stop
         // being pushed apart and match dispersion falls 0.785 -> 0.634 with nothing
         // replacing it. docs/TRAPS-BOTS.md.
         settings.Add(BoolRow(
             "Bots", "Occupancy", nameof(ServerOptions.BotOccupancy),
-            o => o.BotOccupancy, (o, v) => o.BotOccupancy = v,
-            "Price an edge a team-mate is already walking above its honest cost, so a "
-            + "squad fans out. A BEHAVIOUR switch: off, match dispersion falls "
-            + "0.785 to 0.634 and nothing replaces it."));
+            o => o.BotOccupancy, (o, v) => o.BotOccupancy = v));
 
         settings.Add(BoolRow(
             "Bots", "EngageBots", nameof(ServerOptions.BotEngagesBotsToo),
-            o => o.BotEngagesBotsToo, (o, v) => o.BotEngagesBotsToo = v,
-            "Run the expensive micro-controller in bot-vs-bot fights too. It does not "
-            + "make the bots better; it makes those fights cost more."));
+            o => o.BotEngagesBotsToo, (o, v) => o.BotEngagesBotsToo = v));
 
         // A DEBUGGING aid and the one Bots row that changes nothing a bot
         // decides. Every bubble is a broadcast to every connected client, which
         // is why it is off by default rather than merely quiet.
         settings.Add(BoolRow(
             "Bots", "HandoverBubbles", nameof(ServerOptions.BotHandoverBubbles),
-            o => o.BotHandoverBubbles, (o, v) => o.BotHandoverBubbles = v,
-            "Bots put up a chat bubble whenever their brain changes hands: z1 a policy "
-            + "took the wheel, z3 the search did, z2 the scripted layer took it back. "
-            + "For debugging; every bubble is a broadcast."));
+            o => o.BotHandoverBubbles, (o, v) => o.BotHandoverBubbles = v));
 
         settings.Add(BoolRow(
             "Bots", "AdaptiveBudget", nameof(ServerOptions.AdaptiveBotBudget),
-            o => o.AdaptiveBotBudget, (o, v) => o.AdaptiveBotBudget = v,
-            "Let the server walk the controller budget down when ticks crowd their "
-            + "deadline. The arbiter setting stays an upper bound."));
+            o => o.AdaptiveBotBudget, (o, v) => o.AdaptiveBotBudget = v));
 
         settings.Add(ChoiceRow(
             "Bots", "Mode", nameof(ServerOptions.BotMode),
             ["scripted", "search", "policy", "tiered"],
             o => o.BotMode.ToString().ToLowerInvariant(),
             (o, v) => o.BotMode = Mode(v),
-            "search",
-            "Which of the four shipped brains runs. search is the better bot and the "
-            + "far more expensive one."));
+            "search"));
 
         // ⚠️ A LIST, not a path, since 2026-09-07 — the shipped bundle is two
         // checkpoints driving disjoint class sets, and one file cannot express two
@@ -708,16 +608,11 @@ public static class ServerSettings
         settings.Add(ListRow(
             "Bots", "Policy", nameof(ServerOptions.PolicyPaths),
             o => o.PolicyPaths, (o, v) => o.PolicyPaths = v,
-            "checkpoints/tier0_combat4_s2.npz,checkpoints/tier2_pyro_rest3_s0.npz",
-            "The gg2-rl checkpoints policy and tiered modes load, one tier each. A "
-            + "checkpoint is DATED by the simulation it was trained against, and the "
-            + "classes it drives are read off the file."));
+            "checkpoints/tier0_combat4_s2.npz,checkpoints/tier2_pyro_rest3_s0.npz"));
 
         settings.Add(BoolRow(
             "Bots", "PolicyIgnoreStamp", nameof(ServerOptions.PolicyIgnoreStamp),
-            o => o.PolicyIgnoreStamp, (o, v) => o.PolicyIgnoreStamp = v,
-            "BYPASS the SIM_UUID guard, which exists to stop a policy running against "
-            + "a simulation it was not trained on. The server prints both stamps."));
+            o => o.PolicyIgnoreStamp, (o, v) => o.PolicyIgnoreStamp = v));
 
         settings.Add(new ServerSetting
         {
@@ -730,15 +625,11 @@ public static class ServerSettings
             Set = (o, v) => o.BotArbiterMicroseconds =
                 v.Trim().Length == 0 ? null : Number("Bots.Arbiter", v),
             Probe = "10000",
-            Help = "MICROSECONDS of bot-controller work per tick, against a 33,300us tick. "
-                + "Empty lets the mode pick its default.",
         });
 
         settings.Add(IntRow(
             "Bots", "SearchThreads", nameof(ServerOptions.SearchThreads),
-            o => o.SearchThreads, (o, v) => o.SearchThreads = v, OtherNumberProbe,
-            "Threads the rollout search uses. Threads change NO decision, so this is a "
-            + "pure cost knob."));
+            o => o.SearchThreads, (o, v) => o.SearchThreads = v, OtherNumberProbe));
 
         // --- [BotClasslimits] -------------------------------------------------
         //
@@ -760,9 +651,7 @@ public static class ServerSettings
                 "BotClasslimits", key, "Bots",
                 o => o.Bots.EffectiveClassLimits[index],
                 (o, v) => o.Bots = BotClassLimit(o.Bots, index, (byte)Math.Clamp(v, 0, 255)),
-                "1",
-                $"How many {key} BOTS one team may hold. Humans do not count and are not "
-                + "limited by this. 255 is unlimited; 0 keeps bots off the class."));
+                "1"));
         }
 
         // --- [Web] ------------------------------------------------------------
@@ -784,8 +673,6 @@ public static class ServerSettings
             Get = o => o.Web.Port.ToString(CultureInfo.InvariantCulture),
             Set = (o, v) => o.Web = o.Web with { Enabled = true, Port = Number("Web.Port", v) },
             Probe = "8291",
-            Help = "The admin panel's port. Naming it at all turns the panel ON; 0 asks "
-                + "the OS for a free one.",
         });
 
         // ⚠️ AFTER Port, and the order is load-bearing: Port's setter turns the panel
@@ -793,63 +680,41 @@ public static class ServerSettings
         settings.Add(BoolRow(
             "Web", "Enabled", nameof(ServerOptions.Web),
             o => o.Web.Enabled, (o, v) => o.Web = o.Web with { Enabled = v },
-            "Host the admin panel. Written explicitly so turning it OFF is expressible; "
-            + "a Port key on its own turns it on.",
             probe: "1"));
 
         // ⛔ THE ONE DEFAULT IN THIS PROJECT WHOSE BEING WRONG WOULD PUT AN ADMIN
         // CONSOLE ON THE INTERNET. Loopback unless somebody says otherwise.
         settings.Add(TextRow(
             "Web", "Bind", nameof(ServerOptions.Web),
-            o => o.Web.Bind, (o, v) => o.Web = o.Web with { Bind = v }, "0.0.0.0",
-            "Where the panel listens. 127.0.0.1 is local only; 0.0.0.0 is what makes "
-            + "it remote, and remote without a certificate sends the admin password in "
-            + "the clear."));
+            o => o.Web.Bind, (o, v) => o.Web = o.Web with { Bind = v }, "0.0.0.0"));
 
         settings.Add(SecretRow(
             "Web", "Password", nameof(ServerOptions.Web),
-            o => o.Web.Password, (o, v) => o.Web = o.Web with { Password = v }, "a long one",
-            "The admin password. EMPTY DOES NOT MEAN NO PASSWORD — it means one is "
-            + "generated and printed to the console at startup. A generated one lasts as "
-            + "long as the process: a restart from this panel carries it, so pressing "
-            + "restart does not lock you out, and a new process generates a new one."));
+            o => o.Web.Password, (o, v) => o.Web = o.Web with { Password = v }, "a long one"));
 
         settings.Add(PathRow(
             "Web", "Certificate", nameof(ServerOptions.Web),
             o => o.Web.CertificatePath, (o, v) => o.Web = o.Web with { CertificatePath = v },
-            "cert.pfx",
-            "A PKCS#12 certificate to serve HTTPS with. Empty is plain HTTP. 'auto' makes "
-            + "a self-signed one on first start and keeps it beside the config file, so its "
-            + "fingerprint stays the same for a fleet hub to pin."));
+            "cert.pfx"));
 
         settings.Add(SecretRow(
             "Web", "CertificatePassword", nameof(ServerOptions.Web),
             o => o.Web.CertificatePassword,
-            (o, v) => o.Web = o.Web with { CertificatePassword = v }, "pw",
-            "That certificate's password, if it has one."));
+            (o, v) => o.Web = o.Web with { CertificatePassword = v }, "pw"));
 
         settings.Add(TextRow(
             "Web", "AllowFrom", nameof(ServerOptions.Web),
-            o => o.Web.AllowFrom, (o, v) => o.Web = o.Web with { AllowFrom = v }, "203.0.113.7",
-            "Addresses and CIDR blocks allowed to connect at all, comma-separated. Empty "
-            + "allows anyone. Loopback is always allowed. Checked before TLS or any HTTP, "
-            + "so on a fleet member this is normally just the hub's address."));
+            o => o.Web.AllowFrom, (o, v) => o.Web = o.Web with { AllowFrom = v }, "203.0.113.7"));
 
         settings.Add(BoolRow(
             "Web", "FleetMember", nameof(ServerOptions.Web),
             o => o.Web.FleetMember, (o, v) => o.Web = o.Web with { FleetMember = v },
-            "Let a fleet hub manage this server with a token instead of the password. "
-            + "Needs a Certificate (auto is fine). The pairing code to give the hub is "
-            + "printed at every start.",
             probe: "1"));
 
         settings.Add(PathRow(
             "Web", "FleetDirectory", nameof(ServerOptions.Web),
             o => o.Web.FleetDirectory, (o, v) => o.Web = o.Web with { FleetDirectory = v },
-            "fleet",
-            "Make this panel a fleet hub that manages other servers. The directory holds "
-            + "the member list (with every member's token), relative to the config file. "
-            + "Empty is not a hub. A hub bound beyond loopback needs a Certificate."));
+            "fleet"));
 
         // --- [Runtime] --------------------------------------------------------
         //
@@ -868,22 +733,15 @@ public static class ServerSettings
             Get = o => ControlCommands.Number(o.SpeedMultiplier).Trim('"'),
             Set = (o, v) => o.SpeedMultiplier = Speed(v),
             Probe = "max",
-            Help = "Tick pacing. 1 is real time; 'max' is unpaced. MUST STAY AT 1 on a "
-                + "server anybody is connected to.",
         });
 
         settings.Add(BoolRow(
             "Runtime", "IdleWhenEmpty", nameof(ServerOptions.IdleWhenEmpty),
-            o => o.IdleWhenEmpty, (o, v) => o.IdleWhenEmpty = v,
-            "Drop to 2 Hz when nobody is connected and no bots are running. The round "
-            + "clock slows with it, which is why an idle server's round is not "
-            + "wall-clock Time Limit."));
+            o => o.IdleWhenEmpty, (o, v) => o.IdleWhenEmpty = v));
 
         settings.Add(BoolRow(
             "Runtime", "TickStats", nameof(ServerOptions.TickStats),
-            o => o.TickStats, (o, v) => o.TickStats = v,
-            "Log a histogram of tick intervals every 30 seconds. Pacing only, so it is "
-            + "safe with players on."));
+            o => o.TickStats, (o, v) => o.TickStats = v));
 
         settings.Add(new ServerSetting
         {
@@ -898,8 +756,6 @@ public static class ServerSettings
                 o.ControlPortEnabled = true;
             },
             Probe = "9001",
-            Help = "The loopback-only JSON control port. Naming it at all turns it ON; "
-                + "0 asks the OS for a free one. It executes commands against a live game.",
         });
 
         // ⚠️ AFTER ControlPort, for the reason [Web] Enabled comes after [Web] Port:
@@ -909,8 +765,6 @@ public static class ServerSettings
         settings.Add(BoolRow(
             "Runtime", "ControlPortEnabled", nameof(ServerOptions.ControlPortEnabled),
             o => o.ControlPortEnabled, (o, v) => o.ControlPortEnabled = v,
-            "Open the control port at all. A ControlPort key on its own turns it on; "
-            + "this is how it is turned back off.",
             probe: "1"));
 
         return [.. settings];
@@ -925,48 +779,48 @@ public static class ServerSettings
     private static ServerSetting TextRow(
         string section, string key, string property,
         Func<ServerOptions, string> get, Action<ServerOptions, string> set,
-        string probe, string help) =>
+        string probe) =>
         new()
         {
             Section = section, Key = key, Property = property, Kind = SettingKind.Text,
-            Get = get, Set = set, Probe = probe, Help = help,
+            Get = get, Set = set, Probe = probe,
         };
 
     private static ServerSetting PathRow(
         string section, string key, string property,
         Func<ServerOptions, string> get, Action<ServerOptions, string> set,
-        string probe, string help) =>
+        string probe) =>
         new()
         {
             Section = section, Key = key, Property = property, Kind = SettingKind.Path,
-            Get = get, Set = set, Probe = probe, Help = help,
+            Get = get, Set = set, Probe = probe,
         };
 
     private static ServerSetting SecretRow(
         string section, string key, string property,
         Func<ServerOptions, string> get, Action<ServerOptions, string> set,
-        string probe, string help) =>
+        string probe) =>
         new()
         {
             Section = section, Key = key, Property = property, Kind = SettingKind.Secret,
-            Get = get, Set = set, Probe = probe, Help = help, Secret = true,
+            Get = get, Set = set, Probe = probe, Secret = true,
         };
 
     private static ServerSetting IntRow(
         string section, string key, string property,
         Func<ServerOptions, int> get, Action<ServerOptions, int> set,
-        string probe, string help) =>
+        string probe) =>
         new()
         {
             Section = section, Key = key, Property = property, Kind = SettingKind.Integer,
             Get = o => get(o).ToString(CultureInfo.InvariantCulture),
             Set = (o, v) => set(o, Number(section + "." + key, v)),
-            Probe = probe, Help = help,
+            Probe = probe,
         };
 
     private static ServerSetting BoolRow(
         string section, string key, string property,
-        Func<ServerOptions, bool> get, Action<ServerOptions, bool> set, string help,
+        Func<ServerOptions, bool> get, Action<ServerOptions, bool> set,
         string probe = FlipProbe) =>
         new()
         {
@@ -981,30 +835,29 @@ public static class ServerSettings
             // cannot be a literal: TcpKeepAlive defaults on and TickStats defaults
             // off, so one fixed string would silently be a no-op for half of these.
             Probe = probe,
-            Help = help,
         };
 
     private static ServerSetting ChoiceRow(
         string section, string key, string property, string[] choices,
         Func<ServerOptions, string> get, Action<ServerOptions, string> set,
-        string probe, string help) =>
+        string probe) =>
         new()
         {
             Section = section, Key = key, Property = property, Kind = SettingKind.Choice,
-            Get = get, Set = set, Probe = probe, Help = help, Choices = choices,
+            Get = get, Set = set, Probe = probe, Choices = choices,
         };
 
     private static ServerSetting ListRow(
         string section, string key, string property,
         Func<ServerOptions, IReadOnlyList<string>> get,
         Action<ServerOptions, IReadOnlyList<string>> set,
-        string probe, string help) =>
+        string probe) =>
         new()
         {
             Section = section, Key = key, Property = property, Kind = SettingKind.List,
             Get = o => string.Join(',', get(o)),
             Set = (o, v) => set(o, Split(v)),
-            Probe = probe, Help = help,
+            Probe = probe,
         };
 
     /// <summary>

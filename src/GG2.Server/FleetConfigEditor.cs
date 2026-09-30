@@ -170,7 +170,6 @@ public sealed class FleetConfigEditor
                 json.WriteString("section", setting.Section);
                 json.WriteString("key", setting.Key);
                 json.WriteString("kind", setting.Kind.ToString().ToLowerInvariant());
-                json.WriteString("help", setting.Help);
                 json.WriteBoolean("secret", setting.Secret);
 
                 if (setting.Choices.Count != 0)
