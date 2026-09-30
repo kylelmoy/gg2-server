@@ -56,7 +56,27 @@ public sealed class FleetHub : IDisposable
         _directory = directory;
         Directory.CreateDirectory(directory);
         Load();
+
+        Config = new FleetConfigEditor(
+            directory,
+            () => Members.Select(member => member.Name).ToArray(),
+            "this hub's paired members");
     }
+
+    /// <summary>
+    /// The shared settings and each member's overrides — <c>common.ini</c> and
+    /// <c>hosts/&lt;member&gt;.ini</c> in the fleet directory, the layout
+    /// <c>deploy/config</c> uses.
+    /// </summary>
+    /// <remarks>
+    /// Not thread-safe; the caller holds <see cref="ConfigLock"/> around every
+    /// call, because two browser tabs saving at once would each validate against
+    /// files the other is replacing.
+    /// </remarks>
+    public FleetConfigEditor Config { get; }
+
+    /// <summary>Held around every <see cref="Config"/> call.</summary>
+    public Lock ConfigLock { get; } = new();
 
     /// <summary>The fleet directory: <c>members.ini</c>, and later the shared config and overlays.</summary>
     public string DirectoryPath => _directory;

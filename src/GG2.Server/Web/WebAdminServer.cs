@@ -511,6 +511,18 @@ public sealed class WebAdminServer : IDisposable
             case ("GET", "/favicon.svg"):
                 return await AssetAsync(stream, "favicon.svg", "image/svg+xml", token);
 
+            // The fleet settings page: config edit's own page, which notices
+            // where it is served from and talks to the hub's routes instead.
+            // Static, like the dashboard; its API is behind the session.
+            case ("GET", "/fleet/settings"):
+                return await AssetAsync(stream, "editor.html", "text/html; charset=utf-8", token);
+
+            case ("GET", "/editor.js"):
+                return await AssetAsync(stream, "editor.js", "text/javascript; charset=utf-8", token);
+
+            case ("GET", "/editor.css"):
+                return await AssetAsync(stream, "editor.css", "text/css; charset=utf-8", token);
+
             // Served without a session, like the stylesheet that names them.
             case ("GET", var path) when WebAssets.Fonts.TryGetValue(path, out var font):
                 return await AssetAsync(stream, font, "font/woff2", token);
@@ -571,6 +583,8 @@ public sealed class WebAdminServer : IDisposable
         // own fleet would chain one member's credential into all of them.
         if (_hub is not null && session is not null)
         {
+            string body;
+
             if (request.Path.StartsWith("/h/", StringComparison.Ordinal))
                 return await ProxyAsync(request, stream, token);
 
@@ -584,6 +598,24 @@ public sealed class WebAdminServer : IDisposable
 
                 case ("POST", "/api/fleet/remove"):
                     return await FleetRemoveAsync(request, stream, token);
+
+                // The fleet settings page's three calls: FleetConfigEditor over
+                // the hub's fleet directory, which is local files and no game —
+                // so answered here, under the editor's own lock.
+                case ("GET", "/api/fleet/config/model"):
+                    lock (_hub.ConfigLock)
+                        body = _hub.Config.Model();
+                    return await JsonAsync(stream, 200, body, token);
+
+                case ("GET", "/api/fleet/config/preview"):
+                    lock (_hub.ConfigLock)
+                        body = _hub.Config.Preview(request.Q("host") ?? string.Empty);
+                    return await JsonAsync(stream, 200, body, token);
+
+                case ("POST", "/api/fleet/config/save"):
+                    lock (_hub.ConfigLock)
+                        body = _hub.Config.Save(request.Body);
+                    return await JsonAsync(stream, 200, body, token);
             }
         }
 

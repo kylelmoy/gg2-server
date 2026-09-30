@@ -36,16 +36,47 @@ public sealed class FleetConfigEditor
 {
     private readonly string _directory;
     private readonly string _hostsFile;
+    private readonly Func<IReadOnlyList<string>> _hosts;
+    private readonly bool _fleetOnly;
 
+    /// <summary><c>gg2-server config edit</c>: the hosts are <c>deploy/hosts</c>'s lines.</summary>
     public FleetConfigEditor(string directory, string hostsFile)
     {
         _directory = directory;
-        _hostsFile = hostsFile;
+        _hostsFile = Path.GetFullPath(hostsFile);
+        _hosts = () => File.Exists(hostsFile) ? FleetConfig.ReadHosts(hostsFile) : [];
     }
 
-    /// <summary>The hosts the page offers, from the hosts file, re-read on every call.</summary>
-    public IReadOnlyList<string> Hosts() =>
-        File.Exists(_hostsFile) ? FleetConfig.ReadHosts(_hostsFile) : [];
+    /// <summary>
+    /// A fleet hub's settings page: the hosts are the hub's members, and only
+    /// settings that are not <see cref="ServerSetting.HostLocal"/> are offered.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Host-local settings are neither shown nor accepted here</b>, because
+    /// a hub pushes what this page writes and a member keeps its own value for
+    /// each of them (<c>config-install</c>). Offering them would be a field that
+    /// saves and then does nothing.
+    /// </remarks>
+    public FleetConfigEditor(string directory, Func<IReadOnlyList<string>> hosts, string hostsSource)
+    {
+        _directory = directory;
+        _hostsFile = hostsSource;
+        _hosts = hosts;
+        _fleetOnly = true;
+    }
+
+    /// <summary>The hosts the page offers, re-read on every call.</summary>
+    public IReadOnlyList<string> Hosts() => _hosts();
+
+    private IEnumerable<ServerSetting> Offered =>
+        _fleetOnly ? ServerSettings.All.Where(setting => !setting.HostLocal) : ServerSettings.All;
+
+    private ServerSetting Offer(ServerSetting setting) =>
+        _fleetOnly && setting.HostLocal
+            ? throw new ArgumentException(
+                $"{setting.Id} is host-local: each server keeps its own, and a push never changes it. "
+                + "Set it on that server's own settings page.")
+            : setting;
 
     /// <summary>Everything the page draws: the settings, the shared values, each host's overrides.</summary>
     public string Model()
@@ -100,7 +131,8 @@ public sealed class FleetConfigEditor
             json.WriteStartObject();
             json.WriteBoolean("ok", true);
             json.WriteString("directory", Path.GetFullPath(_directory));
-            json.WriteString("hostsFile", Path.GetFullPath(_hostsFile));
+            json.WriteString("hostsFile", _hostsFile);
+            json.WriteBoolean("fleetOnly", _fleetOnly);
             json.WriteBoolean("commonExists", File.Exists(commonPath));
 
             if (commonError is not null)
@@ -131,7 +163,7 @@ public sealed class FleetConfigEditor
 
             json.WriteStartArray("settings");
 
-            foreach (var setting in ServerSettings.All)
+            foreach (var setting in Offered)
             {
                 json.WriteStartObject();
                 json.WriteString("id", setting.Id);
@@ -341,8 +373,8 @@ public sealed class FleetConfigEditor
                 {
                     foreach (var id in clear.EnumerateArray())
                     {
-                        var setting = ServerSettings.Find(id.GetString() ?? string.Empty)
-                            ?? throw new ArgumentException($"unknown setting \"{id.GetString()}\"");
+                        var setting = Offer(ServerSettings.Find(id.GetString() ?? string.Empty)
+                            ?? throw new ArgumentException($"unknown setting \"{id.GetString()}\""));
 
                         ServerConfigFile.Remove(lines, setting.Section, setting.Key);
                         changed = true;
@@ -391,10 +423,10 @@ public sealed class FleetConfigEditor
         return Encoding.UTF8.GetString(buffer.ToArray());
     }
 
-    private static (ServerSetting Setting, string Value) Change(JsonProperty change)
+    private (ServerSetting Setting, string Value) Change(JsonProperty change)
     {
-        var setting = ServerSettings.Find(change.Name)
-            ?? throw new ArgumentException($"unknown setting \"{change.Name}\"");
+        var setting = Offer(ServerSettings.Find(change.Name)
+            ?? throw new ArgumentException($"unknown setting \"{change.Name}\""));
 
         if (change.Value.ValueKind != JsonValueKind.String)
             throw new ArgumentException($"\"{change.Name}\" must be a string; every value here is ini text");

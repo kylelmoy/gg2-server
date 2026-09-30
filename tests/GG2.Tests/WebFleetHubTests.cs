@@ -162,6 +162,52 @@ public sealed class WebFleetHubTests : IDisposable
     }
 
     [Fact]
+    public async Task TheFleetSettingsAreTheMembersAndNeverTheHostLocalOnes()
+    {
+        var csrf = await SignInAsync();
+
+        await PostAsync(csrf, "/api/fleet/add", new { name = "member", url = MemberUrl, pairing = _member.Server.WebPairingCode });
+
+        var page = await _http.GetAsync("/fleet/settings");
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        Assert.Contains("/editor.js", await page.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+
+        var model = await GetJsonAsync("/api/fleet/config/model");
+        Assert.Equal("member", model.GetProperty("hosts")[0].GetProperty("dest").GetString());
+
+        var ids = model.GetProperty("settings").EnumerateArray().Select(s => s.GetProperty("id").GetString()!).ToList();
+        Assert.Contains("Server.ServerName", ids);
+        Assert.DoesNotContain(ids, id => id.StartsWith("Web.", StringComparison.Ordinal));
+        Assert.DoesNotContain(model.GetProperty("settings").EnumerateArray(), s => s.GetProperty("kind").GetString() == "path");
+
+        // The control: the full table does have paths, so the line above can fail.
+        Assert.Contains(ServerSettings.All, s => s.Kind == SettingKind.Path);
+
+        // A shared value and a member's override, written as the two files.
+        var saved = await PostAsync(csrf, "/api/fleet/config/save", new
+        {
+            common = new Dictionary<string, string> { ["Settings.PlayerLimit"] = "20" },
+            hosts = new Dictionary<string, object>
+            {
+                ["member"] = new { set = new Dictionary<string, string> { ["Server.ServerName"] = "Renamed" } },
+            },
+        });
+
+        Assert.True(saved.GetProperty("ok").GetBoolean(), saved.ToString());
+        Assert.Contains("PlayerLimit=20", File.ReadAllText(Path.Combine(_hubDirectory, "fleet", "common.ini")), StringComparison.Ordinal);
+        Assert.Contains("Renamed", File.ReadAllText(Path.Combine(_hubDirectory, "fleet", "hosts", "member.ini")), StringComparison.Ordinal);
+
+        // A host-local setting is refused outright, not quietly dropped.
+        var refused = await PostAsync(csrf, "/api/fleet/config/save", new
+        {
+            common = new Dictionary<string, string> { ["Web.AllowFrom"] = "192.0.2.1" },
+        });
+
+        Assert.False(refused.GetProperty("ok").GetBoolean());
+        Assert.Contains("host-local", refused.GetProperty("error").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AWrongFingerprintIsNotPaired()
     {
         var csrf = await SignInAsync();

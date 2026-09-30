@@ -65,7 +65,32 @@ function changeCount() {
   return count;
 }
 
+/*
+ * The same page is also a fleet hub's settings page, served at /fleet/settings.
+ * There it talks to the hub's /api/fleet/config/* routes with the hub panel's
+ * session cookie and CSRF token instead of a one-run token, and a 401 sends the
+ * browser back to the dashboard to sign in.
+ */
+const onHub = location.pathname.startsWith('/fleet/');
+let hubCsrf = '';
+
 async function api(path, options = {}) {
+  if (onHub) {
+    if (!hubCsrf) {
+      const session = await (await fetch('/api/session')).json();
+      if (!session.authenticated) { location.href = '/'; throw new Error('signed out'); }
+      hubCsrf = session.csrf || '';
+    }
+
+    const reply = await fetch(path.replace('/api/', '/api/fleet/config/'), {
+      ...options,
+      headers: { 'X-CSRF-Token': hubCsrf, 'Content-Type': 'application/json' },
+    });
+
+    if (reply.status === 401) { location.href = '/'; throw new Error('signed out'); }
+    return reply.json();
+  }
+
   const reply = await fetch(path, {
     ...options,
     headers: { 'X-Editor-Token': token, 'Content-Type': 'application/json' },
@@ -103,6 +128,9 @@ async function load() {
   model = reply;
   if (scope !== 'common' && !model.hosts.some((h) => h.dest === scope)) scope = 'common';
   $('ed-directory').textContent = model.directory;
+  $('ed-hub').hidden = !onHub;
+  $('ed-deploy').hidden = onHub;
+  if (onHub) document.title = 'Fleet settings — gg2-server';
   render();
 }
 
@@ -145,7 +173,11 @@ function renderNotes() {
   const add = (text, kind) => notes.appendChild(
     Object.assign(document.createElement('p'), { className: `ed-note ${kind}`, textContent: text }));
 
-  if (!model.commonExists) {
+  if (!model.commonExists && onHub) {
+    add('There are no fleet settings yet, so every value below is a default and Save creates them. '
+      + 'Paths and the [Web] section are not here: each server keeps its own, and a push never changes them.',
+    'warn');
+  } else if (!model.commonExists) {
     add(`There is no common.ini yet, so every value below is a default and Save creates the file. `
       + `To start from a server's current configuration instead, copy its /opt/gg2-server/shared/gg2.ini `
       + `to ${model.directory}${model.directory.includes('\\') ? '\\' : '/'}common.ini and reload.`, 'warn');

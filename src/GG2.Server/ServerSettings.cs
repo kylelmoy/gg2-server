@@ -112,6 +112,25 @@ public sealed record ServerSetting
 
     /// <summary>The stable identifier a wire protocol names this setting by.</summary>
     public string Id => Section + "." + Key;
+
+    /// <summary>
+    /// Whether each server keeps its own value and a fleet hub never changes it:
+    /// every path, and the whole <c>[Web]</c> section.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Paths</b> because a path names this machine's disk — the same text means
+    /// a different file on every host — and because choosing where a server writes
+    /// is the one thing a stolen hub token should not be able to do.
+    /// </para>
+    /// <para>
+    /// <b><c>[Web]</c></b> because it is how the hub reaches the member at all: a
+    /// push that changed its port, bind, allowlist or <c>FleetMember</c> could cut
+    /// the hub off from the server it just changed, with nothing left to push the
+    /// fix through.
+    /// </para>
+    /// </remarks>
+    public bool HostLocal => Kind == SettingKind.Path || Section == "Web";
 }
 
 /// <summary>

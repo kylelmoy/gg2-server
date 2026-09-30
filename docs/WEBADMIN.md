@@ -258,6 +258,16 @@ pairing code) and lists every member with its map, players, tick and build.
   unlike a plain panel, which is warned about: the hub's password opens every
   member.
 
+**Fleet settings** (`/fleet/settings`, linked from the Fleet sheet) is
+`config edit`'s page served by the hub: `common.ini` and `hosts/<member>.ini` in
+the fleet directory, the same layout as `deploy/config`, through the same
+`FleetConfigEditor` and its all-or-nothing save. It offers only settings that are
+not `ServerSetting.HostLocal` — every path and the whole `[Web]` section stay
+each server's own — and a save naming one is refused with a message that says
+so. The three calls are `GET /api/fleet/config/model`, `GET
+/api/fleet/config/preview?host=` and `POST /api/fleet/config/save`, under the
+hub's session and CSRF token.
+
 `WebFleetHubTests` runs a real member over TLS and a real hub: pairing, a wrong
 pin, a wrong token, the overview, a read, a command with and without the hub's
 CSRF token, the relayed event stream and the route allowlist. What it does not

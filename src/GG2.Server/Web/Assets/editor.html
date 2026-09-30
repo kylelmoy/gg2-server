@@ -26,7 +26,13 @@
 
     <nav class="ed-scopes" id="ed-scopes" aria-label="What to edit"></nav>
 
-    <div class="ed-push">
+    <div class="ed-push" id="ed-hub" hidden>
+      <a class="btn btn-quiet" href="/">Back to the dashboard</a>
+      <p class="hint">Saving writes the hub's fleet settings. Push sends them to the servers.</p>
+      <div id="ed-push-list"></div>
+    </div>
+
+    <div class="ed-push" id="ed-deploy">
       <p class="hint">Saving writes files on this machine only. To send them to the servers:</p>
       <code>scripts/deploy.sh --config --check</code>
       <code>scripts/deploy.sh --config</code>
