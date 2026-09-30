@@ -519,4 +519,46 @@ public sealed class ChatPluginTests
         // The join announcement and nothing else.
         Assert.Single(LinesTo(host, alice));
     }
+
+    // --- the operator's line, and the panel's history --------------------------
+
+    /// <summary>
+    /// The panel's chat box speaks as slot 0 exactly as a player speaks: the raw
+    /// text under index 0, so the client names and colours it from its own
+    /// roster entry for the reserved spectator. A leading slash is text, not a
+    /// command.
+    /// </summary>
+    [Fact]
+    public void TheServerSpeaksAsSlotZeroToEverybodyInChat()
+    {
+        var (host, plugin) = Fresh();
+        var alice = Join(host, plugin, "alice", Team.Red);
+        var bob = Join(host, plugin, "bob", Team.Blue);
+        var silent = Join(host, plugin, "silent", Team.Red, chat: false);
+
+        host.Sent.Clear();
+        plugin.SayAsServer("/votekick bob");
+
+        Assert.Equal([(0, 0, "/votekick bob")], LinesTo(host, alice));
+        Assert.Equal([(0, 0, "/votekick bob")], LinesTo(host, bob));
+        Assert.Empty(LinesTo(host, silent));
+        Assert.Equal([(0, "/votekick bob", false)], host.Heard);
+    }
+
+    /// <summary>
+    /// What the panel's chat window is fed: what players said, team chat marked,
+    /// and never a command, which is acted on rather than said.
+    /// </summary>
+    [Fact]
+    public void PlayerLinesAreHeardAndCommandsAreNot()
+    {
+        var (host, plugin) = Fresh();
+        var alice = Join(host, plugin, "alice", Team.Red);
+
+        SayGlobal(plugin, alice, "hello");
+        SayTeam(plugin, alice, "flank left");
+        SayGlobal(plugin, alice, "/maplist");
+
+        Assert.Equal([(alice, "hello", false), (alice, "flank left", true)], host.Heard);
+    }
 }

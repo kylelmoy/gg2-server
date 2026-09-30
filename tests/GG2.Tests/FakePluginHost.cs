@@ -46,6 +46,11 @@ public sealed class FakePluginHost : IPluginHost
 
     public List<string> Logged { get; } = [];
 
+    /// <summary>Every line handed to the panel's chat history, in order.</summary>
+    public List<(int Slot, string Message, bool TeamOnly)> Heard { get; } = [];
+
+    public void ChatHeard(int slot, string message, bool teamOnly) => Heard.Add((slot, message, teamOnly));
+
     public List<(int Slot, string Name)> Renames { get; } = [];
 
     public List<(string Name, string Reason)> Kicked { get; } = [];

@@ -311,6 +311,7 @@ public sealed class WebAdminTests : IDisposable
     [InlineData("""{"cmd":"teleport","slot":1,"x":100,"y":100}""")]
     [InlineData("""{"cmd":"kick","slot":1}""")]
     [InlineData("""{"cmd":"command","kind":"ToggleZoom","slot":1}""")]
+    [InlineData("""{"cmd":"say","text":"hello"}""")]
     [InlineData("""{"cmd":"ban","address":"198.51.100.7","minutes":1}""")]
     [InlineData("""{"cmd":"unban","address":"198.51.100.7"}""")]
     [InlineData("""{"cmd":"bans"}""")]

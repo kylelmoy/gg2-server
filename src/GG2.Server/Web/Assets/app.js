@@ -27,6 +27,7 @@ let retry = 1000;
 let state = null;
 let selected = -1;
 let logSeen = -1;
+let chatSeen = -1;
 
 /** One command to the server. Returns the parsed reply; never throws. */
 async function send(body, quiet) {
@@ -55,13 +56,10 @@ async function send(body, quiet) {
 
 function describe(body) {
   switch (body.cmd) {
-    case 'freeze': return 'Frozen';
-    case 'resume': return 'Resumed';
-    case 'step': return `Stepped ${body.ticks} tick${body.ticks === 1 ? '' : 's'}`;
-    case 'speed': return `Speed ${body.value}×`;
     case 'bots': return `Bot fill set to ${body.fill}`;
     case 'map': return `Changing map to ${body.name}`;
     case 'kick': return 'Kicked';
+    case 'ban': return 'Banned';
     case 'teleport': return 'Teleported';
     case 'config-set': return 'Settings saved';
     case 'restart': return 'Restarting';
@@ -91,6 +89,7 @@ function connect() {
   });
 
   stream.addEventListener('log', (event) => appendLog(JSON.parse(event.data)));
+  stream.addEventListener('chat', (event) => appendChat(JSON.parse(event.data)));
   stream.addEventListener('perf', (event) => appendPerf(JSON.parse(event.data)));
 
   stream.addEventListener('error', () => {
@@ -235,10 +234,11 @@ function tiles(s) {
   $('tile-frame').textContent = s.frame.toLocaleString();
   $('tile-area').textContent = s.match.areas > 1 ? `area ${s.match.area} of ${s.match.areas}` : '';
 
-  $('freeze').textContent = s.frozen ? 'Resume' : 'Freeze';
-  $('freeze').classList.toggle('btn-primary', !s.frozen);
-  $('step-1').disabled = !s.frozen;
-  $('step-30').disabled = !s.frozen;
+  // Where the chat box's lines go, which a player sees very differently: chat
+  // through a plugin, or an on-screen notice that replaces the last one.
+  $('chat-hint').textContent = s.server.chatPlugin
+    ? `Sent as ${s.players[0] ? s.players[0].name : 'the server'} through ${s.server.chatPlugin}.`
+    : 'No chat plugin is loaded, so this shows as an on-screen notice to every player.';
 
   const fill = $('bots');
   if (document.activeElement !== fill) fill.value = s.server.botFill;
@@ -483,6 +483,13 @@ function row(player) {
     kick.textContent = 'Kick';
     kick.dataset.kick = player.slot;
     actions.appendChild(kick);
+
+    const ban = document.createElement('button');
+    ban.className = 'mini';
+    ban.type = 'button';
+    ban.textContent = 'Ban';
+    ban.dataset.ban = player.slot;
+    actions.appendChild(ban);
   }
 
   tr.appendChild(actions);
@@ -1136,6 +1143,45 @@ function bytes(value) {
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
   return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+/* ---------- chat ----------------------------------------------------------- */
+
+function appendChat(lines) {
+  const box = $('chat');
+  const atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+
+  for (const line of lines) {
+    if (line.seq <= chatSeen) continue;
+    chatSeen = line.seq;
+
+    const node = document.createElement('div');
+    node.className = 'chat-line new';
+
+    const time = document.createElement('span');
+    time.className = 'chat-time';
+    time.textContent = new Date(line.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    node.appendChild(time);
+
+    if (line.teamOnly) {
+      const scope = document.createElement('span');
+      scope.className = 'chat-scope';
+      scope.textContent = '(team)';
+      node.appendChild(scope);
+    }
+
+    // ⚠️ textContent throughout: a name and a message are whatever a player typed.
+    const name = document.createElement('span');
+    name.className = 'chat-name ' + (line.team === 'Red' ? 'red' : line.team === 'Blue' ? 'blue' : '');
+    name.textContent = line.name;
+
+    node.append(name, document.createTextNode(': ' + line.text));
+    box.appendChild(node);
+  }
+
+  while (box.childElementCount > 300) box.removeChild(box.firstChild);
+  $('chat-empty').hidden = box.childElementCount > 0;
+  if (atEnd) box.scrollTop = box.scrollHeight;
 }
 
 /* ---------- log ------------------------------------------------------------ */
@@ -1864,9 +1910,16 @@ $('logout').addEventListener('click', async () => {
   showLogin();
 });
 
-$('freeze').addEventListener('click', () => send({ cmd: state && state.frozen ? 'resume' : 'freeze' }));
-$('step-1').addEventListener('click', () => send({ cmd: 'step', ticks: 1 }, true));
-$('step-30').addEventListener('click', () => send({ cmd: 'step', ticks: 30 }));
+$('chat-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+
+  const input = $('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  const reply = await send({ cmd: 'say', text }, true);
+  if (reply.ok) input.value = '';
+});
 
 $('bots-up').addEventListener('click', () => step($('bots'), 1));
 $('bots-down').addEventListener('click', () => step($('bots'), -1));
@@ -1909,6 +1962,26 @@ $('roster').addEventListener('click', async (event) => {
 
     if (await ask('Kick this player?', `${player ? player.name : `Slot ${slot}`} is disconnected immediately.`)) {
       send({ cmd: 'kick', slot });
+    }
+
+    return;
+  }
+
+  const ban = event.target.closest('[data-ban]');
+
+  if (ban) {
+    const slot = Number(ban.dataset.ban);
+    const player = state.players[slot];
+
+    // ⚠️ The ban is on the ADDRESS, permanently, and the dialog says so: anyone
+    // behind the same NAT is banned with them. BanList has the case against
+    // reading an address as a person.
+    if (await ask(
+      'Ban this player?',
+      `${player ? player.name : `Slot ${slot}`} is disconnected and their address `
+      + `${player && player.address ? `(${player.address}) ` : ''}is banned permanently. `
+      + 'Anyone else on that address is banned too.')) {
+      send({ cmd: 'ban', slot });
     }
 
     return;
@@ -1962,28 +2035,6 @@ canvas.addEventListener('click', (event) => {
 
 $('teleport-mode').addEventListener('change', (event) => {
   canvas.classList.toggle('clickable', event.target.checked);
-});
-
-// ⚠️ Ignored while a text field has focus, or typing a map name would freeze the
-// server on every space bar.
-document.addEventListener('keydown', (event) => {
-  if ($('app').hidden) return;
-
-  const tag = document.activeElement && document.activeElement.tagName;
-  // ⚠️ The settings sheet is in the guard as well as the confirm dialog. It is
-  // full of fields, and a space pressed with focus on one of its buttons or
-  // selects would otherwise freeze the server from a page nobody thinks of as a
-  // simulation control.
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || $('confirm').open
-      || $('settings').open || $('analytics').open) return;
-
-  if (event.code === 'Space') {
-    event.preventDefault();
-    $('freeze').click();
-  } else if (event.key === '.') {
-    event.preventDefault();
-    if (state && state.frozen) send({ cmd: 'step', ticks: 1 }, true);
-  }
 });
 
 window.addEventListener('resize', () => {

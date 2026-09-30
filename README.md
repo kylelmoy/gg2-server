@@ -80,7 +80,7 @@ gg2-server --bots 12 --bot-mode policy `
 
 | Option | What |
 |---|---|
-| `--web <port>` | Runs a browser admin panel: roster, live map, performance graphs, kick, and a settings page for the `--config` file. It binds `127.0.0.1` unless you pass `--web-bind`. Use `--web-password` to choose the password; otherwise one is generated and printed at startup. Add `--web-tls <pfx>` before exposing the panel. See [`docs/WEBADMIN.md`](docs/WEBADMIN.md). |
+| `--web <port>` | Runs a browser admin panel: roster, live map, performance graphs, chat, kick and ban, and a settings page for the `--config` file. It binds `127.0.0.1` unless you pass `--web-bind`. Use `--web-password` to choose the password; otherwise one is generated and printed at startup. Add `--web-tls <pfx>` before exposing the panel. See [`docs/WEBADMIN.md`](docs/WEBADMIN.md). |
 | `--analytics <path>` | Tracks unique players, playtime and peak concurrency across restarts. Addresses are stored only as salted hashes. Add `--geoip <path>` with a database you download yourself to show locations. See [`docs/ANALYTICS.md`](docs/ANALYTICS.md). |
 | `--tick-stats` | Logs a tick-timing histogram every 30 seconds. |
 

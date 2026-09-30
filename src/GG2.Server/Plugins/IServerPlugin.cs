@@ -205,6 +205,18 @@ public interface IPluginHost
     bool ResumeBots();
 
     /// <summary>
+    /// A line of player chat was delivered: record it for the admin panel's chat
+    /// window.
+    /// </summary>
+    /// <remarks>
+    /// A write to the operator's side only — nothing goes on the wire, and a
+    /// server without the panel drops it. Called for what a player said (and
+    /// what slot 0 said through <see cref="IServerChat"/>), not for a command or
+    /// the plugin's own announcements, which are in the server log.
+    /// </remarks>
+    void ChatHeard(int slot, string message, bool teamOnly);
+
+    /// <summary>
     /// A random source for a plugin's own shuffles and tie-breaks.
     /// </summary>
     /// <remarks>
@@ -213,6 +225,22 @@ public interface IPluginHost
     /// spread. This is the server's own, and nothing on the wire depends on it.
     /// </remarks>
     Random Random { get; }
+}
+
+/// <summary>
+/// A chat plugin that can speak as the server's own slot-0 player — the admin
+/// panel's chat box.
+/// </summary>
+/// <remarks>
+/// Each plugin puts the line on its own wire the way it would put a player's,
+/// so a stock client with the plugin draws it as chat from the roster's slot 0.
+/// The reference's host could do the same from its own chat window; a headless
+/// server has no window, so the panel is where the text comes from.
+/// </remarks>
+public interface IServerChat
+{
+    /// <summary>Sends <paramref name="message"/> to everybody in chat, as slot 0.</summary>
+    void SayAsServer(string message);
 }
 
 /// <summary>

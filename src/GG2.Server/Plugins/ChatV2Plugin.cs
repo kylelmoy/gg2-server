@@ -36,7 +36,7 @@ namespace GG2.Server.Plugins;
 /// <c>string</c> slice.
 /// </para>
 /// </remarks>
-public sealed partial class ChatV2Plugin : ServerPlugin
+public sealed partial class ChatV2Plugin : ServerPlugin, IServerChat
 {
     /// <summary>Per-player state; the reference keeps these on the <c>Player</c> instance.</summary>
     private sealed class Chatter
@@ -248,6 +248,7 @@ public sealed partial class ChatV2Plugin : ServerPlugin
                 }
 
                 Deliver(Format(slot, message, TeamEveryone), TeamEveryone);
+                Host.ChatHeard(slot, message, teamOnly: false);
 
                 // AFTER the delivery, which is the reference's order: the
                 // message that trips the limit is still sent, and the mute
@@ -275,6 +276,7 @@ public sealed partial class ChatV2Plugin : ServerPlugin
 
                 var audience = 1 + (int)team;
                 Deliver(Format(slot, message, audience), audience);
+                Host.ChatHeard(slot, message, teamOnly: true);
                 CheckForSpam(slot);
                 break;
             }
@@ -305,9 +307,9 @@ public sealed partial class ChatV2Plugin : ServerPlugin
     /// rest of it.
     /// <para>
     /// The reference has a third branch here — <c>#O</c> instead of <c>#W</c>
-    /// when the speaker is <c>global.myself</c>, so the host sees its own
-    /// messages in orange. A headless server's slot 0 never speaks, so that
-    /// branch is unreachable and is not transcribed.
+    /// when the speaker is <c>global.myself</c>, so the host's own messages are
+    /// orange. Here that speaker is slot 0 talking through
+    /// <see cref="SayAsServer"/>, which is the only way slot 0 speaks.
     /// </para>
     /// </remarks>
     private string Format(int slot, string message, int audience)
@@ -324,8 +326,26 @@ public sealed partial class ChatV2Plugin : ServerPlugin
         var name = Host.NameOf(slot);
 
         return audience == TeamEveryone
-            ? $"{colour}{name}: #{ColourWhite}{message}"
+            ? $"{colour}{name}: #{(slot == 0 ? ColourOrange : ColourWhite)}{message}"
             : $"{colour}{name}: {message}";
+    }
+
+    /// <summary>
+    /// A line from the server's own slot 0, formatted as the reference formats
+    /// the host's — see <see cref="Format"/>.
+    /// </summary>
+    /// <remarks>
+    /// Not through <see cref="TryRunCommand"/>: a leading <c>/</c> from the
+    /// operator is text. Not counted towards the anti-spam limit either, which
+    /// exists to mute players.
+    /// </remarks>
+    public void SayAsServer(string message)
+    {
+        if (message.Length == 0)
+            return;
+
+        Deliver(Format(0, message, TeamEveryone), TeamEveryone);
+        Host.ChatHeard(0, message, teamOnly: false);
     }
 
     /// <summary>

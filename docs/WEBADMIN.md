@@ -2,7 +2,7 @@
 
 A browser console for a running server: who is on it, where they are, what the
 round is doing, six graphs of how the process is coping, the operator controls —
-freeze, step, bot count, map change, teleport, kick, ban — and a settings
+chat, bot count, map change, teleport, kick, ban — and a settings
 page that edits the config file, with a restart button that applies it.
 
 It is the **only** surface in this project that is meant to be reachable from
@@ -197,7 +197,7 @@ All JSON, all under the session cookie except the first four.
 | `POST /api/logout` | — | clears it |
 | `GET /api/state` | — | one fresh state object, run on the tick thread |
 | `GET /api/events` | — | server-sent events: `state` snapshots, `log` lines and `perf` samples |
-| `POST /api/command` | a control-port command | freeze, resume, step, speed, bots, bots-suspend, map, teleport, kick, command, ban, unban, bans, analytics, config-set, restart |
+| `POST /api/command` | a control-port command | freeze, resume, step, speed, bots, bots-suspend, map, teleport, kick, command, say, ban, unban, bans, analytics, config-set, restart |
 | `GET /api/config` | — | every setting, its value **in the config file**, and which are pinned or pending |
 | `GET /api/analytics` | — | who has played here, for how long and from where — `docs/ANALYTICS.md` |
 | `GET /api/maps` | — | what this server could change to, plus its rotation |
@@ -235,6 +235,33 @@ against its three known reasons and falls into `else kickReason = ""`, showing
 operator kick means. **Kicking a bot is refused by name**, because a bot has no
 connection to close and the population manager would put it straight back; the
 message names the bot count as the thing to change instead.
+
+**The roster's Ban button bans the player's address permanently**, through `ban`
+by slot, after a confirmation that says so and says that everyone on that
+address is banned with them. `BanList` has the case against reading an address
+as a person.
+
+**Freeze, step and speed are verbs without panel controls.** They exist for
+debugging and each desynchronises or stalls every connected client, so the page
+does not offer them; the state tile still shows `frozen` if the control port has
+frozen the server.
+
+### Chat
+
+The Chat card shows what players say and sends a line as the server's own slot-0
+spectator, through `say`. **Stock GG2 has no chat**, so where the line goes
+depends on the plugins, and the card's hint says which:
+
+| Loaded | What a player sees |
+|---|---|
+| `chat` or `chat_v2_pr` | a chat line from slot 0, named and coloured as the reference's host's own lines are |
+| neither (the default) | a `MESSAGE_STRING`: the on-screen notice every stock client draws, reading `<slot 0's name>: <text>`, which replaces the previous notice rather than scrolling |
+
+A line is at most 255 characters (the `ubyte` length prefix) and is refused, not
+cut, above that. The history is `ChatHistory`, 200 lines held only while the
+panel is enabled, fed by the chat plugins with what players said (team chat
+marked, commands left out) and by `say`; it goes to the browser as the SSE
+`chat` event. A leading `/` in the operator's line is text, never a command.
 
 ## The page
 

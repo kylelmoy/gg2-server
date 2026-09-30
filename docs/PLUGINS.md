@@ -357,7 +357,9 @@ two numbers meet only at the kind byte.
 bindings, the colour rendering, the wrapping, the options menu, the
 `cheatycheat` object that stops you moving while typing, the vote dialog's
 drawing, and the host's own chat window — a headless server has no window, so
-lines go to the server log instead.
+lines go to the server log, and the admin panel's Chat card stands in for the
+host's input: `SayAsServer` relays its line under index 0, as the reference's
+host spoke as `global.myself`.
 
 **Not ported, and a deliberate gap:**
 
@@ -436,7 +438,9 @@ because the fix would change what a stock client sees.
 key bindings, the colour rendering, the wrapping, the options menu, and the
 `cheatycheat` object that stops you moving while typing. Also the host's own
 chat window: a headless server has no window, so `event4` becomes a line in the
-server log.
+server log. The admin panel's Chat card is the host's input instead:
+`SayAsServer` formats its line with `event1`'s `global.myself` branch (an orange
+message), outside the command parser and the anti-spam count.
 
 ---
 

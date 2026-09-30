@@ -1,4 +1,4 @@
-namespace GG2.Server.Plugins;
+﻿namespace GG2.Server.Plugins;
 
 /// <summary>
 /// One advertised plugin: the name and hash on the wire, and the C# server half
@@ -52,6 +52,22 @@ public sealed class ServerPlugins
     public IReadOnlyList<LoadedPlugin> Plugins => _plugins;
 
     public bool IsEmpty => _plugins.Length == 0;
+
+    /// <summary>
+    /// The first loaded plugin that can speak as the server, or null — the
+    /// default, since <c>ServerPluginList</c> is empty by default.
+    /// </summary>
+    public LoadedPlugin? Chat
+    {
+        get
+        {
+            foreach (var plugin in _plugins)
+                if (plugin.Implementation is IServerChat)
+                    return plugin;
+
+            return null;
+        }
+    }
 
     /// <summary>
     /// Resolves hashes, instantiates the server halves and binds each one to its

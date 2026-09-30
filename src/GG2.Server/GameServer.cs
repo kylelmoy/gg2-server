@@ -51,6 +51,7 @@ public sealed partial class GameServer : IDisposable, IPluginHost
 
     /// <summary>The panel's scrollback. Null unless <c>--web</c> was given.</summary>
     private readonly LogRing? _webLog;
+    private readonly ChatHistory? _chatHistory;
 
     /// <summary>
     /// A smoothed cost of <see cref="Tick"/> itself, in milliseconds.
@@ -556,6 +557,7 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         // log begins after startup is missing the half an operator most wants.
         _webLog = options.Web.Enabled ? new LogRing() : null;
         _log = _webLog is null ? log : new TeeLog(log, _webLog);
+        _chatHistory = options.Web.Enabled ? new ChatHistory() : null;
 
         // ⚠️ Here as well as in Start, because a caller can reach Bans before
         // Start has run — the control surfaces are constructed against a

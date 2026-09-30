@@ -223,4 +223,71 @@ public sealed partial class GameServer
         ServerMessages.PluginPacket(writer, checked((byte)packetId), data);
         connection.Send(writer.WrittenSpan);
     }
+
+    // --- the operator's chat ---------------------------------------------------
+
+    /// <summary>
+    /// Longest line the panel may send. A <c>MESSAGE_STRING</c> is a
+    /// <c>ubyte</c>-prefixed string and <c>chat_v2_pr</c> truncates at the same
+    /// length, so one bound serves every path.
+    /// </summary>
+    public const int MaxSayLength = 255;
+
+    /// <summary>What the panel's chat window shows, or null without the panel.</summary>
+    public ChatHistory? ChatHistory => _chatHistory;
+
+    /// <summary>The loaded chat plugin the operator's lines go through, or null.</summary>
+    public string? ChatPluginName => _plugins.Chat?.Name;
+
+    void IPluginHost.ChatHeard(int slot, string message, bool teamOnly) =>
+        _chatHistory?.Add(_roster[slot].Name, _roster[slot].Team, message, teamOnly);
+
+    /// <summary>
+    /// Says <paramref name="text"/> as the server's own slot-0 spectator.
+    /// </summary>
+    /// <returns>
+    /// <c>"chat"</c> when a chat plugin carried it, <c>"notice"</c> when it went
+    /// out as a <c>MESSAGE_STRING</c> instead.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// <b>Chat exists only through a plugin.</b> Stock GG2 has no chat, so with a
+    /// chat plugin loaded the line is ordinary chat from slot 0, and without one
+    /// it is a <c>MESSAGE_STRING</c> — the notice every stock client draws on
+    /// screen (<c>ClientBeginStep.gml</c>, <c>case MESSAGE_STRING</c>), prefixed
+    /// with slot 0's name so it still says who spoke. A notice replaces the one
+    /// before it rather than scrolling.
+    /// </para>
+    /// <para>
+    /// Both are messages a stock client already handles, so nothing here is
+    /// invisible to a client that the server believes it said.
+    /// </para>
+    /// </remarks>
+    public string Say(string text)
+    {
+        text = text.Replace('\r', ' ').Replace('\n', ' ').Trim();
+
+        if (text.Length == 0)
+            throw new ArgumentException("nothing to say");
+
+        if (text.Length > MaxSayLength)
+            throw new ArgumentException($"a line is at most {MaxSayLength} characters");
+
+        if (_plugins.Chat?.Implementation is IServerChat chat)
+        {
+            chat.SayAsServer(text);
+            return "chat";
+        }
+
+        var name = _roster.ServerPlayer.Name;
+        var notice = $"{name}: {text}";
+
+        if (notice.Length > MaxSayLength)
+            notice = notice[..MaxSayLength];
+
+        ServerMessages.MessageString(_broadcast, notice);
+        _chatHistory?.Add(name, Team.Spectator, text, teamOnly: false);
+        _log.Info($"[notice] {LogText.Safe(name)}: {LogText.Safe(text)}");
+        return "notice";
+    }
 }

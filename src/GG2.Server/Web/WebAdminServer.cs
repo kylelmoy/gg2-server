@@ -556,6 +556,7 @@ public sealed class WebAdminServer : IDisposable
             var seenVersion = -1L;
             var seenLog = -1L;
             var seenPerf = -1L;
+            var seenChat = -1L;
             var idle = 0;
 
             while (!token.IsCancellationRequested)
@@ -586,6 +587,24 @@ public sealed class WebAdminServer : IDisposable
                     {
                         await SendEventAsync(stream, "log", LogJson(lines), token);
                         idle = 0;
+                    }
+                }
+
+                // Chat, with its backlog on the first pass like the log's.
+                if (_server.ChatHistory is { } chat)
+                {
+                    var chatSequence = chat.Sequence;
+
+                    if (chatSequence > 0 && chatSequence - 1 != seenChat)
+                    {
+                        var lines = chat.Since(seenChat);
+                        seenChat = chatSequence - 1;
+
+                        if (lines.Count > 0)
+                        {
+                            await SendEventAsync(stream, "chat", ChatJson(lines), token);
+                            idle = 0;
+                        }
                     }
                 }
 
@@ -787,6 +806,29 @@ public sealed class WebAdminServer : IDisposable
 
             json.Append("{\"seq\":").Append(lines[i].Sequence);
             json.Append(",\"at\":\"").Append(lines[i].Utc.ToString("O")).Append('"');
+            json.Append(",\"text\":\"").Append(ControlCommands.Escape(lines[i].Text)).Append("\"}");
+        }
+
+        json.Append(']');
+        return json.ToString();
+    }
+
+    private static string ChatJson(IReadOnlyList<ChatHistory.Entry> lines)
+    {
+        var json = new StringBuilder(lines.Count * 96 + 2);
+
+        json.Append('[');
+
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (i > 0)
+                json.Append(',');
+
+            json.Append("{\"seq\":").Append(lines[i].Sequence);
+            json.Append(",\"at\":\"").Append(lines[i].Utc.ToString("O")).Append('"');
+            json.Append(",\"name\":\"").Append(ControlCommands.Escape(lines[i].Name)).Append('"');
+            json.Append(",\"team\":\"").Append(lines[i].Team).Append('"');
+            json.Append(",\"teamOnly\":").Append(lines[i].TeamOnly ? "true" : "false");
             json.Append(",\"text\":\"").Append(ControlCommands.Escape(lines[i].Text)).Append("\"}");
         }
 

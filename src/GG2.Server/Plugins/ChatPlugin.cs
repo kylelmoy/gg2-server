@@ -65,7 +65,7 @@ namespace GG2.Server.Plugins;
 /// <c>string</c> slice.
 /// </para>
 /// </remarks>
-public sealed partial class ChatPlugin : ServerPlugin
+public sealed partial class ChatPlugin : ServerPlugin, IServerChat
 {
     /// <summary>Per-player state; the reference keeps these on the <c>Player</c> instance.</summary>
     /// <remarks>
@@ -362,7 +362,9 @@ public sealed partial class ChatPlugin : ServerPlugin
                 // is relayed as text rather than run. Transcribed: a player who
                 // sees "/votekick bob" appear as a team message has learnt
                 // something true about the server they are on.
-                SendChatMessage(ReadMessage(data), slot, 1 + (int)team);
+                var teamMessage = ReadMessage(data);
+                SendChatMessage(teamMessage, slot, 1 + (int)team);
+                Host.ChatHeard(slot, teamMessage, teamOnly: true);
                 break;
             }
 
@@ -498,6 +500,23 @@ public sealed partial class ChatPlugin : ServerPlugin
         // an index and the raw text.
         var scope = audience == AudienceEveryone ? string.Empty : $"({Host.TeamOf(slot)}) ";
         Host.Log($"[chat] {scope}{LogText.Safe(Host.NameOf(slot))}: {LogText.Safe(message)}");
+        Host.ChatHeard(slot, message, audience != AudienceEveryone);
+    }
+
+    /// <summary>
+    /// A line from the server's own slot 0, sent exactly as a player's is: the
+    /// raw text and index 0, so the client names and colours it from its own
+    /// roster entry for slot 0 — the reserved spectator.
+    /// </summary>
+    /// <remarks>
+    /// The reference's host did this from its chat window, as <c>global.myself</c>.
+    /// Not through <see cref="ExecuteChat"/>: a leading <c>/</c> from the
+    /// operator is text, not a vote the server's own player could start.
+    /// </remarks>
+    public void SayAsServer(string message)
+    {
+        if (message.Length != 0)
+            Relay(0, message, AudienceEveryone);
     }
 
     /// <summary>

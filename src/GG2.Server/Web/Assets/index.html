@@ -204,16 +204,17 @@
     </div>
 
     <div class="col col-side">
-      <article class="card">
-        <header class="card-head"><h2>Simulation</h2></header>
-        <div class="card-body stack">
-          <div class="btn-row">
-            <button class="btn btn-primary" id="freeze" type="button">Freeze</button>
-            <button class="btn" id="step-1" type="button" disabled>Step 1</button>
-            <button class="btn" id="step-30" type="button" disabled>Step 30</button>
+      <article class="card card-chat">
+        <header class="card-head"><h2>Chat</h2></header>
+        <div class="chat" id="chat" role="log" aria-live="polite"></div>
+        <p class="empty" id="chat-empty">Nothing said yet.</p>
+        <form class="chat-form" id="chat-form" autocomplete="off">
+          <div class="row">
+            <input id="chat-input" maxlength="255" placeholder="Say something" aria-label="Message">
+            <button class="btn btn-primary" id="chat-send" type="submit">Send</button>
           </div>
-          <p class="hint" id="freeze-hint">Space freezes and resumes, <kbd>.</kbd> steps one tick.</p>
-        </div>
+          <p class="hint" id="chat-hint"></p>
+        </form>
       </article>
 
       <article class="card">

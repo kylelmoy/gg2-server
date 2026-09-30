@@ -1,4 +1,4 @@
-using GG2.Protocol;
+﻿using GG2.Protocol;
 using GG2.Server.Plugins;
 
 namespace GG2.Tests;
@@ -482,5 +482,43 @@ public sealed class ChatV2PluginTests
         var line = host.MessagesTo(alice)[^1];
         Assert.Equal(255, line.Length);
         Assert.StartsWith("Ralice: #W", line, StringComparison.Ordinal);
+    }
+
+    // --- the operator's line, and the panel's history --------------------------
+
+    /// <summary>
+    /// The reference formats the host's own line with an orange message
+    /// (<c>event1</c>'s <c>global.myself</c> branch); slot 0 is a spectator, so
+    /// the name is white. Not a command, and not counted towards the mute.
+    /// </summary>
+    [Fact]
+    public void TheServerSpeaksAsSlotZeroInOrange()
+    {
+        var (host, plugin) = Fresh();
+        var alice = Join(host, plugin, "alice", Team.Red);
+        plugin.Receive(alice, [Hello]);
+
+        host.Sent.Clear();
+
+        for (var i = 0; i < 8; i++)
+            plugin.SayAsServer("/kick alice");
+
+        Assert.Equal(8, host.MessagesTo(alice).Count);
+        Assert.All(host.MessagesTo(alice), line => Assert.Equal("WServer: #O/kick alice", line));
+        Assert.Equal(8, host.Heard.Count);
+        Assert.All(host.Heard, heard => Assert.Equal((0, "/kick alice", false), heard));
+    }
+
+    [Fact]
+    public void PlayerLinesAreHeardWithTheirScope()
+    {
+        var (host, plugin) = Fresh();
+        var alice = Join(host, plugin, "alice", Team.Red);
+        plugin.Receive(alice, [Hello]);
+
+        SayGlobal(plugin, alice, "hello");
+        SayTeam(plugin, alice, "flank left");
+
+        Assert.Equal([(alice, "hello", false), (alice, "flank left", true)], host.Heard);
     }
 }

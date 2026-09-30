@@ -137,6 +137,11 @@ public static class ControlCommands
 
         "command" => Command(server, request),
 
+        // A line as the server's slot-0 spectator: chat through a chat plugin,
+        // or an on-screen notice without one. `via` says which, because the two
+        // look very different to a player. GameServer.Say.
+        "say" => Ok($"\"via\":\"{server.Say(Text(request, "text"))}\""),
+
         // Operator moderation. Like "kick" these have no client equivalent, so
         // they do not go through Execute — but they live HERE rather than in
         // either transport, which is the rule the control port and the panel
@@ -679,6 +684,11 @@ public static class ControlCommands
         json.Append(",\"joining\":").Append(server.JoiningCount);
         json.Append(",\"bansActive\":").Append(server.Bans.Entries.Count);
         json.Append(",\"botFill\":").Append(server.Options.Bots.FillToPlayers);
+
+        // Which plugin the panel's chat box speaks through, or null for the
+        // MESSAGE_STRING fallback — see GameServer.Say.
+        json.Append(",\"chatPlugin\":")
+            .Append(server.ChatPluginName is { } chat ? $"\"{Escape(chat)}\"" : "null");
 
         // Sent because it is the reason a bot count set from the panel can
         // appear to do nothing: below MinHumans the population manager's target
