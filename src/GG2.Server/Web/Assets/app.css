@@ -370,7 +370,7 @@ kbd {
 .brand-text strong { font: 600 1.0625rem/1.1 var(--font-display); letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .brand-sub { font: 0.6875rem var(--font-mono); color: var(--muted); }
 
-.chips { display: flex; gap: 6px; flex: 1; min-width: 0; overflow: hidden; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
 
 /* HeroUI Chip, flat variant: pill, neutral fill, no border. */
 .chip {
@@ -1574,7 +1574,6 @@ kbd {
 @media (max-width: 720px) {
   .app { padding: 10px 12px 20px; gap: 10px; }
   .topbar { flex-wrap: wrap; gap: 10px; position: static; }
-  .chips { order: 3; flex: 1 0 100%; flex-wrap: wrap; overflow: visible; }
   .topbar-right { margin-left: auto; }
   .tiles { grid-template-columns: repeat(2, 1fr); }
   .scoreboard { padding: 12px; gap: 10px; }
