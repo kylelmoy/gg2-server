@@ -68,3 +68,7 @@ deploy/analytics/
 # name at ANY depth, so a future src/Something/scripts/ would be ignored
 # silently and nothing would go red.
 /scripts/
+
+# The web panel's own identity (Certificate=auto, FleetMember=1) when run with no --config.
+web-cert.pfx
+fleet-member.token

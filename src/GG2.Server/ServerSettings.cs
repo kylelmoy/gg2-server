@@ -799,13 +799,30 @@ public static class ServerSettings
             "Web", "Certificate", nameof(ServerOptions.Web),
             o => o.Web.CertificatePath, (o, v) => o.Web = o.Web with { CertificatePath = v },
             "cert.pfx",
-            "A PKCS#12 certificate to serve HTTPS with. Empty is plain HTTP."));
+            "A PKCS#12 certificate to serve HTTPS with. Empty is plain HTTP. 'auto' makes "
+            + "a self-signed one on first start and keeps it beside the config file, so its "
+            + "fingerprint stays the same for a fleet hub to pin."));
 
         settings.Add(SecretRow(
             "Web", "CertificatePassword", nameof(ServerOptions.Web),
             o => o.Web.CertificatePassword,
             (o, v) => o.Web = o.Web with { CertificatePassword = v }, "pw",
             "That certificate's password, if it has one."));
+
+        settings.Add(TextRow(
+            "Web", "AllowFrom", nameof(ServerOptions.Web),
+            o => o.Web.AllowFrom, (o, v) => o.Web = o.Web with { AllowFrom = v }, "203.0.113.7",
+            "Addresses and CIDR blocks allowed to connect at all, comma-separated. Empty "
+            + "allows anyone. Loopback is always allowed. Checked before TLS or any HTTP, "
+            + "so on a fleet member this is normally just the hub's address."));
+
+        settings.Add(BoolRow(
+            "Web", "FleetMember", nameof(ServerOptions.Web),
+            o => o.Web.FleetMember, (o, v) => o.Web = o.Web with { FleetMember = v },
+            "Let a fleet hub manage this server with a token instead of the password. "
+            + "Needs a Certificate (auto is fine). The pairing code to give the hub is "
+            + "printed at every start.",
+            probe: "1"));
 
         // --- [Runtime] --------------------------------------------------------
         //

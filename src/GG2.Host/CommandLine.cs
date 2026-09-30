@@ -840,6 +840,16 @@ internal static class CommandLine
                     options.Web = options.Web with { CertificatePassword = cursor.Take() };
                     break;
 
+                case "--web-allow":
+                    webSetting = name;
+                    options.Web = options.Web with { AllowFrom = cursor.Take() };
+                    break;
+
+                case "--web-fleet-member":
+                    webSetting = name;
+                    options.Web = options.Web with { FleetMember = true };
+                    break;
+
                 // ⚠️ Pacing only. Nothing about the simulation is rate-dependent
                 // — every duration in the game is counted in ticks — so this
                 // changes throughput and nothing else. It must stay at 1 on any
@@ -1249,9 +1259,17 @@ internal static class CommandLine
                             (.pfx) certificate. ⚠ Without it, on a non-loopback
                             bind, the admin password and every session cookie
                             cross the network in the clear — a reverse proxy or an
-                            SSH tunnel is the other answer.
+                            SSH tunnel is the other answer. 'auto' makes a
+                            self-signed one on first start and keeps it beside the
+                            config file.
           --web-tls-password <text>
                             the certificate's password, if it has one
+          --web-allow <list>
+                            addresses and CIDR blocks allowed to connect to the
+                            panel at all, comma-separated; loopback always is
+          --web-fleet-member
+                            let a fleet hub manage this server with a token; needs
+                            --web-tls. The pairing code is printed at startup.
           --tick-stats      log a histogram of tick intervals every 30s and at
                             shutdown; safe with clients connected
           --lobby           list this server publicly at ganggarrison.com, so it

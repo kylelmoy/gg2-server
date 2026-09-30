@@ -318,6 +318,12 @@ public sealed partial class GameServer
     /// <summary>The password the web admin will accept, generated or configured.</summary>
     public string WebPassword => _web?.Password ?? string.Empty;
 
+    /// <summary>The web admin certificate's SHA-256, or null over plain HTTP or with no panel.</summary>
+    public string? WebFingerprint => _web?.Fingerprint;
+
+    /// <summary>What a fleet hub is given to manage this server, or null when it is not a member.</summary>
+    public string? WebPairingCode => _web?.PairingCode;
+
     /// <summary>
     /// How many state snapshots the panel has published.
     /// </summary>

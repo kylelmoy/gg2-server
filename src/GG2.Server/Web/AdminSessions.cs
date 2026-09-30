@@ -78,13 +78,19 @@ public sealed class AdminSessions
     private readonly ConcurrentDictionary<string, Session> _sessions = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, Failures> _failures = new(StringComparer.Ordinal);
     private readonly Func<DateTime> _now;
+    private readonly byte[]? _memberHash;
 
     /// <param name="password">The admin password. Never stored in the clear.</param>
     /// <param name="now">The clock, so the timeouts are testable without sleeping.</param>
-    public AdminSessions(string password, Func<DateTime>? now = null)
+    /// <param name="memberToken">
+    /// The fleet member token a hub authenticates with, or null when this server
+    /// is not a member. Hashed like the password.
+    /// </param>
+    public AdminSessions(string password, Func<DateTime>? now = null, string? memberToken = null)
     {
         _now = now ?? (() => DateTime.UtcNow);
         _passwordHash = Hash(password);
+        _memberHash = memberToken is null ? null : Hash(memberToken);
     }
 
     /// <summary>One signed-in browser.</summary>
@@ -145,22 +151,7 @@ public sealed class AdminSessions
 
         if (!CryptographicOperations.FixedTimeEquals(_passwordHash, Hash(password)))
         {
-            var failures = _failures.GetOrAdd(key, static _ => new Failures());
-
-            lock (failures)
-            {
-                failures.Count++;
-
-                if (failures.Count > FreeAttempts)
-                {
-                    var doublings = Math.Min(failures.Count - FreeAttempts - 1, 16);
-                    var lockout = TimeSpan.FromTicks(
-                        Math.Min(FirstLockout.Ticks * (1L << doublings), MaxLockout.Ticks));
-
-                    failures.LockedUntil = _now() + lockout;
-                }
-            }
-
+            RecordFailure(key);
             return null;
         }
 
@@ -181,6 +172,59 @@ public sealed class AdminSessions
         Evict();
 
         return session;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="presented"/> is this server's fleet member token.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>No session is issued</b>: a hub sends the token on every request, the
+    /// way an API client does, so there is nothing to expire, evict or steal
+    /// beyond the token itself. And <b>no CSRF token is needed</b> for the same
+    /// reason — CSRF is an attack on a credential the browser attaches by itself,
+    /// and a browser never attaches an <c>Authorization</c> header on its own.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A wrong token counts against the same lockout as a wrong
+    /// password</b>, keyed by address. Otherwise the token would be a second
+    /// door with no throttle on it.
+    /// </para>
+    /// </remarks>
+    public bool AuthenticateMember(IPAddress address, string presented)
+    {
+        var key = address.ToString();
+
+        if (_memberHash is null || !CryptographicOperations.FixedTimeEquals(_memberHash, Hash(presented)))
+        {
+            RecordFailure(key);
+            return false;
+        }
+
+        _failures.TryRemove(key, out _);
+        return true;
+    }
+
+    /// <summary>Whether a member token is configured at all.</summary>
+    public bool AcceptsMemberToken => _memberHash is not null;
+
+    private void RecordFailure(string key)
+    {
+        var failures = _failures.GetOrAdd(key, static _ => new Failures());
+
+        lock (failures)
+        {
+            failures.Count++;
+
+            if (failures.Count > FreeAttempts)
+            {
+                var doublings = Math.Min(failures.Count - FreeAttempts - 1, 16);
+                var lockout = TimeSpan.FromTicks(
+                    Math.Min(FirstLockout.Ticks * (1L << doublings), MaxLockout.Ticks));
+
+                failures.LockedUntil = _now() + lockout;
+            }
+        }
     }
 
     /// <summary>

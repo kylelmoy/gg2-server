@@ -59,6 +59,72 @@ public readonly record struct WebAdminOptions(
     public const string DefaultBind = "127.0.0.1";
 
     /// <summary>
+    /// The <see cref="CertificatePath"/> that means "make a self-signed one and
+    /// keep it" — <see cref="WebIdentity"/>.
+    /// </summary>
+    public const string AutoCertificate = "auto";
+
+    /// <summary>
+    /// Addresses and CIDR blocks that may connect at all, comma-separated; empty
+    /// admits everyone.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Checked when the connection is accepted, before TLS and before a byte
+    /// of HTTP is parsed</b>, so an address outside the list never reaches the
+    /// hand-written parser, the login throttle or the handshake. It is inside the
+    /// server rather than left to a firewall because that works for every
+    /// operator — Windows, no root, no ufw — and a firewall can still be added on
+    /// top.
+    /// </para>
+    /// <para>
+    /// <b>Loopback is always admitted.</b> It is this machine, which already has
+    /// the config file and the password in it, and refusing it would lock out the
+    /// ssh tunnel that is the recovery route when the list is wrong.
+    /// </para>
+    /// </remarks>
+    public string AllowFrom { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Accept a fleet hub's token (<c>Authorization: Bearer</c>) as well as the
+    /// password.
+    /// </summary>
+    /// <remarks>
+    /// The token is <see cref="WebIdentity"/>'s, generated on first start and
+    /// printed with the certificate's fingerprint as a pairing code. <b>Requires
+    /// TLS</b>: a token that crosses the network in the clear is the admin
+    /// password with extra steps.
+    /// </remarks>
+    public bool FleetMember { get; init; }
+
+    /// <summary>Whether <see cref="CertificatePath"/> asks for the self-signed certificate.</summary>
+    public bool AutoCertificateRequested =>
+        string.Equals(CertificatePath.Trim(), AutoCertificate, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary><see cref="AllowFrom"/>, parsed. Throws on an entry that is not an address or block.</summary>
+    public IReadOnlyList<IpRange> AllowedRanges()
+    {
+        var ranges = new List<IpRange>();
+        var entries = (AllowFrom ?? string.Empty).Split(
+            ',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        foreach (var entry in entries)
+        {
+            if (!IpRange.TryParse(entry, out var range))
+            {
+                throw new ArgumentException(
+                    $"[Web] AllowFrom: '{entry}' is not an address or a CIDR block "
+                    + "(1.2.3.4 or 1.2.3.0/24).",
+                    nameof(AllowFrom));
+            }
+
+            ranges.Add(range);
+        }
+
+        return ranges;
+    }
+
+    /// <summary>
     /// Off — the default, and what <c>new WebAdminOptions()</c> would <em>not</em>
     /// give you.
     /// </summary>
@@ -75,7 +141,11 @@ public readonly record struct WebAdminOptions(
         Bind: DefaultBind,
         Password: string.Empty,
         CertificatePath: string.Empty,
-        CertificatePassword: string.Empty);
+        CertificatePassword: string.Empty)
+    {
+        AllowFrom = string.Empty,
+        FleetMember = false,
+    };
 
     /// <summary>Whether <see cref="Bind"/> reaches beyond this machine.</summary>
     /// <remarks>
@@ -109,6 +179,24 @@ public readonly record struct WebAdminOptions(
                 "--web-tls-password was given without --web-tls, so there is no "
                 + "certificate for it to open.",
                 nameof(CertificatePassword));
+        }
+
+        if (AutoCertificateRequested && CertificatePassword.Length != 0)
+        {
+            throw new ArgumentException(
+                "[Web] Certificate=auto makes its own certificate, which has no password; "
+                + "remove CertificatePassword.",
+                nameof(CertificatePassword));
+        }
+
+        _ = AllowedRanges();
+
+        if (FleetMember && CertificatePath.Length == 0)
+        {
+            throw new ArgumentException(
+                "[Web] FleetMember needs TLS, or the hub's token crosses the network in the "
+                + "clear. Set [Web] Certificate=auto for a self-signed certificate the hub pins.",
+                nameof(FleetMember));
         }
     }
 }

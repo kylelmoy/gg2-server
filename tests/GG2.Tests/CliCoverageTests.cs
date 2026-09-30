@@ -224,6 +224,8 @@ public sealed class CliCoverageTests
         ("Web", ["--web", "0", "--web-tls", "some/cert.pfx"], o => o.Web.CertificatePath),
         ("Web", ["--web", "0", "--web-tls", "some/cert.pfx", "--web-tls-password", "pw"],
             o => o.Web.CertificatePassword),
+        ("Web", ["--web", "0", "--web-allow", "203.0.113.7"], o => o.Web.AllowFrom),
+        ("Web", ["--web", "0", "--web-tls", "auto", "--web-fleet-member"], o => o.Web.FleetMember),
     ];
 
     /// <summary>
@@ -322,6 +324,7 @@ public sealed class CliCoverageTests
     [InlineData("--web-password", "hunter2")]
     [InlineData("--web-tls", "cert.pfx")]
     [InlineData("--web-tls-password", "pw")]
+    [InlineData("--web-allow", "203.0.113.7")]
     public void AWebSettingWithoutAPanelIsRefused(string flag, string value)
     {
         var thrown = Assert.Throws<ArgumentException>(() => CommandLine.Parse([flag, value]));

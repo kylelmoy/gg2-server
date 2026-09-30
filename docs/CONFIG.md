@@ -470,8 +470,10 @@ from the network.
 | `Enabled` | boolean | `0` | Host the panel. Written explicitly so turning it **off** is expressible; a `Port` key on its own turns it on. |
 | `Bind` | text | `127.0.0.1` | Where the panel listens. ⛔ `0.0.0.0` is what makes it remote, and remote without a certificate sends the admin password in the clear. |
 | `Password` | secret | *(empty)* | ⛔ **Empty does not mean no password** — it means one is generated and printed to the console at startup. A generated one lasts as long as the process: a restart from the panel carries it, so pressing restart does not lock you out. |
-| `Certificate` | path | *(empty)* | A PKCS#12 certificate to serve HTTPS with. Empty is plain HTTP. |
-| `CertificatePassword` | secret | *(empty)* | That certificate's password, if it has one. |
+| `Certificate` | path | *(empty)* | A PKCS#12 certificate to serve HTTPS with. Empty is plain HTTP. `auto` makes a self-signed one on first start, writes it beside the config file as `web-cert.pfx` and reuses it, so its fingerprint stays the same for a fleet hub to pin. |
+| `CertificatePassword` | secret | *(empty)* | That certificate's password, if it has one. Refused with `auto`. |
+| `AllowFrom` | text | *(empty)* | Addresses and CIDR blocks allowed to connect at all, comma-separated. Empty allows anyone; loopback is always allowed. Checked when the connection is accepted, before TLS or any HTTP. On a fleet member this is normally the hub's address. |
+| `FleetMember` | boolean | `0` | Accept a fleet hub's token (`Authorization: Bearer`) as well as the password. Needs a `Certificate`. The token is generated on first start into `fleet-member.token` beside the config file, never in it, and the pairing code for the hub is printed at every start. `docs/WEBADMIN.md`, "Fleet members". |
 
 ### `[Runtime]`
 

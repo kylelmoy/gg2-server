@@ -25,10 +25,12 @@ gg2-server --web 8191 --web-bind 0.0.0.0 --web-password "$PANEL_PASSWORD" `
 | `--web <n>` | off | Host the panel on port `n`. `0` asks the OS for a free port. **The only flag that turns it on.** |
 | `--web-bind <addr>` | `127.0.0.1` | Where to listen. `0.0.0.0` is what makes it remote. |
 | `--web-password <text>` | generated | The admin password. There is no way to configure it away. |
-| `--web-tls <path>` | none | A PKCS#12 (`.pfx`) certificate; serve HTTPS. |
+| `--web-tls <path>` | none | A PKCS#12 (`.pfx`) certificate; serve HTTPS. `auto` makes and keeps a self-signed one. |
 | `--web-tls-password <text>` | none | That certificate's password. |
+| `--web-allow <list>` | anyone | Addresses and CIDR blocks allowed to connect; loopback always is. |
+| `--web-fleet-member` | off | Accept a fleet hub's token. Needs `--web-tls`. "Fleet members" below. |
 
-**The four settings flags do not turn the panel on, and one given without
+**The settings flags do not turn the panel on, and one given without
 `--web` is refused rather than ignored** — the rule `--policy` without a mode
 that consults it already follows. `CliCoverageTests` gates this.
 
@@ -164,6 +166,55 @@ answers are `--web-tls`, a reverse proxy that terminates TLS, or binding
 ```bash
 ssh -N -L 8191:127.0.0.1:8191 you@your-server   # then open http://127.0.0.1:8191/
 ```
+
+## Fleet members
+
+A fleet hub manages other servers by calling their panels over HTTPS, with no
+ssh in between. A server opts in as a member with three settings:
+
+```ini
+[Web]
+Port=8191
+Bind=0.0.0.0
+Certificate=auto
+AllowFrom=203.0.113.7        ; the hub's address
+FleetMember=1
+```
+
+| Piece | What it is | Where |
+|---|---|---|
+| Certificate | Self-signed ECDSA P-256, ten years, made on first start | `web-cert.pfx` beside the config file |
+| Token | 256 random bits, base64url, made on first start | `fleet-member.token` beside the config file |
+| Pairing code | `<token>.<certificate SHA-256 hex>`, printed at every start | the log |
+
+- **The hub pins the certificate by its SHA-256**, as ssh pins a host key. That
+  is what makes a self-signed certificate worth having without a CA or a domain,
+  and it is why the certificate persists: a fresh one per start would look to the
+  hub exactly like interception. `WebIdentity`.
+- **Both files live beside the config file and never in it**, so a config push
+  from the hub cannot change or drop the identity it pins. Deleting a file undoes
+  the pairing; the next start makes a new one and prints a new code. Both are
+  written owner-only on Unix.
+- **The token authenticates every request as `Authorization: Bearer`**, with no
+  session and no CSRF token: CSRF defends a credential a browser attaches by
+  itself, which a bearer header never is. A wrong token counts against the same
+  per-address lockout as a wrong password, and a present `Authorization` header
+  decides the request alone, so a stale token is refused even beside a valid
+  cookie. `AdminSessions.AuthenticateMember`.
+- **`FleetMember` without a certificate is refused at startup**; a token over
+  plain HTTP would be the admin password with extra steps.
+- **`AllowFrom` is checked when a connection is accepted**, before TLS and
+  before any HTTP, so an address off the list never reaches the parser, the
+  handshake or the lockout table. Loopback is always admitted, which keeps an ssh
+  tunnel as the way back in when the list is wrong. IPv4 mapped into IPv6 is
+  compared as IPv4.
+
+**What the token gets an attacker who has it and can connect**: everything the
+panel can do, which includes rewriting the config file. Two settings reach past
+the game: `ServerPluginList` makes connecting clients offer plugins from the GG2
+plugin site, which run as game code on players' machines, and the path settings
+choose where the server writes. `WebFleetMemberTests` covers the pinning, the
+token, the lockout and the allowlist.
 
 ## The HTTP server
 

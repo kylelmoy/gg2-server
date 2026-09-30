@@ -130,7 +130,59 @@ public sealed class WebAdminServer : IDisposable
             : AdminSessions.GeneratePassword();
 
         Generated = options.Password.Length == 0;
-        _sessions = new AdminSessions(Password);
+        _allowed = options.AllowedRanges();
+
+        if (options.FleetMember)
+        {
+            _memberToken = WebIdentity.LoadOrCreateToken(
+                WebIdentity.Directory(server.Options), out _memberTokenCreated);
+        }
+
+        _sessions = new AdminSessions(Password, memberToken: _memberToken);
+    }
+
+    private readonly IReadOnlyList<IpRange> _allowed;
+    private readonly string? _memberToken;
+    private readonly bool _memberTokenCreated;
+
+    /// <summary>The certificate's SHA-256 as hex, or null over plain HTTP.</summary>
+    public string? Fingerprint { get; private set; }
+
+    /// <summary>
+    /// What a fleet hub is given to manage this server — the token and the
+    /// certificate's fingerprint — or null when this server is not a member.
+    /// </summary>
+    public string? PairingCode =>
+        _memberToken is not null && Fingerprint is not null
+            ? WebIdentity.PairingCode(_memberToken, Fingerprint)
+            : null;
+
+    /// <summary>
+    /// Whether a connection from <paramref name="address"/> may be served at all.
+    /// </summary>
+    /// <remarks>
+    /// Loopback always may: <see cref="WebAdminOptions.AllowFrom"/> has why.
+    /// An IPv4 address that arrives mapped into IPv6 is compared as IPv4, or a
+    /// dual-stack bind would refuse every address on the list.
+    /// </remarks>
+    internal static bool Admits(IReadOnlyList<IpRange> allowed, IPAddress address)
+    {
+        if (allowed.Count == 0)
+            return true;
+
+        if (address.IsIPv4MappedToIPv6)
+            address = address.MapToIPv4();
+
+        if (IPAddress.IsLoopback(address))
+            return true;
+
+        foreach (var range in allowed)
+        {
+            if (range.Contains(address))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>The password the panel will accept.</summary>
@@ -155,12 +207,23 @@ public sealed class WebAdminServer : IDisposable
 
     public void Start()
     {
-        if (_options.CertificatePath.Length != 0)
+        if (_options.AutoCertificateRequested)
+        {
+            var directory = WebIdentity.Directory(_server.Options);
+            _certificate = WebIdentity.LoadOrCreateCertificate(directory, out var created);
+
+            if (created)
+                _log.Info($"web admin: made a self-signed certificate at {Path.Combine(directory, WebIdentity.CertificateFile)}");
+        }
+        else if (_options.CertificatePath.Length != 0)
         {
             _certificate = X509CertificateLoader.LoadPkcs12FromFile(
                 _options.CertificatePath,
                 _options.CertificatePassword.Length == 0 ? null : _options.CertificatePassword);
         }
+
+        if (_certificate is not null)
+            Fingerprint = WebIdentity.Fingerprint(_certificate);
 
         _listener = new TcpListener(IPAddress.Parse(_options.Bind), _options.Port);
         _listener.Start();
@@ -170,6 +233,24 @@ public sealed class WebAdminServer : IDisposable
         var shown = _options.Bind == "0.0.0.0" ? "<this machine>" : _options.Bind;
 
         _log.Info($"web admin on {scheme}://{shown}:{BoundPort}/");
+
+        // Every start, so it can be compared against what a hub or a browser's
+        // certificate warning shows without anything else to go on.
+        if (Fingerprint is not null)
+            _log.Info($"web admin certificate SHA-256: {Fingerprint}");
+
+        if (_allowed.Count > 0)
+            _log.Info($"web admin accepts connections only from loopback and {_options.AllowFrom}");
+
+        // ⚠️ Printed every start, like a generated password, because it is the
+        // only way an operator gets it. It is a credential: anybody who can
+        // connect (AllowFrom) and has it can do anything the panel can.
+        if (PairingCode is { } pairing)
+        {
+            _log.Info(
+                $"fleet member {(_memberTokenCreated ? "token generated" : "token loaded")}; "
+                + $"pairing code for the hub: {pairing}");
+        }
 
         if (Generated)
         {
@@ -266,6 +347,16 @@ public sealed class WebAdminServer : IDisposable
                 continue;
             }
 
+            // Before the connection counts against MaxConnections, before TLS and
+            // before a byte is read: an address off the list gets nothing from
+            // this process but a closed socket. Not logged — a scan would fill
+            // the log, and the rule for a client-driven log line is a throttle.
+            if (!Admits(_allowed, (client.Client.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None))
+            {
+                client.Dispose();
+                continue;
+            }
+
             if (Interlocked.Increment(ref _connections) > MaxConnections)
             {
                 Interlocked.Decrement(ref _connections);
@@ -352,7 +443,39 @@ public sealed class WebAdminServer : IDisposable
         IPAddress address,
         CancellationToken token)
     {
-        var session = _sessions.Validate(request.Cookie(CookieName));
+        // A hub authenticates with a bearer token on every request instead of
+        // a cookie. An Authorization header that is PRESENT decides the request
+        // on its own: a wrong one is refused even if a valid cookie came with it,
+        // so a hub with a stale token finds out rather than riding on a session.
+        var member = false;
+
+        if (request.Header("Authorization") is { } authorization)
+        {
+            const string bearer = "Bearer ";
+
+            var remaining = _sessions.LockoutRemaining(address);
+
+            if (remaining > TimeSpan.Zero)
+            {
+                return await JsonAsync(
+                    stream,
+                    429,
+                    Error($"too many attempts — try again in {(int)remaining.TotalSeconds + 1}s"),
+                    token);
+            }
+
+            if (!authorization.StartsWith(bearer, StringComparison.OrdinalIgnoreCase)
+                || !_sessions.AuthenticateMember(address, authorization[bearer.Length..].Trim()))
+            {
+                await Task.Delay(AdminSessions.FailureDelay, token);
+                _log.Warn($"web admin: refused a fleet token from {address}");
+                return await JsonAsync(stream, 401, Error("bad fleet token"), token);
+            }
+
+            member = true;
+        }
+
+        var session = member ? null : _sessions.Validate(request.Cookie(CookieName));
 
         switch (request.Method, request.Path)
         {
@@ -393,7 +516,7 @@ public sealed class WebAdminServer : IDisposable
             // lobby — but nothing else is offered.
             case ("GET", "/api/session"):
                 return await JsonAsync(stream, 200, Json(
-                    $"\"authenticated\":{(session is not null ? "true" : "false")}",
+                    $"\"authenticated\":{(session is not null || member ? "true" : "false")}",
                     $"\"secure\":{(Secure ? "true" : "false")}",
 
                     // The CSRF token is re-issued to a browser that already
@@ -413,14 +536,17 @@ public sealed class WebAdminServer : IDisposable
                 return await JsonAsync(stream, 200, "{\"ok\":true}", token, ClearCookie);
         }
 
-        if (session is null)
+        if (session is null && !member)
             return await JsonAsync(stream, 401, Error("sign in first"), token);
 
         // Every state-changing request must echo the token issued at sign-in.
         // The SameSite=Strict cookie already stops a cross-site post from
         // carrying credentials; this stops anything that gets past it, because a
         // page on another origin cannot read the token out of the login reply.
-        if (request.Method != "GET"
+        // A hub's bearer token is exempt: a browser never attaches one by itself,
+        // which is the only thing CSRF defends against. AdminSessions.AuthenticateMember.
+        if (session is not null
+            && request.Method != "GET"
             && !string.Equals(request.Header("X-CSRF-Token"), session.Csrf, StringComparison.Ordinal))
         {
             return await JsonAsync(stream, 403, Error("bad or missing CSRF token"), token);
