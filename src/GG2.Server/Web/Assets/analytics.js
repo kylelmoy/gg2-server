@@ -2,8 +2,9 @@
  * The analytics view: who has played, for how long, and roughly from where.
  *
  * Drawn by two pages. The admin panel (app.js) fetches one server's
- * `analytics` reply; the fleet page (scripts/fleet-analytics.sh, fleet.js)
- * hands it several servers' replies summed into the same shape, with a `fleet`
+ * `analytics` reply, or on a fleet hub every server's; the fleet page
+ * (scripts/fleet-analytics.sh, fleet.js) reads replies saved to disk. Several
+ * replies are summed by sumAnalytics into the same shape, with a `fleet`
  * member saying so. Neither page's loading lives here, so this file draws an
  * object and never fetches one.
  *
@@ -55,6 +56,139 @@ function named(rows, fields) {
     fields.forEach((field, i) => { object[field] = row[i]; });
     return object;
   });
+}
+
+/**
+ * Several `analytics` replies, added into the shape one server sends.
+ *
+ * Both pages sum: the panel on a fleet hub (app.js, "All servers") and the
+ * offline fleet page (fleet.js). Each entry is `{ host, analytics }`, where
+ * `host` is the label a merged row and the peak are credited to.
+ *
+ * ⛔ Additive figures are summed and nothing else is. Joins and playtime add
+ * exactly. Unique players add as an OVER-count — each server's salt is its own,
+ * so a player on two servers is two keys and nothing here can join them; the
+ * view says so. A peak is the busiest single server's, because per-server peaks
+ * happened at different moments and their sum is a crowd that never existed.
+ *
+ * ⚠️ Every row is read through its own reply's field list (`named`), never by
+ * position, so a host running an older build with a different column set still
+ * sums into the right column.
+ *
+ * @param hosts  the replies, `{ host, analytics }` each.
+ * @param hint   what the "off" note tells the operator to set when no server
+ *               is collecting; showAnalytics has a default.
+ */
+function sumAnalytics(hosts, hint) {
+  const on = hosts.filter((h) => h.analytics && h.analytics.enabled);
+
+  if (on.length === 0) return { enabled: false, hint };
+
+  const dayFields = ['date', 'sessions', 'unique', 'new', 'playtimeSeconds', 'peak'];
+  const regionFields = ['key', 'country', 'countryName', 'region', 'regionName', 'players', 'sessions', 'playtimeSeconds'];
+
+  const totals = {
+    uniquePlayers: 0, sessions: 0, playtimeSeconds: 0, live: 0, tracked: 0, cap: 0, trimmed: 0,
+    peakConcurrent: 0, peakUtc: '', peakHost: '',
+  };
+
+  const days = new Map();
+  const regions = new Map();
+  const top = [];
+  const connected = [];
+  let since = '';
+  let now = '';
+  let geoip = null;
+
+  for (const host of on) {
+    const a = host.analytics;
+
+    for (const key of ['uniquePlayers', 'sessions', 'playtimeSeconds', 'live', 'tracked', 'cap', 'trimmed'])
+      totals[key] += a.totals[key] || 0;
+
+    if (a.totals.peakConcurrent > totals.peakConcurrent) {
+      totals.peakConcurrent = a.totals.peakConcurrent;
+      totals.peakUtc = a.totals.peakUtc;
+      totals.peakHost = host.host;
+    }
+
+    for (const day of named(a.days, a.dayFields)) {
+      const at = days.get(day.date) || { date: day.date, sessions: 0, unique: 0, new: 0, playtimeSeconds: 0, peak: 0 };
+
+      at.sessions += day.sessions || 0;
+      at.unique += day.unique || 0;
+      at.new += day.new || 0;
+      at.playtimeSeconds += day.playtimeSeconds || 0;
+      at.peak = Math.max(at.peak, day.peak || 0);
+      days.set(day.date, at);
+    }
+
+    for (const region of named(a.regions, a.regionFields)) {
+      const at = regions.get(region.key) || {
+        key: region.key, country: region.country, countryName: '', region: region.region, regionName: '',
+        players: 0, sessions: 0, playtimeSeconds: 0,
+      };
+
+      at.countryName = region.countryName || at.countryName;
+      at.regionName = region.regionName || at.regionName;
+      at.players += region.players || 0;
+      at.sessions += region.sessions || 0;
+      at.playtimeSeconds += region.playtimeSeconds || 0;
+      regions.set(region.key, at);
+    }
+
+    for (const player of a.top || []) top.push({ ...player, host: host.host });
+    for (const player of a.connected || []) connected.push({ ...player, host: host.host });
+
+    // ISO-8601 in UTC compares correctly as a string.
+    if (a.since && (!since || a.since < since)) since = a.since;
+    if (a.now && a.now > now) now = a.now;
+
+    geoip = geoip || a.geoip;
+  }
+
+  top.sort((x, y) => y.playtimeSeconds - x.playtimeSeconds);
+
+  const regionRows = [...regions.values()]
+    .sort((x, y) => y.players - x.players || (x.key < y.key ? -1 : x.key > y.key ? 1 : 0));
+
+  return {
+    enabled: true,
+    file: t('analytics.fleet.file', { count: on.length }),
+    since,
+    now,
+    totals,
+    dayFields,
+    days: [...days.values()].sort((x, y) => (x.date < y.date ? -1 : 1)).map((d) => dayFields.map((f) => d[f])),
+    regionFields,
+    regions: regionRows.map((r) => regionFields.map((f) => r[f])),
+    top: top.slice(0, 25),
+    connected,
+    geoip,
+    fleet: { hosts: on.map((h) => h.host) },
+  };
+}
+
+/**
+ * Fills the sheet's server switch: "All servers" first, then one button per
+ * `[value, label, title]`; "All servers" is `'*'`. Both pages call it and each
+ * wires the clicks itself.
+ */
+function analyticsHosts(entries, selected) {
+  const group = $('an-hosts');
+
+  const buttons = [['*', t('analytics.fleet.all'), t('analytics.fleet.allTitle')], ...entries].map(([value, label, title]) => {
+    const button = document.createElement('button');
+    button.className = value === selected ? 'seg-btn is-on' : 'seg-btn';
+    button.type = 'button';
+    button.dataset.host = value;
+    button.textContent = label;
+    button.title = title;
+    return button;
+  });
+
+  group.replaceChildren(...buttons);
+  group.hidden = false;
 }
 
 /** How each metric's axis label is written. The buttons that pick one are index.html's. */

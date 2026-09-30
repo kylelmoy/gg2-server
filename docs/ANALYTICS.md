@@ -231,7 +231,19 @@ is what stops a list and its rows drifting apart.
 
 ## The whole fleet
 
-`scripts/fleet-analytics.sh` collects every host in `deploy/hosts` and builds one
+Two ways to see every server at once. Both add the servers up with the same
+function, `sumAnalytics` in `analytics.js`, so the rules in the second table
+below hold for both.
+
+**On a fleet hub's panel** (`docs/WEBADMIN.md`, "The fleet hub"), the Analytics
+sheet has a server switch: *All servers*, the hub's own server, and each
+member. It opens on the server the page is showing. A single server is fetched
+through the hub's pass-through (`/h/<member>/api/analytics`). *All servers*
+asks the hub and every member at once and adds up whatever answers. A server
+that does not answer, or has analytics off, is named above the figures and left
+out of them. These are live figures over HTTPS, with no ssh.
+
+**Offline, from ssh:** `scripts/fleet-analytics.sh` collects every host in `deploy/hosts` and builds one
 page, `deploy/analytics/fleet-analytics.html`: each server on its own, or all of
 them added together. It is read-only on the hosts.
 
@@ -248,7 +260,7 @@ scripts/fleet-analytics.sh --no-collect    # rebuild the page from what is saved
 | **What it keeps** | `deploy/analytics/<host>.json`, the last successful reply per host. A host that does not answer keeps its previous reply, and the page names it and the time its figures are from. The directory is gitignored: it holds player names. |
 | **The page** | Self-contained, opened from disk: `app.css`, `world.json`, the panel's `analytics.js` and `common.js`, and the analytics sheet's markup cut out of `index.html`, with `scripts/fleet-analytics/fleet.js` adding the server switch and the sum. There is no second copy of the view to go stale. A reply's `<` is escaped before it goes into the page, because a player name can spell `</script>`. |
 
-**What "all servers" adds, and what it cannot.**
+**What "All servers" adds, and what it cannot**, on either page.
 
 | Figure | In the sum |
 |---|---|
@@ -262,12 +274,15 @@ make the player sum exact** is a salt shared across the fleet, which this
 deliberately does not do: a per-file salt is what stops one server's table being
 cross-referenced against another's.
 
-**Verified by opening it**, against the three live hosts: the sum's joins,
+**The offline page was verified by opening it**, against the three live hosts: the sum's joins,
 players, peak and per-day rows matched each host's `!meta` and `!day` records by
 hand, and a host that did not answer was named above the figures.
 `WebAssetTests.TheFleetPageHasEveryIdItsScriptsAskFor` and
 `NoTopLevelNameIsDeclaredTwice` are the mechanical half; nothing runs the sum
-itself.
+itself. The panel's switch was checked in a browser against a local hub with one
+paired member: each server alone, the sum of both (with injected replies whose
+column order differed), and a member that had been stopped, which was named
+above the figures and left out of the sum.
 
 ## Gates
 

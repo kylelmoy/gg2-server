@@ -56,6 +56,7 @@ const STRINGS = {
       "topEmpty": "No connections yet.",
       "us": "United States",
       "whatToPlot": "Metric",
+      "whichServer": "Server",
       "where": "Connection origins",
       "world": "World"
     },
@@ -550,7 +551,10 @@ const STRINGS = {
       "wrongPassword": "wrong password"
     },
     "analytics": {
-      "refused": "refused by server"
+      "refused": "refused by server",
+      "sub": "{server} · {file}",
+      "noAnswer": "{name} did not answer and is not in these figures.",
+      "off": "{name} has analytics disabled and adds nothing."
     },
     "round": {
       "endTitle": "End round?",
@@ -608,6 +612,14 @@ const STRINGS = {
     "off": "Analytics disabled: nothing is recorded. To enable, {hint}, then restart.",
     "offHint": "set an analytics file",
     "notCollecting": "not collecting",
+    "fleet": {
+      "all": "All servers",
+      "allTitle": "Every server added together",
+      "file": {
+        "one": "{count} server added together",
+        "other": "{count} servers added together"
+      }
+    },
     "players": {
       "one": "{count} player",
       "other": "{count} players"

@@ -1490,6 +1490,11 @@ kbd {
 
 .an-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .an-head h4 { margin: 0 0 12px; }
+/* The server switch on a fleet hub: one button per server, wrapping rather
+   than squeezing when the fleet is wide. */
+.an-hosts { flex-wrap: wrap; width: fit-content; max-width: calc(100% - 48px); margin: 12px 24px 0; }
+.an-hosts .seg-btn { flex: none; }
+
 .an-head-tools { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
 
 .an-days-wrap, .an-map-wrap {

@@ -356,7 +356,7 @@ All JSON, all under the session cookie except the first four.
 | `GET /api/events` | — | server-sent events: `state` snapshots, `log` lines and `perf` samples |
 | `POST /api/command` | a control-port command | freeze, resume, step, speed, bots, bots-suspend, map, teleport, kick, command, say, ban, unban, bans, analytics, config-set, restart, offline, password, player-limit, autobalance, end-round, restart-round, rotation, team, bot-limit, bot-brain |
 | `GET /api/config` | — | every setting, its value **in the config file**, and which are pinned or pending |
-| `GET /api/analytics` | — | who has played here, for how long and from where — `docs/ANALYTICS.md` |
+| `GET /api/analytics` | — | who has played here, for how long and from where — `docs/ANALYTICS.md`. On a hub the sheet can also show any member, or all of them added together; "The whole fleet" there |
 | `GET /api/maps` | — | what this server could change to, plus its rotation |
 | `GET /api/map.png?name=` | — | a map's PNG, for the live map |
 | `GET /api/log?after=` | — | the scrollback, by sequence number |

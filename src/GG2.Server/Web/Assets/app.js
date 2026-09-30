@@ -1977,45 +1977,122 @@ $('login-form').addEventListener('submit', async (event) => {
 let worldGeometry = null;
 let worldGeometryFailed = false;
 
+/**
+ * Which server the sheet shows: '' for the hub's own (or, off a hub, this
+ * page's), a member's name, or '*' for every server added together. Starts on
+ * the server the page is showing.
+ */
+let anSelected = member;
+
+/** Bumped per load, so a slow reply for a server no longer selected is dropped. */
+let anLoad = 0;
+
 async function openAnalytics() {
   $('analytics').showModal();
+
+  if (hubMembers) {
+    analyticsHosts([['', t('app.fleet.hubTab'), t('app.fleet.hubTitle')], ...hubMembers.map((name) => [name, name, name])], anSelected);
+  }
+
   await loadAnalytics();
 }
 
+/**
+ * One server's `analytics` reply: `{ analytics }`, `{ error }`, or `{ signedOut }`.
+ *
+ * The path is spelled out rather than built by api(): on a member's page the
+ * sheet can still show the hub or another member.
+ */
+async function fetchAnalytics(server) {
+  const path = server ? `/h/${encodeURIComponent(server)}/api/analytics` : '/api/analytics';
+
+  try {
+    const response = await fetch(path);
+    if (response.status === 401) return { signedOut: true };
+
+    const reply = await response.json();
+    return reply.ok ? { analytics: reply.analytics } : { error: reply.error || t('app.analytics.refused') };
+  } catch {
+    return { error: t('app.settings.noAnswer') };
+  }
+}
+
+function serverLabel(server) {
+  return server || t('app.fleet.hubTab');
+}
+
 async function loadAnalytics() {
+  const load = ++anLoad;
+  const all = anSelected === '*';
+
   $('an-loading').hidden = false;
   $('an-loading').textContent = t('app.settings.loading');
   $('an-content').hidden = true;
   $('an-off').hidden = true;
+  $('an-note').hidden = true;
 
-  let reply;
+  for (const button of $('an-hosts').querySelectorAll('.seg-btn'))
+    button.classList.toggle('is-on', button.dataset.host === anSelected);
 
-  try {
-    const response = await fetch(api('/api/analytics'));
+  // ⚠️ All servers are asked at once, and one that does not answer costs its
+  // own figures, not the sum's: it is named above them instead.
+  const servers = all ? ['', ...hubMembers] : [anSelected];
+  const replies = await Promise.all(servers.map(fetchAnalytics));
 
-    if (response.status === 401) { $('analytics').close(); showLogin(); return; }
+  if (load !== anLoad) return;
 
-    reply = await response.json();
-  } catch {
-    $('an-loading').textContent = t('app.settings.noAnswer');
-    return;
+  if (replies.some((r) => r.signedOut)) { $('analytics').close(); showLogin(); return; }
+
+  let data;
+
+  if (all) {
+    const notes = [];
+
+    servers.forEach((server, i) => {
+      if (replies[i].error) notes.push(t('app.analytics.noAnswer', { name: serverLabel(server) }));
+      else if (!replies[i].analytics.enabled) notes.push(t('app.analytics.off', { name: serverLabel(server) }));
+    });
+
+    data = sumAnalytics(servers
+      .map((server, i) => ({ host: serverLabel(server), analytics: replies[i].analytics }))
+      .filter((h) => h.analytics));
+
+    $('an-note').textContent = notes.join(' ');
+    $('an-note').hidden = notes.length === 0;
+  } else {
+    if (replies[0].error) {
+      $('an-loading').textContent = replies[0].error;
+      return;
+    }
+
+    data = replies[0].analytics;
   }
 
-  if (!reply.ok) {
-    $('an-loading').textContent = reply.error || t('app.analytics.refused');
-    return;
-  }
-
-  if (reply.analytics.enabled && !worldGeometry && !worldGeometryFailed) {
+  if (data.enabled && !worldGeometry && !worldGeometryFailed) {
     try {
       worldGeometry = await (await fetch('/world.json')).json();
     } catch {
       worldGeometryFailed = true;
     }
+
+    if (load !== anLoad) return;
   }
 
-  showAnalytics(reply.analytics, worldGeometry);
+  showAnalytics(data, worldGeometry);
+
+  // On a hub the sheet can show any server, so it says which.
+  if (hubMembers && !all) {
+    $('analytics-sub').textContent = t('app.analytics.sub', { server: serverLabel(anSelected), file: $('analytics-sub').textContent });
+  }
 }
+
+$('an-hosts').addEventListener('click', (event) => {
+  const button = event.target.closest('.seg-btn');
+  if (!button || button.dataset.host === anSelected) return;
+
+  anSelected = button.dataset.host;
+  loadAnalytics();
+});
 
 $('analytics-open').addEventListener('click', openAnalytics);
 $('analytics-close').addEventListener('click', () => $('analytics').close());
@@ -2280,6 +2357,9 @@ window.addEventListener('resize', () => {
  * the Fleet button stays hidden; on a hub it lists each member with that member's
  * own state object, fetched by the hub from all of them at once.
  */
+/** The hub's members by name, from the last /api/fleet; null off a hub. */
+let hubMembers = null;
+
 async function initFleet() {
   let reply;
 
@@ -2315,6 +2395,8 @@ async function initFleet() {
  * link, so a middle click opens a member in a new tab.
  */
 function renderHosts(members) {
+  hubMembers = members.map((m) => m.name);
+
   const tabs = [hostTab('', t('app.fleet.hubTab'), true, t('app.fleet.hubTitle'))];
 
   for (const m of members) {
