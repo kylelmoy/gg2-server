@@ -500,7 +500,7 @@ kbd {
 
 .tile-value i { font-style: normal; font-size: var(--text-tiny); color: var(--muted); }
 .tile-note { font-size: var(--text-tiny); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tile-note.warn { color: var(--warning); }
+.tile-note.warn, .tile-value b.warn { color: var(--warning); }
 
 .meter { height: 3px; border-radius: var(--radius-pill); background: var(--default); overflow: hidden; margin: 4px 0 2px; }
 

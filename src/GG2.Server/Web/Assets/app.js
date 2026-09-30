@@ -228,9 +228,9 @@ function tiles(s) {
   $('tile-slots').textContent = `/ ${s.server.slots}`;
   $('tile-bots').textContent = `${humans} human${humans === 1 ? '' : 's'}, ${bots} bot${bots === 1 ? '' : 's'}`;
 
-  $('tile-speed').textContent = s.speed === 'max' ? '∞' : s.speed;
-  $('tile-state').textContent = s.frozen ? 'frozen' : s.server.idle ? 'idle (2 Hz, nobody on)' : 'running';
+  $('tile-state').textContent = s.frozen ? 'frozen' : s.server.idle ? 'idle' : 'running';
   $('tile-state').classList.toggle('warn', s.frozen);
+  $('tile-state-note').textContent = s.server.idle && !s.frozen ? '2 Hz, nobody on' : '';
 
   $('tile-frame').textContent = s.frame.toLocaleString();
   $('tile-area').textContent = s.match.areas > 1 ? `area ${s.match.area} of ${s.match.areas}` : '';
@@ -239,16 +239,6 @@ function tiles(s) {
   $('freeze').classList.toggle('btn-primary', !s.frozen);
   $('step-1').disabled = !s.frozen;
   $('step-30').disabled = !s.frozen;
-
-  // ⚠️ Scoped to #speed-seg. `.seg-btn` alone also matches the charts' range
-  // buttons, which have no data-speed — so this cleared their selection on every
-  // snapshot, and the click handler below made each of them ask "change the tick
-  // rate?".
-  for (const button of document.querySelectorAll('#speed-seg .seg-btn')) {
-    button.classList.toggle('is-on', String(s.speed) === button.dataset.speed);
-  }
-
-  $('speed-warn').hidden = String(s.speed) === '1';
 
   const fill = $('bots');
   if (document.activeElement !== fill) fill.value = s.server.botFill;
@@ -1877,22 +1867,6 @@ $('logout').addEventListener('click', async () => {
 $('freeze').addEventListener('click', () => send({ cmd: state && state.frozen ? 'resume' : 'freeze' }));
 $('step-1').addEventListener('click', () => send({ cmd: 'step', ticks: 1 }, true));
 $('step-30').addEventListener('click', () => send({ cmd: 'step', ticks: 30 }));
-
-for (const button of document.querySelectorAll('#speed-seg .seg-btn')) {
-  button.addEventListener('click', async () => {
-    const value = button.dataset.speed;
-
-    if (value !== '1' && !await ask(
-      'Change the tick rate?',
-      'Clients pace themselves at 30 Hz and re-simulate between updates, so any '
-      + 'speed but 1× desynchronises every player currently connected. This is a '
-      + 'debugging control.')) {
-      return;
-    }
-
-    send({ cmd: 'speed', value: value === 'max' ? 'max' : Number(value) });
-  });
-}
 
 $('bots-up').addEventListener('click', () => step($('bots'), 1));
 $('bots-down').addEventListener('click', () => step($('bots'), -1));

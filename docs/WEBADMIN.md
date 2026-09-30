@@ -2,7 +2,7 @@
 
 A browser console for a running server: who is on it, where they are, what the
 round is doing, six graphs of how the process is coping, the operator controls —
-freeze, step, speed, bot count, map change, teleport, kick, ban — and a settings
+freeze, step, bot count, map change, teleport, kick, ban — and a settings
 page that edits the config file, with a restart button that applies it.
 
 It is the **only** surface in this project that is meant to be reachable from
@@ -120,7 +120,7 @@ of which happens at 30 Hz. Take the direct per-snapshot number above.
 
 **An idle server ticks at 2 Hz** (`--no-idle-when-empty` turns that off), so
 with nobody connected the panel updates twice a second. It says `idle` in the
-speed tile rather than looking stuck.
+state tile rather than looking stuck.
 
 `WebAdminTests.NobodyWatchingMeansNoSnapshots` gates the structural half of this.
 **What would show the table has gone stale**: a snapshot that stops being
@@ -402,8 +402,10 @@ hashed its own password. Writing new values into a running server's options
 object would apply some of them and not others with **nothing telling an operator
 which**. So a save writes the file and says plainly that the restart is what
 applies it. The three things that *can* change on a live server — the map, the
-bot count, the speed — have had their own `ControlCommands` verbs since phase 8
-and are still their own controls.
+bot count, the speed — have their own `ControlCommands` verbs. The map and bot
+count are panel controls; speed is reachable only through `POST /api/command`
+and the control port, because anything but 1x desynchronises every connected
+client.
 
 **A file pushed by `scripts/deploy.sh --config` is marked as managed** (the
 `config` verb's `managed`, `editedSincePush` and `pushWaiting`). Saving still
@@ -567,9 +569,9 @@ it.
 - **One y-axis per chart, ever.** Working set and managed heap share a frame
   because they share a unit; tick time and CPU do not and never will. A second
   y-scale invents a correlation that is not in the data.
-- **`.seg-btn` is scoped to its own group.** Each chart's range buttons and the
-  speed selector share the class name but have separate handlers, so clicking one
-  does not affect the other's selection state.
+- **`.seg-btn` is scoped to its own group.** Each chart's range buttons share the
+  class name but have separate handlers, so clicking one does not affect
+  another's selection state.
 
 **None of these numbers is a benchmark number.** They are measured over
 whatever the server happened to be doing, map loads and GC included, on a machine

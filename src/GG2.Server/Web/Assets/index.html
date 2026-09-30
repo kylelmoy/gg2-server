@@ -96,9 +96,9 @@
       <span class="tile-note" id="tile-bots">—</span>
     </div>
     <div class="tile">
-      <span class="tile-key">speed</span>
-      <span class="tile-value"><b id="tile-speed">—</b><i>×</i></span>
-      <span class="tile-note" id="tile-state">running</span>
+      <span class="tile-key">state</span>
+      <span class="tile-value"><b id="tile-state">—</b></span>
+      <span class="tile-note" id="tile-state-note"></span>
     </div>
     <div class="tile">
       <span class="tile-key">frame</span>
@@ -213,20 +213,6 @@
             <button class="btn" id="step-30" type="button" disabled>Step 30</button>
           </div>
           <p class="hint" id="freeze-hint">Space freezes and resumes, <kbd>.</kbd> steps one tick.</p>
-
-          <div class="control">
-            <label for="speed">Speed</label>
-            <div class="seg" id="speed-seg" role="group" aria-label="Speed">
-              <button class="seg-btn" data-speed="0.25" type="button">¼×</button>
-              <button class="seg-btn" data-speed="0.5" type="button">½×</button>
-              <button class="seg-btn is-on" data-speed="1" type="button">1×</button>
-              <button class="seg-btn" data-speed="2" type="button">2×</button>
-              <button class="seg-btn" data-speed="max" type="button">max</button>
-            </div>
-            <p class="hint warn" id="speed-warn" hidden>
-              Anything but 1× desynchronises every connected client.
-            </p>
-          </div>
         </div>
       </article>
 
