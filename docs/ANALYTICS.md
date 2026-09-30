@@ -148,6 +148,15 @@ A **country-level** database (either publisher's `-Country` file) works and is
 much smaller; the world map is then complete and the United States view resolves
 no states, which the map's caption says in those words.
 
+**DB-IP's City Lite names a US state but gives it no code**; MaxMind gives both.
+`GeoIpDatabase.UsStateCode` derives the code from the English name, for the 50
+states and DC, which is every name DB-IP uses inside the United States (checked
+against the 2026-09 build). `GeoIpStateTests` holds that table to `world.json`'s
+US markers. A player recorded before a state could be resolved stays under
+"United States, no state" until they next join, when they move to their state.
+Their earlier joins and playtime stay where they were counted. The file keeps no
+address, so there is nothing to re-resolve them from.
+
 `GeoIpDatabase` reads the format directly — this project has no NuGet
 dependencies and the panel already declined ASP.NET Core for eight endpoints.
 The file is read with `RandomAccess` rather than being loaded or mapped, so a

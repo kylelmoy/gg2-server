@@ -11,7 +11,9 @@ namespace GG2.Server;
 /// <param name="CountryName">The database's English name for it.</param>
 /// <param name="RegionCode">
 /// The first subdivision's code without its country prefix — <c>CA</c> for
-/// California. Empty unless the database carries subdivisions.
+/// California. Empty unless the database carries subdivisions. For a US state
+/// with no code in the database (DB-IP), derived from its name by
+/// <see cref="GeoIpDatabase.UsStateCode"/>.
 /// </param>
 /// <param name="RegionName">That subdivision's English name.</param>
 public readonly record struct GeoLocation(
@@ -479,10 +481,44 @@ public sealed class GeoIpDatabase : IDisposable
             }
         }
 
+        // ⚠️ DB-IP's City Lite names a subdivision and gives it no iso_code, so
+        // without this every American lands in "United States, no state" with a
+        // city database loaded. Measured against dbip-city-lite 2026-09.
+        if (regionCode.Length == 0 && code == "US")
+            regionCode = UsStateCode(regionName);
+
         return code.Length == 0 && regionCode.Length == 0
             ? GeoLocation.Unknown
             : new GeoLocation(code, name, regionCode, regionName);
     }
+
+    /// <summary>
+    /// The USPS code for a state's English name, or empty for any other name.
+    /// </summary>
+    /// <remarks>
+    /// The 50 states and DC: exactly the places DB-IP City Lite names inside
+    /// the United States, and exactly the US view's markers in
+    /// <c>world.json</c>. <c>GeoIpStateTests</c> holds the table to the map.
+    /// </remarks>
+    public static string UsStateCode(string name) =>
+        UsStates.TryGetValue(name, out var code) ? code : string.Empty;
+
+    private static readonly Dictionary<string, string> UsStates = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Alabama"] = "AL", ["Alaska"] = "AK", ["Arizona"] = "AZ", ["Arkansas"] = "AR",
+        ["California"] = "CA", ["Colorado"] = "CO", ["Connecticut"] = "CT", ["Delaware"] = "DE",
+        ["District of Columbia"] = "DC", ["Florida"] = "FL", ["Georgia"] = "GA", ["Hawaii"] = "HI",
+        ["Idaho"] = "ID", ["Illinois"] = "IL", ["Indiana"] = "IN", ["Iowa"] = "IA",
+        ["Kansas"] = "KS", ["Kentucky"] = "KY", ["Louisiana"] = "LA", ["Maine"] = "ME",
+        ["Maryland"] = "MD", ["Massachusetts"] = "MA", ["Michigan"] = "MI", ["Minnesota"] = "MN",
+        ["Mississippi"] = "MS", ["Missouri"] = "MO", ["Montana"] = "MT", ["Nebraska"] = "NE",
+        ["Nevada"] = "NV", ["New Hampshire"] = "NH", ["New Jersey"] = "NJ", ["New Mexico"] = "NM",
+        ["New York"] = "NY", ["North Carolina"] = "NC", ["North Dakota"] = "ND", ["Ohio"] = "OH",
+        ["Oklahoma"] = "OK", ["Oregon"] = "OR", ["Pennsylvania"] = "PA", ["Rhode Island"] = "RI",
+        ["South Carolina"] = "SC", ["South Dakota"] = "SD", ["Tennessee"] = "TN", ["Texas"] = "TX",
+        ["Utah"] = "UT", ["Vermont"] = "VT", ["Virginia"] = "VA", ["Washington"] = "WA",
+        ["West Virginia"] = "WV", ["Wisconsin"] = "WI", ["Wyoming"] = "WY",
+    };
 
     private static string EnglishName(in Decoder reader, long namesOffset)
     {

@@ -50,3 +50,41 @@ public sealed class GeoIpDatabaseTests
         }
     }
 }
+
+/// <summary>
+/// The name-to-code table for US states, held to the map it feeds.
+/// </summary>
+/// <remarks>
+/// DB-IP's City Lite names a US state without a code, and a state's players are
+/// drawn at <c>world.json</c>'s marker keyed by that code. So every marker's
+/// name has to resolve to its own key, or that state's players are counted and
+/// never drawn.
+/// </remarks>
+public sealed class GeoIpStateTests
+{
+    [Fact]
+    public void EveryUsMarkerNameResolvesToItsOwnCode()
+    {
+        using var world = System.Text.Json.JsonDocument.Parse(WebAssets.Read("world.json"));
+        var points = world.RootElement.GetProperty("views").GetProperty("us").GetProperty("points");
+
+        var checkedCount = 0;
+
+        foreach (var point in points.EnumerateObject())
+        {
+            var name = point.Value[2].GetString()!;
+            Assert.Equal(point.Name, GeoIpDatabase.UsStateCode(name));
+            checkedCount++;
+        }
+
+        // The vacuity control: the 50 states and DC.
+        Assert.Equal(51, checkedCount);
+    }
+
+    [Fact]
+    public void ANameThatIsNotAStateResolvesToNothing()
+    {
+        Assert.Equal(string.Empty, GeoIpDatabase.UsStateCode(string.Empty));
+        Assert.Equal(string.Empty, GeoIpDatabase.UsStateCode("Bavaria"));
+    }
+}
