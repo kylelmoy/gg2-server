@@ -204,6 +204,8 @@ public static class ControlCommands
 
         "bot-brain" => Do(() => server.SetBotBrain(ServerSettings.ParseBotMode(Text(request, "mode")))),
 
+        "bot-difficulty" => Do(() => server.SetBotDifficulty(Int(request, "tier", -1))),
+
         _ => Error($"unknown cmd \"{cmd}\""),
     };
 
@@ -820,6 +822,11 @@ public static class ControlCommands
 
         json.Append(",\"bots\":{\"mode\":\"")
             .Append(server.Options.BotMode.ToString().ToLowerInvariant()).Append('"');
+
+        // The 1-5 tier, which is the scripted layer's combat skill whatever the
+        // brain: a policy tier drives inside an engagement, the scripted aim
+        // chain outside it.
+        json.Append(",\"difficulty\":").Append(server.Options.Bots.Difficulty);
 
         // BotBrainSpec.Name — the same string tools/bench prints in a result
         // table, so a bot watched on the panel and a number read off the bench

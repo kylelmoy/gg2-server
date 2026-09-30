@@ -143,6 +143,38 @@ public sealed class LiveSettingsTests
         Assert.Equal(2, State(harness).GetProperty("server").GetProperty("botLimit").GetInt32());
     }
 
+    /// <summary>
+    /// The tier re-skills the bots already running, in place: nobody is removed,
+    /// and a bot added afterwards gets it too.
+    /// </summary>
+    [Fact]
+    public void TheBotDifficultyReskillsRunningBotsWithoutReplacingThem()
+    {
+        using var harness = new ServerHarness(options =>
+            options.Bots = options.Bots with { Enabled = true, FillToPlayers = 3, MaxBots = 3, MinHumans = 0, Difficulty = 5 });
+
+        harness.TickUntil(() => harness.Server.BotSlots.Count == 3, "three bots");
+        var before = harness.Server.BotSlots.Select(s => GG2.Bots.ScriptedBot.Of(harness.Server.SourceOf(s))).ToArray();
+
+        AssertOk(Run(harness, """{"cmd":"bot-difficulty","tier":1}"""));
+
+        var after = harness.Server.BotSlots.Select(s => GG2.Bots.ScriptedBot.Of(harness.Server.SourceOf(s))).ToArray();
+        Assert.Equal(before, after);
+        Assert.All(after, bot => Assert.Equal(GG2.Bots.BotSkill.ForTier(1), bot!.Skill));
+        Assert.NotEqual(GG2.Bots.BotSkill.ForTier(5), GG2.Bots.BotSkill.ForTier(1));
+        Assert.Equal(1, State(harness).GetProperty("bots").GetProperty("difficulty").GetInt32());
+
+        AssertOk(Run(harness, """{"cmd":"bot-limit","max":4}"""));
+        AssertOk(Run(harness, """{"cmd":"bots","fill":4}"""));
+        harness.TickUntil(() => harness.Server.BotSlots.Count == 4, "a fourth bot");
+        Assert.All(harness.Server.BotSlots, s =>
+            Assert.Equal(GG2.Bots.BotSkill.ForTier(1), GG2.Bots.ScriptedBot.Of(harness.Server.SourceOf(s))!.Skill));
+
+        Assert.False(Run(harness, """{"cmd":"bot-difficulty","tier":0}""").GetProperty("ok").GetBoolean());
+        Assert.False(Run(harness, """{"cmd":"bot-difficulty","tier":6}""").GetProperty("ok").GetBoolean());
+        Assert.Equal(1, State(harness).GetProperty("bots").GetProperty("difficulty").GetInt32());
+    }
+
     [Fact]
     public void SwappingTheBrainReplacesEveryBotAndAPolicyNeedsACheckpoint()
     {

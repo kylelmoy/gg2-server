@@ -76,6 +76,13 @@ public readonly record struct BotSkill(
             LeadMode: BotLeadMode.Full);
     }
 
+    /// <summary>Whether <paramref name="tier"/> is one of the server's difficulty tiers.</summary>
+    /// <remarks>
+    /// <see cref="ForTier"/> clamps, so a caller that would rather refuse an
+    /// out-of-range tier than quietly run the nearest one asks this first.
+    /// </remarks>
+    public static bool IsTier(int tier) => tier is >= BotConstants.TierMin and <= BotConstants.TierMax;
+
     /// <summary>The server's 1-5 difficulty as a skill.</summary>
     /// <remarks>
     /// <c>botAdd.gml</c>: <c>0.15 + (clamped tier - 1) × 0.2</c>, so the five

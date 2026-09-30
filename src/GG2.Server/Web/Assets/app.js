@@ -85,6 +85,7 @@ function describe(body) {
     case 'team': return t('app.done.team', { team: body.team });
     case 'bot-limit': return t('app.done.botLimit', { max: body.max });
     case 'bot-brain': return t('app.done.botBrain', { mode: body.mode });
+    case 'bot-difficulty': return t('app.done.botDifficulty', { tier: body.tier });
     case 'teleport': return t('app.done.teleport');
     case 'config-set': return t('app.done.configSet');
     case 'restart': return t('app.done.restart');
@@ -1587,6 +1588,10 @@ function controls(s) {
   $('password-state').classList.toggle('is-set', s.server.passworded);
   $('password-clear').disabled = !s.server.passworded;
 
+  for (const button of document.querySelectorAll('#difficulty-seg .seg-btn')) {
+    button.classList.toggle('is-on', s.bots.difficulty === Number(button.dataset.tier));
+  }
+
   for (const button of document.querySelectorAll('#brain-seg .seg-btn')) {
     const mode = button.dataset.mode;
     button.classList.toggle('is-on', s.bots.mode === mode);
@@ -2204,6 +2209,15 @@ $('password-clear').addEventListener('click', () => send({ cmd: 'password', valu
 $('bot-limit-up').addEventListener('click', () => step($('bot-limit'), 1));
 $('bot-limit-down').addEventListener('click', () => step($('bot-limit'), -1));
 $('bot-limit-apply').addEventListener('click', () => send({ cmd: 'bot-limit', max: Number($('bot-limit').value) || 0 }));
+
+// Applied to the running bots in place, so no confirmation: nobody is removed.
+for (const button of document.querySelectorAll('#difficulty-seg .seg-btn')) {
+  button.addEventListener('click', () => {
+    const tier = Number(button.dataset.tier);
+    if (!state || state.bots.difficulty === tier) return;
+    send({ cmd: 'bot-difficulty', tier });
+  });
+}
 
 for (const button of document.querySelectorAll('#brain-seg .seg-btn')) {
   button.addEventListener('click', async () => {

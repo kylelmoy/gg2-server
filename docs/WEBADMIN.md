@@ -354,7 +354,7 @@ All JSON, all under the session cookie except the first four.
 | `POST /api/logout` | — | clears it |
 | `GET /api/state` | — | one fresh state object, run on the tick thread |
 | `GET /api/events` | — | server-sent events: `state` snapshots, `log` lines and `perf` samples |
-| `POST /api/command` | a control-port command | freeze, resume, step, speed, bots, bots-suspend, map, teleport, kick, command, say, ban, unban, bans, analytics, config-set, restart, offline, password, player-limit, autobalance, end-round, restart-round, rotation, team, bot-limit, bot-brain |
+| `POST /api/command` | a control-port command | freeze, resume, step, speed, bots, bots-suspend, map, teleport, kick, command, say, ban, unban, bans, analytics, config-set, restart, offline, password, player-limit, autobalance, end-round, restart-round, rotation, team, bot-limit, bot-brain, bot-difficulty |
 | `GET /api/config` | — | every setting, its value **in the config file**, and which are pinned or pending |
 | `GET /api/analytics` | — | who has played here, for how long and from where — `docs/ANALYTICS.md`. On a hub the sheet can also show any member, or all of them added together; "The whole fleet" there |
 | `GET /api/maps` | — | what this server could change to, plus its rotation |
@@ -656,6 +656,7 @@ which is the whole test for belonging on this list (`GameServer.Live`):
 | `team` `{slot, team}` | now | `ForceTeam`: skips the balance refusal a client's request meets, nothing else. Not slot 0. |
 | `bot-limit` `{max}` | every tick | `MaxBots`; the fill is separate. |
 | `bot-brain` `{mode}` | bot add | Rebuilt by `BotBrain.Build`, then every bot is removed and re-added with it, because a bot keeps its brain for life. A policy mode needs the checkpoint the server started with and is refused without one. The pacing loop re-arms the adaptive budget against the new arbiter. Loading a checkpoint runs on the tick thread and can make that tick late. |
+| `bot-difficulty` `{tier}` | every combat decision | 1..5, `Bots.Difficulty`. Sets `ScriptedBot.Skill` on every running bot in place, so nobody is replaced; a delay already counting down finishes on the old tier. `state` carries it as `bots.difficulty`. |
 
 **Freeze, step and speed stay off the page**, as above.
 

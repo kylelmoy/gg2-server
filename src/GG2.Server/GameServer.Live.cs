@@ -224,6 +224,38 @@ public sealed partial class GameServer
     }
 
     /// <summary>
+    /// Sets the 1-5 difficulty tier new bots are made with, and re-skills every
+    /// running one to it.
+    /// </summary>
+    /// <remarks>
+    /// Unlike the brain, a bot's <see cref="ScriptedBot.Skill"/> is read afresh
+    /// every combat decision, so nobody has to be removed for it to take: the
+    /// next aim interval uses the new cadences and cone. Anything already counting
+    /// down (an acquisition delay, a perception snapshot) finishes on the old one.
+    /// </remarks>
+    public void SetBotDifficulty(int tier)
+    {
+        if (!BotSkill.IsTier(tier))
+            throw new ArgumentException("bot difficulty must be 1..5");
+
+        _options.Bots = _options.Bots with { Difficulty = tier };
+
+        var skill = BotSkill.ForTier(tier);
+        var count = 0;
+
+        foreach (var slot in BotSlots)
+        {
+            if (ScriptedBot.Of(SourceOf(slot)) is { } bot)
+            {
+                bot.Skill = skill;
+                count++;
+            }
+        }
+
+        _log.Info($"control: bot difficulty {tier}; {count} bot(s) re-skilled");
+    }
+
+    /// <summary>
     /// Replaces the bot brain and every running bot with it.
     /// </summary>
     /// <remarks>
