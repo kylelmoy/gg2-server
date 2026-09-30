@@ -2456,6 +2456,48 @@ $('fleet-open').addEventListener('click', async () => {
   await loadFleet();
 });
 
+/** One command to every member; a toast per member that refused. */
+async function broadcast(body, done) {
+  let reply;
+
+  try {
+    reply = await fleetPost('/api/fleet/broadcast', body);
+  } catch {
+    toast('the hub did not answer', 'bad');
+    return;
+  }
+
+  if (!reply.ok) { toast(reply.error || 'refused', 'bad'); return; }
+
+  const refused = reply.results.filter((r) => !r.reply.ok);
+  for (const r of refused) toast(`${r.name}: ${r.reply.error || 'refused'}`, 'bad');
+
+  const count = reply.results.length - refused.length;
+  toast(`${done} on ${count} server${count === 1 ? '' : 's'}`, count > 0 ? 'good' : 'bad');
+  await loadFleet();
+}
+
+$('fleet-say').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const text = $('fleet-say-text').value.trim();
+  if (!text) return;
+  await broadcast({ cmd: 'say', text }, 'Said');
+  $('fleet-say-text').value = '';
+});
+
+$('fleet-offline').addEventListener('click', async () => {
+  const sure = await ask('Take every server offline?',
+    'Everyone on every server is disconnected and new connections are refused until you bring them back online.');
+  if (sure) await broadcast({ cmd: 'offline', enabled: true }, 'Offline');
+});
+
+$('fleet-online').addEventListener('click', () => broadcast({ cmd: 'offline', enabled: false }, 'Online'));
+
+$('fleet-end-round').addEventListener('click', async () => {
+  const sure = await ask('End the round everywhere?', 'Nobody wins; every server moves on to its next map.');
+  if (sure) await broadcast({ cmd: 'end-round' }, 'Round ended');
+});
+
 $('fleet-close').addEventListener('click', () => $('fleet').close());
 $('fleet-refresh').addEventListener('click', loadFleet);
 

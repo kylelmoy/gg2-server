@@ -627,6 +627,14 @@ public sealed class WebAdminServer : IDisposable
 
                 case ("POST", "/api/fleet/adopt"):
                     return await FleetAdoptAsync(request, stream, token);
+
+                case ("POST", "/api/fleet/broadcast"):
+                    body = await _hub.BroadcastAsync(request.Body, token);
+
+                    if (body.StartsWith("{\"ok\":true", StringComparison.Ordinal))
+                        _log.Info($"fleet: sent a command to every member: {LogText.Safe(request.Body)}");
+
+                    return await JsonAsync(stream, 200, body, token);
             }
         }
 

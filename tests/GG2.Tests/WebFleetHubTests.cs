@@ -310,6 +310,27 @@ public sealed class WebFleetHubTests : IDisposable
     }
 
     [Fact]
+    public async Task ABroadcastReachesEveryMemberAndOnlyForListedVerbs()
+    {
+        var csrf = await SignInAsync();
+        await PostAsync(csrf, "/api/fleet/add", new { name = "member", url = MemberUrl, pairing = _member.Server.WebPairingCode });
+
+        var limited = await PostAsync(csrf, "/api/fleet/broadcast", new { cmd = "player-limit", value = 7 });
+        Assert.True(limited.GetProperty("ok").GetBoolean(), limited.ToString());
+
+        var result = limited.GetProperty("results")[0];
+        Assert.Equal("member", result.GetProperty("name").GetString());
+        Assert.True(result.GetProperty("reply").GetProperty("ok").GetBoolean(), result.ToString());
+
+        // The member itself says so, not just the hub.
+        var state = await GetJsonAsync("/h/member/api/state");
+        Assert.Equal(7, state.GetProperty("server").GetProperty("slots").GetInt32());
+
+        var refused = await PostAsync(csrf, "/api/fleet/broadcast", new { cmd = "restart" });
+        Assert.False(refused.GetProperty("ok").GetBoolean());
+    }
+
+    [Fact]
     public void AHubTokenMayNotSetAHostLocalSetting()
     {
         Assert.NotNull(WebAdminServer.HostLocalRefusal("""{"cmd":"config-set","settings":{"Web.AllowFrom":"0.0.0.0/0"}}"""));

@@ -553,6 +553,19 @@
     <p class="sheet-empty" id="fleet-empty" hidden>No members yet. Pair one below.</p>
 
     <section class="sheet-group">
+      <h4>Every server at once</h4>
+      <form class="fleet-say" id="fleet-say" autocomplete="off">
+        <input type="text" id="fleet-say-text" maxlength="120" placeholder="Say something on every server" spellcheck="true">
+        <button class="btn" type="submit">Say</button>
+      </form>
+      <div class="btn-row fleet-actions">
+        <button class="btn btn-quiet btn-warn" type="button" id="fleet-offline">Take all offline</button>
+        <button class="btn btn-quiet" type="button" id="fleet-online">Bring all online</button>
+        <button class="btn btn-quiet" type="button" id="fleet-end-round">End the round everywhere</button>
+      </div>
+    </section>
+
+    <section class="sheet-group">
       <h4>Pair a server</h4>
       <p class="hint">
         On the server to add, set <code>[Web] Certificate=auto</code>, <code>FleetMember=1</code>,

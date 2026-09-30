@@ -166,6 +166,55 @@ public sealed class FleetHub : IDisposable
     }
 
     /// <summary>
+    /// The commands the hub will send to every member at once.
+    /// </summary>
+    /// <remarks>
+    /// An allowlist, and deliberately short: a chat line, taking the fleet
+    /// offline and back, the player and bot limits, ending the round. Anything
+    /// that should be decided per server — a map, a kick, a ban, a restart — stays
+    /// on that server's own dashboard, where the operator can see who it hits.
+    /// </remarks>
+    public static readonly IReadOnlySet<string> BroadcastVerbs =
+        new HashSet<string>(StringComparer.Ordinal) { "say", "offline", "player-limit", "bot-limit", "end-round" };
+
+    /// <summary>Sends one command to every member at once; each member's reply by name.</summary>
+    public async Task<string> BroadcastAsync(string body, CancellationToken token)
+    {
+        string? verb;
+
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            verb = document.RootElement.TryGetProperty("cmd", out var cmd) ? cmd.GetString() : null;
+        }
+        catch (JsonException)
+        {
+            return ControlCommands.Error("not JSON");
+        }
+
+        if (verb is null || !BroadcastVerbs.Contains(verb))
+            return ControlCommands.Error($"\"{verb}\" is not sent fleet-wide; use that server's own dashboard");
+
+        var members = Members;
+        var replies = await Task.WhenAll(members.Select(member => CommandAsync(member.Name, body, token)));
+
+        var json = new StringBuilder(1024);
+        json.Append("{\"ok\":true,\"results\":[");
+
+        for (var i = 0; i < members.Count; i++)
+        {
+            if (i > 0)
+                json.Append(',');
+
+            json.Append("{\"name\":\"").Append(ControlCommands.Escape(members[i].Name)).Append("\",\"reply\":")
+                .Append(replies[i]).Append('}');
+        }
+
+        json.Append("]}");
+        return json.ToString();
+    }
+
+    /// <summary>
     /// Adopt: where a member's own file differs from what the fleet settings
     /// would give it, and — with <paramref name="ids"/> — writes those values
     /// into its overrides or into the shared settings.

@@ -1477,3 +1477,7 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 @media (max-width: 640px) {
   .fleet-add { grid-template-columns: minmax(0, 1fr); }
 }
+
+.fleet-say { display: flex; gap: 8px; margin: 12px 0 10px; }
+.fleet-say input { flex: 1; }
+.fleet-actions { flex-wrap: wrap; gap: 8px; }

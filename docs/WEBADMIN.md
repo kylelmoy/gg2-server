@@ -292,6 +292,12 @@ one. Host-local settings are never compared. **Secrets cannot be adopted** —
 `config` never sends a secret's value — so the dialog names the ones the member
 has set and they are entered on the settings page by hand.
 
+**Every server at once** (the Fleet sheet; `POST /api/fleet/broadcast` with a
+control command) sends one command to every member and reports each reply. Only
+`FleetHub.BroadcastVerbs` go — `say`, `offline`, `player-limit`, `bot-limit`,
+`end-round`. A map, a kick, a ban or a restart is decided per server, on that
+server's dashboard.
+
 **A hub token cannot set a host-local setting through `config-set` either**
 (`WebAdminServer.HostLocalRefusal`, a 403). The member's own password still can,
 from its own panel.
