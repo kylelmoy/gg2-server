@@ -218,7 +218,14 @@ h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
 
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
 
-.login-mark { display: flex; justify-content: center; margin-bottom: 16px; }
+.login-mark { display: flex; justify-content: center; margin-bottom: 20px; }
+
+/* The Phosphor wordmark. Scales down with a narrow card rather than clipping. */
+.login-wordmark { display: block; max-width: 100%; height: auto; border-radius: var(--radius-lg); }
+
+/* The cursor blinks at a terminal's rate, in whole steps rather than a fade. */
+.login-cursor { animation: cursor-blink 1.06s steps(1) infinite; }
+@keyframes cursor-blink { 50% { opacity: 0; } }
 .login-card h1 { font: 600 1.5rem/1.1 var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; }
 
 .login-name {

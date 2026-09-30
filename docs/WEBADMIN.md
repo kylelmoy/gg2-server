@@ -494,11 +494,12 @@ ends in system faces, so a missing file degrades rather than breaks.
 `WebAdminTests.ThePageIsServedWithoutSigningIn` checks each font route returns
 WOFF2 bytes.
 
-**The mark is `favicon.svg`, and every logo on both pages is that file.** It is
-"gg2" in a hand-drawn 4-pixel console face, amber `#ffb347` on a near-black
-tile, drawn on a 16 × 16 grid with `shape-rendering="crispEdges"`. It is sharp
-only at whole multiples of 16 px, so it is placed at 32 (top bars) and 48 (the
-sign-in card). **The game's own icon (`Source/gg2/game icon.ico`) is not used**:
+**The mark is `favicon.svg`, and both top bars show that file.** It is "gg2"
+in a hand-drawn 4-pixel console face, amber `#ffb347` on a near-black tile,
+drawn on a 16 × 16 grid with `shape-rendering="crispEdges"`. It is sharp only
+at whole multiples of 16 px, so the top bars place it at 32. The sign-in card
+has the large form, inline in `index.html`: the same pixels on a CRT screen with
+a glow, scanlines and a blinking cursor, which reduced motion holds lit. **The game's own icon (`Source/gg2/game icon.ico`) is not used**:
 it is a copy of the Team Fortress 2 logo, which is Valve's mark, and GG2's MPL
 licence cannot grant it.
 

@@ -17,7 +17,9 @@
 <main id="login" class="login" hidden>
   <form class="login-card" id="login-form" autocomplete="on">
     <div class="login-mark">
-      <img class="mark" src="/favicon.svg" width="48" height="48" alt="">
+      <!-- The favicon's pixels, large: a CRT with a glow, scanlines and a
+           blinking cursor. Drawn from the same 16-grid console face. -->
+      <svg class="login-wordmark" viewBox="0 0 22 12" width="220" height="120" shape-rendering="crispEdges" role="img" aria-label="gg2"><defs><filter id="mark-glow" x="-20%" y="-40%" width="140%" height="180%"><feGaussianBlur stdDeviation="0.45" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter><pattern id="mark-scan" width="1" height="0.5" patternUnits="userSpaceOnUse"><rect y="0.36" width="1" height="0.14" fill="#0f0d0b" fill-opacity="0.55"/></pattern></defs><rect width="22" height="12" rx="1" fill="#0f0d0b"/><g filter="url(#mark-glow)" fill="#ffb347"><rect x="13" y="2" width="2" height="1"/><rect x="12" y="3" width="1" height="1"/><rect x="15" y="3" width="1" height="1"/><rect x="3" y="4" width="3" height="1"/><rect x="8" y="4" width="3" height="1"/><rect x="15" y="4" width="1" height="1"/><rect x="2" y="5" width="1" height="1"/><rect x="5" y="5" width="1" height="1"/><rect x="7" y="5" width="1" height="1"/><rect x="10" y="5" width="1" height="1"/><rect x="14" y="5" width="1" height="1"/><rect x="2" y="6" width="1" height="1"/><rect x="5" y="6" width="1" height="1"/><rect x="7" y="6" width="1" height="1"/><rect x="10" y="6" width="1" height="1"/><rect x="13" y="6" width="1" height="1"/><rect x="3" y="7" width="3" height="1"/><rect x="8" y="7" width="3" height="1"/><rect x="12" y="7" width="4" height="1"/><rect x="5" y="8" width="1" height="1"/><rect x="10" y="8" width="1" height="1"/><rect x="3" y="9" width="2" height="1"/><rect x="8" y="9" width="2" height="1"/><rect class="login-cursor" x="17" y="4" width="3" height="4"/></g><rect width="22" height="12" rx="1" fill="url(#mark-scan)"/></svg>
     </div>
     <h1>gg2-server</h1>
     <p class="login-name" id="login-server">&nbsp;</p>
