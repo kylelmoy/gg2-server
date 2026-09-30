@@ -57,12 +57,13 @@ function named(rows, fields) {
   });
 }
 
+/** How each metric's axis label is written. The buttons that pick one are index.html's. */
 const METRICS = {
-  unique: { label: 'unique players', format: (v) => v.toLocaleString() },
-  new: { label: 'first-time players', format: (v) => v.toLocaleString() },
-  sessions: { label: 'joins', format: (v) => v.toLocaleString() },
-  playtimeSeconds: { label: 'playtime', format: (v) => duration(v) },
-  peak: { label: 'peak concurrent', format: (v) => v.toLocaleString() },
+  unique: { format: (v) => v.toLocaleString() },
+  new: { format: (v) => v.toLocaleString() },
+  sessions: { format: (v) => v.toLocaleString() },
+  playtimeSeconds: { format: (v) => duration(v) },
+  peak: { format: (v) => v.toLocaleString() },
 };
 
 /**
@@ -87,10 +88,8 @@ function showAnalytics(data, world) {
     // ⚠️ The flag is named by the SERVER, in `hint`, and not repeated here.
     // Two copies of a flag's spelling in two languages is one copy that goes
     // stale, and the one that goes stale is the one the operator reads.
-    $('an-off').textContent =
-      'Analytics are off: nothing is counted and nothing is written. To turn them on, '
-      + `${analytics.hint || 'set an analytics file'}, then restart.`;
-    $('analytics-sub').textContent = 'not collecting';
+    $('an-off').textContent = t('analytics.off', { hint: analytics.hint || t('analytics.offHint') });
+    $('analytics-sub').textContent = t('analytics.notCollecting');
     return;
   }
 
@@ -111,7 +110,7 @@ function redrawAnalytics() {
 }
 
 function renderAnalytics() {
-  const t = analytics.totals;
+  const totals = analytics.totals;
   const fleet = analytics.fleet;
 
   $('analytics-sub').textContent = analytics.file;
@@ -121,18 +120,25 @@ function renderAnalytics() {
     : null;
 
   const isToday = today && today.date === analytics.now.slice(0, 10);
-  const peakAt = t.peakUtc ? t.peakUtc.replace('T', ' ').replace('Z', ' UTC') : '—';
+  const peakAt = totals.peakUtc
+    ? t('analytics.kpi.peakUtc', { time: totals.peakUtc.replace('T', ' ').replace('Z', '') })
+    : '—';
 
   anKpis([
-    ['players all time', t.uniquePlayers.toLocaleString(),
-      fleet ? `summed over ${fleet.hosts.length} servers` : `since ${analytics.since.slice(0, 10)}`],
-    ['joins', t.sessions.toLocaleString(), `${(t.sessions / Math.max(1, t.uniquePlayers)).toFixed(1)} per player`],
-    ['time played', duration(t.playtimeSeconds), 'connected time, everybody'],
+    [t('analytics.kpi.players'), totals.uniquePlayers.toLocaleString(),
+      fleet
+        ? t('analytics.kpi.playersSummed', { count: fleet.hosts.length })
+        : t('analytics.kpi.playersSince', { date: analytics.since.slice(0, 10) })],
+    [t('analytics.kpi.joins'), totals.sessions.toLocaleString(),
+      t('analytics.kpi.joinsPerPlayer', { rate: (totals.sessions / Math.max(1, totals.uniquePlayers)).toFixed(1) })],
+    [t('analytics.kpi.timePlayed'), duration(totals.playtimeSeconds), t('analytics.kpi.timePlayedNote')],
     // ⚠️ The busiest ONE server's peak. Per-server peaks happened at different
     // moments, so their sum is a crowd that never existed.
-    ['peak at once', String(t.peakConcurrent), fleet && t.peakHost ? `${t.peakHost}, ${peakAt}` : peakAt],
-    ['today', isToday ? today.unique.toLocaleString() : '0', isToday ? `${today.new} new` : 'nobody yet'],
-    ['connected now', String(t.live), t.live === 1 ? 'player' : 'players'],
+    [t('analytics.kpi.peak'), String(totals.peakConcurrent),
+      fleet && totals.peakHost ? t('analytics.kpi.peakOnHost', { host: totals.peakHost, at: peakAt }) : peakAt],
+    [t('analytics.kpi.today'), isToday ? today.unique.toLocaleString() : '0',
+      isToday ? t('analytics.kpi.todayNew', { count: today.new }) : t('analytics.kpi.todayNobody')],
+    [t('analytics.kpi.connected'), String(totals.live), t('analytics.kpi.connectedNote', { count: totals.live })],
   ]);
 
   drawDays();
@@ -219,7 +225,7 @@ function drawDays() {
   if (data.length === 0) {
     g.fillStyle = INK_3();
     g.font = '11px ui-monospace, Consolas, monospace';
-    g.fillText('no days recorded yet', 12, height / 2);
+    g.fillText(t('analytics.days.none'), 12, height / 2);
     return;
   }
 
@@ -282,10 +288,13 @@ function onDaysHover(event) {
   const day = bar.day;
 
   tip.hidden = false;
-  tip.textContent =
-    `${day.date} · ${day.unique} player${day.unique === 1 ? '' : 's'} `
-    + `· ${day.sessions} join${day.sessions === 1 ? '' : 's'} `
-    + `· ${duration(day.playtimeSeconds)} · peak ${day.peak}`;
+  tip.textContent = [
+    day.date,
+    t('analytics.players', { count: day.unique }),
+    t('analytics.joins', { count: day.sessions }),
+    duration(day.playtimeSeconds),
+    t('analytics.days.peak', { count: day.peak }),
+  ].join(' · ');
 
   tip.style.left = `${Math.min(Math.max(bar.x + bar.width / 2, 90), box.width - 90)}px`;
   tip.style.top = `${box.height - 8}px`;
@@ -371,7 +380,7 @@ function drawGeoMap() {
   if (!geometry) {
     g.fillStyle = INK_3();
     g.font = '11px ui-monospace, Consolas, monospace';
-    g.fillText('the map geometry could not be loaded', 12, height / 2);
+    g.fillText(t('analytics.map.noGeometry'), 12, height / 2);
     return;
   }
 
@@ -475,25 +484,25 @@ function drawGeoMap() {
   // said "296 placed" out of 300 and stopped there is the panel quietly losing
   // four people, and a reader who notices has no way to find out where.
   const parts = [anView === 'world'
-    ? `${placed.toLocaleString()} player${placed === 1 ? '' : 's'} on the map`
-    : `${placed.toLocaleString()} placed by state`];
+    ? t('analytics.map.onMap', { count: placed, n: placed.toLocaleString() })
+    : t('analytics.map.byState', { count: placed, n: placed.toLocaleString() })];
 
-  if (outOfView > 0) parts.push(`${outOfView.toLocaleString()} outside the United States`);
+  if (outOfView > 0) parts.push(t('analytics.map.outOfView', { count: outOfView, n: outOfView.toLocaleString() }));
 
-  if (noMarker > 0) parts.push(`${noMarker.toLocaleString()} in a place this map has no marker for`);
+  if (noMarker > 0) parts.push(t('analytics.map.noMarker', { count: noMarker, n: noMarker.toLocaleString() }));
 
   if (unresolved > 0) {
     parts.push(anView === 'us' && analytics.geoip && !analytics.geoip.regions
-      ? `${unresolved.toLocaleString()} with no state — ${analytics.geoip.type} is a country-level database`
-      : `${unresolved.toLocaleString()} the database could not place`);
+      ? t('analytics.map.noState', { count: unresolved, n: unresolved.toLocaleString(), type: analytics.geoip.type })
+      : t('analytics.map.unresolved', { count: unresolved, n: unresolved.toLocaleString() }));
   }
 
   if (!analytics.geoip) {
     parts.length = 0;
-    parts.push('No geo database is loaded, so nobody can be placed. Pass --geoip <path.mmdb>');
+    parts.push(t('analytics.map.noGeoip'));
   }
 
-  note.textContent = parts.join(' · ') + '.';
+  note.textContent = t('analytics.map.caption', { parts: parts.join(' · ') });
 }
 
 function onMapHover(event) {
@@ -517,9 +526,11 @@ function onMapHover(event) {
   if (!best) { tip.hidden = true; return; }
 
   tip.hidden = false;
-  tip.textContent =
-    `${best.name || best.code} · ${best.value.players} player${best.value.players === 1 ? '' : 's'} `
-    + `· ${duration(best.value.seconds)}`;
+  tip.textContent = [
+    best.name || best.code,
+    t('analytics.players', { count: best.value.players }),
+    duration(best.value.seconds),
+  ].join(' · ');
 
   tip.style.left = `${Math.min(Math.max(best.x, 90), box.width - 90)}px`;
   tip.style.top = `${best.y - best.radius}px`;
@@ -556,9 +567,9 @@ function places() {
     // A US state is named with its country, because "California" and "Germany"
     // in one column with no other cue reads as two countries.
     name.textContent = region.key === '??'
-      ? 'not resolved'
+      ? t('analytics.places.unresolved')
       : (region.key.startsWith('US-')
-        ? `${region.regionName || region.region}, United States`
+        ? t('analytics.places.usState', { state: region.regionName || region.region })
         : (region.countryName || region.country));
 
     box.appendChild(code);
@@ -591,7 +602,7 @@ function topPlayers() {
 
     // ⛔ textContent, never innerHTML. This is a name a player typed into their
     // own client, and the CSP is the second net rather than the first.
-    name.textContent = player.name || '(no name)';
+    name.textContent = player.name || t('analytics.top.noName');
     box.appendChild(name);
 
     if (player.country) {
@@ -612,7 +623,7 @@ function topPlayers() {
       box.appendChild(host);
     }
 
-    if (player.live) box.appendChild(tag('on now', 'good'));
+    if (player.live) box.appendChild(tag(t('analytics.top.onNow'), 'good'));
 
     first.appendChild(box);
     tr.appendChild(first);
@@ -622,7 +633,7 @@ function topPlayers() {
 
     const last = document.createElement('td');
     last.className = 'c-last';
-    last.textContent = player.live ? 'now' : (player.lastSeen || '').slice(0, 10);
+    last.textContent = player.live ? t('analytics.top.now') : (player.lastSeen || '').slice(0, 10);
     tr.appendChild(last);
 
     body.appendChild(tr);
@@ -638,35 +649,30 @@ function topPlayers() {
  * in a file they have not opened.
  */
 function foot() {
-  const t = analytics.totals;
-  const parts = [
-    'A "player" here is an address, hashed with a per-file salt — the protocol has no '
-    + 'account, so everybody behind one address counts once and one person on a mobile '
-    + 'network counts more than once.',
-  ];
+  const totals = analytics.totals;
+  const parts = [t('analytics.foot.player')];
 
   if (analytics.fleet) {
-    parts.push(
-      `These are ${analytics.fleet.hosts.length} servers' figures added together. Each salts its `
-      + 'hashes differently, so somebody who played on two of them is two players here, and a '
-      + "day's peak is the busiest single server's.");
+    parts.push(t('analytics.foot.fleet', { count: analytics.fleet.hosts.length }));
   }
 
   if (analytics.geoip) {
-    parts.push(
-      `Geography from ${analytics.geoip.type}, built ${analytics.geoip.built}`
-      + `${analytics.geoip.regions ? ' (with subdivisions)' : ' (countries only)'}.`);
+    const source = { type: analytics.geoip.type, built: analytics.geoip.built };
+    parts.push(analytics.geoip.regions
+      ? t('analytics.foot.geoipRegions', source)
+      : t('analytics.foot.geoipCountries', source));
   } else {
-    parts.push('No geo database is loaded.');
+    parts.push(t('analytics.foot.noGeoip'));
   }
 
-  if (t.trimmed > 0) {
-    parts.push(
-      `${t.trimmed.toLocaleString()} of the oldest player records have been dropped to stay `
-      + `under the ${t.cap.toLocaleString()} kept, so the all-time total counts a returning `
-      + 'player from before that twice.');
+  if (totals.trimmed > 0) {
+    parts.push(t('analytics.foot.trimmed', {
+      count: totals.trimmed, n: totals.trimmed.toLocaleString(), cap: totals.cap.toLocaleString(),
+    }));
   } else {
-    parts.push(`${t.tracked.toLocaleString()} of ${t.cap.toLocaleString()} player records kept.`);
+    parts.push(t('analytics.foot.kept', {
+      count: totals.tracked, n: totals.tracked.toLocaleString(), cap: totals.cap.toLocaleString(),
+    }));
   }
 
   $('an-foot').textContent = parts.join(' ');

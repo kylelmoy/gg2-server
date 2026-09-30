@@ -49,6 +49,7 @@
     <EmbeddedResource Include="Web\Assets\index.html" LogicalName="GG2.Server.Web.Assets.index.html" />
     <EmbeddedResource Include="Web\Assets\app.css" LogicalName="GG2.Server.Web.Assets.app.css" />
     <EmbeddedResource Include="Web\Assets\app.js" LogicalName="GG2.Server.Web.Assets.app.js" />
+    <EmbeddedResource Include="Web\Assets\strings.js" LogicalName="GG2.Server.Web.Assets.strings.js" />
     <EmbeddedResource Include="Web\Assets\common.js" LogicalName="GG2.Server.Web.Assets.common.js" />
     <EmbeddedResource Include="Web\Assets\analytics.js" LogicalName="GG2.Server.Web.Assets.analytics.js" />
     <EmbeddedResource Include="Web\Assets\settings.js" LogicalName="GG2.Server.Web.Assets.settings.js" />

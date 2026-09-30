@@ -49,6 +49,7 @@ public sealed class WebAssetTests
     [InlineData("index.html")]
     [InlineData("app.css")]
     [InlineData("app.js")]
+    [InlineData("strings.js")]
     [InlineData("common.js")]
     [InlineData("analytics.js")]
     [InlineData("settings.js")]
@@ -60,10 +61,10 @@ public sealed class WebAssetTests
     public void EveryAssetIsEmbedded(string name) => Assert.NotEmpty(Asset(name));
 
     /// <summary>The panel's scripts, in the order index.html loads them.</summary>
-    private static readonly string[] PanelScripts = ["common.js", "analytics.js", "settings.js", "app.js"];
+    internal static readonly string[] PanelScripts = ["strings.js", "common.js", "analytics.js", "settings.js", "app.js"];
 
     /// <summary>The settings page's scripts, in the order editor.html loads them.</summary>
-    private static readonly string[] EditorScripts = ["common.js", "settings.js", "editor.js"];
+    internal static readonly string[] EditorScripts = ["strings.js", "common.js", "settings.js", "editor.js"];
 
     /// <summary>
     /// Both pages load the scripts their script tags name, in that order — the
@@ -145,9 +146,9 @@ public sealed class WebAssetTests
         // declarations at all.
         Assert.True(declared > 50, $"only {declared} top-level names found — the scan is broken");
 
-        // The fleet page loads common.js, analytics.js and its own fleet.js.
+        // The fleet page loads strings.js, common.js, analytics.js and its own fleet.js.
         if (OperatorFile("scripts", "fleet-analytics", "fleet.js") is { } fleet)
-            Declarations([panel[0], panel[1], ("fleet.js", fleet)]);
+            Declarations([panel[0], panel[1], panel[2], ("fleet.js", fleet)]);
     }
 
     private static int Declarations((string Name, string Text)[] scripts)

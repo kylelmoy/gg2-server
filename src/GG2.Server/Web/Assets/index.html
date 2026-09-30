@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <meta name="robots" content="noindex, nofollow">
-<title>gg2-server</title>
+<title data-t="page.title"></title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
 
 <!-- Shown until /api/session answers, so the page never flashes the wrong view. -->
-<div id="boot" class="boot"><div class="spinner" aria-label="Loading"></div></div>
+<div id="boot" class="boot"><div class="spinner" data-t-aria-label="page.boot.loading"></div></div>
 
 <main id="login" class="login" hidden>
   <form class="login-card" id="login-form" autocomplete="on">
@@ -21,21 +21,19 @@
            blinking cursor. Drawn from the same 16-grid console face. -->
       <svg class="login-wordmark" viewBox="0 0 22 12" width="220" height="120" shape-rendering="crispEdges" role="img" aria-label="gg2"><defs><filter id="mark-glow" x="-20%" y="-40%" width="140%" height="180%"><feGaussianBlur stdDeviation="0.45" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter><pattern id="mark-scan" width="1" height="0.5" patternUnits="userSpaceOnUse"><rect y="0.36" width="1" height="0.14" fill="#0f0d0b" fill-opacity="0.55"/></pattern></defs><rect width="22" height="12" rx="1" fill="#0f0d0b"/><g filter="url(#mark-glow)" fill="#ffb347"><rect x="13" y="2" width="2" height="1"/><rect x="12" y="3" width="1" height="1"/><rect x="15" y="3" width="1" height="1"/><rect x="3" y="4" width="3" height="1"/><rect x="8" y="4" width="3" height="1"/><rect x="15" y="4" width="1" height="1"/><rect x="2" y="5" width="1" height="1"/><rect x="5" y="5" width="1" height="1"/><rect x="7" y="5" width="1" height="1"/><rect x="10" y="5" width="1" height="1"/><rect x="14" y="5" width="1" height="1"/><rect x="2" y="6" width="1" height="1"/><rect x="5" y="6" width="1" height="1"/><rect x="7" y="6" width="1" height="1"/><rect x="10" y="6" width="1" height="1"/><rect x="13" y="6" width="1" height="1"/><rect x="3" y="7" width="3" height="1"/><rect x="8" y="7" width="3" height="1"/><rect x="12" y="7" width="4" height="1"/><rect x="5" y="8" width="1" height="1"/><rect x="10" y="8" width="1" height="1"/><rect x="3" y="9" width="2" height="1"/><rect x="8" y="9" width="2" height="1"/><rect class="login-cursor" x="17" y="4" width="3" height="4"/></g><rect width="22" height="12" rx="1" fill="url(#mark-scan)"/></svg>
     </div>
-    <h1>gg2-server</h1>
-    <p class="login-name" id="login-server">&nbsp;</p>
+    <h1 data-t="page.brand"></h1>
+    <p class="login-name" id="login-server"> </p>
 
     <label class="field">
-      <span>Password</span>
+      <span data-t="page.login.password"></span>
       <input type="password" id="password" name="password" autocomplete="current-password"
              required autofocus spellcheck="false">
     </label>
 
-    <button class="btn btn-primary btn-block" type="submit" id="login-button">Sign in</button>
+    <button class="btn btn-primary btn-block" type="submit" id="login-button" data-t="page.login.signIn"></button>
 
     <p class="login-error" id="login-error" role="alert" aria-live="polite" hidden></p>
-    <p class="login-note" id="login-insecure" hidden>
-      This connection is not encrypted. Your password crosses the network in the clear.
-    </p>
+    <p class="login-note" id="login-insecure" hidden data-t="page.login.insecure"></p>
   </form>
 </main>
 
@@ -45,90 +43,90 @@
     <div class="brand">
       <img class="mark" src="/favicon.svg" width="32" height="32" alt="">
       <div class="brand-text">
-        <strong id="server-name">gg2-server</strong>
+        <strong id="server-name" data-t="page.brand"></strong>
         <span class="brand-sub"><span id="server-port"></span></span>
       </div>
     </div>
 
     <div class="chips" id="chips">
-      <span class="chip" id="chip-map" title="Current map"><i class="chip-key">map</i><b>—</b></span>
-      <span class="chip" id="chip-mode" title="Gamemode"><i class="chip-key">mode</i><b>—</b></span>
+      <span class="chip" id="chip-map" data-t-title="page.topbar.mapTitle"><i class="chip-key" data-t="page.topbar.map"></i><b>—</b></span>
+      <span class="chip" id="chip-mode" data-t-title="page.topbar.modeTitle"><i class="chip-key" data-t="page.topbar.mode"></i><b>—</b></span>
     </div>
 
     <div class="topbar-right">
-      <span class="live" id="live" data-state="connecting"><span class="live-dot"></span><span id="live-text">connecting</span></span>
-      <button class="btn btn-quiet" id="fleet-open" type="button" hidden>Fleet</button>
-      <button class="btn btn-quiet" id="analytics-open" type="button">Analytics</button>
-      <button class="btn btn-quiet" id="settings-open" type="button">Settings</button>
-      <button class="btn btn-quiet btn-warn" id="restart" type="button">Restart</button>
-      <button class="btn btn-quiet" id="logout" type="button">Sign out</button>
+      <span class="live" id="live" data-state="connecting"><span class="live-dot"></span><span id="live-text" data-t="page.topbar.connecting"></span></span>
+      <button class="btn btn-quiet" id="fleet-open" type="button" hidden data-t="page.topbar.fleet"></button>
+      <button class="btn btn-quiet" id="analytics-open" type="button" data-t="page.topbar.analytics"></button>
+      <button class="btn btn-quiet" id="settings-open" type="button" data-t="page.topbar.settings"></button>
+      <button class="btn btn-quiet btn-warn" id="restart" type="button" data-t="page.topbar.restart"></button>
+      <button class="btn btn-quiet" id="logout" type="button" data-t="page.topbar.signOut"></button>
     </div>
   </header>
 
   <!-- Only on a hub: one tab per server, the hub's own first. A tab is a link to
        /?host=<member>, so switching is the page load app.js relies on. -->
-  <nav class="hosts" id="hosts" aria-label="Servers" hidden></nav>
+  <nav class="hosts" id="hosts" data-t-aria-label="page.hosts.label" hidden></nav>
 
   <div class="banner" id="banner" hidden role="status"></div>
 
-  <section class="tiles" aria-label="Server health">
+  <section class="tiles" data-t-aria-label="page.tiles.label">
     <div class="tile">
-      <span class="tile-key">tick</span>
-      <span class="tile-value"><b id="tile-tick">—</b><i>ms</i></span>
+      <span class="tile-key" data-t="page.tiles.tick"></span>
+      <span class="tile-value"><b id="tile-tick">—</b><i data-t="page.tiles.ms"></i></span>
       <div class="meter"><span id="tile-tick-bar"></span></div>
-      <span class="tile-note" id="tile-tick-note">of budget</span>
+      <span class="tile-note" id="tile-tick-note" data-t="page.tiles.ofBudget"></span>
     </div>
     <div class="tile">
-      <span class="tile-key">players</span>
+      <span class="tile-key" data-t="page.tiles.players"></span>
       <span class="tile-value"><b id="tile-players">—</b><i id="tile-slots"></i></span>
       <span class="tile-note" id="tile-bots">—</span>
     </div>
     <div class="tile">
-      <span class="tile-key">uptime</span>
+      <span class="tile-key" data-t="page.tiles.uptime"></span>
       <span class="tile-value"><b id="tile-uptime">—</b></span>
-      <span class="tile-note" id="tile-state">running</span>
+      <span class="tile-note" id="tile-state" data-t="page.tiles.running"></span>
     </div>
     <div class="tile">
-      <span class="tile-key">connections</span>
+      <span class="tile-key" data-t="page.tiles.connections"></span>
       <span class="tile-value"><b id="tile-joins">—</b></span>
-      <span class="tile-note">joins since start, repeats counted</span>
+      <span class="tile-note" data-t="page.tiles.joinsNote"></span>
     </div>
   </section>
 
   <div class="grid">
 
     <div class="col col-main">
-      <section class="scoreboard" aria-label="Round">
+      <section class="scoreboard" data-t-aria-label="page.round.label">
         <div class="score score-red">
-          <span class="score-team">RED</span>
+          <span class="score-team" data-t="page.round.red"></span>
           <span class="score-value" id="score-red">0</span>
         </div>
 
         <div class="score-mid">
           <div class="clock" id="clock">--:--</div>
-          <div class="clock-sub" id="clock-sub">round</div>
-          <div class="setup" id="setup" hidden>SETUP <b id="setup-time"></b></div>
+          <div class="clock-sub" id="clock-sub" data-t="page.round.round"></div>
+          <div class="setup" id="setup" hidden><span data-t="page.round.setup"></span> <b id="setup-time"></b></div>
         </div>
 
         <div class="score score-blue">
           <span class="score-value" id="score-blue">0</span>
-          <span class="score-team">BLU</span>
+          <span class="score-team" data-t="page.round.blu"></span>
         </div>
       </section>
 
       <article class="card card-map">
         <header class="card-head">
-          <h2>Live map</h2>
+          <h2 data-t="page.liveMap.title"></h2>
           <div class="card-tools">
-            <label class="toggle" title="Click the map to move the selected player there">
+            <label class="toggle" data-t-title="page.liveMap.teleportTitle">
               <input type="checkbox" id="teleport-mode">
-              <span>Click to teleport</span>
+              <span data-t="page.liveMap.teleport"></span>
             </label>
           </div>
         </header>
         <div class="map-wrap">
           <canvas id="map" width="1200" height="700"></canvas>
-          <div class="map-empty" id="map-empty">no map loaded</div>
+          <div class="map-empty" id="map-empty" data-t="page.liveMap.empty"></div>
           <div class="map-tip" id="map-tip" hidden></div>
         </div>
         <footer class="card-foot" id="objective"></footer>
@@ -136,9 +134,9 @@
 
       <article class="card">
         <header class="card-head">
-          <h2>Players</h2>
+          <h2 data-t="page.players.title"></h2>
           <div class="card-tools">
-            <input type="search" id="filter" placeholder="Filter" spellcheck="false" aria-label="Filter players">
+            <input type="search" id="filter" data-t-placeholder="page.players.filter" spellcheck="false" data-t-aria-label="page.players.filterLabel">
           </div>
         </header>
         <div class="table-wrap">
@@ -146,19 +144,19 @@
             <thead>
               <tr>
                 <th class="c-slot">#</th>
-                <th class="c-name">Player</th>
-                <th class="c-class">Class</th>
-                <th class="c-hp">Health</th>
-                <th class="c-num">K</th>
-                <th class="c-num">D</th>
-                <th class="c-num">Caps</th>
-                <th class="c-num">Pts</th>
+                <th class="c-name" data-t="page.players.player"></th>
+                <th class="c-class" data-t="page.players.class"></th>
+                <th class="c-hp" data-t="page.players.health"></th>
+                <th class="c-num" data-t="page.players.kills"></th>
+                <th class="c-num" data-t="page.players.deaths"></th>
+                <th class="c-num" data-t="page.players.caps"></th>
+                <th class="c-num" data-t="page.players.points"></th>
                 <th class="c-act"></th>
               </tr>
             </thead>
             <tbody id="roster"></tbody>
           </table>
-          <p class="empty" id="roster-empty" hidden>Nobody is connected.</p>
+          <p class="empty" id="roster-empty" hidden data-t="page.players.empty"></p>
         </div>
       </article>
 
@@ -170,27 +168,27 @@
       -->
       <details class="card sys perf" id="perf" open>
         <summary class="card-head">
-          <h2>Performance</h2>
+          <h2 data-t="page.perf.title"></h2>
           <div class="card-tools" id="perf-tools">
             <span class="at" id="chart-at" hidden></span>
-            <div class="seg seg-sm" id="range-seg" role="group" aria-label="Time range">
-              <button class="seg-btn" data-range="60" type="button">1m</button>
-              <button class="seg-btn" data-range="180" type="button">3m</button>
-              <button class="seg-btn is-on" data-range="300" type="button">5m</button>
+            <div class="seg seg-sm" id="range-seg" role="group" data-t-aria-label="page.common.timeRange">
+              <button class="seg-btn" data-range="60" type="button" data-t="page.perf.range1m"></button>
+              <button class="seg-btn" data-range="180" type="button" data-t="page.perf.range3m"></button>
+              <button class="seg-btn is-on" data-range="300" type="button" data-t="page.perf.range5m"></button>
             </div>
           </div>
         </summary>
 
         <div class="charts" id="charts"></div>
 
-        <p class="chart-axis"><span id="axis-from">5 minutes ago</span><span>now</span></p>
+        <p class="chart-axis"><span id="axis-from" data-t="page.perf.fiveMinutesAgo"></span><span data-t="page.perf.now"></span></p>
 
         <footer class="card-foot kpis">
-          <span class="kpi"><i>ticks/s</i><b id="kpi-rate">—</b></span>
-          <span class="kpi"><i>late ticks</i><b id="kpi-late">—</b></span>
-          <span class="kpi"><i>worst overrun</i><b id="kpi-worst">—</b></span>
-          <span class="kpi"><i>sent</i><b id="kpi-sent">—</b></span>
-          <span class="kpi"><i>gc/s</i><b id="kpi-gc">—</b></span>
+          <span class="kpi"><i data-t="page.perf.ticksPerSecond"></i><b id="kpi-rate">—</b></span>
+          <span class="kpi"><i data-t="page.perf.lateTicks"></i><b id="kpi-late">—</b></span>
+          <span class="kpi"><i data-t="page.perf.worstOverrun"></i><b id="kpi-worst">—</b></span>
+          <span class="kpi"><i data-t="page.perf.sent"></i><b id="kpi-sent">—</b></span>
+          <span class="kpi"><i data-t="page.perf.gcPerSecond"></i><b id="kpi-gc">—</b></span>
         </footer>
       </details>
 
@@ -201,7 +199,7 @@
       -->
       <details class="card sys" id="system" open>
         <summary class="card-head">
-          <h2>System</h2>
+          <h2 data-t="page.system.title"></h2>
           <span class="sys-peek" id="sys-peek">—</span>
         </summary>
         <div class="sys-body" id="sys-body"></div>
@@ -211,93 +209,93 @@
     <div class="col col-side">
       <article class="card card-log">
         <header class="card-head">
-          <h2>Log</h2>
+          <h2 data-t="page.log.title"></h2>
           <div class="card-tools">
-            <label class="toggle"><input type="checkbox" id="log-follow" checked><span>Follow</span></label>
+            <label class="toggle"><input type="checkbox" id="log-follow" checked><span data-t="page.log.follow"></span></label>
           </div>
         </header>
         <div class="log" id="log" role="log" aria-live="off"></div>
       </article>
 
       <article class="card">
-        <header class="card-head"><h2>Game</h2></header>
+        <header class="card-head"><h2 data-t="page.game.title"></h2></header>
         <div class="card-body stack">
           <div class="control">
-            <label>Server</label>
+            <label data-t="page.game.server"></label>
             <div class="btn-row">
-              <button class="btn btn-danger" id="offline" type="button">Take offline</button>
+              <button class="btn btn-danger" id="offline" type="button" data-t="page.game.takeOffline"></button>
             </div>
-            <p class="hint" id="offline-hint">Disconnects every player, refuses new connections and removes the bots. This panel stays up; bring it back online from here.</p>
+            <p class="hint" id="offline-hint" data-t="page.game.offlineHint"></p>
           </div>
 
           <div class="btn-row">
-            <button class="btn btn-primary" id="end-round" type="button">End round</button>
-            <button class="btn" id="restart-round" type="button">Restart round</button>
+            <button class="btn btn-primary" id="end-round" type="button" data-t="page.game.endRound"></button>
+            <button class="btn" id="restart-round" type="button" data-t="page.game.restartRound"></button>
           </div>
-          <p class="hint">End round goes to the next map in the rotation; restart plays this map again from the start. Both run the usual ten-second round end.</p>
+          <p class="hint" data-t="page.game.roundHint"></p>
 
-          <label class="toggle toggle-row"><input type="checkbox" id="autobalance"><span>Autobalance teams</span></label>
+          <label class="toggle toggle-row"><input type="checkbox" id="autobalance"><span data-t="page.game.autobalance"></span></label>
 
           <div class="control">
-            <label for="player-limit">Player limit</label>
+            <label for="player-limit" data-t="page.game.playerLimit"></label>
             <div class="stepper">
-              <button class="btn btn-icon" id="limit-down" type="button" aria-label="Fewer seats">−</button>
+              <button class="btn btn-icon" id="limit-down" type="button" data-t-aria-label="page.game.fewerSeats">−</button>
               <input type="number" id="player-limit" min="1" max="48" value="10" inputmode="numeric">
-              <button class="btn btn-icon" id="limit-up" type="button" aria-label="More seats">+</button>
-              <button class="btn btn-primary" id="limit-apply" type="button">Apply</button>
+              <button class="btn btn-icon" id="limit-up" type="button" data-t-aria-label="page.game.moreSeats">+</button>
+              <button class="btn btn-primary" id="limit-apply" type="button" data-t="page.common.apply"></button>
             </div>
-            <p class="hint">Seats for people, 1..48. Bots do not take one. Lowering it removes nobody.</p>
+            <p class="hint" data-t="page.game.limitHint"></p>
           </div>
 
           <form class="control" id="password-form" autocomplete="off">
-            <label for="game-password">Join password <span class="label-state" id="password-state">none</span></label>
+            <label for="game-password"><span data-t="page.game.joinPassword"></span> <span class="label-state" id="password-state" data-t="page.game.passwordNone"></span></label>
             <div class="row">
-              <input type="text" id="game-password" maxlength="255" placeholder="New password" spellcheck="false" autocomplete="off">
-              <button class="btn btn-primary" id="password-set" type="submit">Set</button>
-              <button class="btn" id="password-clear" type="button">Clear</button>
+              <input type="text" id="game-password" maxlength="255" data-t-placeholder="page.game.newPassword" spellcheck="false" autocomplete="off">
+              <button class="btn btn-primary" id="password-set" type="submit" data-t="page.game.set"></button>
+              <button class="btn" id="password-clear" type="button" data-t="page.game.clear"></button>
             </div>
-            <p class="hint">Asked of the next players to join; nobody already in is removed.</p>
+            <p class="hint" data-t="page.game.passwordHint"></p>
           </form>
 
-          <p class="hint live-note">Changes on this page apply now and last until the server restarts. They are not saved to the config file; Settings is for that.</p>
+          <p class="hint live-note" data-t="page.game.liveNote"></p>
         </div>
       </article>
 
       <article class="card">
-        <header class="card-head"><h2>Bots</h2></header>
+        <header class="card-head"><h2 data-t="page.bots.title"></h2></header>
         <div class="card-body stack">
           <div class="control">
-            <label for="bots">Fill the server to</label>
+            <label for="bots" data-t="page.bots.fillTo"></label>
             <div class="stepper">
-              <button class="btn btn-icon" id="bots-down" type="button" aria-label="Fewer bots">−</button>
+              <button class="btn btn-icon" id="bots-down" type="button" data-t-aria-label="page.bots.fewer">−</button>
               <input type="number" id="bots" min="0" max="48" value="0" inputmode="numeric">
-              <button class="btn btn-icon" id="bots-up" type="button" aria-label="More bots">+</button>
-              <button class="btn btn-primary" id="bots-apply" type="button">Apply</button>
+              <button class="btn btn-icon" id="bots-up" type="button" data-t-aria-label="page.bots.more">+</button>
+              <button class="btn btn-primary" id="bots-apply" type="button" data-t="page.common.apply"></button>
             </div>
-            <p class="hint">Players in total, people and bots together. 0 turns bots off. Humans always displace bots.</p>
+            <p class="hint" data-t="page.bots.fillHint"></p>
             <p class="hint warn" id="bots-warn" hidden></p>
           </div>
 
           <div class="control">
-            <label for="bot-limit">Bot limit</label>
+            <label for="bot-limit" data-t="page.bots.limit"></label>
             <div class="stepper">
-              <button class="btn btn-icon" id="bot-limit-down" type="button" aria-label="Lower bot limit">−</button>
+              <button class="btn btn-icon" id="bot-limit-down" type="button" data-t-aria-label="page.bots.lowerLimit">−</button>
               <input type="number" id="bot-limit" min="0" max="48" value="8" inputmode="numeric">
-              <button class="btn btn-icon" id="bot-limit-up" type="button" aria-label="Raise bot limit">+</button>
-              <button class="btn btn-primary" id="bot-limit-apply" type="button">Apply</button>
+              <button class="btn btn-icon" id="bot-limit-up" type="button" data-t-aria-label="page.bots.raiseLimit">+</button>
+              <button class="btn btn-primary" id="bot-limit-apply" type="button" data-t="page.common.apply"></button>
             </div>
-            <p class="hint">The most bots at once, whatever the fill.</p>
+            <p class="hint" data-t="page.bots.limitHint"></p>
           </div>
 
           <div class="control">
-            <label>Brain</label>
-            <div class="seg" id="brain-seg" role="group" aria-label="Bot brain">
-              <button class="seg-btn" data-mode="scripted" type="button">Scripted</button>
-              <button class="seg-btn" data-mode="search" type="button">Search</button>
-              <button class="seg-btn" data-mode="policy" type="button">Policy</button>
-              <button class="seg-btn" data-mode="tiered" type="button">Tiered</button>
+            <label data-t="page.bots.brain"></label>
+            <div class="seg" id="brain-seg" role="group" data-t-aria-label="page.bots.brainLabel">
+              <button class="seg-btn" data-mode="scripted" type="button" data-t="page.bots.scripted"></button>
+              <button class="seg-btn" data-mode="search" type="button" data-t="page.bots.search"></button>
+              <button class="seg-btn" data-mode="policy" type="button" data-t="page.bots.policy"></button>
+              <button class="seg-btn" data-mode="tiered" type="button" data-t="page.bots.tiered"></button>
             </div>
-            <p class="hint" id="brain-seg-note">Changing it replaces every bot.</p>
+            <p class="hint" id="brain-seg-note" data-t="page.bots.brainChange"></p>
           </div>
 
           <!--
@@ -309,7 +307,7 @@
           -->
           <div class="brain" id="brain">
             <div class="brain-head">
-              <span class="brain-key">brain</span>
+              <span class="brain-key" data-t="page.bots.brainKey"></span>
               <b id="brain-name">—</b>
             </div>
             <div class="brain-tiers" id="brain-tiers"></div>
@@ -319,38 +317,38 @@
       </article>
 
       <article class="card">
-        <header class="card-head"><h2>Map</h2></header>
+        <header class="card-head"><h2 data-t="page.mapCard.title"></h2></header>
         <div class="card-body stack">
           <div class="control">
-            <label for="map-pick">Change to</label>
+            <label for="map-pick" data-t="page.mapCard.changeTo"></label>
             <div class="row">
-              <input list="map-list" id="map-pick" placeholder="Search maps" spellcheck="false" autocomplete="off">
+              <input list="map-list" id="map-pick" data-t-placeholder="page.mapCard.search" spellcheck="false" autocomplete="off">
               <datalist id="map-list"></datalist>
-              <button class="btn btn-primary" id="map-go" type="button">Go</button>
+              <button class="btn btn-primary" id="map-go" type="button" data-t="page.mapCard.go"></button>
             </div>
-            <p class="hint">Ends the round immediately for everyone on the server.</p>
+            <p class="hint" data-t="page.mapCard.changeHint"></p>
           </div>
 
           <div class="control rotation">
-            <label for="rotation-pick">Rotation</label>
+            <label for="rotation-pick" data-t="page.mapCard.rotation"></label>
             <ol class="rot-list" id="rotation-list"></ol>
-            <p class="hint" id="rotation-empty">No rotation: the server stays on the map it is on.</p>
+            <p class="hint" id="rotation-empty" data-t="page.mapCard.rotationEmpty"></p>
             <div class="row">
-              <input list="map-list" id="rotation-pick" placeholder="Add a map" spellcheck="false" autocomplete="off">
-              <button class="btn" id="rotation-add" type="button">Add</button>
+              <input list="map-list" id="rotation-pick" data-t-placeholder="page.mapCard.addMap" spellcheck="false" autocomplete="off">
+              <button class="btn" id="rotation-add" type="button" data-t="page.mapCard.add"></button>
             </div>
           </div>
         </div>
       </article>
 
       <article class="card card-chat">
-        <header class="card-head"><h2>Chat</h2></header>
+        <header class="card-head"><h2 data-t="page.chat.title"></h2></header>
         <div class="chat" id="chat" role="log" aria-live="polite"></div>
-        <p class="empty" id="chat-empty">Nothing said yet.</p>
+        <p class="empty" id="chat-empty" data-t="page.chat.empty"></p>
         <form class="chat-form" id="chat-form" autocomplete="off">
           <div class="row">
-            <input id="chat-input" maxlength="255" placeholder="Say something" aria-label="Message">
-            <button class="btn btn-primary" id="chat-send" type="submit">Send</button>
+            <input id="chat-input" maxlength="255" data-t-placeholder="page.chat.placeholder" data-t-aria-label="page.chat.messageLabel">
+            <button class="btn btn-primary" id="chat-send" type="submit" data-t="page.chat.send"></button>
           </div>
           <p class="hint" id="chat-hint"></p>
         </form>
@@ -359,7 +357,7 @@
   </div>
 
   <footer class="foot">
-    <span id="foot-note">gg2-server web admin</span>
+    <span id="foot-note" data-t="page.foot"></span>
   </footer>
 </div>
 
@@ -384,13 +382,13 @@
 <dialog class="sheet cfg-sheet" id="settings" aria-labelledby="settings-title">
   <header class="sheet-head">
     <div>
-      <h3 id="settings-title">Settings</h3>
+      <h3 id="settings-title" data-t="page.settings.title"></h3>
       <p class="sheet-sub" id="settings-file">—</p>
     </div>
     <div class="sheet-tools">
-      <input type="search" id="settings-filter" placeholder="Filter settings"
-             spellcheck="false" autocomplete="off" aria-label="Filter settings">
-      <button class="btn btn-quiet" id="settings-close" type="button" aria-label="Close">Close</button>
+      <input type="search" id="settings-filter" data-t-placeholder="page.settings.filter"
+             spellcheck="false" autocomplete="off" data-t-aria-label="page.settings.filter">
+      <button class="btn btn-quiet" id="settings-close" type="button" data-t-aria-label="page.common.close" data-t="page.common.close"></button>
     </div>
   </header>
 
@@ -400,18 +398,16 @@
   </div>
 
   <div class="cfg-main">
-    <nav class="cfg-rail" id="settings-rail" aria-label="Sections"></nav>
+    <nav class="cfg-rail" id="settings-rail" data-t-aria-label="page.settings.sections"></nav>
     <div class="cfg-body" id="settings-body"></div>
   </div>
 
   <footer class="sheet-foot">
-    <p class="hint" id="settings-status">
-      Saved settings take effect when the server restarts.
-    </p>
+    <p class="hint" id="settings-status" data-t="page.settings.restartNote"></p>
     <div class="btn-row">
-      <button class="btn" id="settings-revert" type="button" disabled>Revert</button>
-      <button class="btn btn-primary" id="settings-save" type="button" disabled>Save</button>
-      <button class="btn btn-warn" id="settings-save-restart" type="button" disabled>Save &amp; restart</button>
+      <button class="btn" id="settings-revert" type="button" disabled data-t="page.settings.revert"></button>
+      <button class="btn btn-primary" id="settings-save" type="button" disabled data-t="page.settings.save"></button>
+      <button class="btn btn-warn" id="settings-save-restart" type="button" disabled data-t="page.settings.saveRestart"></button>
     </div>
   </footer>
 </dialog>
@@ -432,39 +428,39 @@
 <dialog class="sheet sheet-wide" id="analytics" aria-labelledby="analytics-title">
   <header class="sheet-head">
     <div>
-      <h3 id="analytics-title">Analytics</h3>
+      <h3 id="analytics-title" data-t="page.analytics.title"></h3>
       <p class="sheet-sub" id="analytics-sub">—</p>
     </div>
     <div class="sheet-tools">
-      <button class="btn btn-quiet" id="analytics-refresh" type="button">Refresh</button>
-      <button class="btn btn-quiet" id="analytics-close" type="button" aria-label="Close">Close</button>
+      <button class="btn btn-quiet" id="analytics-refresh" type="button" data-t="page.common.refresh"></button>
+      <button class="btn btn-quiet" id="analytics-close" type="button" data-t-aria-label="page.common.close" data-t="page.common.close"></button>
     </div>
   </header>
 
   <p class="sheet-note warn" id="an-off" hidden></p>
 
   <div class="sheet-body" id="an-body">
-    <p class="sheet-empty" id="an-loading">Loading…</p>
+    <p class="sheet-empty" id="an-loading" data-t="page.common.loading"></p>
 
     <div id="an-content" hidden>
       <div class="an-kpis" id="an-kpis"></div>
 
       <section class="an-block">
         <div class="an-head">
-          <h4>Per day</h4>
+          <h4 data-t="page.analytics.perDay"></h4>
           <div class="an-head-tools">
-            <div class="seg seg-sm" id="an-metric" role="group" aria-label="What to plot">
-              <button class="seg-btn is-on" data-metric="unique" type="button">players</button>
-              <button class="seg-btn" data-metric="new" type="button">new</button>
-              <button class="seg-btn" data-metric="sessions" type="button">joins</button>
-              <button class="seg-btn" data-metric="playtimeSeconds" type="button">playtime</button>
-              <button class="seg-btn" data-metric="peak" type="button">peak</button>
+            <div class="seg seg-sm" id="an-metric" role="group" data-t-aria-label="page.analytics.whatToPlot">
+              <button class="seg-btn is-on" data-metric="unique" type="button" data-t="page.analytics.metricPlayers"></button>
+              <button class="seg-btn" data-metric="new" type="button" data-t="page.analytics.metricNew"></button>
+              <button class="seg-btn" data-metric="sessions" type="button" data-t="page.analytics.metricJoins"></button>
+              <button class="seg-btn" data-metric="playtimeSeconds" type="button" data-t="page.analytics.metricPlaytime"></button>
+              <button class="seg-btn" data-metric="peak" type="button" data-t="page.analytics.metricPeak"></button>
             </div>
-            <div class="seg seg-sm" id="an-range" role="group" aria-label="Time range">
-              <button class="seg-btn" data-days="14" type="button">14d</button>
-              <button class="seg-btn is-on" data-days="30" type="button">30d</button>
-              <button class="seg-btn" data-days="90" type="button">90d</button>
-              <button class="seg-btn" data-days="0" type="button">all</button>
+            <div class="seg seg-sm" id="an-range" role="group" data-t-aria-label="page.common.timeRange">
+              <button class="seg-btn" data-days="14" type="button" data-t="page.analytics.range14d"></button>
+              <button class="seg-btn is-on" data-days="30" type="button" data-t="page.analytics.range30d"></button>
+              <button class="seg-btn" data-days="90" type="button" data-t="page.analytics.range90d"></button>
+              <button class="seg-btn" data-days="0" type="button" data-t="page.analytics.rangeAll"></button>
             </div>
           </div>
         </div>
@@ -477,11 +473,11 @@
 
       <section class="an-block">
         <div class="an-head">
-          <h4>Where they connect from</h4>
+          <h4 data-t="page.analytics.where"></h4>
           <div class="an-head-tools">
-            <div class="seg seg-sm" id="an-view" role="group" aria-label="Map">
-              <button class="seg-btn is-on" data-view="world" type="button">World</button>
-              <button class="seg-btn" data-view="us" type="button">United States</button>
+            <div class="seg seg-sm" id="an-view" role="group" data-t-aria-label="page.analytics.mapLabel">
+              <button class="seg-btn is-on" data-view="world" type="button" data-t="page.analytics.world"></button>
+              <button class="seg-btn" data-view="us" type="button" data-t="page.analytics.us"></button>
             </div>
           </div>
         </div>
@@ -494,38 +490,38 @@
 
       <div class="an-cols">
         <section class="an-block">
-          <h4>Places</h4>
+          <h4 data-t="page.analytics.places"></h4>
           <div class="table-wrap">
             <table class="roster">
               <thead>
                 <tr>
-                  <th class="c-name">Place</th>
-                  <th class="c-num">Players</th>
-                  <th class="c-num">Joins</th>
-                  <th class="c-num">Played</th>
+                  <th class="c-name" data-t="page.analytics.place"></th>
+                  <th class="c-num" data-t="page.analytics.players"></th>
+                  <th class="c-num" data-t="page.analytics.joins"></th>
+                  <th class="c-num" data-t="page.analytics.played"></th>
                 </tr>
               </thead>
               <tbody id="an-places"></tbody>
             </table>
-            <p class="empty" id="an-places-empty" hidden>Nowhere resolved yet.</p>
+            <p class="empty" id="an-places-empty" hidden data-t="page.analytics.placesEmpty"></p>
           </div>
         </section>
 
         <section class="an-block">
-          <h4>Most time played</h4>
+          <h4 data-t="page.analytics.mostPlayed"></h4>
           <div class="table-wrap">
             <table class="roster">
               <thead>
                 <tr>
-                  <th class="c-name">Player</th>
-                  <th class="c-num">Joins</th>
-                  <th class="c-num">Played</th>
-                  <th class="c-last">Last seen</th>
+                  <th class="c-name" data-t="page.analytics.player"></th>
+                  <th class="c-num" data-t="page.analytics.joins"></th>
+                  <th class="c-num" data-t="page.analytics.played"></th>
+                  <th class="c-last" data-t="page.analytics.lastSeen"></th>
                 </tr>
               </thead>
               <tbody id="an-top"></tbody>
             </table>
-            <p class="empty" id="an-top-empty" hidden>Nobody has connected yet.</p>
+            <p class="empty" id="an-top-empty" hidden data-t="page.analytics.topEmpty"></p>
           </div>
         </section>
       </div>
@@ -543,54 +539,50 @@
 <dialog class="sheet sheet-wide" id="fleet" aria-labelledby="fleet-title">
   <header class="sheet-head">
     <div>
-      <h3 id="fleet-title">Fleet</h3>
-      <p class="sheet-sub" id="fleet-sub">The servers this hub manages.</p>
+      <h3 id="fleet-title" data-t="page.fleet.title"></h3>
+      <p class="sheet-sub" id="fleet-sub" data-t="page.fleet.sub"></p>
     </div>
     <div class="sheet-tools">
-      <a class="btn btn-quiet" href="/fleet/settings">Fleet settings</a>
-      <button class="btn btn-quiet" id="fleet-refresh" type="button">Refresh</button>
-      <button class="btn btn-quiet" id="fleet-close" type="button" aria-label="Close">Close</button>
+      <a class="btn btn-quiet" href="/fleet/settings" data-t="page.fleet.settings"></a>
+      <button class="btn btn-quiet" id="fleet-refresh" type="button" data-t="page.common.refresh"></button>
+      <button class="btn btn-quiet" id="fleet-close" type="button" data-t-aria-label="page.common.close" data-t="page.common.close"></button>
     </div>
   </header>
 
   <div class="sheet-body">
     <table class="roster fleet-table">
       <thead>
-        <tr><th>Member</th><th>Server</th><th>Map</th><th>Players</th><th>Tick</th><th>Build</th><th></th></tr>
+        <tr><th data-t="page.fleet.member"></th><th data-t="page.fleet.server"></th><th data-t="page.fleet.map"></th><th data-t="page.fleet.players"></th><th data-t="page.fleet.tick"></th><th data-t="page.fleet.build"></th><th></th></tr>
       </thead>
       <tbody id="fleet-rows"></tbody>
     </table>
-    <p class="sheet-empty" id="fleet-empty" hidden>No members yet. Pair one below.</p>
+    <p class="sheet-empty" id="fleet-empty" hidden data-t="page.fleet.empty"></p>
 
     <section class="sheet-group">
-      <h4>Every server at once</h4>
+      <h4 data-t="page.fleet.everyServer"></h4>
       <form class="fleet-say" id="fleet-say" autocomplete="off">
-        <input type="text" id="fleet-say-text" maxlength="120" placeholder="Say something on every server" spellcheck="true">
-        <button class="btn" type="submit">Say</button>
+        <input type="text" id="fleet-say-text" maxlength="120" data-t-placeholder="page.fleet.sayPlaceholder" spellcheck="true">
+        <button class="btn" type="submit" data-t="page.fleet.say"></button>
       </form>
       <div class="btn-row fleet-actions">
-        <button class="btn btn-quiet btn-warn" type="button" id="fleet-offline">Take all offline</button>
-        <button class="btn btn-quiet" type="button" id="fleet-online">Bring all online</button>
-        <button class="btn btn-quiet" type="button" id="fleet-end-round">End the round everywhere</button>
+        <button class="btn btn-quiet btn-warn" type="button" id="fleet-offline" data-t="page.fleet.allOffline"></button>
+        <button class="btn btn-quiet" type="button" id="fleet-online" data-t="page.fleet.allOnline"></button>
+        <button class="btn btn-quiet" type="button" id="fleet-end-round" data-t="page.fleet.endRoundEverywhere"></button>
       </div>
     </section>
 
     <section class="sheet-group">
-      <h4>Pair a server</h4>
-      <p class="hint">
-        On the server to add, set <code>[Web] Certificate=auto</code>, <code>FleetMember=1</code>,
-        <code>Bind=0.0.0.0</code> and <code>AllowFrom=</code> this hub's address, then restart it.
-        It prints a pairing code at startup.
-      </p>
+      <h4 data-t="page.fleet.pairTitle"></h4>
+      <p class="hint" data-t-html="page.fleet.pairHint"></p>
       <form class="fleet-add" id="fleet-add" autocomplete="off">
-        <label class="field"><span>Name</span>
-          <input type="text" id="fleet-name" required maxlength="32" spellcheck="false" placeholder="us-east"></label>
-        <label class="field"><span>Panel URL</span>
-          <input type="text" id="fleet-url" required spellcheck="false" placeholder="https://203.0.113.7:8191/"></label>
-        <label class="field fleet-pairing"><span>Pairing code</span>
+        <label class="field"><span data-t="page.fleet.name"></span>
+          <input type="text" id="fleet-name" required maxlength="32" spellcheck="false" data-t-placeholder="page.fleet.namePlaceholder"></label>
+        <label class="field"><span data-t="page.fleet.url"></span>
+          <input type="text" id="fleet-url" required spellcheck="false" data-t-placeholder="page.fleet.urlPlaceholder"></label>
+        <label class="field fleet-pairing"><span data-t="page.fleet.pairingCode"></span>
           <input type="password" id="fleet-pairing" required spellcheck="false" autocomplete="off"></label>
         <div class="btn-row btn-row-end">
-          <button class="btn btn-primary" id="fleet-add-button" type="submit">Pair</button>
+          <button class="btn btn-primary" id="fleet-add-button" type="submit" data-t="page.fleet.pair"></button>
         </div>
         <p class="login-error" id="fleet-error" role="alert" hidden></p>
       </form>
@@ -599,17 +591,19 @@
 </dialog>
 
 <dialog class="confirm" id="confirm">
-  <h3 id="confirm-title">Are you sure?</h3>
+  <h3 id="confirm-title" data-t="page.confirm.title"></h3>
   <p id="confirm-body"></p>
   <div class="btn-row btn-row-end">
-    <button class="btn" value="cancel" id="confirm-no" type="button">Cancel</button>
-    <button class="btn btn-danger" value="ok" id="confirm-yes" type="button">Confirm</button>
+    <button class="btn" value="cancel" id="confirm-no" type="button" data-t="page.confirm.cancel"></button>
+    <button class="btn btn-danger" value="ok" id="confirm-yes" type="button" data-t="page.confirm.confirm"></button>
   </div>
 </dialog>
 
-<!-- Three classic scripts in one global scope, in this order: common.js's
+<!-- Classic scripts in one global scope, in this order: strings.js is the
+     text every other one looks up, and common.js's
      helpers are used by both of the others. analytics.js is also drawn by the
      fleet page, scripts/fleet-analytics.sh. -->
+<script src="/strings.js" defer></script>
 <script src="/common.js" defer></script>
 <script src="/analytics.js" defer></script>
 <script src="/settings.js" defer></script>

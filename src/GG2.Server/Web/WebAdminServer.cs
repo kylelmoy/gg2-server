@@ -502,6 +502,9 @@ public sealed class WebAdminServer : IDisposable
             case ("GET", "/app.js"):
                 return await AssetAsync(stream, "app.js", "text/javascript; charset=utf-8", token);
 
+            case ("GET", "/strings.js"):
+                return await AssetAsync(stream, "strings.js", "text/javascript; charset=utf-8", token);
+
             case ("GET", "/common.js"):
                 return await AssetAsync(stream, "common.js", "text/javascript; charset=utf-8", token);
 

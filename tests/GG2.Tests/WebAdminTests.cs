@@ -520,7 +520,8 @@ public sealed class WebAdminTests : IDisposable
     /// serve a working binary and a broken page.
     /// </summary>
     [Theory]
-    [InlineData("/", "text/html", "<title>gg2-server</title>")]
+    [InlineData("/", "text/html", "<title data-t=\"page.title\">")]
+    [InlineData("/strings.js", "text/javascript", "const STRINGS = ")]
     [InlineData("/app.css", "text/css", ":root")]
     [InlineData("/app.js", "text/javascript", "/api/events")]
     [InlineData("/favicon.svg", "image/svg+xml", "<svg")]

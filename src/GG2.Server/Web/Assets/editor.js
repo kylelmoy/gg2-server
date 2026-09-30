@@ -118,7 +118,8 @@ async function load() {
   try {
     reply = await api('/api/model');
   } catch {
-    $('ed-body').innerHTML = '<p class="sheet-empty">The editor is not running any more.</p>';
+    $('ed-body').replaceChildren(Object.assign(document.createElement('p'),
+      { className: 'sheet-empty', textContent: t('editor.notRunning') }));
     return;
   }
 
@@ -143,11 +144,11 @@ async function load() {
  * the name is an unsaved edit in that scope.
  */
 function renderScopes() {
-  const tabs = [scopeTab('common', 'All servers', 'common.ini — every server, unless it overrides a setting',
+  const tabs = [scopeTab('common', t('editor.allServers'), t('editor.commonTabTitle'),
     Object.keys(edits.common).length > 0, false)];
 
   for (const host of model.hosts) {
-    tabs.push(scopeTab(host.dest, host.dest, host.error || `${host.name} — ${host.file}`,
+    tabs.push(scopeTab(host.dest, host.dest, host.error || t('editor.hostTabTitle', { name: host.name, file: host.file }),
       isHostDirty(host.dest), !!host.error));
   }
 
@@ -182,17 +183,14 @@ function renderNotes() {
     Object.assign(document.createElement('p'), { className: `cfg-note ${kind}`, textContent: text }));
 
   if (!model.commonExists && onHub) {
-    add('There are no fleet settings yet, so every value below is a default and Save creates them. '
-      + 'To start from a server you already run, choose it above, use Adopt… and take its values into all servers. '
-      + 'Paths and the [Web] section are not here: each server keeps its own, and a push never changes them.',
-    'warn');
+    add(t('editor.notes.noFleetSettings'), 'warn');
   } else if (!model.commonExists) {
-    add(`There is no common.ini yet, so every value below is a default and Save creates the file. `
-      + `To start from a server's current configuration instead, copy its /opt/gg2-server/shared/gg2.ini `
-      + `to ${model.directory}${model.directory.includes('\\') ? '\\' : '/'}common.ini and reload.`, 'warn');
+    add(t('editor.notes.noCommonIni', {
+      path: `${model.directory}${model.directory.includes('\\') ? '\\' : '/'}common.ini`,
+    }), 'warn');
   }
 
-  if (model.commonError) add(`common.ini: ${model.commonError}`, 'bad');
+  if (model.commonError) add(t('editor.notes.commonError', { error: model.commonError }), 'bad');
 
   if (scope === 'common') {
     for (const warning of model.warnings) add(warning, 'warn');
@@ -244,10 +242,12 @@ function render() {
   const isHost = scope !== 'common';
   const host = isHost ? model.hosts.find((h) => h.dest === scope) : null;
 
-  $('ed-title').textContent = isHost ? host.dest : 'All servers';
+  $('ed-title').textContent = isHost ? host.dest : t('editor.allServers');
   $('ed-file').textContent = isHost
-    ? `${host.name} — ${host.file}${host.exists ? '' : ' (not created yet)'} — wins over common.ini`
-    : `common.ini — every server, unless a server overrides the setting`;
+    ? (host.exists
+      ? t('editor.hostFile', { name: host.name, file: host.file })
+      : t('editor.hostFileNotCreated', { name: host.name, file: host.file }))
+    : t('editor.commonFile');
   $('ed-preview').hidden = !isHost;
   $('ed-adopt').hidden = !isHost || !onHub;
   $('ed-only-wrap').hidden = !isHost;
@@ -267,12 +267,12 @@ function render() {
     .filter((setting) => cfgMatches(setting, filter))
     .filter((setting) => !onlyOwn || hostRow(setting, scope).own)
     .map((setting) => ({
-      heading: first.includes(setting.id) ? 'This server' : setting.section,
+      heading: first.includes(setting.id) ? t('editor.thisServerGroup') : setting.section,
       node: isHost ? hostField(setting, scope) : commonField(setting),
     }));
 
   cfgRenderGroups($('ed-body'), $('ed-rail'), items,
-    onlyOwn ? 'This server overrides nothing that matches.' : 'Nothing matches that filter.');
+    onlyOwn ? t('editor.noOverridesMatch') : t('editor.noMatch'));
 
   for (const setting of model.settings) markDirty(setting);
   renderStatus();
@@ -290,13 +290,13 @@ function commonField(setting) {
     id: `f:${setting.id}`,
     value,
     placeholder: setting.secret
-      ? (setting.common.set ? 'set — type to replace' : 'not set')
-      : setting.common.resolved ? 'default — each server resolves its own' : '',
+      ? (setting.common.set ? t('editor.placeholder.secretSet') : t('editor.placeholder.secretNotSet'))
+      : setting.common.resolved ? t('editor.placeholder.commonResolved') : '',
     tags: overriding.length > 0
-      ? [{ text: `${overriding.length} override${overriding.length === 1 ? '' : 's'}`, title: `Overridden on ${names}` }]
+      ? [{ text: t('editor.overrides', { count: overriding.length }), title: t('editor.overriddenOn', { names }) }]
       : [],
     notes: overriding.length > 0
-      ? [{ text: `Overridden on ${names} — a change here does not reach ${overriding.length === 1 ? 'it' : 'them'}.` }]
+      ? [{ text: t('editor.overriddenNote', { count: overriding.length, names }) }]
       : [],
     onChange: (input) => {
       const typed = cfgRead(setting, input);
@@ -313,12 +313,12 @@ function commonField(setting) {
 function hostField(setting, dest) {
   const row = hostRow(setting, dest);
 
-  let placeholder = setting.hosts[dest].effective.resolved ? 'default — this server resolves its own' : '';
+  let placeholder = setting.hosts[dest].effective.resolved ? t('editor.placeholder.hostResolved') : '';
   if (setting.secret) {
     const effective = setting.hosts[dest].effective.set;
     placeholder = row.own
-      ? (effective ? 'set on this server — type to replace' : 'type to set on this server')
-      : (setting.common.set ? 'shared value set — type to override' : 'not set — type to set here');
+      ? (effective ? t('editor.placeholder.hostSecretSet') : t('editor.placeholder.hostSecretType'))
+      : (setting.common.set ? t('editor.placeholder.sharedSecretSet') : t('editor.placeholder.sharedSecretNotSet'));
   }
 
   const field = cfgField(setting, {
@@ -326,11 +326,11 @@ function hostField(setting, dest) {
     value: setting.secret ? (row.own && edits.hosts[dest]?.set[setting.id]) || '' : row.value,
     placeholder,
     classes: [row.own ? 'is-own' : 'is-inherited'],
-    tags: row.own ? [] : [{ text: 'shared', title: 'From common.ini. Type a value to override it on this server.' }],
+    tags: row.own ? [] : [{ text: t('editor.sharedTag'), title: t('editor.sharedTagTitle') }],
     action: row.own
       ? {
-        text: 'use shared',
-        title: 'Remove this server’s own value; it goes back to common.ini’s.',
+        text: t('editor.useShared'),
+        title: t('editor.useSharedTitle'),
         onClick: () => {
           const h = hostEdits(dest);
           delete h.set[setting.id];
@@ -371,9 +371,7 @@ function renderStatus() {
   const count = changeCount();
   $('ed-save').disabled = count === 0;
   $('ed-revert').disabled = count === 0;
-  $('ed-status').textContent = count === 0
-    ? 'No unsaved changes.'
-    : `${count} unsaved change${count === 1 ? '' : 's'}. Saving checks every server's file before writing any.`;
+  $('ed-status').textContent = count === 0 ? t('editor.status.clean') : t('editor.status.dirty', { count });
 }
 
 /* ---------- save, revert, preview ----------------------------------------- */
@@ -392,18 +390,18 @@ async function save() {
   try {
     reply = await api('/api/save', { method: 'POST', body: JSON.stringify(payload) });
   } catch {
-    toast('The editor did not answer. Nothing was saved.', 'bad');
+    toast(t('editor.toast.saveNoAnswer'), 'bad');
     renderStatus();
     return;
   }
 
   if (!reply.ok) {
-    toast(`Not saved: ${reply.error}`, 'bad');
+    toast(t('editor.toast.notSaved', { error: reply.error }), 'bad');
     renderStatus();
     return;
   }
 
-  toast(reply.written.length === 0 ? 'Nothing to write' : `Saved ${reply.written.join(', ')}`, 'good');
+  toast(reply.written.length === 0 ? t('editor.toast.nothingToWrite') : t('editor.toast.saved', { files: reply.written.join(', ') }), 'good');
   edits = freshEdits();
   await load();
 }
@@ -413,13 +411,13 @@ async function preview() {
   if (!host) return;
 
   const reply = await api(`/api/preview?host=${encodeURIComponent(host.dest)}`);
-  $('ed-preview-title').textContent = `${host.dest} — gg2.ini`;
+  $('ed-preview-title').textContent = t('editor.preview.title', { host: host.dest });
 
   if (!reply.ok) {
     $('ed-preview-sub').textContent = host.dest;
     $('ed-preview-text').textContent = reply.error;
   } else {
-    $('ed-preview-sub').textContent = `${host.dest} — sha256 ${reply.sha256}`;
+    $('ed-preview-sub').textContent = t('editor.preview.sub', { host: host.dest, sha256: reply.sha256 });
     $('ed-preview-text').textContent = reply.text;
   }
 
@@ -457,13 +455,13 @@ async function openPush() {
 
 async function checkPush() {
   const list = $('ed-push-list');
-  list.replaceChildren(pushMessage('Asking every server…', ''));
+  list.replaceChildren(pushMessage(t('editor.push.asking'), ''));
 
   let reply;
   try {
     reply = await hubPost('/api/fleet/push/check');
   } catch {
-    list.replaceChildren(pushMessage('The hub did not answer.', 'warn'));
+    list.replaceChildren(pushMessage(t('editor.push.noAnswer'), 'warn'));
     return;
   }
 
@@ -509,7 +507,7 @@ function renderPush() {
 
     if (c.unchanged && c.managed && !c.editedSincePush) {
       note.className = 'hint';
-      note.textContent = 'Up to date.';
+      note.textContent = t('editor.push.upToDate');
       tools.appendChild(adoptButton(m.name));
       return tr;
     }
@@ -517,35 +515,35 @@ function renderPush() {
     const needsForce = !c.managed || c.editedSincePush;
     note.className = needsForce ? 'hint warn' : 'hint';
     note.textContent = c.unchanged
-      ? 'Same settings; a push only marks it managed.'
-      : `${changes} line${changes === 1 ? '' : 's'} change`
-        + (!c.managed ? ' — never pushed: replaces a hand-written file.'
-          : c.editedSincePush ? ' — edited on the server since the last push.' : '.');
+      ? t('editor.push.sameSettings')
+      : !c.managed ? t('editor.push.changesNeverPushed', { count: changes })
+        : c.editedSincePush ? t('editor.push.changesEdited', { count: changes })
+          : t('editor.push.changes', { count: changes });
 
     const diff = document.createElement('button');
     diff.type = 'button';
     diff.className = 'btn btn-quiet';
-    diff.textContent = 'Diff';
+    diff.textContent = t('editor.push.diff');
     diff.addEventListener('click', () => showDiff(m));
 
     const push = document.createElement('button');
     push.type = 'button';
     push.className = needsForce ? 'btn btn-warn' : 'btn btn-primary';
-    push.textContent = needsForce ? 'Overwrite' : 'Push';
+    push.textContent = needsForce ? t('editor.push.overwrite') : t('editor.push.push');
     push.addEventListener('click', () => doPush(m, needsForce, false));
 
     const now = document.createElement('button');
     now.type = 'button';
     now.className = 'btn btn-quiet btn-warn';
-    now.textContent = 'Push & restart';
-    now.title = 'Restart at once, dropping anyone connected. Otherwise the server applies it the next time it is empty.';
+    now.textContent = t('editor.push.pushRestart');
+    now.title = t('editor.push.pushRestartTitle');
     now.addEventListener('click', () => doPush(m, needsForce, true));
 
     tools.append(diff, adoptButton(m.name), push, now);
     return tr;
   });
 
-  $('ed-push-list').replaceChildren(...(rows.length ? rows : [pushMessage('This hub has no members.', '')]));
+  $('ed-push-list').replaceChildren(...(rows.length ? rows : [pushMessage(t('editor.push.noMembers'), '')]));
 }
 
 let adopting = null;
@@ -554,8 +552,8 @@ function adoptButton(name) {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'btn btn-quiet';
-  button.textContent = 'Adopt…';
-  button.title = 'Take settings this server has that the fleet settings do not';
+  button.textContent = t('editor.adopt.button');
+  button.title = t('editor.adopt.buttonTitle');
   button.addEventListener('click', () => openAdopt(name));
   return button;
 }
@@ -563,13 +561,13 @@ function adoptButton(name) {
 async function openAdopt(name) {
   const reply = await hubPost('/api/fleet/adopt', { name });
 
-  if (!reply.ok) { toast(`${name}: ${reply.error}`, 'bad'); return; }
+  if (!reply.ok) { toast(t('editor.toast.hostError', { name, error: reply.error }), 'bad'); return; }
 
   adopting = name;
-  $('ed-adopt-title').textContent = `Adopt from ${name}`;
+  $('ed-adopt-title').textContent = t('editor.adopt.title', { name });
   $('ed-adopt-sub').textContent = reply.differences.length === 0
-    ? 'Nothing differs: this server already has what the fleet settings give it.'
-    : `${reply.differences.length} setting${reply.differences.length === 1 ? '' : 's'} differ`;
+    ? t('editor.adopt.nothingDiffers')
+    : t('editor.adopt.differ', { count: reply.differences.length });
 
   const body = $('ed-adopt-body');
   body.replaceChildren();
@@ -582,7 +580,10 @@ async function openAdopt(name) {
     const id = Object.assign(document.createElement('strong'), { textContent: d.id });
     const values = Object.assign(document.createElement('span'), {
       className: 'hint',
-      textContent: `fleet: ${d.fleet === '' ? '(empty)' : d.fleet}  →  this server: ${d.member === '' ? '(empty)' : d.member}`,
+      textContent: t('editor.adopt.values', {
+        fleet: d.fleet === '' ? t('editor.adopt.empty') : d.fleet,
+        member: d.member === '' ? t('editor.adopt.empty') : d.member,
+      }),
     });
 
     label.append(box, id, values);
@@ -590,7 +591,7 @@ async function openAdopt(name) {
   }
 
   $('ed-adopt-secrets').textContent = reply.secrets.length
-    ? `Not compared, because a secret's value never leaves a server: ${reply.secrets.join(', ')}.`
+    ? t('editor.adopt.secrets', { names: reply.secrets.join(', ') })
     : '';
 
   $('ed-adopt-common').disabled = reply.differences.length === 0;
@@ -599,44 +600,44 @@ async function openAdopt(name) {
 }
 
 async function adopt(into) {
-  if (changeCount() > 0) { toast('Save or revert your unsaved changes first.', 'bad'); return; }
+  if (changeCount() > 0) { toast(t('editor.toast.unsavedFirst'), 'bad'); return; }
 
   const ids = [...$('ed-adopt-body').querySelectorAll('input:checked')].map((box) => box.value);
-  if (ids.length === 0) { toast('Nothing ticked.', 'bad'); return; }
+  if (ids.length === 0) { toast(t('editor.toast.nothingTicked'), 'bad'); return; }
 
   const reply = await hubPost('/api/fleet/adopt', { name: adopting, ids, into });
 
-  if (!reply.ok) { toast(`Not adopted: ${reply.error}`, 'bad'); return; }
+  if (!reply.ok) { toast(t('editor.toast.notAdopted', { error: reply.error }), 'bad'); return; }
 
-  toast(`Adopted ${ids.length} setting${ids.length === 1 ? '' : 's'} from ${adopting}`, 'good');
+  toast(t('editor.toast.adopted', { count: ids.length, name: adopting }), 'good');
   $('ed-adopt-dialog').close();
   await load();
   if ($('ed-push-dialog').open) await checkPush();
 }
 
 function showDiff(m) {
-  $('ed-preview-title').textContent = `${m.name} — what a push changes`;
-  $('ed-preview-sub').textContent = `now ${m.check.current.slice(0, 12)} → after ${m.check.next.slice(0, 12)}`;
+  $('ed-preview-title').textContent = t('editor.diff.title', { name: m.name });
+  $('ed-preview-sub').textContent = t('editor.diff.sub', { now: m.check.current.slice(0, 12), after: m.check.next.slice(0, 12) });
   $('ed-preview-text').textContent = m.check.diff
     .map((d) => (d.op === '…' ? '…' : `${d.op} ${d.text}`))
-    .join('\n') || '(no line changes)';
+    .join('\n') || t('editor.diff.none');
   $('ed-preview-dialog').showModal();
 }
 
 async function doPush(m, force, restart) {
   const warning = restart
-    ? `Push to ${m.name} and restart it now? Everyone connected to it is dropped.`
+    ? t('editor.confirm.pushRestart', { name: m.name })
     : force
-      ? `Overwrite ${m.name}'s configuration? Look at the diff first: what it loses is not kept anywhere but gg2.ini.prev.`
+      ? t('editor.confirm.overwrite', { name: m.name })
       : null;
 
   if (warning && !window.confirm(warning)) return;
 
   const reply = await hubPost('/api/fleet/push', { name: m.name, expected: m.check.current, force, restart });
 
-  if (!reply.ok) toast(`${m.name}: ${reply.error}`, 'bad');
-  else if (reply.restarted) toast(`${m.name}: pushed, restarting`, 'good');
-  else toast(`${m.name}: pushed; it applies the next time nobody is connected`, 'good');
+  if (!reply.ok) toast(t('editor.toast.hostError', { name: m.name, error: reply.error }), 'bad');
+  else if (reply.restarted) toast(t('editor.toast.pushedRestarting', { name: m.name }), 'good');
+  else toast(t('editor.toast.pushed', { name: m.name }), 'good');
 
   await checkPush();
 }
@@ -644,8 +645,8 @@ async function doPush(m, force, restart) {
 /* ---------- wiring --------------------------------------------------------- */
 
 if (onHub) {
-  document.title = 'Fleet settings — gg2-server';
-  $('ed-brand').textContent = 'Fleet settings';
+  document.title = t('editor.hubPageTitle');
+  $('ed-brand').textContent = t('editor.hubBrand');
   $('ed-back').hidden = false;
 }
 

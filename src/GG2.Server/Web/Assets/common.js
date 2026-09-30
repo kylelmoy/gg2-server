@@ -1,6 +1,6 @@
 /*
  * What the admin panel and the fleet analytics page both need: the element
- * lookup, two table-cell builders, the theme tokens a canvas has to resolve,
+ * lookup, the text lookup over strings.js, two table-cell builders, the theme tokens a canvas has to resolve,
  * and the number formats.
  *
  * ⚠️ Every file here is a classic script sharing ONE global scope, so a
@@ -10,6 +10,52 @@
 'use strict';
 
 const $ = (id) => document.getElementById(id);
+
+/* ---------- text ---------------------------------------------------------- */
+
+/*
+ * The panel's text lives in strings.js and nowhere else; that file's header has
+ * the rules. t() looks a key up and fills its {placeholders}; applyStrings()
+ * fills the pages' data-t attributes, and runs once here as soon as the
+ * document is parsed. A missing key renders as the key itself — loud on the
+ * page rather than a silent blank — and WebAssetTests catches it first.
+ */
+const PLURALS = new Intl.PluralRules(STRINGS.lang);
+
+function t(key, vars) {
+  let value = STRINGS;
+  for (const part of key.split('.')) value = value == null ? undefined : value[part];
+
+  if (value != null && typeof value === 'object') {
+    value = value[PLURALS.select(vars ? vars.count : 0)] ?? value.other;
+  }
+
+  if (typeof value !== 'string') {
+    console.warn(`strings.js has no text for '${key}'`);
+    return key;
+  }
+
+  return vars ? value.replace(/\{(\w+)\}/g, (m, name) => (name in vars ? String(vars[name]) : m)) : value;
+}
+
+const STRING_ATTRIBUTES = ['title', 'placeholder', 'aria-label', 'alt'];
+
+function applyStrings(root) {
+  for (const el of root.querySelectorAll('[data-t]')) el.textContent = t(el.dataset.t);
+  for (const el of root.querySelectorAll('[data-t-html]')) el.innerHTML = t(el.dataset.tHtml);
+
+  for (const attribute of STRING_ATTRIBUTES) {
+    for (const el of root.querySelectorAll(`[data-t-${attribute}]`)) {
+      el.setAttribute(attribute, t(el.getAttribute(`data-t-${attribute}`)));
+    }
+  }
+}
+
+// ⚠️ Immediately, not on DOMContentLoaded: every page loads its scripts at the
+// end of <body>, so the markup is already there, and a later pass would
+// overwrite text the page's own startup code has just set on the same element.
+document.documentElement.lang = STRINGS.lang;
+applyStrings(document);
 
 function tag(text, kind) {
   const span = document.createElement('span');
@@ -77,8 +123,8 @@ function niceCeil(value) {
 
 function duration(seconds) {
   const s = Math.floor(seconds);
-  if (s < 60) return `${s}s`;
-  if (s < 3600) return `${Math.floor(s / 60)}m`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
-  return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h`;
+  if (s < 60) return t('common.duration.seconds', { s });
+  if (s < 3600) return t('common.duration.minutes', { m: Math.floor(s / 60) });
+  if (s < 86400) return t('common.duration.hours', { h: Math.floor(s / 3600), m: Math.floor((s % 3600) / 60) });
+  return t('common.duration.days', { d: Math.floor(s / 86400), h: Math.floor((s % 86400) / 3600) });
 }

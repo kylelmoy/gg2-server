@@ -53,42 +53,42 @@ async function send(body, quiet) {
       body: JSON.stringify(body),
     });
 
-    if (reply.status === 401) { showLogin(); return { ok: false, error: 'signed out' }; }
+    if (reply.status === 401) { showLogin(); return { ok: false, error: t('app.toast.signedOut') }; }
 
     const json = await reply.json();
 
     // A refusal is the interesting case and the server always explains itself,
     // so it is shown whether or not the caller asked to be quiet.
-    if (!json.ok) toast(json.error || 'refused', 'bad');
+    if (!json.ok) toast(json.error || t('app.toast.refused'), 'bad');
     else if (!quiet) toast(describe(body), 'good');
 
     return json;
   } catch (e) {
-    toast('the server did not answer', 'bad');
+    toast(t('app.toast.noAnswer'), 'bad');
     return { ok: false, error: String(e) };
   }
 }
 
 function describe(body) {
   switch (body.cmd) {
-    case 'bots': return `Bot fill set to ${body.fill}`;
-    case 'map': return `Changing map to ${body.name}`;
-    case 'kick': return 'Kicked';
-    case 'ban': return 'Banned';
-    case 'offline': return body.enabled ? 'Server offline' : 'Server back online';
-    case 'end-round': return 'Round ended';
-    case 'restart-round': return 'Restarting the round';
-    case 'autobalance': return `Autobalance ${body.enabled ? 'on' : 'off'}`;
-    case 'player-limit': return `Player limit ${body.value}`;
-    case 'password': return body.value ? 'Join password set' : 'Join password removed';
-    case 'rotation': return 'Rotation updated';
-    case 'team': return `Moved to ${body.team}`;
-    case 'bot-limit': return `Bot limit ${body.max}`;
-    case 'bot-brain': return `Brain ${body.mode}; bots replaced`;
-    case 'teleport': return 'Teleported';
-    case 'config-set': return 'Settings saved';
-    case 'restart': return 'Restarting';
-    default: return 'Done';
+    case 'bots': return t('app.done.botFill', { fill: body.fill });
+    case 'map': return t('app.done.map', { name: body.name });
+    case 'kick': return t('app.done.kick');
+    case 'ban': return t('app.done.ban');
+    case 'offline': return body.enabled ? t('app.done.offline') : t('app.done.online');
+    case 'end-round': return t('app.done.endRound');
+    case 'restart-round': return t('app.done.restartRound');
+    case 'autobalance': return body.enabled ? t('app.done.autobalanceOn') : t('app.done.autobalanceOff');
+    case 'player-limit': return t('app.done.playerLimit', { value: body.value });
+    case 'password': return body.value ? t('app.done.passwordSet') : t('app.done.passwordRemoved');
+    case 'rotation': return t('app.done.rotation');
+    case 'team': return t('app.done.team', { team: body.team });
+    case 'bot-limit': return t('app.done.botLimit', { max: body.max });
+    case 'bot-brain': return t('app.done.botBrain', { mode: body.mode });
+    case 'teleport': return t('app.done.teleport');
+    case 'config-set': return t('app.done.configSet');
+    case 'restart': return t('app.done.restart');
+    default: return t('app.done.generic');
   }
 }
 
@@ -138,7 +138,7 @@ function schedule() {
 
 function live(kind) {
   $('live').dataset.state = kind;
-  $('live-text').textContent = kind === 'live' ? 'live' : kind === 'lost' ? 'reconnecting' : 'connecting';
+  $('live-text').textContent = kind === 'live' ? t('app.live.live') : kind === 'lost' ? t('app.live.lost') : t('app.live.connecting');
 }
 
 /* ---------- rendering ------------------------------------------------------ */
@@ -160,7 +160,7 @@ function render(next) {
   state = next;
 
   $('server-name').textContent = next.server.name;
-  $('server-port').textContent = `:${next.server.port}`;
+  $('server-port').textContent = t('app.server.port', { port: next.server.port });
   chip('chip-map', next.map || '—');
   chip('chip-mode', spaced(next.match.mode));
 
@@ -193,11 +193,14 @@ function banner(s) {
   if (!s.match.nextMap) { node.hidden = true; return; }
 
   node.hidden = false;
-  node.replaceChildren('Changing map to ');
+  // The map's name is bold, so the sentence is split around its placeholder
+  // rather than concatenated, and a translation may put it anywhere.
+  const [before, after] = t('app.banner.changingMap', { seconds: Math.max(0, Math.ceil(s.match.changeIn / 30)) })
+    .split('{map}');
 
   const name = document.createElement('b');
   name.textContent = s.match.nextMap;
-  node.append(name, ` in ${Math.max(0, Math.ceil(s.match.changeIn / 30))}s`);
+  node.replaceChildren(before, name, after ?? '');
 }
 
 function chip(id, text) { $(id).querySelector('b').textContent = text; }
@@ -222,8 +225,8 @@ function scores(s) {
   clock.classList.toggle('low', s.round.timer > 0 && s.round.timer < 30 * 60);
 
   $('clock-sub').textContent = s.round.decided
-    ? (s.round.winner === 'Spectator' ? 'stalemate' : `${s.round.winner.toUpperCase()} wins`)
-    : `first to ${s.match.capLimit}`;
+    ? (s.round.winner === 'Spectator' ? t('app.clock.stalemate') : t('app.clock.wins', { team: s.round.winner.toUpperCase() }))
+    : t('app.clock.firstTo', { count: s.match.capLimit });
 
   $('setup').hidden = s.match.setupTimer <= 0;
   $('setup-time').textContent = mmss(s.match.setupTimer);
@@ -244,18 +247,21 @@ function tiles(s) {
   const bar = $('tile-tick-bar');
   bar.style.width = `${share}%`;
   bar.className = share > 80 ? 'high' : share > 45 ? 'mid' : '';
-  $('tile-tick-note').textContent = `${share.toFixed(1)}% of ${budget.toFixed(1)}ms`;
+  $('tile-tick-note').textContent = t('app.tiles.tickNote', { share: share.toFixed(1), budget: budget.toFixed(1) });
 
   const bots = s.players.filter((p) => p.bot).length;
   const humans = s.players.filter((p) => p.connected).length;
 
   $('tile-players').textContent = humans + bots;
-  $('tile-slots').textContent = `/ ${s.server.slots}`;
-  $('tile-bots').textContent = `${humans} human${humans === 1 ? '' : 's'}, ${bots} bot${bots === 1 ? '' : 's'}`;
+  $('tile-slots').textContent = t('app.tiles.slots', { slots: s.server.slots });
+  $('tile-bots').textContent = t('app.tiles.population', {
+    humans: t('app.tiles.humans', { count: humans }),
+    bots: t('app.tiles.bots', { count: bots }),
+  });
 
   $('tile-uptime').textContent = duration(s.server.uptimeSeconds);
-  $('tile-state').textContent = s.server.offline ? 'offline'
-    : s.frozen ? 'frozen' : s.server.idle ? 'idle (2 Hz, nobody on)' : 'running';
+  $('tile-state').textContent = s.server.offline ? t('app.tiles.offline')
+    : s.frozen ? t('app.tiles.frozen') : s.server.idle ? t('app.tiles.idle') : t('app.tiles.running');
   $('tile-state').classList.toggle('warn', s.frozen || s.server.offline);
 
   $('tile-joins').textContent = s.server.joins.toLocaleString();
@@ -263,8 +269,8 @@ function tiles(s) {
   // Where the chat box's lines go, which a player sees very differently: chat
   // through a plugin, or an on-screen notice that replaces the last one.
   $('chat-hint').textContent = s.server.chatPlugin
-    ? `Sent as ${s.players[0] ? s.players[0].name : 'the server'} through ${s.server.chatPlugin}.`
-    : 'No chat plugin is loaded, so this shows as an on-screen notice to every player.';
+    ? t('app.chat.hintPlugin', { name: s.players[0] ? s.players[0].name : t('app.chat.theServer'), plugin: s.server.chatPlugin })
+    : t('app.chat.hintNotice');
 
   const fill = $('bots');
   if (document.activeElement !== fill) fill.value = s.server.botFill;
@@ -284,14 +290,9 @@ function tiles(s) {
 
   warn.hidden = !suspended && !blocked;
   warn.textContent = suspended
-    ? `A player turned the bots off with /bots for another `
-      + `${Math.ceil(s.server.botSuspendSeconds / 60)} minute`
-      + `${Math.ceil(s.server.botSuspendSeconds / 60) === 1 ? '' : 's'}. `
-      + 'Setting a bot count here ends it.'
+    ? t('app.bots.suspended', { count: Math.ceil(s.server.botSuspendSeconds / 60) })
     : blocked
-    ? `No bots will spawn until ${s.server.botMinHumans} human`
-      + `${s.server.botMinHumans === 1 ? '' : 's'} are connected `
-      + '(--bots-min-humans). There are ' + humans + '.'
+    ? t('app.bots.blocked', { count: s.server.botMinHumans, humans })
     : '';
 }
 
@@ -336,12 +337,14 @@ function brains(s) {
     // ⚠️ The budget IN FORCE, not the one configured: MicroBudgetController moves
     // it while the server runs, so a number here that is not the one in the
     // config file is the calibration working rather than a bug.
-    parts.push(`Arbiter ${s.bots.arbiterMicroseconds.toLocaleString()} µs a tick, `
-      + `${s.bots.arbiterSpentMicroseconds.toLocaleString()} spent on the last one.`);
+    parts.push(t('app.brain.arbiter', {
+      budget: s.bots.arbiterMicroseconds.toLocaleString(),
+      spent: s.bots.arbiterSpentMicroseconds.toLocaleString(),
+    }));
   }
 
   if (all.length === 0 && s.bots.tiers.length > 0) {
-    parts.push('No bots are on the server, so nothing is driving.');
+    parts.push(t('app.brain.noBots'));
   } else if (s.bots.engage === 'humans') {
     // ⛔ The gate every tier is behind, and the reason a correctly configured
     // brain can drive far less than an operator expects — a live server hands a
@@ -351,8 +354,7 @@ function brains(s) {
     // drive. The share beside each tier above is the measurement and it is the
     // one to believe — the gate rests on PlayerState.IsBot surviving a respawn,
     // which is a simulation property this page cannot check.
-    parts.push('Controllers take the wheel against a human enemy only '
-      + '(--bot-engages-bots opens them to bot fights).');
+    parts.push(t('app.brain.humansOnly'));
   }
 
   note.textContent = parts.join(' ');
@@ -385,7 +387,7 @@ function tierRow(tier, all, share) {
   drives.textContent = tier.classes ? tier.classes.join(' · ') : '';
   // The row truncates: nine class names is a paragraph, and the row's job is the
   // count on its right.
-  if (tier.classes) drives.title = `Drives ${tier.classes.join(', ')}.`;
+  if (tier.classes) drives.title = t('app.brain.drives', { classes: tier.classes.join(', ') });
   row.appendChild(drives);
 
   const live = document.createElement('span');
@@ -396,16 +398,15 @@ function tierRow(tier, all, share) {
   const polls = micro + mine.reduce((sum, p) => sum + (p.scriptedTicks || 0), 0);
 
   live.textContent = mine.length === 0
-    ? 'no bots'
-    : `${mine.length} bot${mine.length === 1 ? '' : 's'}`
+    ? t('app.brain.tierEmpty')
+    : t('app.brain.tierBots', { count: mine.length })
       + (share && polls > 0 ? ` · ${((micro / polls) * 100).toFixed(1)}%` : '');
 
   live.classList.toggle('is-driving', driving > 0);
 
   live.title = share
-    ? `${driving} driving right now. ${micro.toLocaleString()} of `
-      + `${polls.toLocaleString()} ticks driven since each bot spawned.`
-    : 'The macro layer alone — every controller refuses these classes.';
+    ? t('app.brain.tierShare', { driving, micro: micro.toLocaleString(), polls: polls.toLocaleString() })
+    : t('app.brain.tierScripted');
 
   row.appendChild(live);
   return row;
@@ -438,7 +439,7 @@ function roster(s) {
 
   body.replaceChildren(rows);
   $('roster-empty').hidden = shown > 0;
-  $('roster-empty').textContent = filter ? 'No player matches that filter.' : 'Nobody is connected.';
+  $('roster-empty').textContent = filter ? t('app.roster.noMatch') : t('app.roster.nobody');
 }
 
 function row(player) {
@@ -468,7 +469,7 @@ function row(player) {
   // their own client, and it reaches this page unfiltered.
   name.textContent = player.name;
 
-  if (player.bot) name.appendChild(tag('BOT', 'bot'));
+  if (player.bot) name.appendChild(tag(t('app.roster.botTag'), 'bot'));
 
   // ⚠️ The brain that WILL drive this slot, lit while it actually is. A
   // controller holds the wheel only inside the engagement window, so an unlit
@@ -479,13 +480,17 @@ function row(player) {
     const polls = (player.microTicks || 0) + (player.scriptedTicks || 0);
 
     badge.title = polls > 0
-      ? `${player.brain} has driven ${((player.microTicks / polls) * 100).toFixed(1)}% of `
-        + `this bot's ticks (${player.microTicks.toLocaleString()} of ${polls.toLocaleString()})`
+      ? t('app.roster.brainShare', {
+        brain: player.brain,
+        share: ((player.microTicks / polls) * 100).toFixed(1),
+        micro: player.microTicks.toLocaleString(),
+        polls: polls.toLocaleString(),
+      })
       : player.brain;
 
     name.appendChild(badge);
   }
-  if (player.intel) name.appendChild(tag('INTEL', 'intel'));
+  if (player.intel) name.appendChild(tag(t('app.roster.intelTag'), 'intel'));
 
   wrap.appendChild(name);
   who.appendChild(wrap);
@@ -506,7 +511,7 @@ function row(player) {
   more.className = 'mini mini-plain more' + (menuFor && menuFor.slot === player.slot ? ' is-open' : '');
   more.type = 'button';
   more.textContent = '⋯';
-  more.title = `Actions for ${player.name}`;
+  more.title = t('app.roster.actionsFor', { name: player.name });
   more.setAttribute('aria-haspopup', 'menu');
   more.dataset.menu = player.slot;
   actions.appendChild(more);
@@ -554,19 +559,22 @@ function objective(s) {
   const foot = $('objective');
   const parts = [];
 
-  for (const [name, intel] of [['RED', s.redIntel], ['BLU', s.blueIntel]]) {
+  for (const [kind, intel] of [['red', s.redIntel], ['blue', s.blueIntel]]) {
     if (!intel.present) continue;
 
     const carrier = intel.carrier >= 0 ? s.players[intel.carrier] : null;
     const home = intel.x === intel.homeX && intel.y === intel.homeY;
-    const status = carrier ? `taken by ${carrier.name}` : home ? 'at base' : 'dropped';
+    const status = carrier ? t('app.objective.takenBy', { name: carrier.name })
+      : home ? t('app.objective.atBase') : t('app.objective.dropped');
+    const label = kind === 'red' ? t('app.objective.redIntel') : t('app.objective.blueIntel');
 
-    parts.push(pill(`${name} intel`, status, name === 'RED' ? 'red' : 'blue'));
+    parts.push(pill(label, status, kind));
   }
 
   s.points.forEach((point, i) => {
-    const owner = point.owner === 'None' ? 'neutral' : point.owner.toUpperCase();
-    const node = pill(`point ${i + 1}`, owner, point.owner === 'Red' ? 'red' : point.owner === 'Blue' ? 'blue' : '');
+    // The owner is the server's team name: None, Red or Blue.
+    const owner = t(`app.objective.owner.${point.owner}`);
+    const node = pill(t('app.objective.point', { number: i + 1 }), owner, point.owner === 'Red' ? 'red' : point.owner === 'Blue' ? 'blue' : '');
 
     if (point.capping !== 'None') {
       const bar = document.createElement('span');
@@ -604,7 +612,7 @@ function loadMapImage(name) {
 
   const image = new Image();
   image.onload = () => { if (mapImageName === name) { mapImage = image; drawMap(); } };
-  image.onerror = () => { $('map-empty').textContent = `no image for ${name}`; };
+  image.onerror = () => { $('map-empty').textContent = t('app.map.noImage', { name }); };
   image.src = api(`/api/map.png?name=${encodeURIComponent(name)}`);
 }
 
@@ -766,63 +774,63 @@ function toWorld(event) {
 const CHARTS = [
   {
     key: 'tick',
-    title: 'Tick time',
-    unit: 'ms',
+    title: t('app.charts.tick.title'),
+    unit: t('app.charts.tick.unit'),
     floor: 5,
     digits: 2,
     rule: (s) => s.tickBudget,
-    ruleLabel: (ms) => `${ms.toFixed(1)}ms budget`,
+    ruleLabel: (ms) => t('app.charts.tick.budget', { ms: ms.toFixed(1) }),
     series: [
-      { field: 'tickMean', label: 'mean', color: SERIES.aqua, fill: true },
-      { field: 'tickPeak', label: 'worst', color: SERIES.orange },
+      { field: 'tickMean', label: t('app.charts.tick.mean'), color: SERIES.aqua, fill: true },
+      { field: 'tickPeak', label: t('app.charts.tick.worst'), color: SERIES.orange },
     ],
   },
   {
     key: 'cpu',
-    title: 'CPU',
-    unit: '% of one core, 5s',
+    title: t('app.charts.cpu.title'),
+    unit: t('app.charts.cpu.unit'),
     floor: 10,
     digits: 1,
-    series: [{ field: 'cpu', label: 'cpu', color: SERIES.aqua, fill: true }],
+    series: [{ field: 'cpu', label: t('app.charts.cpu.cpu'), color: SERIES.aqua, fill: true }],
   },
   {
     key: 'mem',
-    title: 'Memory',
-    unit: 'MB',
+    title: t('app.charts.mem.title'),
+    unit: t('app.charts.mem.unit'),
     floor: 64,
     digits: 0,
     series: [
-      { field: 'rss', label: 'resident', color: SERIES.aqua, fill: true },
-      { field: 'heap', label: 'managed heap', color: SERIES.violet },
+      { field: 'rss', label: t('app.charts.mem.resident'), color: SERIES.aqua, fill: true },
+      { field: 'heap', label: t('app.charts.mem.heap'), color: SERIES.violet },
     ],
   },
   {
     key: 'late',
-    title: 'Late ticks',
-    unit: 'per second',
+    title: t('app.charts.late.title'),
+    unit: t('app.charts.late.unit'),
     floor: 2,
     digits: 0,
-    series: [{ field: 'late', label: 'late', color: SERIES.warning, fill: true }],
+    series: [{ field: 'late', label: t('app.charts.late.late'), color: SERIES.warning, fill: true }],
     // (SERIES.warning is a function; resolve() below calls it.)
   },
   {
     key: 'net',
-    title: 'Sent',
-    unit: 'KB/s',
+    title: t('app.charts.net.title'),
+    unit: t('app.charts.net.unit'),
     floor: 8,
     digits: 1,
-    series: [{ field: 'bytes', label: 'out', color: SERIES.aqua, fill: true, scale: 1 / 1024 }],
+    series: [{ field: 'bytes', label: t('app.charts.net.out'), color: SERIES.aqua, fill: true, scale: 1 / 1024 }],
   },
   {
     key: 'load',
-    title: 'Load',
-    unit: 'count',
+    title: t('app.charts.load.title'),
+    unit: t('app.charts.load.unit'),
     floor: 4,
     digits: 0,
     series: [
-      { field: 'characters', label: 'alive', color: SERIES.aqua, fill: true },
-      { field: 'bots', label: 'bots', color: SERIES.orange },
-      { field: 'humans', label: 'humans', color: SERIES.violet },
+      { field: 'characters', label: t('app.charts.load.alive'), color: SERIES.aqua, fill: true },
+      { field: 'bots', label: t('app.charts.load.bots'), color: SERIES.orange },
+      { field: 'humans', label: t('app.charts.load.humans'), color: SERIES.violet },
     ],
   },
 ];
@@ -846,7 +854,7 @@ function buildCharts() {
     const caption = document.createElement('figcaption');
     const title = document.createElement('span');
     title.className = 'chart-title';
-    title.textContent = `${chart.title} · ${chart.unit}`;
+    title.textContent = t('app.charts.caption', { title: chart.title, unit: chart.unit });
 
     const value = document.createElement('span');
     value.className = 'chart-value';
@@ -877,8 +885,7 @@ function buildCharts() {
     canvas.className = 'chart-canvas';
     canvas.dataset.chart = chart.key;
     canvas.setAttribute('role', 'img');
-    canvas.setAttribute('aria-label',
-      `${chart.title} in ${chart.unit} over the last five minutes`);
+    canvas.setAttribute('aria-label', t('app.charts.aria', { title: chart.title, unit: chart.unit }));
 
     figure.appendChild(canvas);
     host.appendChild(figure);
@@ -894,7 +901,7 @@ function buildCharts() {
       for (const other of $('range-seg').querySelectorAll('.seg-btn'))
         other.classList.toggle('is-on', other === button);
 
-      $('axis-from').textContent = `${range / 60} minute${range === 60 ? '' : 's'} ago`;
+      $('axis-from').textContent = t('app.charts.minutesAgo', { count: range / 60 });
       drawCharts();
     });
   }
@@ -1021,7 +1028,7 @@ function drawChart(chart, data) {
   g.fillText(top >= 10 ? String(top) : top.toFixed(chart.digits), pad.left + 1, pad.top - 2);
 
   if (data.length === 0) {
-    g.fillText('waiting for the first sample', pad.left + 1, pad.top + plotH / 2);
+    g.fillText(t('app.charts.waiting'), pad.left + 1, pad.top + plotH / 2);
     return;
   }
 
@@ -1151,17 +1158,17 @@ function kpis() {
   late.classList.toggle('warn', state.server.lateTicks > 0);
 
   $('kpi-worst').textContent = state.server.worstOverrunMs > 0
-    ? `+${state.server.worstOverrunMs.toFixed(1)}ms`
-    : 'none';
+    ? t('app.kpi.worstOverrun', { ms: state.server.worstOverrunMs.toFixed(1) })
+    : t('app.kpi.none');
 
   $('kpi-sent').textContent = bytes(state.server.bytesSent);
 }
 
 function bytes(value) {
-  if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
-  if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
-  return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  if (value < 1024) return t('app.units.b', { value });
+  if (value < 1024 * 1024) return t('app.units.kb', { value: (value / 1024).toFixed(1) });
+  if (value < 1024 * 1024 * 1024) return t('app.units.mb', { value: (value / 1024 / 1024).toFixed(1) });
+  return t('app.units.gb', { value: (value / 1024 / 1024 / 1024).toFixed(2) });
 }
 
 /* ---------- player menu ---------------------------------------------------- */
@@ -1189,7 +1196,11 @@ function openMenu(slot, anchor) {
   heading.textContent = player.name;
   items.push(heading);
 
-  for (const [team, label] of [['Red', 'Move to Red'], ['Blue', 'Move to Blue'], ['Spectator', 'Move to Spectators']]) {
+  for (const [team, label] of [
+    ['Red', t('app.menu.moveRed')],
+    ['Blue', t('app.menu.moveBlue')],
+    ['Spectator', t('app.menu.moveSpectators')],
+  ]) {
     if (player.team === team) continue;
     items.push(menuItem(label, `team-${team.toLowerCase()}`, () => send({ cmd: 'team', slot, team: team.toLowerCase() })));
   }
@@ -1197,8 +1208,8 @@ function openMenu(slot, anchor) {
   if (player.connected) {
     items.push(Object.assign(document.createElement('div'), { className: 'menu-sep' }));
 
-    items.push(menuItem('Kick', 'danger', async () => {
-      if (await ask('Kick this player?', `${player.name} is disconnected immediately.`)) {
+    items.push(menuItem(t('app.menu.kick'), 'danger', async () => {
+      if (await ask(t('app.menu.kickTitle'), t('app.menu.kickBody', { name: player.name }))) {
         send({ cmd: 'kick', slot });
       }
     }));
@@ -1206,12 +1217,12 @@ function openMenu(slot, anchor) {
     // ⚠️ The ban is on the ADDRESS, permanently, and the dialog says so: anyone
     // behind the same NAT is banned with them. BanList has the case against
     // reading an address as a person.
-    items.push(menuItem('Ban', 'danger', async () => {
+    items.push(menuItem(t('app.menu.ban'), 'danger', async () => {
       if (await ask(
-        'Ban this player?',
-        `${player.name} is disconnected and their address `
-        + `${player.address ? `(${player.address}) ` : ''}is banned permanently. `
-        + 'Anyone else on that address is banned too.')) {
+        t('app.menu.banTitle'),
+        player.address
+          ? t('app.menu.banBodyAddress', { name: player.name, address: player.address })
+          : t('app.menu.banBody', { name: player.name }))) {
         send({ cmd: 'ban', slot });
       }
     }));
@@ -1249,7 +1260,7 @@ function menuItem(label, kind, action) {
     const now = state && target && state.players[target.slot];
 
     if (!now || now.name !== target.name) {
-      toast(`${target ? target.name : 'That player'} left or moved slot; nothing was done`, 'bad');
+      toast(t('app.menu.gone', { name: target ? target.name : t('app.menu.thatPlayer') }), 'bad');
       return;
     }
 
@@ -1298,7 +1309,7 @@ function appendChat(lines) {
     if (line.teamOnly) {
       const scope = document.createElement('span');
       scope.className = 'chat-scope';
-      scope.textContent = '(team)';
+      scope.textContent = t('app.chat.teamOnly');
       node.appendChild(scope);
     }
 
@@ -1361,7 +1372,7 @@ async function loadSystem(force) {
 
     renderSystem(info);
   } catch {
-    if (force) $('sys-body').replaceChildren(hint('the server did not answer'));
+    if (force) $('sys-body').replaceChildren(hint(t('app.toast.noAnswer')));
   }
 }
 
@@ -1380,7 +1391,7 @@ function fact(list, name, value, className) {
   const dd = document.createElement('dd');
 
   if (value === null || value === undefined || value === '') {
-    dd.textContent = 'unknown';
+    dd.textContent = t('app.system.unknown');
     dd.className = 'dim';
   } else if (value instanceof Node) {
     dd.appendChild(value);
@@ -1417,12 +1428,12 @@ function badge(text, kind) {
 function hertz(mhz, nominal) {
   if (mhz === null || mhz === undefined) return null;
 
-  const value = mhz >= 1000 ? `${(mhz / 1000).toFixed(2)} GHz` : `${mhz} MHz`;
+  const value = mhz >= 1000 ? t('app.units.ghz', { value: (mhz / 1000).toFixed(2) }) : t('app.units.mhz', { value: mhz });
 
   // ⚠️ The two platforms mean different things by this and the panel says so:
   // Windows records the clock at boot, Linux reports what core 0 is doing right
   // now — which on a shared VPS moves between requests.
-  return `${value} ${nominal ? '(nominal)' : '(now)'}`;
+  return nominal ? t('app.system.clockNominal', { clock: value }) : t('app.system.clockNow', { clock: value });
 }
 
 function renderSystem(info) {
@@ -1431,59 +1442,64 @@ function renderSystem(info) {
   // The collapsed one-liner. Enough to answer "what am I on" without opening it.
   $('sys-peek').textContent = [
     os.description.split(' ').slice(0, 2).join(' '),
-    `${cpu.logicalCores} core${cpu.logicalCores === 1 ? '' : 's'}`,
+    t('app.system.cores', { count: cpu.logicalCores }),
     memory.totalBytes ? bytes(memory.totalBytes) : null,
-    runtime.build === 'Debug' ? 'DEBUG BUILD' : null,
+    runtime.build === 'Debug' ? t('app.system.debugBuild') : null,
   ].filter(Boolean).join(' · ');
 
   $('sys-body').replaceChildren(
-    group('Operating system', (l) => {
-      fact(l, 'os', os.description);
-      fact(l, 'architecture', os.architecture);
-      fact(l, 'host', os.machine);
-      fact(l, 'uptime', duration(os.uptimeSeconds));
+    group(t('app.system.osTitle'), (l) => {
+      fact(l, t('app.system.os'), os.description);
+      fact(l, t('app.system.architecture'), os.architecture);
+      fact(l, t('app.system.host'), os.machine);
+      fact(l, t('app.system.uptime'), duration(os.uptimeSeconds));
     }),
 
-    group('Processor', (l) => {
-      fact(l, 'model', cpu.model);
-      fact(l, 'clock', hertz(cpu.megahertz, cpu.clockIsNominal));
+    group(t('app.system.cpuTitle'), (l) => {
+      fact(l, t('app.system.model'), cpu.model);
+      fact(l, t('app.system.clock'), hertz(cpu.megahertz, cpu.clockIsNominal));
 
       // ⚠️ Logical, and what the RUNTIME sees — on a VPS with a CPU quota that
       // is not the host's core count, and it is the one that explains the tick.
-      fact(l, 'logical cores', cpu.logicalCores);
+      fact(l, t('app.system.logicalCores'), cpu.logicalCores);
     }),
 
-    group('Memory', (l) => {
-      fact(l, 'total', memory.totalBytes === null ? null : bytes(memory.totalBytes));
-      fact(l, 'available', memory.availableBytes === null ? null : bytes(memory.availableBytes));
+    group(t('app.system.memoryTitle'), (l) => {
+      fact(l, t('app.system.total'), memory.totalBytes === null ? null : bytes(memory.totalBytes));
+      fact(l, t('app.system.available'), memory.availableBytes === null ? null : bytes(memory.availableBytes));
 
       // Says whether the two figures above are the container's or the host's.
-      fact(l, 'reported by', memory.source);
-      fact(l, 'this process', bytes(memory.processBytes));
-      fact(l, 'managed heap', bytes(memory.managedBytes));
+      fact(l, t('app.system.reportedBy'), memory.source);
+      fact(l, t('app.system.thisProcess'), bytes(memory.processBytes));
+      fact(l, t('app.system.managedHeap'), bytes(memory.managedBytes));
     }),
 
-    group('Runtime', (l) => {
-      fact(l, 'framework', runtime.framework);
-      fact(l, 'identifier', runtime.identifier);
-      fact(l, 'build', badge(runtime.build, runtime.build === 'Debug' ? 'debug' : null));
-      fact(l, 'gc', `${runtime.serverGc ? 'server' : 'workstation'}, `
-        + `${runtime.concurrentGc ? 'concurrent' : 'non-concurrent'}`);
-      fact(l, 'collections', runtime.collections.join(' / '));
-      fact(l, 'threads', runtime.threads);
-      fact(l, 'process', `pid ${runtime.processId}, up ${duration(runtime.processUptimeSeconds)}`);
-      fact(l, 'timer', runtime.timerResolution);
+    group(t('app.system.runtimeTitle'), (l) => {
+      fact(l, t('app.system.framework'), runtime.framework);
+      fact(l, t('app.system.identifier'), runtime.identifier);
+      fact(l, t('app.system.build'), badge(runtime.build, runtime.build === 'Debug' ? 'debug' : null));
+      fact(l, t('app.system.gc'), t('app.system.gcMode', {
+        kind: runtime.serverGc ? t('app.system.gcServer') : t('app.system.gcWorkstation'),
+        concurrency: runtime.concurrentGc ? t('app.system.gcConcurrent') : t('app.system.gcNonConcurrent'),
+      }));
+      fact(l, t('app.system.collections'), runtime.collections.join(' / '));
+      fact(l, t('app.system.threads'), runtime.threads);
+      fact(l, t('app.system.process'), t('app.system.processValue', {
+        pid: runtime.processId,
+        uptime: duration(runtime.processUptimeSeconds),
+      }));
+      fact(l, t('app.system.timer'), runtime.timerResolution);
     }),
 
-    group('Storage', (l) => {
+    group(t('app.system.storageTitle'), (l) => {
       if (disk) {
-        fact(l, 'mount', disk.mount, 'path');
-        fact(l, 'free', `${bytes(disk.freeBytes)} of ${bytes(disk.totalBytes)}`, 'path');
+        fact(l, t('app.system.mount'), disk.mount, 'path');
+        fact(l, t('app.system.free'), t('app.system.freeValue', { free: bytes(disk.freeBytes), total: bytes(disk.totalBytes) }), 'path');
       }
 
-      fact(l, 'maps', paths.maps, 'path');
-      fact(l, 'nav', paths.nav, 'path');
-      fact(l, 'recordings', paths.recordings, 'path');
+      fact(l, t('app.system.maps'), paths.maps, 'path');
+      fact(l, t('app.system.nav'), paths.nav, 'path');
+      fact(l, t('app.system.recordings'), paths.recordings, 'path');
     }, true),
   );
 }
@@ -1515,15 +1531,15 @@ function rotation(s) {
     label.textContent = name;
     item.appendChild(label);
 
-    if (index === s.server.rotationIndex) item.appendChild(tag('NOW', 'now'));
+    if (index === s.server.rotationIndex) item.appendChild(tag(t('app.rotation.now'), 'now'));
 
     const tools = document.createElement('span');
     tools.className = 'rot-tools';
 
     for (const [action, text, title, disabled] of [
-      ['up', '↑', 'Move up', index === 0],
-      ['down', '↓', 'Move down', index === list.length - 1],
-      ['remove', '×', 'Remove', false],
+      ['up', '↑', t('app.rotation.moveUp'), index === 0],
+      ['down', '↓', t('app.rotation.moveDown'), index === list.length - 1],
+      ['remove', '×', t('app.rotation.remove'), false],
     ]) {
       const button = document.createElement('button');
       button.className = 'mini' + (action === 'remove' ? '' : ' mini-plain');
@@ -1560,14 +1576,14 @@ function controls(s) {
   if (document.activeElement !== botLimit) botLimit.value = s.server.botLimit;
 
   const offline = s.server.offline;
-  $('offline').textContent = offline ? 'Bring online' : 'Take offline';
+  $('offline').textContent = offline ? t('app.offline.bringOnline') : t('app.offline.takeOffline');
   $('offline').classList.toggle('btn-danger', !offline);
   $('offline').classList.toggle('btn-primary', offline);
   $('offline-hint').textContent = offline
-    ? 'Offline: connections are refused and no bots run. Settings changed here still apply.'
-    : 'Disconnects every player, refuses new connections and removes the bots. This panel stays up; bring it back online from here.';
+    ? t('app.offline.hintOffline')
+    : t('app.offline.hintOnline');
 
-  $('password-state').textContent = s.server.passworded ? 'set' : 'none';
+  $('password-state').textContent = s.server.passworded ? t('app.password.set') : t('app.password.none');
   $('password-state').classList.toggle('is-set', s.server.passworded);
   $('password-clear').disabled = !s.server.passworded;
 
@@ -1577,7 +1593,7 @@ function controls(s) {
 
     // A policy brain needs a checkpoint the server was started with.
     button.disabled = (mode === 'policy' || mode === 'tiered') && !s.server.policy;
-    button.title = button.disabled ? 'Needs a policy checkpoint (--policy) at startup' : '';
+    button.title = button.disabled ? t('app.brain.needsPolicy') : '';
   }
 }
 
@@ -1631,6 +1647,11 @@ function ask(title, body) {
 }
 
 /* ---------- formatting ------------------------------------------------------ */
+
+/** A sheet's single-line placeholder: loading, failed, or the server's own error. */
+function sheetEmpty(text) {
+  return Object.assign(document.createElement('p'), { className: 'sheet-empty', textContent: text });
+}
 
 function mmss(ticks) {
   if (ticks <= 0) return '--:--';
@@ -1710,23 +1731,19 @@ function settingsDirty() {
 
   const parts = [];
 
-  if (count > 0) parts.push(`${count} change${count === 1 ? '' : 's'} not saved.`);
+  if (count > 0) parts.push(t('app.settings.unsaved', { count }));
 
-  if (waiting > 0) {
-    parts.push(
-      `${waiting} saved setting${waiting === 1 ? '' : 's'} `
-      + `${waiting === 1 ? 'is' : 'are'} waiting for a restart.`);
-  }
+  if (waiting > 0) parts.push(t('app.settings.waiting', { count: waiting }));
 
-  if (parts.length === 0) parts.push('The file and the running server agree.');
-  else parts.push('Settings take effect when the server restarts.');
+  if (parts.length === 0) parts.push(t('app.settings.agree'));
+  else parts.push(t('app.settings.takeEffect'));
 
   $('settings-status').textContent = parts.join(' ');
 }
 
 async function openSettings() {
   $('settings').showModal();
-  $('settings-body').innerHTML = '<p class="sheet-empty">Loading…</p>';
+  $('settings-body').replaceChildren(sheetEmpty(t('app.settings.loading')));
   $('settings-rail').replaceChildren();
 
   let config;
@@ -1736,14 +1753,12 @@ async function openSettings() {
     if (reply.status === 401) { $('settings').close(); showLogin(); return; }
     config = await reply.json();
   } catch {
-    $('settings-body').innerHTML = '<p class="sheet-empty">The server did not answer.</p>';
+    $('settings-body').replaceChildren(sheetEmpty(t('app.settings.noAnswer')));
     return;
   }
 
   if (!config.ok) {
-    $('settings-body').innerHTML = '';
-    $('settings-body').appendChild(Object.assign(
-      document.createElement('p'), { className: 'sheet-empty', textContent: config.error }));
+    $('settings-body').replaceChildren(sheetEmpty(config.error));
     return;
   }
 
@@ -1753,16 +1768,13 @@ async function openSettings() {
 
   $('settings-file').textContent = config.writable
     ? config.file
-    : 'no config file — started without --config';
+    : t('app.settings.noFile');
 
   const readonly = $('settings-readonly');
   readonly.hidden = config.writable;
 
   if (!config.writable) {
-    readonly.textContent =
-      'This server was started without --config, so there is nowhere to save to. '
-      + 'Restart it with --config <path> — the file does not have to exist yet — and '
-      + 'these fields become editable.';
+    readonly.textContent = t('app.settings.readonly');
   }
 
   // A file pushed by scripts/deploy.sh --config. Saving here still works — it
@@ -1772,16 +1784,9 @@ async function openSettings() {
   const managed = $('settings-managed');
 
   if (config.managed) {
-    const parts = [
-      'This file is managed by scripts/deploy.sh --config. A save here applies to '
-      + 'this server only, and the next push will stop for it until it is copied into '
-      + 'deploy/config or the push is forced.',
-    ];
-    if (config.editedSincePush) parts.push('It has been edited here since it was last pushed.');
-    if (config.pushWaiting) {
-      parts.push('A pushed configuration is waiting: the server applies it the next time '
-        + 'nobody is connected.');
-    }
+    const parts = [t('app.settings.managed')];
+    if (config.editedSincePush) parts.push(t('app.settings.editedSincePush'));
+    if (config.pushWaiting) parts.push(t('app.settings.pushWaiting'));
     managed.textContent = parts.join(' ');
     managed.hidden = false;
   } else {
@@ -1798,7 +1803,7 @@ function renderSettings() {
     .filter((setting) => cfgMatches(setting, filter))
     .map((setting) => ({ heading: setting.section, node: settingField(setting) }));
 
-  cfgRenderGroups($('settings-body'), $('settings-rail'), items, 'Nothing matches that filter.');
+  cfgRenderGroups($('settings-body'), $('settings-rail'), items, t('app.settings.noMatch'));
   settingsDirty();
 }
 
@@ -1812,7 +1817,7 @@ function settingField(setting) {
   // accent rather than --warning: nothing is wrong, a step is outstanding —
   // and "pinned" means the save will never take, which must not look the same.
   if (setting.pending) {
-    tags.push({ text: 'restart pending', kind: 'accent', title: 'Saved; the running server still has the old value' });
+    tags.push({ text: t('app.settings.pendingTag'), kind: 'accent', title: t('app.settings.pendingTitle') });
   }
 
   // ⚠️ The warning that stops this page lying. A flag beats the config file, so
@@ -1820,12 +1825,8 @@ function settingField(setting) {
   // line — the field stays editable, because saving it is still the right thing
   // to do before removing the flag, but the page says what will happen.
   if (overridden.has(setting.id)) {
-    tags.push({ text: 'pinned', kind: 'warn', title: 'Set by a command-line flag, which beats the file' });
-    notes.push({
-      kind: 'warn',
-      text: 'Pinned on the command line: this server will keep using the flag’s '
-        + 'value after a restart, whatever is saved here.',
-    });
+    tags.push({ text: t('app.settings.pinnedTag'), kind: 'warn', title: t('app.settings.pinnedTitle') });
+    notes.push({ kind: 'warn', text: t('app.settings.pinnedNote') });
   }
 
   return cfgField(setting, {
@@ -1833,7 +1834,7 @@ function settingField(setting) {
     // ⛔ Whether a secret is SET, never what it is: the server does not send
     // its value, so the field starts empty on every open (see edits()).
     value: setting.secret ? '' : setting.value,
-    placeholder: setting.secret ? (setting.set ? 'set — type to replace' : 'not set') : '',
+    placeholder: setting.secret ? (setting.set ? t('app.settings.secretSet') : t('app.settings.secretNotSet')) : '',
     disabled: !settingsWritable,
     tags,
     notes,
@@ -1855,12 +1856,12 @@ async function saveSettings() {
   const reply = await send({ cmd: 'config-set', settings: changed }, true);
   if (!reply.ok) return false;
 
-  toast(`Saved ${reply.saved} setting${reply.saved === 1 ? '' : 's'}`, 'good');
+  toast(t('app.settings.saved', { count: reply.saved }), 'good');
 
   // Named individually rather than counted: the operator has to know WHICH of
   // the things they just saved the command line will keep overriding.
   if (reply.shadowed && reply.shadowed.length > 0) {
-    toast(`Still pinned on the command line: ${reply.shadowed.join(', ')}`, 'bad');
+    toast(t('app.settings.stillPinned', { names: reply.shadowed.join(', ') }), 'bad');
   }
 
   await openSettings();
@@ -1875,15 +1876,14 @@ async function saveSettings() {
  * work; connect()'s backoff covers the case where it does not come back.
  */
 async function restartServer(extra) {
-  if (!await ask(
-    'Restart the server?',
-    `${extra}Every player is disconnected and the round in progress is lost. The `
-    + 'process stays up and comes back with the configuration file as it is now.')) {
+  const body = t('app.restart.body');
+
+  if (!await ask(t('app.restart.title'), extra ? `${extra} ${body}` : body)) {
     return;
   }
 
   await send({ cmd: 'restart' }, true);
-  toast('Restarting — the panel reconnects on its own', 'good');
+  toast(t('app.restart.toast'), 'good');
 
   // 'lost' rather than a new state: the stream is about to drop and this is the
   // same reconnecting badge every other drop shows. Inventing a fourth state
@@ -1943,14 +1943,14 @@ $('login-form').addEventListener('submit', async (event) => {
       return;
     }
 
-    error.textContent = json.error || 'wrong password';
+    error.textContent = json.error || t('app.login.wrongPassword');
     error.hidden = false;
     $('login-form').classList.remove('shake');
     void $('login-form').offsetWidth;
     $('login-form').classList.add('shake');
     $('password').select();
   } catch {
-    error.textContent = 'the server did not answer';
+    error.textContent = t('app.toast.noAnswer');
     error.hidden = false;
   } finally {
     button.disabled = false;
@@ -1984,7 +1984,7 @@ async function openAnalytics() {
 
 async function loadAnalytics() {
   $('an-loading').hidden = false;
-  $('an-loading').textContent = 'Loading…';
+  $('an-loading').textContent = t('app.settings.loading');
   $('an-content').hidden = true;
   $('an-off').hidden = true;
 
@@ -1997,12 +1997,12 @@ async function loadAnalytics() {
 
     reply = await response.json();
   } catch {
-    $('an-loading').textContent = 'The server did not answer.';
+    $('an-loading').textContent = t('app.settings.noAnswer');
     return;
   }
 
   if (!reply.ok) {
-    $('an-loading').textContent = reply.error || 'the server refused';
+    $('an-loading').textContent = reply.error || t('app.analytics.refused');
     return;
   }
 
@@ -2047,7 +2047,7 @@ $('settings-save-restart').addEventListener('click', async () => {
   if (!await saveSettings()) return;
 
   $('settings').close();
-  await restartServer('The settings you just saved will be applied. ');
+  await restartServer(t('app.restart.afterSave'));
 });
 
 $('restart').addEventListener('click', () => restartServer(''));
@@ -2079,11 +2079,9 @@ $('offline').addEventListener('click', async () => {
 
   const people = state.players.filter((p) => p.connected).length;
 
-  if (await ask(
-    'Take the server offline?',
-    `${people === 0 ? 'Nobody is connected.' : `All ${people} connected player${people === 1 ? ' is' : 's are'} disconnected.`} `
-    + 'New connections are refused and the bots are removed until you bring it back online. '
-    + 'The process and this panel keep running.')) {
+  const who = people === 0 ? t('app.offline.askNobody') : t('app.offline.askPeople', { count: people });
+
+  if (await ask(t('app.offline.askTitle'), `${who} ${t('app.offline.askBody')}`)) {
     send({ cmd: 'offline', enabled: true });
   }
 });
@@ -2097,13 +2095,13 @@ $('perf').addEventListener('toggle', (event) => {
 });
 
 $('end-round').addEventListener('click', async () => {
-  if (await ask('End the round?', 'Nobody wins, and the server moves on to the next map in the rotation after the usual ten seconds.')) {
+  if (await ask(t('app.round.endTitle'), t('app.round.endBody'))) {
     send({ cmd: 'end-round' });
   }
 });
 
 $('restart-round').addEventListener('click', async () => {
-  if (await ask('Restart the round?', `Nobody wins, and ${state ? state.map : 'this map'} starts again from the beginning after the usual ten seconds.`)) {
+  if (await ask(t('app.round.restartTitle'), t('app.round.restartBody', { map: state ? state.map : t('app.round.thisMap') }))) {
     send({ cmd: 'restart-round' });
   }
 });
@@ -2135,7 +2133,7 @@ for (const button of document.querySelectorAll('#brain-seg .seg-btn')) {
     const mode = button.dataset.mode;
     if (!state || state.bots.mode === mode) return;
 
-    if (await ask('Change the bot brain?', `Every bot is removed and added back running ${mode}. Search and the policy brains cost more tick time than scripted.`)) {
+    if (await ask(t('app.brain.changeTitle'), t('app.brain.changeBody', { mode }))) {
       send({ cmd: 'bot-brain', mode });
     }
   });
@@ -2163,7 +2161,7 @@ $('rotation-add').addEventListener('click', async () => {
   if (!name || !state) return;
 
   if (mapNames.length > 0 && !mapNames.includes(name)) {
-    toast(`no map '${name}'`, 'bad');
+    toast(t('app.rotation.noMap', { name }), 'bad');
     return;
   }
 
@@ -2187,7 +2185,7 @@ $('map-go').addEventListener('click', async () => {
   const name = $('map-pick').value.trim();
   if (!name) return;
 
-  if (await ask('Change the map?', `Everyone on the server is moved to ${name} and the round ends now.`)) {
+  if (await ask(t('app.map.changeTitle'), t('app.map.changeBody', { name }))) {
     send({ cmd: 'map', name });
     $('map-pick').value = '';
   }
@@ -2247,7 +2245,7 @@ canvas.addEventListener('mousemove', (event) => {
   if (near && near.d < reach) {
     const box = canvas.getBoundingClientRect();
     tip.hidden = false;
-    tip.textContent = `${near.p.name} · ${near.p.class} · ${Math.round(near.p.hp)} hp`;
+    tip.textContent = t('app.map.tip', { name: near.p.name, class: near.p.class, hp: Math.round(near.p.hp) });
     tip.style.left = `${(near.p.x / state.match.width) * box.width}px`;
     tip.style.top = `${(near.p.y / state.match.height) * box.height}px`;
   } else {
@@ -2260,7 +2258,7 @@ canvas.addEventListener('mouseleave', () => { $('map-tip').hidden = true; });
 canvas.addEventListener('click', (event) => {
   if (!$('teleport-mode').checked || !state) return;
 
-  if (selected < 0) { toast('select a player in the table first', 'bad'); return; }
+  if (selected < 0) { toast(t('app.map.selectFirst'), 'bad'); return; }
 
   const at = toWorld(event);
   send({ cmd: 'teleport', slot: selected, x: Math.round(at.x), y: Math.round(at.y) });
@@ -2317,21 +2315,21 @@ async function initFleet() {
  * link, so a middle click opens a member in a new tab.
  */
 function renderHosts(members) {
-  const tabs = [hostTab('', 'Hub', true, 'This server: the hub itself')];
+  const tabs = [hostTab('', t('app.fleet.hubTab'), true, t('app.fleet.hubTitle'))];
 
   for (const m of members) {
     const s = m.state;
     const map = s && (typeof s.map === 'string' ? s.map : (s.map && s.map.name));
     const humans = s ? s.players.filter((p) => p.connected).length : 0;
     const title = s
-      ? `${s.server.name} — ${map || 'no map'}, ${humans} player${humans === 1 ? '' : 's'}`
-      : (m.error || 'unreachable');
+      ? t('app.fleet.tabTitle', { name: s.server.name, map: map || t('app.fleet.noMap'), count: humans })
+      : (m.error || t('app.fleet.unreachable'));
     tabs.push(hostTab(m.name, m.name, !!s, title));
   }
 
   // A member removed since this page loaded still names where the page is.
   if (member && !members.some((m) => m.name === member)) {
-    tabs.push(hostTab(member, member, false, 'not a member of this hub'));
+    tabs.push(hostTab(member, member, false, t('app.fleet.notMember')));
   }
 
   $('hosts').replaceChildren(...tabs);
@@ -2356,7 +2354,7 @@ function hostTab(name, label, up, title) {
 }
 
 async function loadFleet() {
-  $('fleet-sub').textContent = 'Asking every member…';
+  $('fleet-sub').textContent = t('app.fleet.asking');
 
   let reply;
 
@@ -2365,7 +2363,7 @@ async function loadFleet() {
     if (response.status === 401) { $('fleet').close(); showLogin(); return; }
     reply = await response.json();
   } catch {
-    $('fleet-sub').textContent = 'The hub did not answer.';
+    $('fleet-sub').textContent = t('app.fleet.hubNoAnswerSentence');
     return;
   }
 
@@ -2382,11 +2380,11 @@ async function loadFleet() {
 
       tr.appendChild(cell(s.server.name, ''));
       tr.appendChild(cell(map, 'mono'));
-      tr.appendChild(cell(`${humans} + ${bots} bots / ${s.server.slots}`, 'num'));
-      tr.appendChild(cell(`${s.server.tickMs.toFixed(2)} ms`, 'num'));
+      tr.appendChild(cell(t('app.fleet.players', { humans, bots, slots: s.server.slots }), 'num'));
+      tr.appendChild(cell(t('app.fleet.tick', { ms: s.server.tickMs.toFixed(2) }), 'num'));
       tr.appendChild(cell(s.server.commit || s.server.version || '—', 'mono'));
     } else {
-      const down = cell(m.error || 'unreachable', 'fleet-down');
+      const down = cell(m.error || t('app.fleet.unreachable'), 'fleet-down');
       down.colSpan = 5;
       tr.appendChild(down);
     }
@@ -2396,13 +2394,13 @@ async function loadFleet() {
 
     const open = document.createElement('a');
     open.className = 'btn btn-quiet';
-    open.textContent = 'Open';
+    open.textContent = t('app.fleet.open');
     open.href = `/?host=${encodeURIComponent(m.name)}`;
 
     const remove = document.createElement('button');
     remove.className = 'btn btn-quiet btn-warn';
     remove.type = 'button';
-    remove.textContent = 'Remove';
+    remove.textContent = t('app.fleet.remove');
     remove.addEventListener('click', () => removeMember(m.name));
 
     tools.append(open, remove);
@@ -2413,7 +2411,7 @@ async function loadFleet() {
   $('fleet-rows').replaceChildren(...rows);
   renderHosts(reply.members || []);
   $('fleet-empty').hidden = rows.length > 0;
-  $('fleet-sub').textContent = `${rows.length} member${rows.length === 1 ? '' : 's'}, each pinned to its own certificate.`;
+  $('fleet-sub').textContent = t('app.fleet.members', { count: rows.length });
 }
 
 async function fleetPost(path, body) {
@@ -2423,21 +2421,18 @@ async function fleetPost(path, body) {
     body: JSON.stringify(body),
   });
 
-  if (reply.status === 401) { showLogin(); return { ok: false, error: 'signed out' }; }
+  if (reply.status === 401) { showLogin(); return { ok: false, error: t('app.toast.signedOut') }; }
   return reply.json();
 }
 
 async function removeMember(name) {
-  const sure = await ask(
-    `Remove ${name}?`,
-    'The hub forgets its token and stops managing it. The server itself keeps running; '
-    + 'pairing it again needs its pairing code.');
+  const sure = await ask(t('app.fleet.removeTitle', { name }), t('app.fleet.removeBody'));
 
   if (!sure) return;
 
   const reply = await fleetPost('/api/fleet/remove', { name });
-  if (!reply.ok) toast(reply.error || 'refused', 'bad');
-  else toast(`Removed ${name}`, 'good');
+  if (!reply.ok) toast(reply.error || t('app.toast.refused'), 'bad');
+  else toast(t('app.fleet.removed', { name }), 'good');
   await loadFleet();
 }
 
@@ -2453,17 +2448,17 @@ async function broadcast(body, done) {
   try {
     reply = await fleetPost('/api/fleet/broadcast', body);
   } catch {
-    toast('the hub did not answer', 'bad');
+    toast(t('app.fleet.hubNoAnswer'), 'bad');
     return;
   }
 
-  if (!reply.ok) { toast(reply.error || 'refused', 'bad'); return; }
+  if (!reply.ok) { toast(reply.error || t('app.toast.refused'), 'bad'); return; }
 
   const refused = reply.results.filter((r) => !r.reply.ok);
-  for (const r of refused) toast(`${r.name}: ${r.reply.error || 'refused'}`, 'bad');
+  for (const r of refused) toast(t('app.fleet.memberRefused', { name: r.name, error: r.reply.error || t('app.toast.refused') }), 'bad');
 
   const count = reply.results.length - refused.length;
-  toast(`${done} on ${count} server${count === 1 ? '' : 's'}`, count > 0 ? 'good' : 'bad');
+  toast(t('app.fleet.doneOn', { done, count }), count > 0 ? 'good' : 'bad');
   await loadFleet();
 }
 
@@ -2471,21 +2466,20 @@ $('fleet-say').addEventListener('submit', async (event) => {
   event.preventDefault();
   const text = $('fleet-say-text').value.trim();
   if (!text) return;
-  await broadcast({ cmd: 'say', text }, 'Said');
+  await broadcast({ cmd: 'say', text }, t('app.fleet.said'));
   $('fleet-say-text').value = '';
 });
 
 $('fleet-offline').addEventListener('click', async () => {
-  const sure = await ask('Take every server offline?',
-    'Everyone on every server is disconnected and new connections are refused until you bring them back online.');
-  if (sure) await broadcast({ cmd: 'offline', enabled: true }, 'Offline');
+  const sure = await ask(t('app.fleet.offlineTitle'), t('app.fleet.offlineBody'));
+  if (sure) await broadcast({ cmd: 'offline', enabled: true }, t('app.fleet.offline'));
 });
 
-$('fleet-online').addEventListener('click', () => broadcast({ cmd: 'offline', enabled: false }, 'Online'));
+$('fleet-online').addEventListener('click', () => broadcast({ cmd: 'offline', enabled: false }, t('app.fleet.online')));
 
 $('fleet-end-round').addEventListener('click', async () => {
-  const sure = await ask('End the round everywhere?', 'Nobody wins; every server moves on to its next map.');
-  if (sure) await broadcast({ cmd: 'end-round' }, 'Round ended');
+  const sure = await ask(t('app.fleet.endRoundTitle'), t('app.fleet.endRoundBody'));
+  if (sure) await broadcast({ cmd: 'end-round' }, t('app.fleet.roundEnded'));
 });
 
 $('fleet-close').addEventListener('click', () => $('fleet').close());
@@ -2498,7 +2492,7 @@ $('fleet-add').addEventListener('submit', async (event) => {
   const error = $('fleet-error');
 
   button.disabled = true;
-  button.textContent = 'Pairing…';
+  button.textContent = t('app.fleet.pairing');
   error.hidden = true;
 
   try {
@@ -2509,20 +2503,20 @@ $('fleet-add').addEventListener('submit', async (event) => {
     });
 
     if (!reply.ok) {
-      error.textContent = reply.error || 'refused';
+      error.textContent = reply.error || t('app.toast.refused');
       error.hidden = false;
       return;
     }
 
-    toast(`Paired with ${$('fleet-name').value.trim()}`, 'good');
+    toast(t('app.fleet.paired', { name: $('fleet-name').value.trim() }), 'good');
     $('fleet-add').reset();
     await loadFleet();
   } catch {
-    error.textContent = 'the hub did not answer';
+    error.textContent = t('app.fleet.hubNoAnswer');
     error.hidden = false;
   } finally {
     button.disabled = false;
-    button.textContent = 'Pair';
+    button.textContent = t('app.fleet.pair');
   }
 });
 
@@ -2551,7 +2545,7 @@ $('fleet-add').addEventListener('submit', async (event) => {
     showLogin();
   } catch {
     showLogin();
-    $('login-error').textContent = 'the server did not answer';
+    $('login-error').textContent = t('app.toast.noAnswer');
     $('login-error').hidden = false;
   }
 })();

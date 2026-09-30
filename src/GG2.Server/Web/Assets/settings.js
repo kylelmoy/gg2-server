@@ -44,7 +44,7 @@ function cfgControl(setting, value, placeholder) {
     input.autocomplete = 'new-password';
   } else {
     input.type = setting.kind === 'integer' ? 'number' : 'text';
-    if (setting.kind === 'list') placeholder = placeholder || 'comma,separated';
+    if (setting.kind === 'list') placeholder = placeholder || t('settings.listPlaceholder');
   }
 
   input.value = value;
@@ -82,9 +82,9 @@ function cfgField(setting, opts) {
   const tags = document.createElement('span');
   tags.className = 'cfg-tags';
 
-  for (const t of opts.tags || []) {
+  for (const spec of opts.tags || []) {
     tags.appendChild(Object.assign(document.createElement('span'),
-      { className: `cfg-tag ${t.kind || ''}`, textContent: t.text, title: t.title || '' }));
+      { className: `cfg-tag ${spec.kind || ''}`, textContent: spec.text, title: spec.title || '' }));
   }
 
   if (opts.action) {

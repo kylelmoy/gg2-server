@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <meta name="robots" content="noindex, nofollow">
-<title>Server configuration — gg2-server</title>
+<title data-t="editorPage.title"></title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/app.css">
 <link rel="stylesheet" href="/editor.css">
@@ -24,19 +24,19 @@
     <div class="brand">
       <img class="mark" src="/favicon.svg" width="32" height="32" alt="">
       <div class="brand-text">
-        <strong id="ed-brand">Server configuration</strong>
+        <strong id="ed-brand" data-t="editorPage.brand"></strong>
         <span class="brand-sub" id="ed-directory">—</span>
       </div>
     </div>
 
     <div class="topbar-right">
-      <a class="btn btn-quiet" id="ed-back" href="/" hidden>Dashboard</a>
+      <a class="btn btn-quiet" id="ed-back" href="/" hidden data-t="editorPage.dashboard"></a>
     </div>
   </header>
 
   <!-- What to edit: the shared settings, then each server. The dashboard's
        server tabs, so the two pages read as one. -->
-  <nav class="hosts" id="ed-scopes" aria-label="What to edit"></nav>
+  <nav class="hosts" id="ed-scopes" data-t-aria-label="editorPage.scopes"></nav>
 
   <section class="cfg-card">
     <header class="sheet-head">
@@ -46,28 +46,28 @@
       </div>
       <div class="sheet-tools">
         <label class="ed-only" id="ed-only-wrap" hidden>
-          <input type="checkbox" id="ed-only" class="cfg-check"> overridden only
+          <input type="checkbox" id="ed-only" class="cfg-check"> <span data-t="editorPage.overriddenOnly"></span>
         </label>
-        <input type="search" id="ed-filter" placeholder="Filter settings"
-               spellcheck="false" autocomplete="off" aria-label="Filter settings">
-        <button class="btn btn-quiet" id="ed-preview" type="button" hidden>Preview gg2.ini</button>
-        <button class="btn btn-quiet" id="ed-adopt" type="button" hidden>Adopt…</button>
+        <input type="search" id="ed-filter" data-t-placeholder="editorPage.filter"
+               spellcheck="false" autocomplete="off" data-t-aria-label="editorPage.filter">
+        <button class="btn btn-quiet" id="ed-preview" type="button" hidden data-t="editorPage.preview.open"></button>
+        <button class="btn btn-quiet" id="ed-adopt" type="button" hidden data-t="editorPage.adopt.open"></button>
       </div>
     </header>
 
     <div class="cfg-notes" id="ed-notes"></div>
 
     <div class="cfg-main">
-      <nav class="cfg-rail" id="ed-rail" aria-label="Sections"></nav>
-      <div class="cfg-body" id="ed-body"><p class="sheet-empty">Loading…</p></div>
+      <nav class="cfg-rail" id="ed-rail" data-t-aria-label="editorPage.sections"></nav>
+      <div class="cfg-body" id="ed-body"><p class="sheet-empty" data-t="editorPage.loading"></p></div>
     </div>
 
     <footer class="sheet-foot">
-      <p class="hint" id="ed-status">No changes.</p>
+      <p class="hint" id="ed-status" data-t="editorPage.noChanges"></p>
       <div class="btn-row">
-        <button class="btn" id="ed-revert" type="button" disabled>Revert</button>
-        <button class="btn btn-primary" id="ed-save" type="button" disabled>Save</button>
-        <button class="btn" id="ed-push-open" type="button">Push…</button>
+        <button class="btn" id="ed-revert" type="button" disabled data-t="editorPage.revert"></button>
+        <button class="btn btn-primary" id="ed-save" type="button" disabled data-t="editorPage.save"></button>
+        <button class="btn" id="ed-push-open" type="button" data-t="editorPage.push.open"></button>
       </div>
     </footer>
   </section>
@@ -78,26 +78,26 @@
 <dialog class="sheet" id="ed-push-dialog" aria-labelledby="ed-push-title">
   <header class="sheet-head">
     <div>
-      <h3 id="ed-push-title">Push</h3>
-      <p class="sheet-sub" id="ed-push-sub">Each server applies a push the next time nobody is connected.</p>
+      <h3 id="ed-push-title" data-t="editorPage.push.title"></h3>
+      <p class="sheet-sub" id="ed-push-sub" data-t="editorPage.push.sub"></p>
     </div>
     <div class="sheet-tools">
-      <button class="btn btn-quiet" id="ed-push-check" type="button">Check</button>
-      <button class="btn btn-quiet" id="ed-push-close" type="button">Close</button>
+      <button class="btn btn-quiet" id="ed-push-check" type="button" data-t="editorPage.push.check"></button>
+      <button class="btn btn-quiet" id="ed-push-close" type="button" data-t="editorPage.close"></button>
     </div>
   </header>
-  <p class="sheet-note warn" id="ed-push-unsaved" hidden>Unsaved changes are not pushed. Save first.</p>
+  <p class="sheet-note warn" id="ed-push-unsaved" hidden data-t="editorPage.push.unsaved"></p>
   <div class="sheet-body">
     <div id="ed-hub" hidden>
       <table class="roster ed-push-table">
-        <thead><tr><th>Server</th><th>What a push changes</th><th></th></tr></thead>
+        <thead><tr><th data-t="editorPage.push.server"></th><th data-t="editorPage.push.changes"></th><th></th></tr></thead>
         <tbody id="ed-push-list"></tbody>
       </table>
     </div>
     <div class="ed-deploy" id="ed-deploy">
-      <p class="hint">Saving writes files on this machine only. To send them to the servers:</p>
-      <code>scripts/deploy.sh --config --check</code>
-      <code>scripts/deploy.sh --config</code>
+      <p class="hint" data-t="editorPage.push.deployHint"></p>
+      <code data-t="editorPage.push.deployCheck"></code>
+      <code data-t="editorPage.push.deploy"></code>
     </div>
   </div>
 </dialog>
@@ -105,14 +105,14 @@
 <dialog class="sheet" id="ed-preview-dialog" aria-labelledby="ed-preview-title">
   <header class="sheet-head">
     <div>
-      <h3 id="ed-preview-title">gg2.ini</h3>
+      <h3 id="ed-preview-title" data-t="editorPage.preview.title"></h3>
       <p class="sheet-sub" id="ed-preview-sub">—</p>
     </div>
     <div class="sheet-tools">
-      <button class="btn btn-quiet" id="ed-preview-close" type="button">Close</button>
+      <button class="btn btn-quiet" id="ed-preview-close" type="button" data-t="editorPage.close"></button>
     </div>
   </header>
-  <p class="sheet-note">What this server is sent, as saved on disk — unsaved edits are not in it. Passwords are masked.</p>
+  <p class="sheet-note" data-t="editorPage.preview.note"></p>
   <div class="sheet-body"><pre class="ed-pre" id="ed-preview-text"></pre></div>
 </dialog>
 
@@ -121,26 +121,27 @@
 <dialog class="sheet" id="ed-adopt-dialog" aria-labelledby="ed-adopt-title">
   <header class="sheet-head">
     <div>
-      <h3 id="ed-adopt-title">Adopt</h3>
+      <h3 id="ed-adopt-title" data-t="editorPage.adopt.title"></h3>
       <p class="sheet-sub" id="ed-adopt-sub">—</p>
     </div>
     <div class="sheet-tools">
-      <button class="btn btn-quiet" id="ed-adopt-close" type="button">Close</button>
+      <button class="btn btn-quiet" id="ed-adopt-close" type="button" data-t="editorPage.close"></button>
     </div>
   </header>
-  <p class="sheet-note" id="ed-adopt-note">Where this server's own file differs from what the fleet settings would give it. Tick what to keep.</p>
+  <p class="sheet-note" id="ed-adopt-note" data-t="editorPage.adopt.note"></p>
   <div class="sheet-body" id="ed-adopt-body"></div>
   <footer class="sheet-foot">
     <p class="hint" id="ed-adopt-secrets"></p>
     <div class="btn-row">
-      <button class="btn" id="ed-adopt-common" type="button">Into all servers</button>
-      <button class="btn btn-primary" id="ed-adopt-host" type="button">Into this server's overrides</button>
+      <button class="btn" id="ed-adopt-common" type="button" data-t="editorPage.adopt.common"></button>
+      <button class="btn btn-primary" id="ed-adopt-host" type="button" data-t="editorPage.adopt.host"></button>
     </div>
   </footer>
 </dialog>
 
 <div class="toasts" id="toasts" aria-live="polite"></div>
 
+<script src="/strings.js"></script>
 <script src="/common.js"></script>
 <script src="/settings.js"></script>
 <script src="/editor.js"></script>

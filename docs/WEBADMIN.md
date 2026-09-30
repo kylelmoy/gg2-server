@@ -347,7 +347,7 @@ All JSON, all under the session cookie except the first four.
 
 | | | |
 |---|---|---|
-| `GET /`, `/app.css`, `/common.js`, `/analytics.js`, `/settings.js`, `/app.js`, `/favicon.svg` | — | the page, embedded in the assembly |
+| `GET /`, `/app.css`, `/strings.js`, `/common.js`, `/analytics.js`, `/settings.js`, `/app.js`, `/favicon.svg` | — | the page, embedded in the assembly |
 | `GET /world.json` | — | the analytics map's coastlines and markers, embedded. **Served without a session**, like the page: it is the same public-domain geometry for every server in the world and says nothing about this one |
 | `GET /api/session` | — | signed in?, TLS?, server name, CSRF token if signed in |
 | `POST /api/login` | `{password}` | sets the cookie, returns the CSRF token |
@@ -447,13 +447,38 @@ is verified by opening it.
 working binary and a missing page, and so there is no directory to traverse: the
 routes name the six files by hand.
 
-**Three scripts in one global scope**, loaded in order: `common.js` (the element
-lookup, cell builders, theme tokens, number formats), `analytics.js` (the
+**Classic scripts in one global scope**, loaded in order: `strings.js` (the
+text table, below), `common.js` (the element lookup, the text lookup, cell
+builders, theme tokens, number formats), `analytics.js` (the
 Analytics view, which draws an object and never fetches one), then `app.js`.
 The view is its own file because `scripts/fleet-analytics.sh` inlines it into
 the fleet page too. `WebAssetTests` scans the files together for a name declared
 twice, and checks that every id the fleet page's scripts ask for is inside the
 analytics sheet that page cuts out of `index.html`.
+
+### The text: `strings.js`
+
+Every word the panel and the settings page show is in `Web/Assets/strings.js`,
+one nested table, and nowhere else. Rewording the panel is an edit there;
+translating it is a copy of that file with the values translated and `lang`
+set.
+
+| Where the text is used | How it names a key |
+|---|---|
+| `index.html`, `editor.html` | `data-t="key"` for text, `data-t-html` for a value carrying markup, `data-t-title` / `-placeholder` / `-aria-label` / `-alt` for attributes. `applyStrings` fills them as `common.js` loads. |
+| the scripts | `t('key')`, or `t('key', { name: value })` for a value with `{name}` placeholders. A value that is `{ "one": …, "other": … }` is a plural, chosen by `count` through `Intl.PluralRules`. |
+| a server value shown through a table | `` t(`group.${value}`) ``, which counts as using every key in `group`. |
+
+The table between `const STRINGS =` and its final `;` is strict JSON, because
+`WebStringsTests` parses it: every key the pages and scripts name is in it,
+every key in it is named somewhere, neither page holds a text node or a
+text-bearing attribute of its own, and no script assigns a literal with a
+letter in it to `textContent`, `innerHTML`, `title`, `placeholder` or
+`ariaLabel`. That last one is a regular expression over the common shape, so
+text reaching the DOM another way (a literal passed to a helper) is not caught.
+What is NOT in the table: messages the server composes (command replies, the
+settings page's setting names and descriptions, which come from
+`ServerSettings`), and the fleet analytics page's own `fleet.js`.
 
 Two rules hold `app.js` together: **state arrives on one event stream and is
 applied by `render()`** — nothing else writes to the DOM from a timer, so the
@@ -954,6 +979,7 @@ asserts behaviour on an unloaded socket, and the floor is what keeps the load ou
 |---|---|
 | `WebAdminTests` | over a real socket with a real HTTP client: every route refuses an unauthenticated request, the CSRF header is required, the map route takes a map name and nothing else, a command reaches the tick thread, every control-port verb is reachable, the page is served, the security headers are present, nobody watching means no snapshots but does mean a performance history, every sample row matches the declared fields, and an open stream gets both |
 | `BotBrainStateTests` | the brain block and the per-slot fields the Bots card and the roster are built from: a scripted server names the scripted brain and no tier, a policy server names each tier and the classes a live controller says it drives, a class no tier drives falls back by name, the counters that say a brain is consulted are sent, the engagement gate is reported both ways, and two policy tiers are told apart on the bot as well as on the card |
+| `WebStringsTests` | the text table: strict JSON, every key named is present and every key present is named, no text in either page outside it, and no literal text assigned in a script |
 | `WebAssetTests` | the panel's own files: no top-level name declared twice, every literal `$('id')` present in `index.html`, every asset actually embedded, and the analytics map's geometry — both views present, every ring an even number of coordinates, and no ring jumping the antimeridian |
 | `AdminSessionTests` | the password, the tokens, both timeouts, the lockout and its ceiling, per-address isolation, the session cap, and the generated password's alphabet — all on an injected clock, so no test sleeps |
 | `CliCoverageTests` | every `--web-*` flag moves the option it names; a settings flag with no `--web` is refused; `--web` alone is not remote; a config file alone overrides nothing and a flag beside it overrides exactly what it names |
