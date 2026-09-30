@@ -164,6 +164,36 @@ public sealed class LiveSettingsTests
         Assert.Equal(3, harness.Server.BotSlots.Count);
     }
 
+    /// <summary>
+    /// Offline drops everybody, refuses a new connection outright rather than
+    /// leaving it in the backlog, and holds the bots at zero — and coming back
+    /// listens on the SAME port, which a server started on port 0 would not do
+    /// by accident.
+    /// </summary>
+    [Fact]
+    public void OfflineDropsEveryoneRefusesConnectionsAndComesBackOnTheSamePort()
+    {
+        using var harness = new ServerHarness(options =>
+            options.Bots = options.Bots with { Enabled = true, FillToPlayers = 4, MaxBots = 4, MinHumans = 0 });
+
+        var alice = harness.JoinClient("alice");
+        harness.TickUntil(() => harness.Server.BotSlots.Count > 0, "the bots");
+        var port = harness.Port;
+
+        AssertOk(Run(harness, """{"cmd":"offline","enabled":true}"""));
+        harness.TickUntil(() => alice.IsClosed && harness.Server.BotSlots.Count == 0, "everyone gone");
+
+        Assert.True(State(harness).GetProperty("server").GetProperty("offline").GetBoolean());
+        Assert.ThrowsAny<System.Net.Sockets.SocketException>(() => new LoopbackClient(port));
+
+        AssertOk(Run(harness, """{"cmd":"offline","enabled":false}"""));
+
+        Assert.Equal(port, harness.Port);
+        harness.JoinClient("bob");
+        harness.TickUntil(() => harness.Server.BotSlots.Count > 0, "the bots back");
+        Assert.False(State(harness).GetProperty("server").GetProperty("offline").GetBoolean());
+    }
+
     [Fact]
     public void AJoinIsCountedEveryTime()
     {

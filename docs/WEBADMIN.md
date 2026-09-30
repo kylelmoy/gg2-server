@@ -198,7 +198,7 @@ All JSON, all under the session cookie except the first four.
 | `POST /api/logout` | — | clears it |
 | `GET /api/state` | — | one fresh state object, run on the tick thread |
 | `GET /api/events` | — | server-sent events: `state` snapshots, `log` lines and `perf` samples |
-| `POST /api/command` | a control-port command | freeze, resume, step, speed, bots, bots-suspend, map, teleport, kick, command, say, ban, unban, bans, analytics, config-set, restart, password, player-limit, autobalance, end-round, restart-round, rotation, team, bot-limit, bot-brain |
+| `POST /api/command` | a control-port command | freeze, resume, step, speed, bots, bots-suspend, map, teleport, kick, command, say, ban, unban, bans, analytics, config-set, restart, offline, password, player-limit, autobalance, end-round, restart-round, rotation, team, bot-limit, bot-brain |
 | `GET /api/config` | — | every setting, its value **in the config file**, and which are pinned or pending |
 | `GET /api/analytics` | — | who has played here, for how long and from where — `docs/ANALYTICS.md` |
 | `GET /api/maps` | — | what this server could change to, plus its rotation |
@@ -237,15 +237,23 @@ operator kick means. **Kicking a bot is refused by name**, because a bot has no
 connection to close and the population manager would put it straight back; the
 message names the bot count as the thing to change instead.
 
-**The roster's Ban button bans the player's address permanently**, through `ban`
+**Each roster row's menu (the `⋯` button) moves the player to another team,
+kicks, or bans.** It is one floating element outside the table, because the table
+is rebuilt five times a second; it remembers the player by slot and name and
+refuses to act if either has changed, since a departure renumbers every slot
+above it. **Ban bans the player's address permanently**, through `ban`
 by slot, after a confirmation that says so and says that everyone on that
 address is banned with them. `BanList` has the case against reading an address
 as a person.
 
-**Freeze, step and speed are verbs without panel controls.** They exist for
-debugging and each desynchronises or stalls every connected client, so the page
-does not offer them; the state tile still shows `frozen` if the control port has
-frozen the server.
+**Take offline is on the Game card**, through `offline` (`GameServer.SetOffline`):
+every client is kicked, half-finished joins are dropped, the listening socket is
+closed so a new connection is refused rather than left in the backlog, the lobby
+listing is withdrawn, and the bot population is held at zero. The process, the
+panel and the control port keep running, so an operator can change settings and
+bring it back online from the same page; the listener re-opens on the same port.
+**Freeze, step and speed stay off the page**; they are debugging verbs, and
+anything but 1x speed desynchronises every client.
 
 ### Chat
 
@@ -441,6 +449,7 @@ which is the whole test for belonging on this list (`GameServer.Live`):
 
 | Verb | Read when | Notes |
 |---|---|---|
+| `offline` `{enabled}` | now | See above. |
 | `password` `{value}` | a client joins | `state` reports `passworded`, never the value. Empty removes it. |
 | `player-limit` `{value}` | a client joins | 1..48. Lowering it removes nobody. |
 | `autobalance` `{enabled}` | the balance check | Set on the world as well as the options, or it would last one round. |

@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using GG2.Bots;
 using GG2.Protocol;
 
@@ -28,6 +30,65 @@ public sealed partial class GameServer
 
     /// <summary>Bumped when the bot brain is replaced, so the pacing loop re-arms its budget.</summary>
     private int _brainVersion;
+
+    /// <summary>Set by <see cref="SetOffline"/>.</summary>
+    private bool _offline;
+
+    /// <summary>Whether the game is offline: nobody connected, nothing accepted, no bots.</summary>
+    public bool IsOffline => _offline;
+
+    /// <summary>
+    /// Takes the game offline, or brings it back — without stopping the process.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Offline:</b> every client is kicked, every half-finished join dropped,
+    /// the listening socket closed so a new connection is REFUSED rather than left
+    /// hanging in the backlog, the lobby listing withdrawn, and the bot population
+    /// held at zero through the same target a <c>/bots off</c> suspension uses.
+    /// The panel and the control port stay up, which is the point: an operator can
+    /// change settings, edit the rotation and bring it back without a shell.
+    /// </para>
+    /// <para>
+    /// <b>Online:</b> the listener is re-opened on the SAME port it had — a
+    /// server started on port 0 would otherwise come back somewhere else — and the
+    /// lobby is told again. The world keeps ticking throughout; with nobody on it
+    /// that is the idle 2 Hz loop.
+    /// </para>
+    /// </remarks>
+    public void SetOffline(bool offline)
+    {
+        if (offline == _offline)
+            return;
+
+        if (offline)
+        {
+            _offline = true;
+
+            for (var slot = _roster.Count - 1; slot > 0; slot--)
+                if (_roster[slot].Connection is { IsClosed: false })
+                    KickPlayer(slot, "server taken offline");
+
+            foreach (var joining in _joining)
+                joining.Connection.Dispose();
+
+            _joining.Clear();
+
+            _listener?.Stop();
+            _lobby?.Unregister();
+
+            _log.Info("control: server offline; players disconnected, connections refused");
+            return;
+        }
+
+        _listener = new TcpListener(IPAddress.Any, BoundPort);
+        _listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, false);
+        _listener.Start();
+
+        _offline = false;
+        AnnounceToLobby();
+        _log.Info($"control: server online; listening on {BoundPort}");
+    }
 
     /// <summary>Clients that completed a join since startup, repeats included.</summary>
     public long JoinsSinceStart { get; private set; }

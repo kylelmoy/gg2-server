@@ -631,7 +631,8 @@ public sealed partial class GameServer
     public int BotSuspensionTicksLeft { get; private set; }
 
     /// <summary>Whether the bot population is currently held at zero by <c>/bots off</c>.</summary>
-    public bool BotsSuspended => BotSuspensionTicksLeft > 0;
+    /// <remarks>Also true while the server is offline, which holds the population at zero.</remarks>
+    public bool BotsSuspended => BotSuspensionTicksLeft > 0 || _offline;
 
     /// <summary>Seconds remaining on a suspension, rounded up. Zero when none is running.</summary>
     public int BotSuspensionSecondsLeft => (BotSuspensionTicksLeft + GameConstants.TickRate - 1) / GameConstants.TickRate;

@@ -315,6 +315,7 @@ public sealed class WebAdminTests : IDisposable
     [InlineData("""{"cmd":"password","value":""}""")]
     [InlineData("""{"cmd":"player-limit","value":10}""")]
     [InlineData("""{"cmd":"autobalance","enabled":true}""")]
+    [InlineData("""{"cmd":"offline","enabled":false}""")]
     [InlineData("""{"cmd":"end-round"}""")]
     [InlineData("""{"cmd":"restart-round"}""")]
     [InlineData("""{"cmd":"rotation","maps":[]}""")]

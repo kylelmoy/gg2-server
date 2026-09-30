@@ -1,4 +1,4 @@
-﻿using GG2.Protocol;
+using GG2.Protocol;
 using GG2.Server.Plugins;
 
 namespace GG2.Tests;

@@ -179,6 +179,11 @@ public static class ControlCommands
 
         "autobalance" => Do(() => server.SetAutobalance(Bool(request, "enabled"))),
 
+        // Takes the GAME offline and leaves the process, the panel and the
+        // control port up: everyone disconnected, no new connections, no bots.
+        // GameServer.SetOffline.
+        "offline" => Do(() => server.SetOffline(Bool(request, "enabled"))),
+
         "end-round" => server.RequestRoundEnd()
             ? Ok()
             : Error("the round is already over, or a map change is running"),
@@ -723,6 +728,7 @@ public static class ControlCommands
         json.Append(",\"passworded\":").Append(server.Passworded ? "true" : "false");
         json.Append(",\"autobalance\":").Append(server.Options.Autobalance ? "true" : "false");
         json.Append(",\"joins\":").Append(server.JoinsSinceStart);
+        json.Append(",\"offline\":").Append(server.IsOffline ? "true" : "false");
 
         json.Append(",\"rotation\":[");
 

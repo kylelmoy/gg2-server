@@ -91,38 +91,6 @@
   <div class="grid">
 
     <div class="col col-main">
-      <!--
-        The diagnostics. Six small multiples on one time axis, so a hitch in one
-        can be read against every other at the same instant — which is the whole
-        question an operator opens this card to answer. Hovering any of them puts
-        the crosshair on all six.
-      -->
-      <article class="card">
-        <header class="card-head">
-          <h2>Performance</h2>
-          <div class="card-tools">
-            <span class="at" id="chart-at" hidden></span>
-            <div class="seg seg-sm" id="range-seg" role="group" aria-label="Time range">
-              <button class="seg-btn" data-range="60" type="button">1m</button>
-              <button class="seg-btn" data-range="180" type="button">3m</button>
-              <button class="seg-btn is-on" data-range="300" type="button">5m</button>
-            </div>
-          </div>
-        </header>
-
-        <div class="charts" id="charts"></div>
-
-        <p class="chart-axis"><span id="axis-from">5 minutes ago</span><span>now</span></p>
-
-        <footer class="card-foot kpis">
-          <span class="kpi"><i>ticks/s</i><b id="kpi-rate">—</b></span>
-          <span class="kpi"><i>late ticks</i><b id="kpi-late">—</b></span>
-          <span class="kpi"><i>worst overrun</i><b id="kpi-worst">—</b></span>
-          <span class="kpi"><i>sent</i><b id="kpi-sent">—</b></span>
-          <span class="kpi"><i>gc/s</i><b id="kpi-gc">—</b></span>
-        </footer>
-      </article>
-
       <section class="scoreboard" aria-label="Round">
         <div class="score score-red">
           <span class="score-team">RED</span>
@@ -178,7 +146,6 @@
                 <th class="c-num">D</th>
                 <th class="c-num">Caps</th>
                 <th class="c-num">Pts</th>
-                <th class="c-team">Move to</th>
                 <th class="c-act"></th>
               </tr>
             </thead>
@@ -187,6 +154,38 @@
           <p class="empty" id="roster-empty" hidden>Nobody is connected.</p>
         </div>
       </article>
+
+      <!--
+        The diagnostics. Six small multiples on one time axis, so a hitch in one
+        can be read against every other at the same instant — which is the whole
+        question an operator opens this card to answer. Hovering any of them puts
+        the crosshair on all six. Collapsible like System, and open by default.
+      -->
+      <details class="card sys perf" id="perf" open>
+        <summary class="card-head">
+          <h2>Performance</h2>
+          <div class="card-tools" id="perf-tools">
+            <span class="at" id="chart-at" hidden></span>
+            <div class="seg seg-sm" id="range-seg" role="group" aria-label="Time range">
+              <button class="seg-btn" data-range="60" type="button">1m</button>
+              <button class="seg-btn" data-range="180" type="button">3m</button>
+              <button class="seg-btn is-on" data-range="300" type="button">5m</button>
+            </div>
+          </div>
+        </summary>
+
+        <div class="charts" id="charts"></div>
+
+        <p class="chart-axis"><span id="axis-from">5 minutes ago</span><span>now</span></p>
+
+        <footer class="card-foot kpis">
+          <span class="kpi"><i>ticks/s</i><b id="kpi-rate">—</b></span>
+          <span class="kpi"><i>late ticks</i><b id="kpi-late">—</b></span>
+          <span class="kpi"><i>worst overrun</i><b id="kpi-worst">—</b></span>
+          <span class="kpi"><i>sent</i><b id="kpi-sent">—</b></span>
+          <span class="kpi"><i>gc/s</i><b id="kpi-gc">—</b></span>
+        </footer>
+      </details>
 
       <!--
         Open by default, and still a <details> so it can be folded away: it keeps
@@ -216,6 +215,14 @@
       <article class="card">
         <header class="card-head"><h2>Game</h2></header>
         <div class="card-body stack">
+          <div class="control">
+            <label>Server</label>
+            <div class="btn-row">
+              <button class="btn btn-danger" id="offline" type="button">Take offline</button>
+            </div>
+            <p class="hint" id="offline-hint">Disconnects every player, refuses new connections and removes the bots. This panel stays up; bring it back online from here.</p>
+          </div>
+
           <div class="btn-row">
             <button class="btn btn-primary" id="end-round" type="button">End round</button>
             <button class="btn" id="restart-round" type="button">Restart round</button>
@@ -350,6 +357,14 @@
 </div>
 
 <div class="toasts" id="toasts" aria-live="polite"></div>
+
+<!--
+  The roster's per-player menu. ONE element outside the table, because the table
+  is rebuilt five times a second and a menu inside it would be destroyed while
+  open. It remembers the player by slot AND name and checks both before acting,
+  since a departure renumbers every slot above it.
+-->
+<div class="menu" id="player-menu" role="menu" hidden></div>
 
 <!--
   The settings editor. Every key the config file has, read from /api/config and

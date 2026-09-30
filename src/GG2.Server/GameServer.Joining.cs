@@ -77,6 +77,11 @@ public sealed partial class GameServer
 
     private void AcceptConnections(DateTime now)
     {
+        // Offline: the listener is stopped, and nothing is accepted until an
+        // operator brings the server back.
+        if (_offline)
+            return;
+
         Debug.Assert(_listener is not null, "Start() must run before Tick()");
 
         // The reference accepts one per tick because GML gave it no reason not
@@ -334,7 +339,7 @@ public sealed partial class GameServer
     /// </remarks>
     private void AnnounceToLobby()
     {
-        if (_lobby is null)
+        if (_lobby is null || _offline)
             return;
 
         _lobby.Register(new LobbyServerInfo

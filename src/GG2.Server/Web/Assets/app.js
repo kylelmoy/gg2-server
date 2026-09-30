@@ -60,6 +60,7 @@ function describe(body) {
     case 'map': return `Changing map to ${body.name}`;
     case 'kick': return 'Kicked';
     case 'ban': return 'Banned';
+    case 'offline': return body.enabled ? 'Server offline' : 'Server back online';
     case 'end-round': return 'Round ended';
     case 'restart-round': return 'Restarting the round';
     case 'autobalance': return `Autobalance ${body.enabled ? 'on' : 'off'}`;
@@ -238,8 +239,9 @@ function tiles(s) {
   $('tile-bots').textContent = `${humans} human${humans === 1 ? '' : 's'}, ${bots} bot${bots === 1 ? '' : 's'}`;
 
   $('tile-uptime').textContent = duration(s.server.uptimeSeconds);
-  $('tile-state').textContent = s.frozen ? 'frozen' : s.server.idle ? 'idle (2 Hz, nobody on)' : 'running';
-  $('tile-state').classList.toggle('warn', s.frozen);
+  $('tile-state').textContent = s.server.offline ? 'offline'
+    : s.frozen ? 'frozen' : s.server.idle ? 'idle (2 Hz, nobody on)' : 'running';
+  $('tile-state').classList.toggle('warn', s.frozen || s.server.offline);
 
   $('tile-joins').textContent = s.server.joins.toLocaleString();
 
@@ -482,44 +484,17 @@ function row(player) {
   tr.appendChild(cell(String(player.caps), 'c-num'));
   tr.appendChild(cell(String(player.points), 'c-num'));
 
-  // The two teams the player is not on. Buttons rather than a <select>: the
-  // table is rebuilt five times a second, which would close an open dropdown.
-  const move = document.createElement('td');
-  move.className = 'c-team';
-
-  for (const [team, label] of [['Red', 'Red'], ['Blue', 'Blu'], ['Spectator', 'Spec']]) {
-    if (player.team === team) continue;
-
-    const button = document.createElement('button');
-    button.className = `mini team-${team.toLowerCase()}`;
-    button.type = 'button';
-    button.textContent = label;
-    button.title = `Move ${player.name} to ${team}`;
-    button.dataset.team = team;
-    button.dataset.slot = player.slot;
-    move.appendChild(button);
-  }
-
-  tr.appendChild(move);
-
   const actions = document.createElement('td');
   actions.className = 'c-act';
 
-  if (player.connected) {
-    const kick = document.createElement('button');
-    kick.className = 'mini';
-    kick.type = 'button';
-    kick.textContent = 'Kick';
-    kick.dataset.kick = player.slot;
-    actions.appendChild(kick);
-
-    const ban = document.createElement('button');
-    ban.className = 'mini';
-    ban.type = 'button';
-    ban.textContent = 'Ban';
-    ban.dataset.ban = player.slot;
-    actions.appendChild(ban);
-  }
+  const more = document.createElement('button');
+  more.className = 'mini mini-plain more' + (menuFor && menuFor.slot === player.slot ? ' is-open' : '');
+  more.type = 'button';
+  more.textContent = '⋯';
+  more.title = `Actions for ${player.name}`;
+  more.setAttribute('aria-haspopup', 'menu');
+  more.dataset.menu = player.slot;
+  actions.appendChild(more);
 
   tr.appendChild(actions);
   return tr;
@@ -1174,6 +1149,119 @@ function bytes(value) {
   return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
+/* ---------- player menu ---------------------------------------------------- */
+
+let menuFor = null;
+
+/**
+ * Opens the per-player menu under a roster button.
+ *
+ * ⚠️ The player is remembered by slot AND name, and both are checked again when
+ * an item is chosen: a departure renumbers every slot above it, so a menu left
+ * open across one would otherwise kick or ban whoever inherited the number.
+ */
+function openMenu(slot, anchor) {
+  const player = state && state.players[slot];
+  if (!player) return;
+
+  menuFor = { slot, name: player.name };
+
+  const menu = $('player-menu');
+  const items = [];
+
+  const heading = document.createElement('div');
+  heading.className = 'menu-head';
+  heading.textContent = player.name;
+  items.push(heading);
+
+  for (const [team, label] of [['Red', 'Move to Red'], ['Blue', 'Move to Blue'], ['Spectator', 'Move to Spectators']]) {
+    if (player.team === team) continue;
+    items.push(menuItem(label, `team-${team.toLowerCase()}`, () => send({ cmd: 'team', slot, team: team.toLowerCase() })));
+  }
+
+  if (player.connected) {
+    items.push(Object.assign(document.createElement('div'), { className: 'menu-sep' }));
+
+    items.push(menuItem('Kick', 'danger', async () => {
+      if (await ask('Kick this player?', `${player.name} is disconnected immediately.`)) {
+        send({ cmd: 'kick', slot });
+      }
+    }));
+
+    // ⚠️ The ban is on the ADDRESS, permanently, and the dialog says so: anyone
+    // behind the same NAT is banned with them. BanList has the case against
+    // reading an address as a person.
+    items.push(menuItem('Ban', 'danger', async () => {
+      if (await ask(
+        'Ban this player?',
+        `${player.name} is disconnected and their address `
+        + `${player.address ? `(${player.address}) ` : ''}is banned permanently. `
+        + 'Anyone else on that address is banned too.')) {
+        send({ cmd: 'ban', slot });
+      }
+    }));
+  }
+
+  menu.replaceChildren(...items);
+  menu.hidden = false;
+
+  // Below the button, right-aligned to it, and kept on screen.
+  const box = anchor.getBoundingClientRect();
+  const width = menu.offsetWidth;
+  const height = menu.offsetHeight;
+  const left = Math.max(8, Math.min(box.right - width, window.innerWidth - width - 8));
+  const below = box.bottom + 4;
+  const top = below + height > window.innerHeight - 8 ? box.top - height - 4 : below;
+
+  menu.style.left = `${left + window.scrollX}px`;
+  menu.style.top = `${Math.max(8, top) + window.scrollY}px`;
+
+  if (state) roster(state);
+  menu.querySelector('button')?.focus();
+}
+
+function menuItem(label, kind, action) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = `menu-item ${kind}`;
+  button.setAttribute('role', 'menuitem');
+  button.textContent = label;
+
+  button.addEventListener('click', () => {
+    const target = menuFor;
+    closeMenu();
+
+    const now = state && target && state.players[target.slot];
+
+    if (!now || now.name !== target.name) {
+      toast(`${target ? target.name : 'That player'} left or moved slot; nothing was done`, 'bad');
+      return;
+    }
+
+    action();
+  });
+
+  return button;
+}
+
+function closeMenu() {
+  if (!menuFor) return;
+
+  menuFor = null;
+  $('player-menu').hidden = true;
+  if (state) roster(state);
+}
+
+document.addEventListener('click', (event) => {
+  if (menuFor && !event.target.closest('#player-menu')) closeMenu();
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeMenu();
+});
+
+window.addEventListener('scroll', closeMenu, { passive: true });
+
 /* ---------- chat ----------------------------------------------------------- */
 
 function appendChat(lines) {
@@ -1455,6 +1543,14 @@ function controls(s) {
 
   const botLimit = $('bot-limit');
   if (document.activeElement !== botLimit) botLimit.value = s.server.botLimit;
+
+  const offline = s.server.offline;
+  $('offline').textContent = offline ? 'Bring online' : 'Take offline';
+  $('offline').classList.toggle('btn-danger', !offline);
+  $('offline').classList.toggle('btn-primary', offline);
+  $('offline-hint').textContent = offline
+    ? 'Offline: connections are refused and no bots run. Settings changed here still apply.'
+    : 'Disconnects every player, refuses new connections and removes the bots. This panel stays up; bring it back online from here.';
 
   $('password-state').textContent = s.server.passworded ? 'set' : 'none';
   $('password-state').classList.toggle('is-set', s.server.passworded);
@@ -2027,6 +2123,33 @@ $('chat-form').addEventListener('submit', async (event) => {
   if (reply.ok) input.value = '';
 });
 
+$('offline').addEventListener('click', async () => {
+  if (!state) return;
+
+  if (state.server.offline) {
+    send({ cmd: 'offline', enabled: false });
+    return;
+  }
+
+  const people = state.players.filter((p) => p.connected).length;
+
+  if (await ask(
+    'Take the server offline?',
+    `${people === 0 ? 'Nobody is connected.' : `All ${people} connected player${people === 1 ? ' is' : 's are'} disconnected.`} `
+    + 'New connections are refused and the bots are removed until you bring it back online. '
+    + 'The process and this panel keep running.')) {
+    send({ cmd: 'offline', enabled: true });
+  }
+});
+
+// A button inside <summary> would also fold the card; the range buttons are
+// for the charts, not the disclosure.
+$('perf-tools').addEventListener('click', (event) => event.preventDefault());
+
+$('perf').addEventListener('toggle', (event) => {
+  if (event.target.open && perf.length > 0) drawCharts();
+});
+
 $('end-round').addEventListener('click', async () => {
   if (await ask('End the round?', 'Nobody wins, and the server moves on to the next map in the rotation after the usual ten seconds.')) {
     send({ cmd: 'end-round' });
@@ -2138,43 +2261,15 @@ $('system').addEventListener('toggle', (event) => {
 
 $('filter').addEventListener('input', () => { if (state) roster(state); });
 
-$('roster').addEventListener('click', async (event) => {
-  const kick = event.target.closest('[data-kick]');
+$('roster').addEventListener('click', (event) => {
+  const more = event.target.closest('[data-menu]');
 
-  if (kick) {
-    const slot = Number(kick.dataset.kick);
-    const player = state.players[slot];
+  if (more) {
+    event.stopPropagation();
+    const slot = Number(more.dataset.menu);
 
-    if (await ask('Kick this player?', `${player ? player.name : `Slot ${slot}`} is disconnected immediately.`)) {
-      send({ cmd: 'kick', slot });
-    }
-
-    return;
-  }
-
-  const team = event.target.closest('[data-team]');
-
-  if (team) {
-    send({ cmd: 'team', slot: Number(team.dataset.slot), team: team.dataset.team.toLowerCase() });
-    return;
-  }
-
-  const ban = event.target.closest('[data-ban]');
-
-  if (ban) {
-    const slot = Number(ban.dataset.ban);
-    const player = state.players[slot];
-
-    // ⚠️ The ban is on the ADDRESS, permanently, and the dialog says so: anyone
-    // behind the same NAT is banned with them. BanList has the case against
-    // reading an address as a person.
-    if (await ask(
-      'Ban this player?',
-      `${player ? player.name : `Slot ${slot}`} is disconnected and their address `
-      + `${player && player.address ? `(${player.address}) ` : ''}is banned permanently. `
-      + 'Anyone else on that address is banned too.')) {
-      send({ cmd: 'ban', slot });
-    }
+    if (menuFor && menuFor.slot === slot) closeMenu();
+    else openMenu(slot, more);
 
     return;
   }
