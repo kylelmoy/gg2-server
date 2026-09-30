@@ -576,6 +576,21 @@ kbd {
 
 .hint { margin: 0; font-size: var(--text-tiny); color: var(--muted); line-height: 1.45; }
 .hint.warn { color: var(--warning); }
+.live-note { border-top: var(--border-width) solid var(--separator); padding-top: 12px; }
+
+.label-state {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--default);
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.label-state.is-set { background: var(--warning-soft); color: var(--warning); }
+.toggle-row { font-size: var(--text-small); color: var(--foreground); }
+.seg-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.seg-btn:disabled:hover { color: var(--muted); }
 
 .toggle { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-tiny); color: var(--muted); cursor: pointer; user-select: none; }
 .toggle input { accent-color: var(--accent); }
@@ -659,24 +674,30 @@ kbd {
 
 .rotation { border-top: var(--border-width) solid var(--separator); padding-top: 14px; }
 
-.rotation-key {
-  font: var(--label);
-  letter-spacing: var(--label-tracking);
-  text-transform: uppercase;
-  color: var(--muted);
+.rot-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; counter-reset: rot; }
+
+.rot-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 4px 3px 8px;
+  border-radius: var(--radius-lg);
+  counter-increment: rot;
 }
 
-.rotation-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
-
-.rot {
-  font: 500 0.6875rem var(--font-mono);
-  padding: 3px 8px;
-  border-radius: var(--radius-pill);
-  background: var(--default-soft);
+.rot-item::before {
+  content: counter(rot);
+  font: 500 var(--text-tiny) var(--font-mono);
   color: var(--muted);
+  min-width: 14px;
 }
 
-.rot.is-now { background: var(--accent-soft); color: var(--accent); }
+.rot-item:hover { background: var(--default-soft); }
+.rot-item.is-now { background: var(--accent-soft); }
+.rot-name { font: 500 var(--text-small) var(--font-mono); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rot-item.is-now .rot-name { color: var(--accent); }
+.rot-tools { display: flex; gap: 0; flex: none; }
+.tag.now { background: var(--accent); color: var(--accent-foreground); }
 
 /* ---------- map ---------------------------------------------------------- */
 
@@ -926,6 +947,7 @@ kbd {
 .c-hp { width: 108px; }
 .c-class { width: 92px; color: var(--muted); }
 .c-act { width: 104px; text-align: right; white-space: nowrap; }
+.c-team { width: 96px; white-space: nowrap; }
 
 .who { display: flex; align-items: center; gap: 9px; min-width: 0; }
 
@@ -984,6 +1006,11 @@ kbd {
 }
 
 .mini:hover { background: var(--danger-soft); color: var(--danger); }
+.mini:disabled { opacity: 0.35; cursor: default; background: transparent; color: var(--muted); }
+.mini-plain:hover:not(:disabled) { background: var(--default); color: var(--foreground); }
+.mini.team-red:hover { background: color-mix(in oklab, var(--team-red) 16%, transparent); color: var(--team-red); }
+.mini.team-blue:hover { background: color-mix(in oklab, var(--team-blue) 16%, transparent); color: var(--team-blue); }
+.mini.team-spectator:hover { background: var(--default); color: var(--foreground); }
 
 /* ---------- log ---------------------------------------------------------- */
 

@@ -492,6 +492,7 @@ public sealed partial class GameServer
         client.Received.Append(joining.Unconsumed);
 
         _clients.Add(client);
+        JoinsSinceStart++;
 
         // ⚠️ AFTER the add, so `_clients.Count` is the concurrency this join
         // reached — the number a peak is measured from. Bots are not in

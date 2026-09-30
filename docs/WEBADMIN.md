@@ -2,7 +2,8 @@
 
 A browser console for a running server: who is on it, where they are, what the
 round is doing, six graphs of how the process is coping, the operator controls —
-chat, bot count, map change, teleport, kick, ban — and a settings
+chat, round end and restart, team moves, the rotation, the join password, the
+player and bot limits, the bot brain, map change, teleport, kick, ban — and a settings
 page that edits the config file, with a restart button that applies it.
 
 It is the **only** surface in this project that is meant to be reachable from
@@ -197,7 +198,7 @@ All JSON, all under the session cookie except the first four.
 | `POST /api/logout` | — | clears it |
 | `GET /api/state` | — | one fresh state object, run on the tick thread |
 | `GET /api/events` | — | server-sent events: `state` snapshots, `log` lines and `perf` samples |
-| `POST /api/command` | a control-port command | freeze, resume, step, speed, bots, bots-suspend, map, teleport, kick, command, say, ban, unban, bans, analytics, config-set, restart |
+| `POST /api/command` | a control-port command | freeze, resume, step, speed, bots, bots-suspend, map, teleport, kick, command, say, ban, unban, bans, analytics, config-set, restart, password, player-limit, autobalance, end-round, restart-round, rotation, team, bot-limit, bot-brain |
 | `GET /api/config` | — | every setting, its value **in the config file**, and which are pinned or pending |
 | `GET /api/analytics` | — | who has played here, for how long and from where — `docs/ANALYTICS.md` |
 | `GET /api/maps` | — | what this server could change to, plus its rotation |
@@ -428,11 +429,29 @@ file, the plugin list has been served to everyone connected, `WebAdminServer` ha
 hashed its own password. Writing new values into a running server's options
 object would apply some of them and not others with **nothing telling an operator
 which**. So a save writes the file and says plainly that the restart is what
-applies it. The three things that *can* change on a live server — the map, the
-bot count, the speed — have their own `ControlCommands` verbs. The map and bot
-count are panel controls; speed is reachable only through `POST /api/command`
-and the control port, because anything but 1x desynchronises every connected
-client.
+applies it. What *can* change on a live server has its own `ControlCommands`
+verb and a control on the main page instead — "Live settings" below.
+
+### Live settings
+
+The main page's Game, Bots and Map cards change the RUNNING server and write
+nothing to the file; a restart puts the file's values back, and the Game card
+says so. Each setting here is one read at use time rather than once at `Start`,
+which is the whole test for belonging on this list (`GameServer.Live`):
+
+| Verb | Read when | Notes |
+|---|---|---|
+| `password` `{value}` | a client joins | `state` reports `passworded`, never the value. Empty removes it. |
+| `player-limit` `{value}` | a client joins | 1..48. Lowering it removes nobody. |
+| `autobalance` `{enabled}` | the balance check | Set on the world as well as the options, or it would last one round. |
+| `end-round` | now | Nobody wins; the ordinary ten-second round end, then the next rotation entry. |
+| `restart-round` | now | The same, with a one-round override to the current map, so a multi-area map starts from area 1. |
+| `rotation` `{maps}` | a round ends | Refused whole if any entry is not on disk. The index follows the current map when it is in the new list; otherwise the next round is the first entry. `state` carries `rotation` and `rotationIndex` (-1 when the current map is not the rotation's). |
+| `team` `{slot, team}` | now | `ForceTeam`: skips the balance refusal a client's request meets, nothing else. Not slot 0. |
+| `bot-limit` `{max}` | every tick | `MaxBots`; the fill is separate. |
+| `bot-brain` `{mode}` | bot add | Rebuilt by `BotBrain.Build`, then every bot is removed and re-added with it, because a bot keeps its brain for life. A policy mode needs the checkpoint the server started with and is refused without one. The pacing loop re-arms the adaptive budget against the new arbiter. Loading a checkpoint runs on the tick thread and can make that tick late. |
+
+**Freeze, step and speed stay off the page**, as above.
 
 **A file pushed by `scripts/deploy.sh --config` is marked as managed** (the
 `config` verb's `managed`, `editedSincePush` and `pushWaiting`). Saving still
@@ -678,14 +697,9 @@ real Linux run is the test this section should be checked against.
 
 ## What it deliberately does not do
 
-- **No chat, and no way to send one.** A client command the panel could issue and
-  a game client could not would break CLAUDE.md's rule that the simulation never
-  special-cases anybody. If chat is wanted, it goes through `PlayerCommandKind`
-  and the socket switch first, and the panel gets it for free.
-- **No LIVE config editing.** The settings page writes the config file and the
-  restart button applies it; nothing is pushed into a running server. See "The
-  settings page" above for why, and for what the panel is trusted with as a
-  result.
+- **No live editing of the config file's other settings.** The settings page
+  writes the file and the restart button applies it. Only the settings in "Live
+  settings" change a running server, and none of those is written to the file.
 - **No user accounts.** One password, one role. An operator console with a
   permission model is a different product.
 - **No PERFORMANCE history across a restart.** The six graphs are the last five

@@ -51,7 +51,6 @@
     <div class="chips" id="chips">
       <span class="chip" id="chip-map" title="Current map"><i class="chip-key">map</i><b>—</b></span>
       <span class="chip" id="chip-mode" title="Gamemode"><i class="chip-key">mode</i><b>—</b></span>
-      <span class="chip" id="chip-uptime" title="Time since this server started"><i class="chip-key">up</i><b>—</b></span>
     </div>
 
     <div class="topbar-right">
@@ -64,24 +63,6 @@
   </header>
 
   <div class="banner" id="banner" hidden role="status"></div>
-
-  <section class="scoreboard" aria-label="Round">
-    <div class="score score-red">
-      <span class="score-team">RED</span>
-      <span class="score-value" id="score-red">0</span>
-    </div>
-
-    <div class="score-mid">
-      <div class="clock" id="clock">--:--</div>
-      <div class="clock-sub" id="clock-sub">round</div>
-      <div class="setup" id="setup" hidden>SETUP <b id="setup-time"></b></div>
-    </div>
-
-    <div class="score score-blue">
-      <span class="score-value" id="score-blue">0</span>
-      <span class="score-team">BLU</span>
-    </div>
-  </section>
 
   <section class="tiles" aria-label="Server health">
     <div class="tile">
@@ -96,38 +77,20 @@
       <span class="tile-note" id="tile-bots">—</span>
     </div>
     <div class="tile">
-      <span class="tile-key">state</span>
-      <span class="tile-value"><b id="tile-state">—</b></span>
-      <span class="tile-note" id="tile-state-note"></span>
+      <span class="tile-key">uptime</span>
+      <span class="tile-value"><b id="tile-uptime">—</b></span>
+      <span class="tile-note" id="tile-state">running</span>
     </div>
     <div class="tile">
-      <span class="tile-key">frame</span>
-      <span class="tile-value"><b id="tile-frame">—</b></span>
-      <span class="tile-note" id="tile-area"></span>
+      <span class="tile-key">connections</span>
+      <span class="tile-value"><b id="tile-joins">—</b></span>
+      <span class="tile-note">joins since start, repeats counted</span>
     </div>
   </section>
 
   <div class="grid">
 
     <div class="col col-main">
-      <article class="card card-map">
-        <header class="card-head">
-          <h2>Live map</h2>
-          <div class="card-tools">
-            <label class="toggle" title="Click the map to move the selected player there">
-              <input type="checkbox" id="teleport-mode">
-              <span>Click to teleport</span>
-            </label>
-          </div>
-        </header>
-        <div class="map-wrap">
-          <canvas id="map" width="1200" height="700"></canvas>
-          <div class="map-empty" id="map-empty">no map loaded</div>
-          <div class="map-tip" id="map-tip" hidden></div>
-        </div>
-        <footer class="card-foot" id="objective"></footer>
-      </article>
-
       <!--
         The diagnostics. Six small multiples on one time axis, so a hitch in one
         can be read against every other at the same instant — which is the whole
@@ -160,19 +123,41 @@
         </footer>
       </article>
 
-      <!--
-        Collapsed by default: this is reference, not telemetry. <details> rather
-        than a JS toggle so it opens with no script, keeps the disclosure
-        semantics a screen reader expects, and is in the DOM for ctrl-F either
-        way.
-      -->
-      <details class="card sys" id="system">
-        <summary class="card-head">
-          <h2>System</h2>
-          <span class="sys-peek" id="sys-peek">—</span>
-        </summary>
-        <div class="sys-body" id="sys-body"></div>
-      </details>
+      <section class="scoreboard" aria-label="Round">
+        <div class="score score-red">
+          <span class="score-team">RED</span>
+          <span class="score-value" id="score-red">0</span>
+        </div>
+
+        <div class="score-mid">
+          <div class="clock" id="clock">--:--</div>
+          <div class="clock-sub" id="clock-sub">round</div>
+          <div class="setup" id="setup" hidden>SETUP <b id="setup-time"></b></div>
+        </div>
+
+        <div class="score score-blue">
+          <span class="score-value" id="score-blue">0</span>
+          <span class="score-team">BLU</span>
+        </div>
+      </section>
+
+      <article class="card card-map">
+        <header class="card-head">
+          <h2>Live map</h2>
+          <div class="card-tools">
+            <label class="toggle" title="Click the map to move the selected player there">
+              <input type="checkbox" id="teleport-mode">
+              <span>Click to teleport</span>
+            </label>
+          </div>
+        </header>
+        <div class="map-wrap">
+          <canvas id="map" width="1200" height="700"></canvas>
+          <div class="map-empty" id="map-empty">no map loaded</div>
+          <div class="map-tip" id="map-tip" hidden></div>
+        </div>
+        <footer class="card-foot" id="objective"></footer>
+      </article>
 
       <article class="card">
         <header class="card-head">
@@ -193,6 +178,7 @@
                 <th class="c-num">D</th>
                 <th class="c-num">Caps</th>
                 <th class="c-num">Pts</th>
+                <th class="c-team">Move to</th>
                 <th class="c-act"></th>
               </tr>
             </thead>
@@ -201,20 +187,66 @@
           <p class="empty" id="roster-empty" hidden>Nobody is connected.</p>
         </div>
       </article>
+
+      <!--
+        Open by default, and still a <details> so it can be folded away: it keeps
+        the disclosure semantics a screen reader expects and is in the DOM for
+        ctrl-F either way.
+      -->
+      <details class="card sys" id="system" open>
+        <summary class="card-head">
+          <h2>System</h2>
+          <span class="sys-peek" id="sys-peek">—</span>
+        </summary>
+        <div class="sys-body" id="sys-body"></div>
+      </details>
     </div>
 
     <div class="col col-side">
-      <article class="card card-chat">
-        <header class="card-head"><h2>Chat</h2></header>
-        <div class="chat" id="chat" role="log" aria-live="polite"></div>
-        <p class="empty" id="chat-empty">Nothing said yet.</p>
-        <form class="chat-form" id="chat-form" autocomplete="off">
-          <div class="row">
-            <input id="chat-input" maxlength="255" placeholder="Say something" aria-label="Message">
-            <button class="btn btn-primary" id="chat-send" type="submit">Send</button>
+      <article class="card card-log">
+        <header class="card-head">
+          <h2>Log</h2>
+          <div class="card-tools">
+            <label class="toggle"><input type="checkbox" id="log-follow" checked><span>Follow</span></label>
           </div>
-          <p class="hint" id="chat-hint"></p>
-        </form>
+        </header>
+        <div class="log" id="log" role="log" aria-live="off"></div>
+      </article>
+
+      <article class="card">
+        <header class="card-head"><h2>Game</h2></header>
+        <div class="card-body stack">
+          <div class="btn-row">
+            <button class="btn btn-primary" id="end-round" type="button">End round</button>
+            <button class="btn" id="restart-round" type="button">Restart round</button>
+          </div>
+          <p class="hint">End round goes to the next map in the rotation; restart plays this map again from the start. Both run the usual ten-second round end.</p>
+
+          <label class="toggle toggle-row"><input type="checkbox" id="autobalance"><span>Autobalance teams</span></label>
+
+          <div class="control">
+            <label for="player-limit">Player limit</label>
+            <div class="stepper">
+              <button class="btn btn-icon" id="limit-down" type="button" aria-label="Fewer seats">−</button>
+              <input type="number" id="player-limit" min="1" max="48" value="10" inputmode="numeric">
+              <button class="btn btn-icon" id="limit-up" type="button" aria-label="More seats">+</button>
+              <button class="btn btn-primary" id="limit-apply" type="button">Apply</button>
+            </div>
+            <p class="hint">Seats for people, 1..48. Bots do not take one. Lowering it removes nobody.</p>
+          </div>
+
+          <form class="control" id="password-form" autocomplete="off">
+            <label for="game-password">Join password <span class="label-state" id="password-state">none</span></label>
+            <div class="row">
+              <input type="text" id="game-password" maxlength="255" placeholder="New password" spellcheck="false" autocomplete="off">
+              <button class="btn btn-primary" id="password-set" type="submit">Set</button>
+              <button class="btn" id="password-clear" type="button">Clear</button>
+            </div>
+            <p class="hint">Asked of the next players to join; nobody already in is removed.</p>
+          </form>
+
+          <p class="hint live-note">Changes on this page apply now and last until the server restarts. They are not saved to the config file; Settings is for that.</p>
+        </div>
       </article>
 
       <article class="card">
@@ -228,8 +260,30 @@
               <button class="btn btn-icon" id="bots-up" type="button" aria-label="More bots">+</button>
               <button class="btn btn-primary" id="bots-apply" type="button">Apply</button>
             </div>
-            <p class="hint">0 turns bots off. Humans always displace bots.</p>
+            <p class="hint">Players in total, people and bots together. 0 turns bots off. Humans always displace bots.</p>
             <p class="hint warn" id="bots-warn" hidden></p>
+          </div>
+
+          <div class="control">
+            <label for="bot-limit">Bot limit</label>
+            <div class="stepper">
+              <button class="btn btn-icon" id="bot-limit-down" type="button" aria-label="Lower bot limit">−</button>
+              <input type="number" id="bot-limit" min="0" max="48" value="8" inputmode="numeric">
+              <button class="btn btn-icon" id="bot-limit-up" type="button" aria-label="Raise bot limit">+</button>
+              <button class="btn btn-primary" id="bot-limit-apply" type="button">Apply</button>
+            </div>
+            <p class="hint">The most bots at once, whatever the fill.</p>
+          </div>
+
+          <div class="control">
+            <label>Brain</label>
+            <div class="seg" id="brain-seg" role="group" aria-label="Bot brain">
+              <button class="seg-btn" data-mode="scripted" type="button">Scripted</button>
+              <button class="seg-btn" data-mode="search" type="button">Search</button>
+              <button class="seg-btn" data-mode="policy" type="button">Policy</button>
+              <button class="seg-btn" data-mode="tiered" type="button">Tiered</button>
+            </div>
+            <p class="hint" id="brain-seg-note">Changing it replaces every bot.</p>
           </div>
 
           <!--
@@ -262,21 +316,30 @@
             </div>
             <p class="hint">Ends the round immediately for everyone on the server.</p>
           </div>
-          <div class="rotation" id="rotation" hidden>
-            <span class="rotation-key">rotation</span>
-            <div class="rotation-list" id="rotation-list"></div>
+
+          <div class="control rotation">
+            <label for="rotation-pick">Rotation</label>
+            <ol class="rot-list" id="rotation-list"></ol>
+            <p class="hint" id="rotation-empty">No rotation: the server stays on the map it is on.</p>
+            <div class="row">
+              <input list="map-list" id="rotation-pick" placeholder="Add a map" spellcheck="false" autocomplete="off">
+              <button class="btn" id="rotation-add" type="button">Add</button>
+            </div>
           </div>
         </div>
       </article>
 
-      <article class="card card-log">
-        <header class="card-head">
-          <h2>Log</h2>
-          <div class="card-tools">
-            <label class="toggle"><input type="checkbox" id="log-follow" checked><span>Follow</span></label>
+      <article class="card card-chat">
+        <header class="card-head"><h2>Chat</h2></header>
+        <div class="chat" id="chat" role="log" aria-live="polite"></div>
+        <p class="empty" id="chat-empty">Nothing said yet.</p>
+        <form class="chat-form" id="chat-form" autocomplete="off">
+          <div class="row">
+            <input id="chat-input" maxlength="255" placeholder="Say something" aria-label="Message">
+            <button class="btn btn-primary" id="chat-send" type="submit">Send</button>
           </div>
-        </header>
-        <div class="log" id="log" role="log" aria-live="off"></div>
+          <p class="hint" id="chat-hint"></p>
+        </form>
       </article>
     </div>
   </div>

@@ -167,6 +167,34 @@ public static class ControlCommands
 
         "restart" => Do(server.RequestRestart),
 
+        // --- live settings -----------------------------------------------------
+        //
+        // The admin panel's main page. Each applies to the RUNNING server and is
+        // never written to the config file — a restart puts the file's values
+        // back. GameServer.Live says which settings can be changed this way and
+        // why the rest cannot.
+        "password" => Do(() => server.SetGamePassword(Optional(request, "value") ?? string.Empty)),
+
+        "player-limit" => Do(() => server.SetPlayerLimit(Int(request, "value", -1))),
+
+        "autobalance" => Do(() => server.SetAutobalance(Bool(request, "enabled"))),
+
+        "end-round" => server.RequestRoundEnd()
+            ? Ok()
+            : Error("the round is already over, or a map change is running"),
+
+        "restart-round" => server.RequestRoundRestart()
+            ? Ok()
+            : Error("the round is already over, or a map change is running"),
+
+        "rotation" => Do(() => server.SetRotation(Strings(request, "maps"))),
+
+        "team" => Do(() => server.SetPlayerTeam(Int(request, "slot", -1), TeamOf(Text(request, "team")))),
+
+        "bot-limit" => Do(() => server.SetBotLimit(Int(request, "max", -1))),
+
+        "bot-brain" => Do(() => server.SetBotBrain(ServerSettings.ParseBotMode(Text(request, "mode")))),
+
         _ => Error($"unknown cmd \"{cmd}\""),
     };
 
@@ -684,6 +712,24 @@ public static class ControlCommands
         json.Append(",\"joining\":").Append(server.JoiningCount);
         json.Append(",\"bansActive\":").Append(server.Bans.Entries.Count);
         json.Append(",\"botFill\":").Append(server.Options.Bots.FillToPlayers);
+        json.Append(",\"botLimit\":").Append(server.Options.Bots.MaxBots);
+
+        // Whether a policy brain can be chosen live: only with a checkpoint the
+        // server was started with.
+        json.Append(",\"policy\":").Append(server.Options.PolicyPaths.Count > 0 ? "true" : "false");
+
+        // ⛔ Whether there IS a join password, never the password: the panel is
+        // reachable from the network, and this is the config verb's rule too.
+        json.Append(",\"passworded\":").Append(server.Passworded ? "true" : "false");
+        json.Append(",\"autobalance\":").Append(server.Options.Autobalance ? "true" : "false");
+        json.Append(",\"joins\":").Append(server.JoinsSinceStart);
+
+        json.Append(",\"rotation\":[");
+
+        for (var i = 0; i < server.Rotation.Count; i++)
+            json.Append(i == 0 ? "\"" : ",\"").Append(Escape(server.Rotation[i])).Append('"');
+
+        json.Append("],\"rotationIndex\":").Append(server.CurrentRotationIndex);
 
         // Which plugin the panel's chat box speaks through, or null for the
         // MESSAGE_STRING fallback — see GameServer.Say.
@@ -1050,6 +1096,37 @@ public static class ControlCommands
         request.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString()!
             : throw new ArgumentException($"\"{name}\" must be a string");
+
+    private static bool Bool(JsonElement request, string name) =>
+        request.TryGetProperty(name, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False
+            ? value.GetBoolean()
+            : throw new ArgumentException($"\"{name}\" must be true or false");
+
+    private static string[] Strings(JsonElement request, string name)
+    {
+        if (!request.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.Array)
+            throw new ArgumentException($"\"{name}\" must be an array of strings");
+
+        var strings = new List<string>();
+
+        foreach (var item in value.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.String)
+                throw new ArgumentException($"\"{name}\" must be an array of strings");
+
+            strings.Add(item.GetString()!);
+        }
+
+        return [.. strings];
+    }
+
+    private static Team TeamOf(string text) => text.Trim().ToLowerInvariant() switch
+    {
+        "red" => Team.Red,
+        "blue" => Team.Blue,
+        "spectator" or "spec" => Team.Spectator,
+        _ => throw new ArgumentException($"no team '{text}'; red, blue or spectator"),
+    };
 
     private static string? Optional(JsonElement request, string name) =>
         request.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String

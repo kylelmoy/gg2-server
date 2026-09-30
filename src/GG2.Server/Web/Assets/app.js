@@ -60,6 +60,15 @@ function describe(body) {
     case 'map': return `Changing map to ${body.name}`;
     case 'kick': return 'Kicked';
     case 'ban': return 'Banned';
+    case 'end-round': return 'Round ended';
+    case 'restart-round': return 'Restarting the round';
+    case 'autobalance': return `Autobalance ${body.enabled ? 'on' : 'off'}`;
+    case 'player-limit': return `Player limit ${body.value}`;
+    case 'password': return body.value ? 'Join password set' : 'Join password removed';
+    case 'rotation': return 'Rotation updated';
+    case 'team': return `Moved to ${body.team}`;
+    case 'bot-limit': return `Bot limit ${body.max}`;
+    case 'bot-brain': return `Brain ${body.mode}; bots replaced`;
     case 'teleport': return 'Teleported';
     case 'config-set': return 'Settings saved';
     case 'restart': return 'Restarting';
@@ -138,13 +147,14 @@ function render(next) {
   $('server-port').textContent = `:${next.server.port}`;
   chip('chip-map', next.map || '—');
   chip('chip-mode', spaced(next.match.mode));
-  chip('chip-uptime', duration(next.server.uptimeSeconds));
 
   banner(next);
   scores(next);
   tiles(next);
   kpis();
   brains(next);
+  controls(next);
+  rotation(next);
   roster(next);
   objective(next);
 
@@ -227,12 +237,11 @@ function tiles(s) {
   $('tile-slots').textContent = `/ ${s.server.slots}`;
   $('tile-bots').textContent = `${humans} human${humans === 1 ? '' : 's'}, ${bots} bot${bots === 1 ? '' : 's'}`;
 
-  $('tile-state').textContent = s.frozen ? 'frozen' : s.server.idle ? 'idle' : 'running';
+  $('tile-uptime').textContent = duration(s.server.uptimeSeconds);
+  $('tile-state').textContent = s.frozen ? 'frozen' : s.server.idle ? 'idle (2 Hz, nobody on)' : 'running';
   $('tile-state').classList.toggle('warn', s.frozen);
-  $('tile-state-note').textContent = s.server.idle && !s.frozen ? '2 Hz, nobody on' : '';
 
-  $('tile-frame').textContent = s.frame.toLocaleString();
-  $('tile-area').textContent = s.match.areas > 1 ? `area ${s.match.area} of ${s.match.areas}` : '';
+  $('tile-joins').textContent = s.server.joins.toLocaleString();
 
   // Where the chat box's lines go, which a player sees very differently: chat
   // through a plugin, or an on-screen notice that replaces the last one.
@@ -472,6 +481,26 @@ function row(player) {
   tr.appendChild(cell(String(player.deaths), 'c-num'));
   tr.appendChild(cell(String(player.caps), 'c-num'));
   tr.appendChild(cell(String(player.points), 'c-num'));
+
+  // The two teams the player is not on. Buttons rather than a <select>: the
+  // table is rebuilt five times a second, which would close an open dropdown.
+  const move = document.createElement('td');
+  move.className = 'c-team';
+
+  for (const [team, label] of [['Red', 'Red'], ['Blue', 'Blu'], ['Spectator', 'Spec']]) {
+    if (player.team === team) continue;
+
+    const button = document.createElement('button');
+    button.className = `mini team-${team.toLowerCase()}`;
+    button.type = 'button';
+    button.textContent = label;
+    button.title = `Move ${player.name} to ${team}`;
+    button.dataset.team = team;
+    button.dataset.slot = player.slot;
+    move.appendChild(button);
+  }
+
+  tr.appendChild(move);
 
   const actions = document.createElement('td');
   actions.className = 'c-act';
@@ -1358,6 +1387,89 @@ function renderSystem(info) {
 
 /* ---------- maps ----------------------------------------------------------- */
 
+let mapNames = [];
+let rotationKey = '';
+
+/**
+ * The rotation editor, drawn from the state so an edit made anywhere — this
+ * tab, another one, the control port — shows up. Redrawn only when the list or
+ * the current entry changes, so a click is never lost to a rebuild.
+ */
+function rotation(s) {
+  const key = JSON.stringify([s.server.rotation, s.server.rotationIndex]);
+  if (key === rotationKey) return;
+  rotationKey = key;
+
+  const list = s.server.rotation;
+  $('rotation-empty').hidden = list.length > 0;
+
+  $('rotation-list').replaceChildren(...list.map((name, index) => {
+    const item = document.createElement('li');
+    item.className = 'rot-item' + (index === s.server.rotationIndex ? ' is-now' : '');
+
+    const label = document.createElement('span');
+    label.className = 'rot-name';
+    label.textContent = name;
+    item.appendChild(label);
+
+    if (index === s.server.rotationIndex) item.appendChild(tag('NOW', 'now'));
+
+    const tools = document.createElement('span');
+    tools.className = 'rot-tools';
+
+    for (const [action, text, title, disabled] of [
+      ['up', '↑', 'Move up', index === 0],
+      ['down', '↓', 'Move down', index === list.length - 1],
+      ['remove', '×', 'Remove', false],
+    ]) {
+      const button = document.createElement('button');
+      button.className = 'mini' + (action === 'remove' ? '' : ' mini-plain');
+      button.type = 'button';
+      button.textContent = text;
+      button.title = title;
+      button.disabled = disabled;
+      button.dataset.rot = action;
+      button.dataset.index = index;
+      tools.appendChild(button);
+    }
+
+    item.appendChild(tools);
+    return item;
+  }));
+}
+
+function sendRotation(list) {
+  return send({ cmd: 'rotation', maps: list });
+}
+
+/**
+ * The Game and Bots cards' live settings. A field the operator is typing in is
+ * left alone; everything else follows the server.
+ */
+function controls(s) {
+  const autobalance = $('autobalance');
+  autobalance.checked = s.server.autobalance;
+
+  const limit = $('player-limit');
+  if (document.activeElement !== limit) limit.value = s.server.slots;
+
+  const botLimit = $('bot-limit');
+  if (document.activeElement !== botLimit) botLimit.value = s.server.botLimit;
+
+  $('password-state').textContent = s.server.passworded ? 'set' : 'none';
+  $('password-state').classList.toggle('is-set', s.server.passworded);
+  $('password-clear').disabled = !s.server.passworded;
+
+  for (const button of document.querySelectorAll('#brain-seg .seg-btn')) {
+    const mode = button.dataset.mode;
+    button.classList.toggle('is-on', s.bots.mode === mode);
+
+    // A policy brain needs a checkpoint the server was started with.
+    button.disabled = (mode === 'policy' || mode === 'tiered') && !s.server.policy;
+    button.title = button.disabled ? 'Needs a policy checkpoint (--policy) at startup' : '';
+  }
+}
+
 async function loadMaps() {
   try {
     const list = await (await fetch('/api/maps')).json();
@@ -1369,13 +1481,7 @@ async function loadMaps() {
       return option;
     }));
 
-    $('rotation').hidden = list.rotation.length === 0;
-    $('rotation-list').replaceChildren(...list.rotation.map((name) => {
-      const node = document.createElement('span');
-      node.className = 'rot' + (state && name === state.map ? ' is-now' : '');
-      node.textContent = name;
-      return node;
-    }));
+    mapNames = list.maps;
   } catch { /* the panel is still usable without the map list */ }
 }
 
@@ -1921,6 +2027,85 @@ $('chat-form').addEventListener('submit', async (event) => {
   if (reply.ok) input.value = '';
 });
 
+$('end-round').addEventListener('click', async () => {
+  if (await ask('End the round?', 'Nobody wins, and the server moves on to the next map in the rotation after the usual ten seconds.')) {
+    send({ cmd: 'end-round' });
+  }
+});
+
+$('restart-round').addEventListener('click', async () => {
+  if (await ask('Restart the round?', `Nobody wins, and ${state ? state.map : 'this map'} starts again from the beginning after the usual ten seconds.`)) {
+    send({ cmd: 'restart-round' });
+  }
+});
+
+$('autobalance').addEventListener('change', (event) => send({ cmd: 'autobalance', enabled: event.target.checked }));
+
+$('limit-up').addEventListener('click', () => step($('player-limit'), 1));
+$('limit-down').addEventListener('click', () => step($('player-limit'), -1));
+$('limit-apply').addEventListener('click', () => send({ cmd: 'player-limit', value: Number($('player-limit').value) || 0 }));
+
+$('password-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+
+  const value = $('game-password').value;
+  if (!value) return;
+
+  const reply = await send({ cmd: 'password', value });
+  if (reply.ok) $('game-password').value = '';
+});
+
+$('password-clear').addEventListener('click', () => send({ cmd: 'password', value: '' }));
+
+$('bot-limit-up').addEventListener('click', () => step($('bot-limit'), 1));
+$('bot-limit-down').addEventListener('click', () => step($('bot-limit'), -1));
+$('bot-limit-apply').addEventListener('click', () => send({ cmd: 'bot-limit', max: Number($('bot-limit').value) || 0 }));
+
+for (const button of document.querySelectorAll('#brain-seg .seg-btn')) {
+  button.addEventListener('click', async () => {
+    const mode = button.dataset.mode;
+    if (!state || state.bots.mode === mode) return;
+
+    if (await ask('Change the bot brain?', `Every bot is removed and added back running ${mode}. Search and the policy brains cost more tick time than scripted.`)) {
+      send({ cmd: 'bot-brain', mode });
+    }
+  });
+}
+
+$('rotation-list').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-rot]');
+  if (!button || !state) return;
+
+  const list = [...state.server.rotation];
+  const index = Number(button.dataset.index);
+
+  if (button.dataset.rot === 'remove') list.splice(index, 1);
+  else {
+    const other = button.dataset.rot === 'up' ? index - 1 : index + 1;
+    if (other < 0 || other >= list.length) return;
+    [list[index], list[other]] = [list[other], list[index]];
+  }
+
+  sendRotation(list);
+});
+
+$('rotation-add').addEventListener('click', async () => {
+  const name = $('rotation-pick').value.trim();
+  if (!name || !state) return;
+
+  if (mapNames.length > 0 && !mapNames.includes(name)) {
+    toast(`no map '${name}'`, 'bad');
+    return;
+  }
+
+  const reply = await sendRotation([...state.server.rotation, name]);
+  if (reply.ok) $('rotation-pick').value = '';
+});
+
+$('rotation-pick').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') $('rotation-add').click();
+});
+
 $('bots-up').addEventListener('click', () => step($('bots'), 1));
 $('bots-down').addEventListener('click', () => step($('bots'), -1));
 $('bots-apply').addEventListener('click', () => send({ cmd: 'bots', fill: Number($('bots').value) || 0 }));
@@ -1964,6 +2149,13 @@ $('roster').addEventListener('click', async (event) => {
       send({ cmd: 'kick', slot });
     }
 
+    return;
+  }
+
+  const team = event.target.closest('[data-team]');
+
+  if (team) {
+    send({ cmd: 'team', slot: Number(team.dataset.slot), team: team.dataset.team.toLowerCase() });
     return;
   }
 

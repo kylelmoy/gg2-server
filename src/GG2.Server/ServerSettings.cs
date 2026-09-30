@@ -1060,6 +1060,8 @@ public static class ServerSettings
     /// bench harness asks for each arm in turn, so <see cref="BotMode"/>'s values
     /// must not be renumbered.
     /// </summary>
+    internal static BotMode ParseBotMode(string value) => Mode(value);
+
     private static BotMode Mode(string value) => value.Trim().ToLowerInvariant() switch
     {
         "scripted" or "0" => BotMode.Scripted,

@@ -124,21 +124,36 @@ public sealed partial class GameServer
         // and a match stops replaying. Run is also the one entry point that
         // HeadlessMatch, the env and eval never call, which is what keeps a
         // benchmark from picking this up by accident.
-        var arbiter = _options.AdaptiveBotBudget
-            ? _options.Bots.Brain?.Arbiter as DecisionQuotaArbiter
-            : null;
+        //
+        // ⚠️ Re-armed when the operator swaps the brain (SetBotBrain), which
+        // builds a new arbiter: a controller left holding the old one would
+        // tune a budget nothing reads. Checked between ticks, like the rest.
+        DecisionQuotaArbiter? arbiter = null;
+        MicroBudgetController? budget = null;
+        var armedBrain = -1;
 
-        var budget = arbiter is null
-            ? null
-            : new MicroBudgetController(
-                ceiling: arbiter.UnitsPerTick,
+        void ArmBudget()
+        {
+            armedBrain = _brainVersion;
 
-                // ⚠️ The floor is one policy decision, not zero: a budget of zero
-                // would also starve the cheap tier, and the whole point of tiering
-                // is that the cheap one survives the expensive one being cut.
-                floor: MicroBudgetController.PolicyFloorUnits,
-                step: MicroBudgetController.DefaultStepUnits,
-                windowTicks: LateTickMonitor.WindowTicks);
+            arbiter = _options.AdaptiveBotBudget
+                ? _options.Bots.Brain?.Arbiter as DecisionQuotaArbiter
+                : null;
+
+            budget = arbiter is null
+                ? null
+                : new MicroBudgetController(
+                    ceiling: arbiter.UnitsPerTick,
+
+                    // ⚠️ The floor is one policy decision, not zero: a budget of zero
+                    // would also starve the cheap tier, and the whole point of tiering
+                    // is that the cheap one survives the expensive one being cut.
+                    floor: MicroBudgetController.PolicyFloorUnits,
+                    step: MicroBudgetController.DefaultStepUnits,
+                    windowTicks: LateTickMonitor.WindowTicks);
+        }
+
+        ArmBudget();
 
         // ⚠️ The restart flag is checked HERE, beside the cancellation token,
         // rather than by cancelling that token: the token is the HOST's — a
@@ -297,6 +312,9 @@ public sealed partial class GameServer
 
             // ⚠️ AFTER the late check and BEFORE the wait, so it sees this tick's
             // pressure and the next tick runs on the adjusted budget.
+            if (armedBrain != _brainVersion)
+                ArmBudget();
+
             if (budget is not null && arbiter is not null)
             {
                 var used = tickLength - wait;
