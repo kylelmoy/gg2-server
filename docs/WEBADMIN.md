@@ -290,7 +290,10 @@ also how a fleet starts: with no shared settings the comparison is against the
 defaults, so adopting one server into "all servers" makes its file the common
 one. Host-local settings are never compared. **Secrets cannot be adopted** —
 `config` never sends a secret's value — so the dialog names the ones the member
-has set and they are entered on the settings page by hand.
+has set and they are entered on the settings page by hand. A setting whose
+default is resolved on the machine (`[Bots] SearchThreads`, from its core count)
+shows as a difference whenever the two machines differ, and adopting it writes
+the member's resolved value explicitly.
 
 **Every server at once** (the Fleet sheet; `POST /api/fleet/broadcast` with a
 control command) sends one command to every member and reports each reply. Only

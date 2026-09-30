@@ -133,7 +133,10 @@ async function load() {
   $('ed-directory').textContent = model.directory;
   $('ed-hub').hidden = !onHub;
   $('ed-deploy').hidden = onHub;
-  if (onHub) document.title = 'Fleet settings — gg2-server';
+  if (onHub) {
+    document.title = 'Fleet settings — gg2-server';
+    document.querySelector('.ed-brand h1').textContent = 'Fleet settings';
+  }
   render();
 }
 
