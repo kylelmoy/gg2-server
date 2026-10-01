@@ -107,8 +107,15 @@ public static class BotReflex
     /// risks a shooter standing far enough away that the rocket is never eligible
     /// at any point on its flight.
     /// </para>
+    /// <para>
+    /// <paramref name="reflexTicks"/> and <paramref name="missChance"/> are the
+    /// difficulty's share — <see cref="BotSkill.ReflexTicks"/> and
+    /// <see cref="BotSkill.ReflexMissChance"/>, read by <see cref="Noticed"/>. Left
+    /// at zero the reflex is perfect.
+    /// </para>
     /// </remarks>
-    public static bool IncomingProjectile(in WorldView world, int slot, double minTravel)
+    public static bool IncomingProjectile(
+        in WorldView world, int slot, double minTravel, int reflexTicks = 0, double missChance = 0)
     {
         if (!world.IsAlive(slot))
             return false;
@@ -144,6 +151,9 @@ public static class BotReflex
                 continue;
 
             if (TravelledFrom(in world, in projectile) < minTravel)
+                continue;
+
+            if (!Noticed(in world, in projectile, found[i], slot, reflexTicks, missChance))
                 continue;
 
             if (InBlastBeam(self.X, self.Y, projectile.X, projectile.Y, forwardX, forwardY, sideX, sideY)
@@ -212,8 +222,12 @@ public static class BotReflex
     /// avoids is the direct hit — 25 damage plus the 30 from an explosion centred on
     /// the body, plus the knockback — and that is worth having.
     /// </para>
+    /// <para>
+    /// <paramref name="reflexTicks"/> and <paramref name="missChance"/> are the
+    /// difficulty's share, as for <see cref="IncomingProjectile"/>.
+    /// </para>
     /// </remarks>
-    public static bool RocketDodge(in WorldView world, int slot)
+    public static bool RocketDodge(in WorldView world, int slot, int reflexTicks = 0, double missChance = 0)
     {
         if (!world.IsAlive(slot))
             return false;
@@ -234,6 +248,9 @@ public static class BotReflex
                 continue;
 
             if (rocket.Kind != ProjectileKind.Rocket || rocket.Team == team)
+                continue;
+
+            if (!Noticed(in world, in rocket, found[i], slot, reflexTicks, missChance))
                 continue;
 
             var hitStanding = false;
@@ -273,6 +290,48 @@ public static class BotReflex
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Has this bot seen this projectile coming — the difficulty's gate on both
+    /// reflexes.
+    /// </summary>
+    /// <remarks>
+    /// <b>The reaction time is a distance, for the reason
+    /// <see cref="IncomingProjectile"/>'s minimum travel is</b>: a projectile has
+    /// to have flown <paramref name="reflexTicks"/> ticks' worth of its own speed.
+    /// A shot from across the room is noticed long before it matters at any tier;
+    /// a point-blank one beats a slow bot, which is what a slow reaction is.
+    /// <para>
+    /// <b>The miss is a hash, not a draw.</b> It has to be decided once per
+    /// projectile — re-rolling every tick turns a 60% miss into a near-certain
+    /// catch over a 20-tick flight — and remembering the decision would be state
+    /// to carry and snapshot. Hashing the handle with the bot's slot gives the
+    /// same answer every tick, a different one per bot, and draws nothing from
+    /// <c>ScriptedBot.Random</c>, so a perfect-reflex tier runs exactly as before.
+    /// A compaction renumbering the slot mid-flight re-decides one projectile,
+    /// which costs nothing.
+    /// </para>
+    /// </remarks>
+    private static bool Noticed(
+        in WorldView world, in ProjectileState projectile, ProjectileHandle handle, int slot,
+        int reflexTicks, double missChance)
+    {
+        if (reflexTicks > 0 && TravelledFrom(in world, in projectile) < reflexTicks * projectile.Motion.Speed)
+            return false;
+
+        return missChance <= 0 || Roll(handle, slot) >= missChance;
+    }
+
+    /// <summary>A uniform <c>[0, 1)</c> fixed by the projectile and the bot — SplitMix64's finaliser.</summary>
+    private static double Roll(ProjectileHandle handle, int slot)
+    {
+        var z = (((ulong)(uint)handle.Index << 32) | handle.Generation) ^ ((ulong)(slot + 1) * 0x9E3779B97F4A7C15UL);
+        z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+        z = (z ^ (z >> 27)) * 0x94D049BB133111EBUL;
+        z ^= z >> 31;
+
+        return (z >> 11) * (1.0 / (1UL << 53));
     }
 
     /// <summary>

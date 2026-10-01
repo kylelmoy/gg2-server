@@ -30,6 +30,18 @@ namespace GG2.Bots;
 /// <param name="MoveErrorMultiplier">What the error is scaled by when the target is moving.</param>
 /// <param name="HoldFireChance">Quake III's fire throttle: the chance of simply not shooting this aim interval.</param>
 /// <param name="SplashAim">Whether this bot knows to aim at a grounded target's feet.</param>
+/// <param name="LeadMode">How the intercept is solved.</param>
+/// <param name="ReflexTicks">
+/// How long a projectile has to have been in the air before this bot reacts to
+/// it at all — the rocket dodge and the pyro's airblast both. Measured as the
+/// distance the projectile has flown at its own speed, so a shot fired from far
+/// off is seen in time at every tier and only a close one beats a slow bot.
+/// </param>
+/// <param name="ReflexMissChance">
+/// The chance of never reacting to a given projectile. Decided once per
+/// projectile and bot (<see cref="BotReflex"/>), not re-rolled each tick, which
+/// would make a miss vanishingly rare over a rocket's flight.
+/// </param>
 public readonly record struct BotSkill(
     int AcquireTicks,
     int FireDelayTicks,
@@ -41,7 +53,9 @@ public readonly record struct BotSkill(
     double MoveErrorMultiplier,
     double HoldFireChance,
     bool SplashAim,
-    BotLeadMode LeadMode)
+    BotLeadMode LeadMode,
+    int ReflexTicks = 0,
+    double ReflexMissChance = 0)
 {
     /// <summary>
     /// The knobs for a skill in <c>[0, 1]</c> — <c>botSkillApply.gml</c>.
@@ -73,7 +87,12 @@ public readonly record struct BotSkill(
 
             // Every tier solves the full intercept; what differs is how often it
             // re-solves and how far off it then aims.
-            LeadMode: BotLeadMode.Full);
+            LeadMode: BotLeadMode.Full,
+
+            // The top tier keeps the perfect reflexes it always had; the rest
+            // see a rocket late (9 ticks is 300ms) and sometimes not at all.
+            ReflexTicks: (int)Math.Floor(Lerp(skill, 9, 6, 3, 0) + 0.5),
+            ReflexMissChance: Lerp(skill, 0.6, 0.35, 0.15, 0));
     }
 
     /// <summary>Whether <paramref name="tier"/> is one of the server's difficulty tiers.</summary>

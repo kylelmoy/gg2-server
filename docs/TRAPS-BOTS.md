@@ -630,6 +630,16 @@ model.** Four gates, all off `BotSkill`:
   class's multiplier, or a slow-turning bot sprays the wall it acquired on.
 - **No filter, no smoothing** — lag, overshoot and settling fall out of
   three numbers alone: perceive interval, aim interval, turn rate.
+- **The two projectile reflexes (rocket dodge, airblast) are the one part
+  of difficulty outside that chain.** `BotSkill.ReflexTicks` is a reaction
+  time expressed as distance (a projectile is ignored until it has flown that
+  many ticks at its own speed, so only close shots beat a slow bot), and
+  `ReflexMissChance` ignores a projectile outright. The miss is a hash of the
+  projectile handle and the bot's slot, decided once per projectile: a
+  per-tick roll would almost never survive a whole flight, and a draw would
+  move `ScriptedBot.Random`. Tier 5 is 0 and 0, which is why no tier-5 pin
+  moves; a nonzero value there would move all of them.
+  `BotReflexTests`, "Difficulty".
 
 - ⚠️ **Aim error is UNIFORM on [-1, 1], not Gaussian** (Quake III's
   `crandom()`), with two multipliers: moving-target scale, and **Quake

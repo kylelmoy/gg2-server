@@ -717,7 +717,9 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
 
         // Dodge an incoming rocket. GROUNDED ONLY, which keeps it out of every
         // planned jump arc without needing to know anything about that arc — and
-        // never throttled, because it is a reflex to a thing already in the air.
+        // never throttled, because it is a reflex to a thing already in the air —
+        // though how quick and how reliable that reflex is IS the difficulty's,
+        // through BotSkill.ReflexTicks and ReflexMissChance.
         //
         // ORing is safe because JUMP is EDGE-TRIGGERED in Begin Step: a press
         // cannot double a jump the follower already wants.
@@ -733,7 +735,7 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         // between them they fired often enough, precisely where the follower has
         // arrived and is returning no movement keys at all, that bots in a
         // firefight read as stuck in place jumping.
-        if (self.OnGround && BotReflex.RocketDodge(in world, slot))
+        if (self.OnGround && BotReflex.RocketDodge(in world, slot, Skill.ReflexTicks, Skill.ReflexMissChance))
             navKeys |= PlayerKeys.Jump;
 
         // Grounded, nothing to walk to, and not deliberately standing to fight:

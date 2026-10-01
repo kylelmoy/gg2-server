@@ -47,9 +47,12 @@ public static class BotClassKeys
     /// something on <see cref="WorldView"/> because the simulation must not know
     /// the nav graph exists.
     /// </param>
+    /// <param name="skill">
+    /// For the airblast's reflex alone. The default reacts perfectly.
+    /// </param>
     public static PlayerKeys For(
         BotCombatState state, in WorldView world, int slot, double distance, int tick,
-        bool subjectIsAlly = false, NavGraph? graph = null)
+        bool subjectIsAlly = false, NavGraph? graph = null, BotSkill skill = default)
     {
         // NOT a blanket "no subject, no keys". `botCombatUpdate`'s own
         // no-subject branch still calls this — "nothing to aim at is a state a class
@@ -174,7 +177,8 @@ public static class BotClassKeys
                 // and gate the beam scan regardless of geometry.
                 if (weapon.ReadyToBlast
                     && weapon.AmmoCount >= AirblastAmmo
-                    && BotReflex.IncomingProjectile(in world, slot, BotConstants.AirblastMinTravel))
+                    && BotReflex.IncomingProjectile(
+                        in world, slot, BotConstants.AirblastMinTravel, skill.ReflexTicks, skill.ReflexMissChance))
                 {
                     flame |= PlayerKeys.Special;
                 }

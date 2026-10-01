@@ -49,7 +49,7 @@ public sealed class BotReflexTests(ITestOutputHelper output)
     /// <c>move_all_bullets</c> does. Putting it far away is what makes the rocket
     /// eligible for a reflect.
     /// </remarks>
-    private static void Rocket(
+    private static ProjectileHandle Rocket(
         ScenarioWorld world, double x, double y, double vx, double vy,
         Team team = Team.Blue, double travelled = 500,
         ProjectileKind kind = ProjectileKind.Rocket)
@@ -68,7 +68,7 @@ public sealed class BotReflexTests(ITestOutputHelper output)
         projectile.Motion.HSpeed = vx;
         projectile.Motion.VSpeed = vy;
 
-        world.State.SpawnProjectile(in projectile);
+        return world.State.SpawnProjectile(in projectile);
     }
 
     // ------------------------------------------------------------------
@@ -529,5 +529,122 @@ public sealed class BotReflexTests(ITestOutputHelper output)
         Assert.Equal(PlayerKeys.None, Keys(200, ready: false) & PlayerKeys.Special);
         Assert.Equal(PlayerKeys.None, Keys(39, ready: true) & PlayerKeys.Special);
         Assert.True((Keys(40, ready: true) & PlayerKeys.Special) != 0);
+    }
+
+    // ------------------------------------------------------------------
+    // Difficulty
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// The reflex gets slower and less reliable down the tiers, and the top tier
+    /// is the perfect one.
+    /// </summary>
+    /// <remarks>
+    /// Tier 5 at zero and zero is not decoration: every pinned bot measurement
+    /// runs at tier 5, and a nonzero miss there would move all of them.
+    /// </remarks>
+    [Fact]
+    public void ReflexesWeakenDownTheTiers()
+    {
+        var top = BotSkill.ForTier(5);
+
+        Assert.Equal(0, top.ReflexTicks);
+        Assert.Equal(0, top.ReflexMissChance);
+
+        for (var tier = BotConstants.TierMin; tier < BotConstants.TierMax; tier++)
+        {
+            var lower = BotSkill.ForTier(tier);
+            var upper = BotSkill.ForTier(tier + 1);
+
+            Assert.True(lower.ReflexTicks > upper.ReflexTicks, $"tier {tier} reacts no slower than {tier + 1}");
+            Assert.True(lower.ReflexMissChance > upper.ReflexMissChance, $"tier {tier} misses no more than {tier + 1}");
+        }
+    }
+
+    /// <summary>
+    /// A rocket fired close is too quick for a slow bot, and one fired from far
+    /// off is not.
+    /// </summary>
+    [Fact]
+    public void ASlowBotDoesNotReactToAPointBlankRocket()
+    {
+        var reflex = BotSkill.ForTier(1).ReflexTicks;
+
+        bool Dodges(double travelled)
+        {
+            var world = Load();
+            var slot = world.Place(PlayerClass.Soldier, Team.Red, StandX, StandY);
+
+            Rocket(world, StandX + 120, StandY, -12, 0, travelled: travelled);
+
+            return BotReflex.RocketDodge(View(world), slot, reflex);
+        }
+
+        bool Blasts(double travelled)
+        {
+            var world = Load();
+            var pyro = world.Place(PlayerClass.Pyro, Team.Red, StandX, StandY);
+
+            Aim(world, pyro, 0);
+            Rocket(world, StandX + 80, StandY, -12, 0, travelled: travelled);
+
+            return BotReflex.IncomingProjectile(View(world), pyro, BotConstants.AirblastMinTravel, reflex);
+        }
+
+        // 12px a tick: one tick short of the reflex is unseen, the full reflex is seen.
+        Assert.False(Dodges((reflex - 1) * 12));
+        Assert.True(Dodges(reflex * 12));
+        Assert.False(Blasts((reflex - 1) * 12));
+        Assert.True(Blasts(reflex * 12));
+
+        // The control: a perfect reflex takes the same point-blank rocket.
+        var control = Load();
+        var controlSlot = control.Place(PlayerClass.Soldier, Team.Red, StandX, StandY);
+
+        Rocket(control, StandX + 120, StandY, -12, 0, travelled: 0);
+
+        Assert.True(BotReflex.RocketDodge(View(control), controlSlot));
+    }
+
+    /// <summary>
+    /// The miss is decided once per rocket, at the rate the tier asks for.
+    /// </summary>
+    /// <remarks>
+    /// <b>Once per rocket is the property that matters.</b> A miss re-rolled each
+    /// tick would almost never survive a whole flight, so asking the same rocket
+    /// twice has to give the same answer — and over many rockets the rate has to
+    /// land near the chance, or the knob does nothing.
+    /// </remarks>
+    [Fact]
+    public void AMissIsDecidedOncePerRocketAtTheTiersRate()
+    {
+        var chance = BotSkill.ForTier(1).ReflexMissChance;
+        var world = Load();
+        var slot = world.Place(PlayerClass.Soldier, Team.Red, StandX, StandY);
+
+        const int Rockets = 2000;
+        var dodged = 0;
+
+        for (var i = 0; i < Rockets; i++)
+        {
+            var handle = Rocket(world, StandX + 120, StandY, -12, 0);
+            var first = BotReflex.RocketDodge(View(world), slot, 0, chance);
+
+            Assert.Equal(first, BotReflex.RocketDodge(View(world), slot, 0, chance));
+
+            if (first)
+                dodged++;
+
+            world.State.FreeProjectile(handle);
+        }
+
+        var missed = 1 - ((double)dodged / Rockets);
+
+        output.WriteLine($"missed {missed:F3} of {Rockets} against a chance of {chance:F3}");
+        Assert.InRange(missed, chance - 0.05, chance + 0.05);
+
+        // And a certain miss sees nothing.
+        Rocket(world, StandX + 120, StandY, -12, 0);
+        Assert.False(BotReflex.RocketDodge(View(world), slot, 0, 1));
     }
 }
