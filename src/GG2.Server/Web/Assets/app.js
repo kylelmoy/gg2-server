@@ -1596,7 +1596,7 @@ function controls(s) {
     const mode = button.dataset.mode;
     button.classList.toggle('is-on', s.bots.mode === mode);
 
-    // A policy brain needs a checkpoint the server was started with.
+    // A policy brain needs a checkpoint: the server's own, or the shipped bundle.
     button.disabled = (mode === 'policy' || mode === 'tiered') && !s.server.policy;
     button.title = button.disabled ? t('app.brain.needsPolicy') : '';
   }

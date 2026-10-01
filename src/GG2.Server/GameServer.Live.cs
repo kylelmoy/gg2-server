@@ -285,6 +285,14 @@ public sealed partial class GameServer
             _options.PolicyPaths = [];
             _options.BotClassPolicies = [];
         }
+        else if (_options.PolicyPaths.Count == 0)
+        {
+            // A server started without a checkpoint runs the shipped bundle: the
+            // panel can name a mode and never a path, and a path from the network
+            // is not something this verb should take. Not kept in the options,
+            // which say what was CONFIGURED.
+            _options.PolicyPaths = MapDirectory.ResolveCheckpoints();
+        }
 
         try
         {

@@ -668,6 +668,11 @@ public static class ControlCommands
         return Ok($"\"suspendedSeconds\":{server.BotSuspensionSecondsLeft}");
     }
 
+    // Probed once: the panel polls `state` every second, and a directory walk per
+    // poll is file I/O for an answer that only a redeploy changes.
+    private static readonly Lazy<bool> ShippedCheckpointsPresent =
+        new(() => MapDirectory.ResolveCheckpoints().Count > 0);
+
     public static string State(GameServer server)
     {
         var json = new StringBuilder(4096);
@@ -724,9 +729,10 @@ public static class ControlCommands
         json.Append(",\"botFill\":").Append(server.Options.Bots.FillToPlayers);
         json.Append(",\"botLimit\":").Append(server.Options.Bots.MaxBots);
 
-        // Whether a policy brain can be chosen live: only with a checkpoint the
-        // server was started with.
-        json.Append(",\"policy\":").Append(server.Options.PolicyPaths.Count > 0 ? "true" : "false");
+        // Whether a policy brain can be chosen live: with a checkpoint the server
+        // was started with, or else the shipped bundle — GameServer.SetBotBrain.
+        json.Append(",\"policy\":")
+            .Append(server.Options.PolicyPaths.Count > 0 || ShippedCheckpointsPresent.Value ? "true" : "false");
 
         // ⛔ Whether there IS a join password, never the password: the panel is
         // reachable from the network, and this is the config verb's rule too.

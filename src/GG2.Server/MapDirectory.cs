@@ -146,6 +146,63 @@ public static class MapDirectory
         return string.Empty;
     }
 
+    /// <summary>
+    /// The checkpoints in the shipped bundle, by file name, most capable tier
+    /// first. <c>checkpoints/README.md</c> and <c>docs/BOTS.md</c>, "the shipped
+    /// bundle".
+    /// </summary>
+    /// <remarks>
+    /// <b>Named rather than globbed</b>, so what a live switch loads is exactly
+    /// the pair <c>ShippedCheckpointTests</c> pins, and a stray <c>.npz</c>
+    /// dropped beside them does not become a tier nobody configured.
+    /// </remarks>
+    public static readonly IReadOnlyList<string> ShippedCheckpoints =
+        ["tier0_combat4_s2.npz", "tier2_pyro_rest3_s0.npz"];
+
+    /// <summary>
+    /// The shipped bundle's full paths — <c>checkpoints/</c> beside the
+    /// executable or above it — or empty when any file of it is missing.
+    /// </summary>
+    /// <remarks>
+    /// <b>Only the live <c>bot-brain</c> switch reads this.</b> A server STARTED
+    /// in a policy mode still has to name its checkpoints, so what it loads is in
+    /// its command line or config file; the panel's switch, which can take no
+    /// path at all, falls back to this when the server was started without one.
+    /// <para>
+    /// <b>All or nothing</b>: half a bundle would drive a different class set
+    /// from the one the panel's operator was told about.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<string> ResolveCheckpoints() =>
+        ResolveCheckpoints(AppContext.BaseDirectory);
+
+    /// <summary>
+    /// <inheritdoc cref="ResolveCheckpoints()"/>, probing upward from
+    /// <paramref name="start"/>.
+    /// </summary>
+    public static IReadOnlyList<string> ResolveCheckpoints(string start)
+    {
+        for (var directory = new DirectoryInfo(start);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            var candidate = Path.Combine(directory.FullName, "checkpoints");
+            var paths = new string[ShippedCheckpoints.Count];
+            var complete = true;
+
+            for (var i = 0; i < paths.Length && complete; i++)
+            {
+                paths[i] = Path.Combine(candidate, ShippedCheckpoints[i]);
+                complete = File.Exists(paths[i]);
+            }
+
+            if (complete)
+                return paths;
+        }
+
+        return [];
+    }
+
     private static bool Holds(string directory) =>
         File.Exists(Path.Combine(directory, Sentinel));
 
