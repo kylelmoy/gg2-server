@@ -138,7 +138,7 @@ const STRINGS = {
       "endRound": "End round",
       "fewerSeats": "Fewer seats",
       "joinPassword": "Join password",
-      "limitHint": "Human seats, 1..48. Bots excluded. Lowering it kicks nobody.",
+      "limitHint": "Maximum number of players allowed to connect. Does not disconnect existing players.",
       "liveNote": "Applied live until restart; not written to the config file. Use Settings for that.",
       "moreSeats": "More seats",
       "newPassword": "New password",
@@ -500,7 +500,7 @@ const STRINGS = {
       "bringOnline": "Bring online",
       "takeOffline": "Take offline",
       "hintOffline": "Offline: connections refused, no bots. Live settings still apply.",
-      "hintOnline": "Disconnects all players, refuses connections, removes bots. The panel stays up.",
+      "hintOnline": "Disconnects all players, refuses connections, removes bots.",
       "askTitle": "Take server offline?",
       "askNobody": "No players connected.",
       "askPeople": {
@@ -736,16 +736,16 @@ const STRINGS = {
       "GeoIpDatabase": "MaxMind .mmdb for the analytics map. Not bundled. Country-level databases resolve no US states."
     },
     "Classlimits": {
-      "Scout": "Per-team limit for Scout. 255: unlimited; 0: class banned.",
-      "Pyro": "Per-team limit for Pyro. 255: unlimited; 0: class banned.",
-      "Soldier": "Per-team limit for Soldier. 255: unlimited; 0: class banned.",
-      "Heavy": "Per-team limit for Heavy. 255: unlimited; 0: class banned.",
-      "Demoman": "Per-team limit for Demoman. 255: unlimited; 0: class banned.",
-      "Medic": "Per-team limit for Medic. 255: unlimited; 0: class banned.",
-      "Engineer": "Per-team limit for Engineer. 255: unlimited; 0: class banned.",
-      "Spy": "Per-team limit for Spy. 255: unlimited; 0: class banned.",
-      "Sniper": "Per-team limit for Sniper. 255: unlimited; 0: class banned.",
-      "Quote": "Per-team limit for Quote. 255: unlimited; 0: class banned."
+      "Scout": "Per-team limit for Scout. 255 = unlimited; 0: class banned.",
+      "Pyro": "Per-team limit for Pyro. 255 = unlimited; 0: class banned.",
+      "Soldier": "Per-team limit for Soldier. 255 = unlimited; 0: class banned.",
+      "Heavy": "Per-team limit for Heavy. 255 = unlimited; 0: class banned.",
+      "Demoman": "Per-team limit for Demoman. 255 = unlimited; 0: class banned.",
+      "Medic": "Per-team limit for Medic. 255 = unlimited; 0: class banned.",
+      "Engineer": "Per-team limit for Engineer. 255 = unlimited; 0: class banned.",
+      "Spy": "Per-team limit for Spy. 255 = unlimited; 0: class banned.",
+      "Sniper": "Per-team limit for Sniper. 255 = unlimited; 0: class banned.",
+      "Quote": "Per-team limit for Quote. 255 = unlimited; 0: class banned."
     },
     "Log": {
       "File": "Also write the log to this file. Console output continues.",
@@ -769,7 +769,7 @@ const STRINGS = {
       "KeepAliveProbeCount": "Unanswered probes before the peer is dropped."
     },
     "Nav": {
-      "Directory": "Bot nav graph directory. Empty is valid: bots fight but do not navigate.",
+      "Directory": "Bot nav graph directory.",
       "Generate": "Build missing graphs on map change (required for custom maps). Kept in memory unless Save is on.",
       "Save": "Write generated graphs to the nav directory. Off by default.",
       "Distances": "Exact node-to-node A* heuristic instead of straight-line. Changes routes, not only speed: the search is weighted."
@@ -794,15 +794,15 @@ const STRINGS = {
       "SearchThreads": "Rollout search threads. Affects cost only, never decisions."
     },
     "BotClasslimits": {
-      "Scout": "Per-team bot limit for Scout. Humans are neither counted nor limited. 255: unlimited; 0: no bots on this class.",
-      "Pyro": "Per-team bot limit for Pyro. Humans are neither counted nor limited. 255: unlimited; 0: no bots on this class.",
-      "Soldier": "Per-team bot limit for Soldier. Humans are neither counted nor limited. 255: unlimited; 0: no bots on this class.",
-      "Heavy": "Per-team bot limit for Heavy. Humans are neither counted nor limited. 255: unlimited; 0: no bots on this class.",
-      "Demoman": "Per-team bot limit for Demoman. Humans are neither counted nor limited. 255: unlimited; 0: no bots on this class.",
-      "Medic": "Per-team bot limit for Medic. Humans are neither counted nor limited. 255: unlimited; 0: no bots on this class.",
-      "Engineer": "Per-team bot limit for Engineer. Humans are neither counted nor limited. 255: unlimited; 0: no bots on this class.",
-      "Spy": "Per-team bot limit for Spy. Humans are neither counted nor limited. 255: unlimited; 0: no bots on this class.",
-      "Sniper": "Per-team bot limit for Sniper. Humans are neither counted nor limited. 255: unlimited; 0: no bots on this class."
+      "Scout": "Per-team bot limit for Scout. 255 = unlimited; 0 = disabled.",
+      "Pyro": "Per-team bot limit for Pyro. 255 = unlimited; 0 = disabled.",
+      "Soldier": "Per-team bot limit for Soldier. 255 = unlimited; 0 = disabled.",
+      "Heavy": "Per-team bot limit for Heavy. 255 = unlimited; 0 = disabled.",
+      "Demoman": "Per-team bot limit for Demoman. 255 = unlimited; 0 = disabled.",
+      "Medic": "Per-team bot limit for Medic. 255 = unlimited; 0 = disabled.",
+      "Engineer": "Per-team bot limit for Engineer. 255 = unlimited; 0 = disabled.",
+      "Spy": "Per-team bot limit for Spy. 255 = unlimited; 0 = disabled.",
+      "Sniper": "Per-team bot limit for Sniper. 255 = unlimited; 0 = disabled."
     },
     "Web": {
       "Port": "Admin panel port. Setting it enables the panel; 0 picks a free port.",
