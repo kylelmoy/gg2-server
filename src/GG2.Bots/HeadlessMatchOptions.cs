@@ -27,6 +27,17 @@ namespace GG2.Bots;
 /// as the speed. Record it beside any number taken with it.
 /// </para>
 /// </param>
+/// <param name="RedDifficulty">
+/// Red's tier in place of <see cref="Difficulty"/>, or null for the shared one.
+/// The per-team form is what makes "tier N against tier 5" one match rather than
+/// two batches compared after the fact.
+/// </param>
+/// <param name="BlueDifficulty">Blue's, as <paramref name="RedDifficulty"/>.</param>
+/// <param name="HandicapOnly">
+/// A team's own tier reaches only <see cref="HybridBot.HandicapSkill"/>, and every
+/// scripted layer plays at <see cref="Difficulty"/>. Isolates how much of a tier
+/// is the controller's handicap; with no <see cref="Brain"/> it changes nothing.
+/// </param>
 public readonly record struct HeadlessMatchOptions(
     string Map,
     int Area,
@@ -43,7 +54,10 @@ public readonly record struct HeadlessMatchOptions(
     PlayerClass[]? AllowedClasses = null,
     BotBrainSpec? Brain = null,
     Team? HybridTeam = null,
-    bool NavDistances = true)
+    bool NavDistances = true,
+    int? RedDifficulty = null,
+    int? BlueDifficulty = null,
+    bool HandicapOnly = false)
 {
     /// <summary>
     /// A short match on <c>ctf_truefort</c> with twelve bots. ⚠️ The values are
@@ -87,4 +101,12 @@ public readonly record struct HeadlessMatchOptions(
     /// codebase's own rule is that a zeroed field meaning "off" is a trap.
     /// </remarks>
     public bool HasExplicitTeams => RedBots is not null || BlueBots is not null;
+
+    /// <summary>The tier <paramref name="team"/> plays at.</summary>
+    public int DifficultyOf(Team team) => team switch
+    {
+        Team.Red => RedDifficulty ?? Difficulty,
+        Team.Blue => BlueDifficulty ?? Difficulty,
+        _ => Difficulty,
+    };
 }

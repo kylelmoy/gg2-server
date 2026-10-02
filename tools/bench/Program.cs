@@ -171,6 +171,25 @@ if (Environment.GetEnvironmentVariable("BENCH_SWEEP") is { } sweepArg)
     return;
 }
 
+// The repo's own nav/ and checkpoints/ unless GG2_NAV and CHECKPOINTS say
+// otherwise: both sit next to maps/ in a clone.
+static string Beside(string maps, string name, string variable) =>
+    Environment.GetEnvironmentVariable(variable) is { Length: > 0 } set
+        ? set
+        : Path.Combine(Path.GetDirectoryName(Path.GetFullPath(maps))!, name);
+
+if (Environment.GetEnvironmentVariable("BENCH_TIERDUEL") is { } tierDuels)
+{
+    Bench.Tiers.RunDuels(maps, Beside(maps, "nav", "GG2_NAV"), Beside(maps, "checkpoints", "CHECKPOINTS"), int.Parse(tierDuels));
+    return;
+}
+
+if (Environment.GetEnvironmentVariable("BENCH_TIERS") is { } tierMatches)
+{
+    Bench.Tiers.RunMatches(maps, Beside(maps, "nav", "GG2_NAV"), Beside(maps, "checkpoints", "CHECKPOINTS"), int.Parse(tierMatches));
+    return;
+}
+
 if (Environment.GetEnvironmentVariable("BENCH_ARMS") is { } armsN)
 {
     Bench.ArmsEval.Run(

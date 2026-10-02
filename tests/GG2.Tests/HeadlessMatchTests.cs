@@ -1,6 +1,7 @@
 using GG2.Bots;
 using GG2.Maps;
 using GG2.Protocol;
+using GG2.Simulation;
 
 namespace GG2.Tests;
 
@@ -516,5 +517,46 @@ public sealed class HeadlessMatchTests
         var second = MatchRunner.Run(Short with { Seed = 2 }, count: 4, map, nav);
 
         Assert.Empty(first.Intersect(second));
+    }
+
+    /// <summary>
+    /// A per-team tier reaches that team's bots and no others, and
+    /// <c>HandicapOnly</c> moves it from the scripted layer to the controller.
+    /// </summary>
+    /// <remarks>
+    /// <b>Both teams are asserted, not only the one that was set</b>: a tier that
+    /// leaked to every bot would pass a check on red alone. <c>BENCH_TIERS</c> is
+    /// built on this, and a leak would make every arm a mirror reading 0.5.
+    /// </remarks>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void APerTeamTierReachesOnlyThatTeam(bool handicapOnly)
+    {
+        var options = HeadlessMatchOptions.Default with
+        {
+            Bots = 8,
+            RedDifficulty = 1,
+            Brain = BotBrainSpec.Of(new PolicyMicroSpec(PolicyFixture.Load())),
+            HandicapOnly = handicapOnly,
+        };
+
+        var match = HeadlessMatch.Load(options, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
+        var seen = new HashSet<Team>();
+
+        for (var slot = 1; slot < WorldState.MaxSlots; slot++)
+        {
+            if (match.HybridBotFor(slot) is not { } hybrid)
+                continue;
+
+            var team = match.State.Players[slot].Team;
+            var tier = team == Team.Red ? 1 : 5;
+            seen.Add(team);
+
+            Assert.Equal(BotSkill.ForTier(handicapOnly ? 5 : tier), hybrid.ScriptedBot.Skill);
+            Assert.Equal(handicapOnly ? BotSkill.ForTier(tier) : null, hybrid.HandicapSkill);
+        }
+
+        Assert.Equal([Team.Red, Team.Blue], seen.OrderBy(t => t));
     }
 }

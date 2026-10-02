@@ -289,6 +289,17 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// <summary>Decisions controllers have taken.</summary>
     public long MicroDecisions { get; private set; }
 
+    /// <summary>
+    /// The skill <see cref="Handicap"/> reads in place of the scripted layer's,
+    /// or null to read the scripted layer's.
+    /// </summary>
+    /// <remarks>
+    /// A measurement knob: it lets a bench weaken the controller alone while the
+    /// macro layer plays at full strength, which is the only way to tell how much
+    /// of a tier is the handicap. Nothing on a live server sets it.
+    /// </remarks>
+    public BotSkill? HandicapSkill { get; set; }
+
     /// <summary>Ticks the scripted layer has held it.</summary>
     public long ScriptedTicks { get; private set; }
 
@@ -632,7 +643,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// </remarks>
     private PlayerInput Handicap(PlayerInput input, int tick)
     {
-        var skill = _scripted.Skill;
+        var skill = HandicapSkill ?? _scripted.Skill;
         var keys = input.Keys;
 
         if (--_handicapTicksLeft <= 0)

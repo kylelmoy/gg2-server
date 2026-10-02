@@ -332,8 +332,6 @@ public sealed class HeadlessMatch : DrivenWorld
     /// </remarks>
     private void AddBots()
     {
-        var skill = BotSkill.ForTier(Options.Difficulty);
-
         // ONE set for the whole match, not one per bot: it is derived from the
         // graph and every bot reads the table matching its own class arcs out of
         // it, so a per-bot derivation would be twelve times the cost and the same
@@ -405,7 +403,9 @@ public sealed class HeadlessMatch : DrivenWorld
             // tick's alarm stage, which is what the reference does.
             State.Players[slot].RespawnTimer = 1;
 
-            Drive(slot, new ScriptedBot(Nav, new NavQuery(team), skill, slot)
+            var tier = Options.HandicapOnly ? Options.Difficulty : Options.DifficultyOf(team);
+
+            Drive(slot, new ScriptedBot(Nav, new NavQuery(team), BotSkill.ForTier(tier), slot)
             {
                 Distances = distances,
             });
@@ -454,7 +454,12 @@ public sealed class HeadlessMatch : DrivenWorld
             if (Options.HybridTeam is { } team && State.Players[slot].Team != team)
                 continue;
 
-            Drive(slot, brain.Wrap(scripted));
+            var hybrid = brain.Wrap(scripted);
+
+            if (Options.HandicapOnly)
+                hybrid.HandicapSkill = BotSkill.ForTier(Options.DifficultyOf(State.Players[slot].Team));
+
+            Drive(slot, hybrid);
         }
     }
 

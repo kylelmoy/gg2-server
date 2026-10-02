@@ -651,6 +651,29 @@ model.** Four gates, all off `BotSkill`:
   checkpoint as trained and no policy measurement moves.
   `HybridBotSeamTests`, "AtTheTopTier…" and "BelowTheTopTier…"; what would show
   this stale is a new knob that is nonzero at tier 5.
+- **The tiers are measured, and rank in order at every step in both a duel and a
+  match.** `BENCH_TIERDUEL=200` and `BENCH_TIERS=40` (`tools/bench/README.md`),
+  every shipped map, the subject at tier t against tier 5 with the shipped
+  two-checkpoint policy brain on both sides, paired per observation against the
+  tier-5 mirror. Each predicted outcome was written down before the runs.
+
+  | arm | duel score | vs mirror | match: opponent's death share | vs mirror |
+  |---|---|---|---|---|
+  | `full:5` (mirror) | 0.503 ±0.013 | — | 0.497 ±0.005 | — |
+  | `full:4` | 0.400 | −0.103 ±0.013 | 0.453 | −0.044 ±0.005 |
+  | `full:3` | 0.327 | −0.176 ±0.014 | 0.408 | −0.089 ±0.006 |
+  | `full:2` | 0.217 | −0.286 ±0.014 | 0.336 | −0.161 ±0.007 |
+  | `full:1` | 0.143 | −0.360 ±0.014 | 0.246 | −0.251 ±0.008 |
+  | `hc:1` (handicap only) | 0.303 | −0.200 ±0.013 | 0.457 | −0.040 ±0.005 |
+
+  n = 4,200 duels and 840 matches an arm; ±95%. **The handicap is over half a
+  tier's effect in a duel and about a sixth of it in a match**, because a
+  controller drives a small share of a match's ticks — so a duel is the instrument
+  for tuning the handicap and a match for whether a tier feels right. Built at
+  `SIM_UUID f10afbdadc795d77`; a retrained checkpoint or a change to `BotSkill`
+  needs a re-run, and a mirror away from 0.5 means the harness, not the tiers,
+  has moved. `capped` differs across match arms (325 at `full:5`, 100 at `full:1`),
+  which is why the match statistic is the death share and not a win rate.
 
 - ⚠️ **Aim error is UNIFORM on [-1, 1], not Gaussian** (Quake III's
   `crandom()`), with two multipliers: moving-target scale, and **Quake
