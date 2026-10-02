@@ -651,29 +651,35 @@ model.** Four gates, all off `BotSkill`:
   checkpoint as trained and no policy measurement moves.
   `HybridBotSeamTests`, "AtTheTopTier…" and "BelowTheTopTier…"; what would show
   this stale is a new knob that is nonzero at tier 5.
-- **The tiers are measured, and rank in order at every step in both a duel and a
-  match.** `BENCH_TIERDUEL=200` and `BENCH_TIERS=40` (`tools/bench/README.md`),
-  every shipped map, the subject at tier t against tier 5 with the shipped
-  two-checkpoint policy brain on both sides, paired per observation against the
-  tier-5 mirror. Each predicted outcome was written down before the runs.
+- **The tiers are tuned to be evenly apart in a match**, through
+  `BotSkill.TierSkills` (0.15, 0.30, 0.42, 0.67, 0.95; evenly spaced skills cost
+  twice as much per step at the bottom as at the top). `BENCH_TIERS=40` and
+  `BENCH_TIERDUEL=200` (`tools/bench/README.md`), every shipped map, the subject
+  at tier t against tier 5 with the shipped two-checkpoint policy brain on both
+  sides, paired per observation against the tier-5 mirror. The match column is
+  on `BENCH_SEED_BASE=500000`, seeds the tuning never saw; the tuning set read
+  within 0.005 of it on every row.
 
-  | arm | duel score | vs mirror | match: opponent's death share | vs mirror |
+  | arm | match: opponent's death share | vs mirror | duel score | vs mirror |
   |---|---|---|---|---|
-  | `full:5` (mirror) | 0.503 ±0.013 | — | 0.497 ±0.005 | — |
-  | `full:4` | 0.400 | −0.103 ±0.013 | 0.453 | −0.044 ±0.005 |
-  | `full:3` | 0.327 | −0.176 ±0.014 | 0.408 | −0.089 ±0.006 |
-  | `full:2` | 0.217 | −0.286 ±0.014 | 0.336 | −0.161 ±0.007 |
-  | `full:1` | 0.143 | −0.360 ±0.014 | 0.246 | −0.251 ±0.008 |
-  | `hc:1` (handicap only) | 0.303 | −0.200 ±0.013 | 0.457 | −0.040 ±0.005 |
+  | `full:5` (mirror) | 0.504 ±0.005 | — | 0.503 ±0.013 | — |
+  | `full:4` | 0.442 | −0.063 ±0.006 | 0.370 | −0.133 ±0.014 |
+  | `full:3` | 0.373 | −0.131 ±0.007 | 0.251 | −0.252 ±0.014 |
+  | `full:2` | 0.309 | −0.195 ±0.008 | 0.200 | −0.303 ±0.014 |
+  | `full:1` | 0.250 | −0.255 ±0.008 | 0.143 | −0.360 ±0.014 |
+  | `hc:1` (handicap only) | 0.464 | −0.041 ±0.004 | 0.303 | −0.200 ±0.013 |
 
-  n = 4,200 duels and 840 matches an arm; ±95%. **The handicap is over half a
-  tier's effect in a duel and about a sixth of it in a match**, because a
-  controller drives a small share of a match's ticks — so a duel is the instrument
-  for tuning the handicap and a match for whether a tier feels right. Built at
+  n = 840 matches and 4,200 duels an arm; ±95%; measured with spot
+  reachability on ("What the graph says", below). **Even in a match is not even in a
+  duel**: close combat separates the top tiers more and the bottom ones less.
+  The match is the target because it is what a player meets. **The handicap is
+  over half a tier's effect in a duel and about a sixth of it in a match**,
+  because a controller drives a small share of a match's ticks. Built at
   `SIM_UUID f10afbdadc795d77`; a retrained checkpoint or a change to `BotSkill`
   needs a re-run, and a mirror away from 0.5 means the harness, not the tiers,
-  has moved. `capped` differs across match arms (325 at `full:5`, 100 at `full:1`),
-  which is why the match statistic is the death share and not a win rate.
+  has moved. `capped` differs across match arms (about 300 at `full:5`, 100 at
+  `full:1`), which is why the match statistic is the death share and not a win
+  rate.
 
 - ⚠️ **Aim error is UNIFORM on [-1, 1], not Gaussian** (Quake III's
   `crandom()`), with two multipliers: moving-target scale, and **Quake
@@ -5932,10 +5938,36 @@ nothing else, and every goal offered to a bot in it resolves to a node outside.
 A bot there is held until it dies. Nothing in the objective layer can fix that —
 it is a nav-graph or map-geometry question, and it is the map's remaining 4.1%.
 
-The other standing issue is upstream and unchanged: the objective layer never
-asks whether a goal is reachable for the profile that has to walk it, so a
-Heavy is handed ground only a jumping class can get to. The bot-anchored last
-resort is a mitigation for that, not the fix.
+**A spot is now filtered for reachability** (`ScriptedBot.SpotsReachableOnly`,
+on): `BotGoalSpot.Find` admits only nodes reachable from the bot's own node under
+its live `NavQuery`, by a BFS over `NavGraph.EdgeRoutable` — A*'s own edge test —
+cached per start node and query. With nothing reachable in the band it widens the
+band outward and takes the reachable node nearest the band's middle that keeps
+the caller's sightline and the minimum distance; with none of those either, it
+misses as before. `SpotBanUntil` stays, as the backstop for a spot that passes the
+filter and still fails to plan on a blacklisted edge. Goals that are not spots
+(an objective's own point) are not filtered.
+
+The case it was written for: `tdm_mantic` node 209, at a red spawn, reaches 45 of
+261 nodes without a rocket jump, so a red demoman spawning there was handed one
+unreachable spot after another and stood still until an enemy came within reach
+(`MatchActuallyHappensTests.TeamDeathmatchBotsHuntEachOtherAndFight`, which goes
+red with the filter off).
+
+| measured, `eval`, 12 bots, tier 5, 256 matches | filter off | filter on |
+|---|---|---|
+| `tdm_mantic` red wins | 120 (47%) | **96 (37.5%)**, z≈2.2 |
+| `arena_montane` unfinished | 55 | 45 |
+| tick cost, `BENCH_COMBAT=5` min µs, `tdm_mantic` / `ctf_truefort` / `cp_dirtbowl` | 15.8 / 20.9 / 11.3 | 15.6 / 18.6 / 10.7 |
+
+The `eval` digest moves on 21 of 23 maps, while the three pinned end-to-end
+measurements do not: none of their scenarios stands a bot in a pocket.
+**`tdm_mantic` shifts toward blue, and that is a side effect, not a fix**: red's
+pocketed non-soldiers used to stand at their spawn and win the fights that came
+to them. Dropping the sightline from the fallback too was measured and is worse
+(red 19 of 64 against 34 of 64 with the filter off). The pocket itself is a
+nav-graph or map question; a human leaves that spawn, so an exit is likely
+missing from the graph.
 ## Standing still under fire: a class radius decided what a bot could be told
 
 Reported from play on a control map: a defending pyro stood on the point and

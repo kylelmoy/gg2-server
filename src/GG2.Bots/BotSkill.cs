@@ -11,9 +11,9 @@ namespace GG2.Bots;
 /// makes its reactions slower, its tracking coarser and its aim looser, which is
 /// what a weaker player actually looks like.
 /// <para>
-/// <b>The server's 1-5 setting is one point on a continuous scale</b>, in even
-/// steps, so tiers 1, 4 and 5 land exactly on the anchors the tuning tables are
-/// quoted at: <c>0.15 + (tier - 1) × 0.2</c>.
+/// <b>The server's 1-5 setting is one point on a continuous scale</b>, at the
+/// skills in <see cref="TierSkills"/> — spaced so the tiers are evenly apart in
+/// play, not evenly apart in skill.
 /// </para>
 /// </remarks>
 /// <param name="AcquireTicks">
@@ -113,14 +113,21 @@ public readonly record struct BotSkill(
     /// </remarks>
     public static bool IsTier(int tier) => tier is >= BotConstants.TierMin and <= BotConstants.TierMax;
 
-    /// <summary>The server's 1-5 difficulty as a skill.</summary>
+    /// <summary>The skill each of the server's tiers 1-5 plays at.</summary>
     /// <remarks>
-    /// <c>botAdd.gml</c>: <c>0.15 + (clamped tier - 1) × 0.2</c>, so the five
-    /// tiers are 0.15, 0.35, 0.55, 0.75, 0.95 — and 0.15 and 0.95 are exactly the
-    /// ends of <see cref="Lerp"/>'s flat regions.
+    /// <b>Tuned so each step down costs about the same in a match</b>, measured by
+    /// <c>BENCH_TIERS</c> as the opponent's share of a match's deaths against tier 5
+    /// (<c>docs/TRAPS-BOTS.md</c>, the difficulty chain). Evenly spaced skills
+    /// (0.15, 0.35, 0.55, 0.75) are not evenly spaced in play: the bottom two
+    /// steps cost twice what the top two did. The ends stay at 0.15 and 0.95,
+    /// exactly the ends of <see cref="Lerp"/>'s flat regions, so tier 1 and tier 5
+    /// are what they always were.
     /// </remarks>
+    public static ReadOnlySpan<double> TierSkills => [0.15, 0.30, 0.42, 0.67, 0.95];
+
+    /// <summary>The server's 1-5 difficulty as a skill, from <see cref="TierSkills"/>.</summary>
     public static BotSkill ForTier(int tier) =>
-        For(0.15 + ((Math.Clamp(tier, BotConstants.TierMin, BotConstants.TierMax) - 1) * 0.2));
+        For(TierSkills[Math.Clamp(tier, BotConstants.TierMin, BotConstants.TierMax) - BotConstants.TierMin]);
 
     /// <summary>
     /// A four-anchor piecewise ramp — <c>botSkillLerp.gml</c>.

@@ -63,10 +63,19 @@ public sealed class BotGoalSpot
     // the same reason: one search at a time per instance.
     private readonly List<(int Node, double Rank)> _candidates = [];
 
+    // The nodes reachable from _reachFrom under _reachQuery, and the BFS queue
+    // that fills it. Sized once, so a recompute allocates nothing.
+    private readonly bool[] _reachable;
+    private readonly int[] _queue;
+    private int _reachFrom = -1;
+    private NavQuery _reachQuery;
+
     public BotGoalSpot(NavGraph graph)
     {
         ArgumentNullException.ThrowIfNull(graph);
         _graph = graph;
+        _reachable = new bool[graph.NodeCount];
+        _queue = new int[graph.NodeCount];
     }
 
     /// <summary>How many sightline tests the last <see cref="Find"/> paid for.</summary>
@@ -142,11 +151,25 @@ public sealed class BotGoalSpot
         double minDistance, double maxDistance,
         BotLos los, double highBonus,
         CollisionWorld collision, in CollisionFilter filter,
-        double avoidRadius = 0, int avoidNode = -1, int skip = 0, int stickyNode = -1)
+        double avoidRadius = 0, int avoidNode = -1, int skip = 0, int stickyNode = -1,
+        int fromNode = -1, NavQuery? reachableFor = null)
     {
         ArgumentNullException.ThrowIfNull(collision);
 
         Tries = 0;
+
+        // ⚠️ A spot the bot's own class cannot walk to is not a spot. Without this
+        // the band is ranked over every node on the map, and a bot whose class
+        // cannot leave the pocket it stands in — a demoman spawning on tdm_mantic
+        // node 209, 45 of 261 nodes reachable without a rocket jump — is handed
+        // one unreachable spot after another, every plan fails, and it stands
+        // still until an enemy happens to walk within reach. The filter is the
+        // search's own: NavGraph.EdgeRoutable under the same live query, so a node
+        // this admits is one A* can route to and one it refuses is not.
+        var filtered = fromNode >= 0 && fromNode < _graph.NodeCount && reachableFor is { } query;
+
+        if (filtered)
+            Reach(fromNode, reachableFor!.Value);
 
         // The anchor is the fallback, published even on a miss — see BotSpot.X.
         var miss = new BotSpot(-1, targetX, targetY);
@@ -178,7 +201,8 @@ public sealed class BotGoalSpot
         // held node leaves the band and the search runs normally. A re-post passes
         // no sticky node at all — breaking a perch that is not paying for itself is
         // the one thing that mechanism exists to do.
-        if (stickyNode >= 0 && stickyNode != avoidNode && stickyNode < _graph.NodeCount)
+        if (stickyNode >= 0 && stickyNode != avoidNode && stickyNode < _graph.NodeCount
+            && (!filtered || _reachable[stickyNode]))
         {
             var (hx, hy) = Stand(stickyNode, targetColumn);
             var held = Gml.PointDistance(hx, hy, targetX, targetY);
@@ -207,6 +231,9 @@ public sealed class BotGoalSpot
             // scores zero there and wins by construction, which is exactly the
             // lock-in this parameter exists to break.
             if (node == avoidNode)
+                continue;
+
+            if (filtered && !_reachable[node])
                 continue;
 
             if (avoidRadius > 0 && Gml.PointDistance(fromX, fromY, x, y) < avoidRadius)
@@ -280,7 +307,101 @@ public sealed class BotGoalSpot
         if (firstNode >= 0)
             return new BotSpot(firstNode, firstX, firstY);
 
+        // Nothing reachable in the band: widen it outward and take the reachable
+        // node nearest its middle that still has the sightline the caller asked
+        // for and still keeps the minimum distance. The sightline is not optional
+        // here — dropping it as well was measured: a red demoman on tdm_mantic
+        // was walked to the reachable floor nearest the enemy, beneath it with no
+        // line, and red's TDM wins fell 34 to 19 of 64 against standing at spawn.
+        // Nothing qualifying at all is a miss, exactly as unfiltered.
+        if (filtered)
+        {
+            var best = -1;
+            var bestRank = double.MaxValue;
+            double bestX = 0, bestY = 0;
+            var budget = BotConstants.SpotTries;
+
+            _candidates.Clear();
+
+            for (var node = 0; node < _graph.NodeCount; node++)
+            {
+                if (!_reachable[node] || node == avoidNode)
+                    continue;
+
+                var (x, y) = Stand(node, targetColumn);
+                var toTarget = Gml.PointDistance(x, y, targetX, targetY);
+
+                if (toTarget < minDistance)
+                    continue;
+
+                _candidates.Add((node, Math.Abs(toTarget - middle)));
+            }
+
+            _candidates.Sort(static (a, b) =>
+            {
+                var byRank = a.Rank.CompareTo(b.Rank);
+                return byRank != 0 ? byRank : a.Node.CompareTo(b.Node);
+            });
+
+            foreach (var (node, rank) in _candidates)
+            {
+                var (x, y) = Stand(node, targetColumn);
+
+                if (Sightline(los, x, y, targetX, targetY, collision, in filter))
+                {
+                    best = node;
+                    bestRank = rank;
+                    bestX = x;
+                    bestY = y;
+                    break;
+                }
+
+                if (--budget <= 0)
+                    break;
+            }
+
+            if (best >= 0)
+                return new BotSpot(best, bestX, bestY);
+        }
+
         return miss;
+    }
+
+    /// <summary>
+    /// Fills <c>_reachable</c> with every node routable from <paramref name="from"/>
+    /// under <paramref name="query"/>, unless it already holds that answer.
+    /// </summary>
+    /// <remarks>
+    /// Cached on the pair, so a bot that has not changed node or ability pays for
+    /// one BFS however many times it asks. The query changes with live state
+    /// (a carrier's gates, a soldier's launcher going cold), and a stale answer
+    /// would admit a spot the planner then refuses.
+    /// </remarks>
+    private void Reach(int from, in NavQuery query)
+    {
+        if (from == _reachFrom && query == _reachQuery)
+            return;
+
+        _reachFrom = from;
+        _reachQuery = query;
+        Array.Clear(_reachable);
+
+        var head = 0;
+        var tail = 0;
+        _reachable[from] = true;
+        _queue[tail++] = from;
+
+        while (head < tail)
+        {
+            foreach (ref readonly var edge in _graph.EdgesFrom(_queue[head++]))
+            {
+                if (_reachable[edge.To] || !NavGraph.EdgeRoutable(in edge, in query))
+                    continue;
+
+                _reachable[edge.To] = true;
+                _queue[tail++] = edge.To;
+            }
+        }
     }
 
     /// <summary>

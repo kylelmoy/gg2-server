@@ -112,6 +112,18 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     /// <summary>Who this bot is, for the search's gate and class rules.</summary>
     public NavQuery Query { get; set; }
 
+    /// <summary>
+    /// Whether a spot must be one this bot's class can route to from where it
+    /// stands — <see cref="BotGoalSpot.Find"/>'s reachability filter. On by default.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="SpotBanUntil"/> is the backstop for a spot that passes the filter
+    /// and still fails to plan (a blacklisted edge, which the filter does not
+    /// read). Turning this off is the only way to stand a bot in front of an
+    /// unplannable spot on purpose, which is what <c>SpotBanTests</c> does.
+    /// </remarks>
+    public bool SpotsReachableOnly { get; init; } = true;
+
     /// <summary>How good it is.</summary>
     public BotSkill Skill { get; set; }
 
@@ -981,7 +993,7 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         var goal = Objective.Decide(
             in world, slot, Role, SpreadX, allowSpot: tick >= SpotBanUntil, target: foe,
             reposting: reposting, repostSkip: _repostSkip,
-            repostNearBot: _repostNearBot);
+            repostNearBot: _repostNearBot, reachableFor: SpotsReachableOnly ? Query : null);
 
         // ⚠️ The lateral offset is the GOAL's own, never SpreadX. Decide adds the
         // defend radius on top of the spread, zeroes both for anything touched or

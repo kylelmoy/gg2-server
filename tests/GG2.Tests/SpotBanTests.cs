@@ -11,17 +11,18 @@ namespace GG2.Tests;
 /// to.
 /// </summary>
 /// <remarks>
-/// <b>A spot is chosen without checking reachability.</b>
-/// <see cref="BotGoalSpot"/> ranks nodes by distance, height and sightline and
-/// asks the graph nothing about whether a route exists — deliberately, because a
-/// path search per candidate is a search per bot per objective tick. So a spot in
-/// another component of the map presents as a goal that never plans, and
-/// <see cref="ScriptedBot.SpotBanUntil"/> is the only place that can notice.
+/// <b>A spot is filtered for reachability, and the ban is the backstop.</b>
+/// <see cref="BotGoalSpot"/> admits only nodes the bot's class can route to from
+/// where it stands (<see cref="ScriptedBot.SpotsReachableOnly"/>), so an isolated
+/// bot is no longer offered a perch it cannot walk to — the last test here. What
+/// the filter does not read is the bot's edge blacklist, so a spot can still pass
+/// it and fail to plan, and <see cref="ScriptedBot.SpotBanUntil"/> is what notices
+/// that. The ban tests turn the filter off, the only way to stand a bot in front
+/// of an unplannable spot on purpose.
 /// <para>
-/// <b>This state is not reachable from any shipped map</b>, which is why the
-/// branch stood ungated and said so in its own comment for four items: every one
-/// of the 24 cached graphs is connected for the team that owns the ground.
-/// The fixture here is a real graph with one node's edges removed — a genuine
+/// <b>The unfiltered state IS reachable from a shipped map</b> for a class that
+/// cannot rocket jump: a demoman on <c>tdm_mantic</c> node 209 reaches 45 of 261
+/// nodes. The fixture here is a real graph with one node's edges removed — a genuine
 /// two-component graph over real geometry, so the spot search sees exactly the
 /// candidates it always saw and the route to them is the only thing that changed.
 /// </para>
@@ -221,6 +222,7 @@ public sealed class SpotBanTests(ITestOutputHelper output)
         {
             Objective = new BotObjective(cut, spawns),
             Role = BotRole.Defend,
+            SpotsReachableOnly = false,
         };
 
         // The premise, from the objective layer itself: with spots allowed this
@@ -301,6 +303,7 @@ public sealed class SpotBanTests(ITestOutputHelper output)
         {
             Objective = new BotObjective(cut, spawns),
             Role = BotRole.Defend,
+            SpotsReachableOnly = false,
         };
 
         var first = 0;
@@ -353,6 +356,7 @@ public sealed class SpotBanTests(ITestOutputHelper output)
         {
             Objective = new BotObjective(cut, spawns),
             Role = BotRole.Defend,
+            SpotsReachableOnly = false,
         };
 
         var view = new WorldView(in state, world);
@@ -458,5 +462,57 @@ public sealed class SpotBanTests(ITestOutputHelper output)
         Assert.True(
             Gml.PointDistance(bot.Path.GoalX, bot.Path.GoalY, px, py) > BotConstants.ArriveTol,
             "the defender never left the point, so the perch was never planned to");
+    }
+
+    /// <summary>
+    /// With the reachability filter on, an isolated defender is never offered a
+    /// perch it cannot walk to, so nothing is ever banned.
+    /// </summary>
+    /// <remarks>
+    /// <b>The control is the first test in this file</b>: the same bot on the same
+    /// cut graph with the filter off is offered a perch that never plans and is
+    /// banned on the tick after. Here every goal it is given resolves to a node
+    /// the bot can reach, which on an isolated node is its own.
+    /// </remarks>
+    [Fact]
+    public void WithTheFilterOnAnIsolatedBotIsOfferedOnlyWhatItCanReach()
+    {
+        ReferenceTree.RequireNavCache();
+
+        var real = NavCache.Load(ReferenceTree.NavCacheDirectory, Map, 1);
+        var (state, world, spawns, px, py) = Held();
+        var slot = Put(ref state, spawns, 1, PlayerClass.Sniper, px, py);
+
+        var stood = real.NodeFromWorld(state.Characters[slot].X, state.Characters[slot].Y);
+        var cut = Isolate(real, stood);
+        var view = new WorldView(in state, world);
+        var objective = new BotObjective(cut, spawns);
+
+        // The objective layer alone: the same question the first test asks
+        // unfiltered, where it answers with a perch across the cut. Filtered, the
+        // only node the bot can reach is its own, so a spot is either that node
+        // or not offered at all — and the first test's premise assertion is the
+        // control that an unfiltered ask does offer one.
+        var perch = objective.Decide(
+            view, slot, BotRole.Defend, spreadX: 0, allowSpot: true, reachableFor: new NavQuery(Team.Red));
+
+        if (perch.IsSpot)
+        {
+            Assert.True(objective.TryResolve(in perch, out var sx, out var sy));
+            Assert.Equal(stood, cut.NodeFromWorld(sx, sy));
+        }
+
+        // And the bot never meets a spot it cannot plan to, so the backstop never
+        // fires — where the same bot with the filter off is banned on tick 1.
+        var bot = new ScriptedBot(cut, new NavQuery(Team.Red), BotSkill.ForTier(5), 0)
+        {
+            Objective = new BotObjective(cut, spawns),
+            Role = BotRole.Defend,
+        };
+
+        for (var tick = 0; tick < SpotBan; tick++)
+            bot.Poll(view, slot, tick);
+
+        Assert.Equal(0, bot.SpotBanUntil);
     }
 }

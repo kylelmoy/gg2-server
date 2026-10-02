@@ -280,7 +280,15 @@ public static class Tiers
         Report(results, "match", "opponent's death share");
     }
 
-    private static uint Seed(string map, int i) => (uint)(9100 + (map.Length * 131) + (i * 37));
+    /// <summary>
+    /// Observation i's seed. <c>BENCH_SEED_BASE</c> moves the whole set, so a
+    /// tuning can be checked on matches it was not tuned on.
+    /// </summary>
+    private static uint Seed(string map, int i) =>
+        (uint)(SeedBase + (map.Length * 131) + (i * 37));
+
+    private static readonly int SeedBase =
+        int.Parse(Environment.GetEnvironmentVariable("BENCH_SEED_BASE") ?? "9100", CultureInfo.InvariantCulture);
 
     private static void Report(ConcurrentBag<Observation> results, string unit, string statistic)
     {

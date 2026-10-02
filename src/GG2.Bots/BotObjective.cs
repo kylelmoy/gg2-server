@@ -159,7 +159,7 @@ public sealed class BotObjective
     public BotGoal Decide(
         in WorldView world, int slot, BotRole role, double spreadX, bool allowSpot,
         int? target = null, bool reposting = false, int repostSkip = 0,
-        bool repostNearBot = false)
+        bool repostNearBot = false, NavQuery? reachableFor = null)
     {
         if (!world.IsAlive(slot))
             return BotGoal.None;
@@ -576,7 +576,9 @@ public sealed class BotObjective
             var spot = _spot.Find(
                 self.X, self.Y, anchorX, anchorY, spotMin, spotMax, spotLos, spotHigh,
                 world.Collision, CollisionFilter.ForBullet(), avoidRadius, avoidNode,
-                reposting ? repostSkip : 0, sticky);
+                reposting ? repostSkip : 0, sticky,
+                fromNode: reachableFor is null ? -1 : _graph.NodeFromWorld(self.X, self.Y),
+                reachableFor: reachableFor);
 
             if (spot.Node >= 0)
             {
