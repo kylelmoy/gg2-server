@@ -131,6 +131,22 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// <summary>The last bubble sent, which is what clients are showing.</summary>
     private byte? _bubbleShown;
 
+    /// <summary>
+    /// The difficulty's aim error on the controller's output, in wire units
+    /// (<c>65536</c> to the circle), held until the next draw.
+    /// </summary>
+    private int _handicapAim;
+
+    /// <summary>Whether the difficulty's hold-fire roll came up for this draw.</summary>
+    private bool _handicapHoldFire;
+
+    /// <summary>Controller-driven ticks until the next handicap draw.</summary>
+    /// <remarks>
+    /// Counted down rather than compared with <c>tick</c>, for the same reason as
+    /// <see cref="_commandPolls"/>: a caller may restart the tick from zero.
+    /// </remarks>
+    private int _handicapTicksLeft;
+
     public HybridBot(IMicroController micro, ScriptedBot scripted, IMicroArbiter? arbiter = null)
         : this([micro], scripted, arbiter)
     {
@@ -345,6 +361,10 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
             // a different roster slot, and a bubble decided for the previous one
             // would be put up over whoever is in this one.
             _bubble = null;
+
+            _handicapAim = 0;
+            _handicapHoldFire = false;
+            _handicapTicksLeft = 0;
         }
 
         ref readonly var self = ref world.Character(slot);
@@ -566,7 +586,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
         MicroDrove = true;
         MicroTicks++;
 
-        var input = _tiers[tier].Poll(in world, slot, tick);
+        var input = Handicap(_tiers[tier].Poll(in world, slot, tick), tick);
 
         DecidedThisPoll = _tiers[tier].DecidedThisPoll;
 
@@ -580,6 +600,61 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
         }
 
         return input;
+    }
+
+    /// <summary>
+    /// Applies the scripted layer's difficulty to whatever the controller pressed.
+    /// </summary>
+    /// <remarks>
+    /// <b>Difficulty inside the window.</b> Every <see cref="BotSkill"/> gate lives
+    /// in <see cref="BotCombat"/>, which a controller never runs, so without this a
+    /// tier-1 bot fought at full strength the moment an enemy came within
+    /// <see cref="Range"/>. Three of the scripted chain's knobs are carried over,
+    /// each chosen because it is ZERO at the top tier — so tier 5 is the checkpoint
+    /// exactly as trained, draws nothing from <see cref="ScriptedBot.Random"/>, and
+    /// moves no pin:
+    /// <list type="bullet">
+    /// <item><b>The fire delay</b>, <see cref="BotSkill.FireDelayTicks"/> after the
+    /// scripted layer acquired its target. Not the acquire hold too: that is 6 ticks
+    /// at tier 5, and the controller already aims while it would be waiting.</item>
+    /// <item><b>An aim error</b>, uniform within <see cref="BotSkill.PolicyAimErrorDeg"/>
+    /// and held for <see cref="BotSkill.AimInterval"/> ticks. Held rather than
+    /// redrawn every tick, because a per-tick jitter averages out across a burst and
+    /// handicaps nobody. Added to the output only: the decoder keeps its own aim, so
+    /// the error never accumulates.</item>
+    /// <item><b>The hold-fire roll</b>, <see cref="BotSkill.HoldFireChance"/>, on the
+    /// same draw.</item>
+    /// </list>
+    /// <b>Only <c>Attack</c> is withheld</b>, never <c>Special</c>, for the reason
+    /// the scripted chain gives: a pyro's airblast or a demoman's detonation cannot
+    /// be a second and a half late. Movement is left alone — a policy's dodge is a
+    /// learnt behaviour with no knob to turn down.
+    /// </remarks>
+    private PlayerInput Handicap(PlayerInput input, int tick)
+    {
+        var skill = _scripted.Skill;
+        var keys = input.Keys;
+
+        if (--_handicapTicksLeft <= 0)
+        {
+            _handicapTicksLeft = skill.AimInterval;
+
+            // Each draw only when its knob is live, so the top tier never moves
+            // the scripted layer's stream.
+            _handicapAim = skill.PolicyAimErrorDeg > 0
+                ? (int)Math.Round((_scripted.Random.Next(2) - 1) * skill.PolicyAimErrorDeg * 65536 / 360)
+                : 0;
+
+            _handicapHoldFire = skill.HoldFireChance > 0 && _scripted.Random.Next(1) < skill.HoldFireChance;
+        }
+
+        var combat = _scripted.Combat;
+        var reacting = combat.Target.Exists && tick - combat.TargetAt < skill.FireDelayTicks;
+
+        if (reacting || _handicapHoldFire)
+            keys &= ~PlayerKeys.Attack;
+
+        return new PlayerInput(keys, (ushort)(input.NetAimDirection + _handicapAim), input.AimDistance);
     }
 
     private PlayerInput Scripted(PlayerInput scripted)

@@ -42,6 +42,12 @@ namespace GG2.Bots;
 /// projectile and bot (<see cref="BotReflex"/>), not re-rolled each tick, which
 /// would make a miss vanishingly rare over a rocket's flight.
 /// </param>
+/// <param name="PolicyAimErrorDeg">
+/// The half-width of the uniform aim error a <see cref="HybridBot"/> adds to its
+/// controller's aim, redrawn every <see cref="AimInterval"/> ticks. The policy
+/// has no cone of its own to widen, so this is the one knob that exists only
+/// for it; see <see cref="HybridBot"/>, "difficulty inside the window".
+/// </param>
 public readonly record struct BotSkill(
     int AcquireTicks,
     int FireDelayTicks,
@@ -55,7 +61,8 @@ public readonly record struct BotSkill(
     bool SplashAim,
     BotLeadMode LeadMode,
     int ReflexTicks = 0,
-    double ReflexMissChance = 0)
+    double ReflexMissChance = 0,
+    double PolicyAimErrorDeg = 0)
 {
     /// <summary>
     /// The knobs for a skill in <c>[0, 1]</c> — <c>botSkillApply.gml</c>.
@@ -92,7 +99,11 @@ public readonly record struct BotSkill(
             // The top tier keeps the perfect reflexes it always had; the rest
             // see a rocket late (9 ticks is 300ms) and sometimes not at all.
             ReflexTicks: (int)Math.Floor(Lerp(skill, 9, 6, 3, 0) + 0.5),
-            ReflexMissChance: Lerp(skill, 0.6, 0.35, 0.15, 0));
+            ReflexMissChance: Lerp(skill, 0.6, 0.35, 0.15, 0),
+
+            // Zero at the top, like every other knob the policy is handicapped
+            // by: tier 5 runs the checkpoint exactly as it was trained.
+            PolicyAimErrorDeg: Lerp(skill, 12, 6, 2, 0));
     }
 
     /// <summary>Whether <paramref name="tier"/> is one of the server's difficulty tiers.</summary>

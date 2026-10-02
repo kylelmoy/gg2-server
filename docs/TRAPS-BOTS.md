@@ -640,6 +640,17 @@ model.** Four gates, all off `BotSkill`:
   move `ScriptedBot.Random`. Tier 5 is 0 and 0, which is why no tier-5 pin
   moves; a nonzero value there would move all of them.
   `BotReflexTests`, "Difficulty".
+- **A policy-driven bot carries the difficulty on its output.** Every gate above
+  lives in `BotCombat`, which a controller never runs, so `HybridBot.Handicap`
+  applies three knobs to whatever the controller pressed inside the window:
+  `FireDelayTicks` after the scripted layer's acquisition, `HoldFireChance`, and
+  a uniform aim error of `PolicyAimErrorDeg` (12 / 8 / 4.7 / 2 / 0 degrees for
+  tiers 1-5), both drawn every `AimInterval` driven ticks. Only `Attack` is
+  withheld, and movement — including the policy's own dodging — is untouched.
+  All three are zero at tier 5 and draw nothing there, so tier 5 is the
+  checkpoint as trained and no policy measurement moves.
+  `HybridBotSeamTests`, "AtTheTopTier…" and "BelowTheTopTier…"; what would show
+  this stale is a new knob that is nonzero at tier 5.
 
 - ⚠️ **Aim error is UNIFORM on [-1, 1], not Gaussian** (Quake III's
   `crandom()`), with two multipliers: moving-target scale, and **Quake

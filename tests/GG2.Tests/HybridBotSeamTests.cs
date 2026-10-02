@@ -87,8 +87,8 @@ public sealed class HybridBotSeamTests
     private static ScenarioWorld World() =>
         ScenarioWorld.Load("ctf_truefort", 1, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
 
-    private static ScriptedBot Scripted(ScenarioWorld world) =>
-        new(world.Nav, new NavQuery(Team.Red), BotSkill.ForTier(5), stagger: 0);
+    private static ScriptedBot Scripted(ScenarioWorld world, int tier = 5) =>
+        new(world.Nav, new NavQuery(Team.Red), BotSkill.ForTier(tier), stagger: 0);
 
     /// <summary>Places red with a blue enemy 80px away — inside the 150px window.</summary>
     private static int Duel(ScenarioWorld world, int gap = 80)
@@ -520,5 +520,111 @@ public sealed class HybridBotSeamTests
 
         Assert.Equal(1, micro.HandoversIn);
         Assert.Equal(1, micro.HandoversOut);
+    }
+
+    /// <summary>
+    /// At tier 5 the controller's output reaches the wire untouched, and the
+    /// scripted layer's stream does not move.
+    /// </summary>
+    /// <remarks>
+    /// <b>This is what keeps every policy measurement and pin valid</b>: they all
+    /// run at tier 5. The control is the next test, where the same duel at tier 1
+    /// does change the output.
+    /// </remarks>
+    [Fact]
+    public void AtTheTopTierTheControllerIsNotHandicapped()
+    {
+        // A bare ScriptedBot on a world stepped in lockstep is the stream's
+        // control: the scripted layer draws at tier 5 itself, so only a
+        // difference from the bare bot's stream is the handicap's.
+        var world = World();
+        var control = World();
+        var micro = new Stub("micro", cost: 1);
+        var scripted = Scripted(world);
+        var bare = Scripted(control);
+        var bot = new HybridBot(micro, scripted) { Rule = HandoverRule.Distance };
+        var red = Duel(world);
+        var controlRed = Duel(control);
+        var driven = 0;
+
+        for (var tick = 0; tick < 60; tick++)
+        {
+            var view = new WorldView(in world.State, world.Collision);
+            var input = bot.Poll(in view, red, tick);
+
+            var controlView = new WorldView(in control.State, control.Collision);
+            bare.Poll(in controlView, controlRed, tick);
+
+            if (bot.MicroDrove)
+            {
+                driven++;
+                Assert.Equal(new PlayerInput(PlayerKeys.Attack, 0, 0), input);
+            }
+
+            world.Step();
+            control.Step();
+        }
+
+        Assert.True(driven > 0, "the controller never drove");
+
+        // Equal states draw equal numbers.
+        var mine = scripted.Random;
+        var theirs = bare.Random;
+        Assert.Equal(theirs.Next(1), mine.Next(1));
+    }
+
+    /// <summary>
+    /// At tier 1 the controller's trigger waits out the fire delay, is sometimes
+    /// held, and its aim is off by up to the tier's error.
+    /// </summary>
+    /// <remarks>
+    /// <b>The control is that Attack DOES get through</b>: a handicap that withheld
+    /// the trigger for ever would pass every other assertion here.
+    /// </remarks>
+    [Fact]
+    public void BelowTheTopTierTheControllerCarriesTheDifficulty()
+    {
+        var world = World();
+        var micro = new Stub("micro", cost: 1);
+        var scripted = Scripted(world, tier: 1);
+        var bot = new HybridBot(micro, scripted) { Rule = HandoverRule.Distance };
+        var red = Duel(world);
+        var skill = BotSkill.ForTier(1);
+        var maxError = (int)Math.Ceiling(skill.PolicyAimErrorDeg * 65536 / 360);
+        int driven = 0, fired = 0, withheldAfterDelay = 0, offAim = 0;
+
+        for (var tick = 0; tick < 300; tick++)
+        {
+            var view = new WorldView(in world.State, world.Collision);
+            var input = bot.Poll(in view, red, tick);
+
+            if (bot.MicroDrove)
+            {
+                driven++;
+
+                var attack = input.IsDown(PlayerKeys.Attack);
+                var sinceAcquired = tick - scripted.Combat.TargetAt;
+
+                if (sinceAcquired < skill.FireDelayTicks)
+                    Assert.False(attack, $"fired {sinceAcquired} ticks after acquisition");
+                else if (attack)
+                    fired++;
+                else
+                    withheldAfterDelay++;
+
+                var error = (short)input.NetAimDirection;
+                Assert.InRange(error, -maxError, maxError);
+
+                if (error != 0)
+                    offAim++;
+            }
+
+            world.Step();
+        }
+
+        Assert.True(driven > skill.FireDelayTicks, "the controller barely drove");
+        Assert.True(fired > 0, "the trigger never got through");
+        Assert.True(withheldAfterDelay > 0, "the hold-fire roll never came up");
+        Assert.True(offAim > 0, "the aim was never off");
     }
 }

@@ -656,7 +656,7 @@ which is the whole test for belonging on this list (`GameServer.Live`):
 | `team` `{slot, team}` | now | `ForceTeam`: skips the balance refusal a client's request meets, nothing else. Not slot 0. |
 | `bot-limit` `{max}` | every tick | `MaxBots`; the fill is separate. |
 | `bot-brain` `{mode}` | bot add | Rebuilt by `BotBrain.Build`, then every bot is removed and re-added with it, because a bot keeps its brain for life. A policy mode uses the checkpoints the server started with; a server started with none loads the shipped bundle (`MapDirectory.ShippedCheckpoints`, from `checkpoints/` beside the executable or above it), and is refused only when that is missing too. The verb takes a mode and never a path, so nothing on the network names a file to open. The pacing loop re-arms the adaptive budget against the new arbiter. Loading a checkpoint runs on the tick thread and can make that tick late. |
-| `bot-difficulty` `{tier}` | every combat decision | 1..5, `Bots.Difficulty`. Sets `ScriptedBot.Skill` on every running bot in place, so nobody is replaced; a delay already counting down finishes on the old tier. `state` carries it as `bots.difficulty`. |
+| `bot-difficulty` `{tier}` | every combat decision | 1..5, `Bots.Difficulty`. Sets `ScriptedBot.Skill` on every running bot in place, so nobody is replaced, and a hybrid bot's controller reads the same skill (`docs/TRAPS-BOTS.md`, the difficulty chain); a delay already counting down finishes on the old tier. `state` carries it as `bots.difficulty`. |
 
 **Freeze, step and speed stay off the page**, as above.
 
