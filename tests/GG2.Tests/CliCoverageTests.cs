@@ -100,6 +100,7 @@ public sealed class CliCoverageTests
         ("ShuffleRotation", ["--shuffle", "any"], o => o.ShuffleRotation),
         ("Autobalance", ["--no-autobalance"], o => o.Autobalance),
         ("AimCheck", ["--aim-check", "kick"], o => o.AimCheck),
+        ("AimAnalysis", ["--no-aim-analysis"], o => o.AimAnalysis),
         ("BotEngagesBotsToo", ["--bot-engages-bots"], o => o.BotEngagesBotsToo),
         ("BotHandoverBubbles", ["--bot-handover-bubbles"], o => o.BotHandoverBubbles),
         ("BotSuspendMinutes", ["--bot-suspend-minutes", "15"], o => o.BotSuspendMinutes),

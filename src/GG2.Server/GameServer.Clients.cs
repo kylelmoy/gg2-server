@@ -322,6 +322,7 @@ public sealed partial class GameServer
 
         _roster.RemoveAt(slot);
         _world.RemoveSlot(slot);
+        _aimAnalysis.Remove(slot);
 
         ServerMessages.PlayerLeave(_broadcast, (byte)slot);
 
@@ -427,6 +428,74 @@ public sealed partial class GameServer
             KickPlayer(
                 _roster.IndexOf(client.Entry),
                 $"{client.ImpossibleAims} impossible aim inputs");
+        }
+    }
+
+    /// <summary>
+    /// Feeds this tick's inputs to <see cref="AimAnalysis"/>, and every ten
+    /// seconds logs any player whose aim has newly crossed a threshold.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only connected people are watched: a bot is not a suspect, and this
+    /// project's bots aim well enough to cross the lock threshold.
+    /// </para>
+    /// <para>
+    /// The keys include the presses <see cref="_relayedPresses"/> carries, so a
+    /// tap inside one tick counts as a press here exactly as it does in a
+    /// recording, and <c>tools/aimscan</c> over a trace computes what this
+    /// computed live.
+    /// </para>
+    /// <para>
+    /// Log only, never a kick: a statistic is evidence for an operator, and a
+    /// false kick of a strong player is the failure the thresholds were set to
+    /// avoid. <see cref="ServerOptions.AimAnalysis"/> is read here, every tick.
+    /// </para>
+    /// </remarks>
+    private void ObserveAim(int live)
+    {
+        if (!_options.AimAnalysis)
+            return;
+
+        for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+        {
+            var watched = slot > 0
+                && slot < live
+                && !_roster[slot].IsBot
+                && _roster[slot].Source is NetworkInputSource;
+
+            _aimWatched[slot] = watched;
+            _aimInputs[slot] = watched
+                ? _inputs[slot] with { Keys = _inputs[slot].Keys | _relayedPresses[slot] }
+                : default;
+        }
+
+        _aimAnalysis.Observe(in _world, _collision, _aimInputs, _aimWatched);
+
+        if (_frame % 300 != 0)
+            return;
+
+        for (var slot = 1; slot < live; slot++)
+        {
+            if (!_aimWatched[slot])
+                continue;
+
+            var fresh = _aimAnalysis.TakeNew(slot);
+
+            if (fresh == AimSignals.None || !_aimAnalysisLog.ShouldLog(_nowMs, out var suppressed))
+                continue;
+
+            var evidence = string.Join(", ", Enum.GetValues<AimSignals>()
+                .Where(signal => signal != AimSignals.None && fresh.HasFlag(signal))
+                .Select(signal =>
+                {
+                    var (hits, of, lag) = _aimAnalysis.Evidence(slot, signal);
+                    return $"{signal.ToString().ToLowerInvariant()} {hits}/{of} at lag {lag}";
+                }));
+
+            _log.Warn(
+                $"{LogText.Safe(_roster[slot].Name)}: aim analysis: {evidence} (docs/HARDENING.md, \"Aim analysis\")"
+                + Suffix(suppressed));
         }
     }
 

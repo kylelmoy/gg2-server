@@ -382,6 +382,13 @@ public sealed class ServerOptions
     public AimCheckMode AimCheck { get; set; } = AimCheckMode.Log;
 
     /// <summary>
+    /// Keep per-player aim statistics and log a player whose aim crosses a
+    /// threshold no recorded human has. <see cref="GG2.Server.AimAnalysis"/>.
+    /// Log only. Read at use time.
+    /// </summary>
+    public bool AimAnalysis { get; set; } = true;
+
+    /// <summary>
     /// Announce this server to the public lobby at
     /// <c>ganggarrison.com:29944</c>, so it appears in the client's server list.
     /// </summary>

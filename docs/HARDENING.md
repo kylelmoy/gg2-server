@@ -255,6 +255,60 @@ compute aim differently, and only an operator can tell that from a cheat.
 against the fixture; a GG2 release that changes `ClientInputstate.gml` or the
 view sizes needs a new dump.
 
+### Aim analysis — `src/GG2.Server/AimAnalysis.cs`
+
+Per-player statistics over every connected person's inputs, kept at each lag
+from 0 to 12 ticks (a client aims at the world it was sent, a round trip ago,
+so a perfect aimbot is exact only at that player's lag). A signal fires when
+the 99.9% Wilson lower bound of its rate, at the player's best lag, exceeds a
+threshold, after a minimum sample. Each fires once per player, as a throttled
+warning naming the evidence. `[Server] AimAnalysis` / `--no-aim-analysis`;
+on by default, **log only**, never a kick.
+
+| Signal | Counts | Minimum | Threshold |
+|---|---|---|---|
+| lock | ticks the aim ray passes within 1 px of a visible enemy whose bearing is turning | 200 | 0.12 |
+| flick | one-tick turns of 20 degrees or more that land within 1 px of a visible enemy | 20 | 0.35 |
+| trigger | attack presses on the first tick the aim ray meets a visible enemy's box | 20 | 0.40 |
+| hidden | ticks within 1 px of an enemy that is off screen at every aspect ratio, behind a wall, or cloaked, with no visible enemy within 4 px | 300 | 0.07 |
+
+**Calibration.** `tools/aimscan` replayed the fleet's 567 recordings
+(2026-09-15 to 2026-10-05, 662 human sessions). No human session crosses any
+threshold; the highest human lower bounds are 0.047 (lock), 0.035 (flick),
+0.111 (trigger) and 0.032 (hidden), under half of each threshold. The same
+sessions with a cheat substituted for part of the input, aimed at positions 2
+to 5 ticks old through a whole-pixel pointer:
+
+| Synthetic cheat | Flagged (of 662; the rest lack the minimum sample) |
+|---|---|
+| aim locked on the nearest visible enemy | 452 (lock), 368 also by flick |
+| the same with 3 px jitter per tick | 451 |
+| the same with 6 px jitter | 77 |
+| the same with 10 px jitter | 0 |
+| fire held exactly while on an enemy | 397 |
+| aim follows the nearest hidden enemy, 3 px jitter | 490 |
+
+**What it does not catch.** An aimbot that adds 6 px or more of per-tick noise
+to its point, a cheat used for only a few seconds, and a wallhack used only to
+know where enemies are without aiming at them. The highest human hidden-lock
+sessions are on `koth_harvest`, which suggests a bullet-blocking shape there that
+does not block sight; it stays below the threshold.
+
+**Cost.** 0.064 ms a tick with 24 watched players on `ctf_truefort` (Release),
+from one wall test per pair per tick and no trigonometry in the per-lag loop.
+Bots are not watched: this project's own bots cross the lock threshold in 16%
+of their sessions, and four policy-bot sessions cross the hidden one, which is
+the known cloaked-spy leak in `BotVisibility`'s remarks.
+
+**Live.** A stock client against this server, its pointer moved every frame
+onto the nearest enemy as the client saw it (through walls), was logged as
+`hidden 192/460 at lag 2` 36 seconds after joining.
+
+**What would show this is stale:** a warning naming a player an operator knows
+to be legitimate. Re-run `tools/aimscan` over new recordings, which prints the
+human distributions, before moving a threshold; a GG2 release that changes how
+aim reaches the wire needs the same.
+
 ## What is left to the machine
 
 **None of the below is done for you, and the process cannot do it.** A
@@ -371,13 +425,13 @@ on purpose — an unrecorded decision gets retried.
   address, and `MaxJoiningConnections` bounds the total, but neither can tell a
   botnet from a LAN party. Past `ConnectionRateLimiter.MaxTracked` addresses the
   limiter **fails open** — see below — and the answer is the firewall.
-- **Most cheating.** The server trusts the aim it is told and broadcasts every
-  player's state to every client, because the stock client re-simulates the
-  physics from it; changing either breaks the stock client. So an aimbot that
-  moves the real pointer, a triggerbot, and a wallhack are not detected. The
-  aim check above catches only aim bytes a pointer cannot produce. Movement,
-  damage, fire rate and ammunition are simulated here, so a modified client
-  cannot cheat them in the first place.
+- **Cheating, except statistically.** The server trusts the aim it is told and
+  broadcasts every player's state to every client, because the stock client
+  re-simulates the physics from it; changing either breaks the stock client. So
+  nothing prevents an aimbot, a triggerbot or a wallhack. The aim check and aim
+  analysis above detect them after the fact, from the inputs, and only log.
+  Movement, damage, fire rate and ammunition are simulated here, so a modified
+  client cannot cheat them in the first place.
 - **The chat/name content itself.** Names and bubbles are relayed as the client
   sent them, modulo the length limit the reference already enforces. There is no
   filter, and adding one would be a policy decision rather than a security one.

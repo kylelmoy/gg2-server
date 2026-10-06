@@ -316,6 +316,11 @@ public static class ServerSettings
             (o, v) => o.AimCheck = AimCheck.ParseMode(v, "Server.AimCheck"),
             "kick"));
 
+        // The port's own key. docs/HARDENING.md, "Aim analysis".
+        settings.Add(BoolRow(
+            "Server", "AimAnalysis", nameof(ServerOptions.AimAnalysis),
+            o => o.AimAnalysis, (o, v) => o.AimAnalysis = v));
+
         // The same max/min clamps game_init.gml applies, and they are not
         // decoration: `CapLimit=0` in the reference is a ONE-capture round, not an
         // endless one, because the floor is applied before anything sees it.

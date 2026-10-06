@@ -402,6 +402,10 @@ internal static class CommandLine
                     options.AimCheck = AimCheck.ParseMode(cursor.Take(), name);
                     break;
 
+                case "--no-aim-analysis":
+                    options.AimAnalysis = false;
+                    break;
+
                 case "--multi-client-limit":
                     options.MultiClientLimit = cursor.TakeInt();
                     break;
@@ -1113,6 +1117,8 @@ internal static class CommandLine
           --aim-check <mode>
                             off, log (default) or kick: what to do about aim
                             input no mouse could produce. docs/HARDENING.md
+          --no-aim-analysis do not keep aim statistics or log players whose aim
+                            no recorded human matches (on by default; log only)
           --bots <n>        fill the server to n players with bots (0 = off)
           --bot-difficulty <1-5>
                             how good they are (default 5, the top tier). The

@@ -499,6 +499,7 @@ public sealed partial class GameServer
             // character left in place would belong to the wrong player from here
             // on.
             _world.RemoveSlot(rosterIndex);
+            _aimAnalysis.Remove(rosterIndex);
 
             ServerMessages.PlayerLeave(_broadcast, (byte)rosterIndex);
 

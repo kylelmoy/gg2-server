@@ -473,6 +473,15 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     /// </remarks>
     private readonly LogThrottle _invalidCommandLog = new(burst: 3, per: TimeSpan.FromSeconds(10));
 
+    /// <summary>Per-player aim statistics; <see cref="ObserveAim"/>.</summary>
+    private readonly AimAnalysis _aimAnalysis = new();
+
+    private readonly bool[] _aimWatched = new bool[WorldState.MaxSlots];
+    private readonly PlayerInput[] _aimInputs = new PlayerInput[WorldState.MaxSlots];
+
+    /// <summary>One line per signal per player, but a server full of them must not flood the log.</summary>
+    private readonly LogThrottle _aimAnalysisLog = new(burst: 3, per: TimeSpan.FromSeconds(10));
+
     /// <summary>The first-impossible-aim line, one per connection; throttled because joins are client-driven.</summary>
     private readonly LogThrottle _aimCheckLog = new(burst: 3, per: TimeSpan.FromSeconds(10));
 
@@ -1066,6 +1075,8 @@ public sealed partial class GameServer : IDisposable, IPluginHost
                 // is left out — see TryGetCharacter.
                 _relayedPresses[slot] = pressed & ~_inputs[slot].Keys;
             }
+
+            ObserveAim(live);
         }
 
         // Order matters and is the reference's. GameServerBeginStep.gml

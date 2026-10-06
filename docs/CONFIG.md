@@ -330,6 +330,7 @@ and it is described above.
 | `ServerPluginsRequired` | boolean | `0` | Clients must load the plugin list to join. |
 | `AutoBalance` | boolean | `1` | Move a player across when one team is two larger. |
 | `AimCheck` | `off`, `log`, `kick` | `log` | Port's own. What to do about an `INPUTSTATE` whose aim no mouse could produce: nothing, one log line per connection, or that line and a kick after 30. `docs/HARDENING.md`, "The aim check". |
+| `AimAnalysis` | boolean | `1` | Port's own. Per-player aim statistics; logs a player whose lock, flick, trigger or hidden-lock rate crosses a threshold no recorded human has. Log only. `docs/HARDENING.md`, "Aim analysis". |
 | `CapLimit` | integer | `5` | Captures that win a round, 1..255. **0 is clamped to 1, not to unlimited.** |
 | `Time Limit` | integer | `15` | Round length in minutes, 1..255. 0 is clamped to 1. |
 | `Deathmatch Kill Limit` | integer | `30` | Kills that win a team-deathmatch round, 1..65535. |

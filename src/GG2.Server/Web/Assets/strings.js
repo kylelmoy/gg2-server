@@ -720,6 +720,7 @@ const STRINGS = {
       "ServerPluginsRequired": "Clients must load the plugin list to join.",
       "AutoBalance": "Move a player when one team leads by two.",
       "AimCheck": "Aim input no mouse could produce: off, log it, or kick after 30.",
+      "AimAnalysis": "Log players whose aim statistics no recorded human matches.",
       "CapLimit": "Captures to win a round, 1..255. 0 clamps to 1, not unlimited.",
       "Time Limit": "Round length in minutes, 1..255. 0 clamps to 1.",
       "Deathmatch Kill Limit": "Kills to win a team-deathmatch round, 1..65535.",
