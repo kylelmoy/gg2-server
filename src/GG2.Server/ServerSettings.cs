@@ -308,6 +308,14 @@ public static class ServerSettings
             "Server", "AutoBalance", nameof(ServerOptions.Autobalance),
             o => o.Autobalance, (o, v) => o.Autobalance = v));
 
+        // The port's own key. docs/HARDENING.md, "The aim check".
+        settings.Add(ChoiceRow(
+            "Server", "AimCheck", nameof(ServerOptions.AimCheck),
+            ["off", "log", "kick"],
+            o => AimCheck.Name(o.AimCheck),
+            (o, v) => o.AimCheck = AimCheck.ParseMode(v, "Server.AimCheck"),
+            "kick"));
+
         // The same max/min clamps game_init.gml applies, and they are not
         // decoration: `CapLimit=0` in the reference is a ONE-capture round, not an
         // endless one, because the floor is applied before anything sees it.

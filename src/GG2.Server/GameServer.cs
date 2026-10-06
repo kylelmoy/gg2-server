@@ -473,6 +473,9 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     /// </remarks>
     private readonly LogThrottle _invalidCommandLog = new(burst: 3, per: TimeSpan.FromSeconds(10));
 
+    /// <summary>The first-impossible-aim line, one per connection; throttled because joins are client-driven.</summary>
+    private readonly LogThrottle _aimCheckLog = new(burst: 3, per: TimeSpan.FromSeconds(10));
+
     /// <summary>
     /// Addresses an operator has refused. Empty unless somebody put one in.
     /// </summary>

@@ -27,6 +27,9 @@ public sealed partial class GameServer
         /// </remarks>
         public bool ReportedInvalidCommands { get; set; }
 
+        /// <summary><c>INPUTSTATE</c>s whose aim no mouse could produce. <see cref="AimCheck"/>.</summary>
+        public int ImpossibleAims { get; set; }
+
         /// <summary>
         /// Bytes already standing in the broadcast buffer when this client
         /// joined, which its next flush must skip.
@@ -392,6 +395,41 @@ public sealed partial class GameServer
         }
     }
 
+    /// <summary>
+    /// Counts an <c>INPUTSTATE</c> whose aim no mouse could produce, and acts on
+    /// <see cref="ServerOptions.AimCheck"/>.
+    /// </summary>
+    /// <remarks>
+    /// The input has already been applied: the check never changes what the
+    /// simulation sees, so a false positive in <see cref="AimCheckMode.Log"/>
+    /// costs a log line and nothing else. One line per connection, at the first
+    /// one, carrying the bytes; a kick says how many it saw.
+    /// </remarks>
+    private void CheckAim(ClientPlayer client, in PlayerInput input)
+    {
+        var mode = _options.AimCheck;
+
+        if (mode == AimCheckMode.Off || AimCheck.IsReachable(input.NetAimDirection, input.AimDistance))
+            return;
+
+        client.ImpossibleAims++;
+
+        if (client.ImpossibleAims == 1 && _aimCheckLog.ShouldLog(_nowMs, out var suppressed))
+        {
+            _log.Warn(
+                $"{LogText.Safe(client.Entry.Name)}: aim {input.NetAimDirection}/{input.AimDistance} "
+                + "is not reachable from any pointer position (aimbot or modified client)"
+                + Suffix(suppressed));
+        }
+
+        if (mode == AimCheckMode.Kick && client.ImpossibleAims >= AimCheck.KickAfter)
+        {
+            KickPlayer(
+                _roster.IndexOf(client.Entry),
+                $"{client.ImpossibleAims} impossible aim inputs");
+        }
+    }
+
     private void Handle(ClientPlayer client, in ClientCommand command)
     {
         var entry = client.Entry;
@@ -408,8 +446,12 @@ public sealed partial class GameServer
                 // per-tick input, and it reaches the simulation through the
                 // seam like everything else. A client always has a
                 // NetworkInputSource behind it, so the cast never fails.
-                ((NetworkInputSource)entry.Source).Latest = PlayerInput.Read(ref reader);
+            {
+                var input = PlayerInput.Read(ref reader);
+                ((NetworkInputSource)entry.Source).Latest = input;
+                CheckAim(client, input);
                 break;
+            }
 
             case MessageType.PlayerChangeTeam:
                 ExecuteChangeTeam(entry, (Team)reader.ReadUByte());

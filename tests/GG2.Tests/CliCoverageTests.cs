@@ -99,6 +99,7 @@ public sealed class CliCoverageTests
         ("ClassLimits", ["--class-limit", "medic=1"], o => string.Join(',', o.ClassLimits)),
         ("ShuffleRotation", ["--shuffle", "any"], o => o.ShuffleRotation),
         ("Autobalance", ["--no-autobalance"], o => o.Autobalance),
+        ("AimCheck", ["--aim-check", "kick"], o => o.AimCheck),
         ("BotEngagesBotsToo", ["--bot-engages-bots"], o => o.BotEngagesBotsToo),
         ("BotHandoverBubbles", ["--bot-handover-bubbles"], o => o.BotHandoverBubbles),
         ("BotSuspendMinutes", ["--bot-suspend-minutes", "15"], o => o.BotSuspendMinutes),

@@ -398,6 +398,10 @@ internal static class CommandLine
                     options.Autobalance = false;
                     break;
 
+                case "--aim-check":
+                    options.AimCheck = AimCheck.ParseMode(cursor.Take(), name);
+                    break;
+
                 case "--multi-client-limit":
                     options.MultiClientLimit = cursor.TakeInt();
                     break;
@@ -1106,6 +1110,9 @@ internal static class CommandLine
           --no-autobalance  do not move a player across when one team is two
                             larger (--autobalance turns it back on; on by
                             default)
+          --aim-check <mode>
+                            off, log (default) or kick: what to do about aim
+                            input no mouse could produce. docs/HARDENING.md
           --bots <n>        fill the server to n players with bots (0 = off)
           --bot-difficulty <1-5>
                             how good they are (default 5, the top tier). The

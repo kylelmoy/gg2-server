@@ -222,6 +222,39 @@ a few in a burst. `ChatBubbleIntervalMs = 0` restores the reference exactly.
 
 ---
 
+### The aim check — `src/GG2.Server/AimCheck.cs`
+
+`INPUTSTATE`'s aim is `ClientInputstate.gml`'s `point_direction` and
+`point_distance / 2` from the view centre to the pointer, and both ends are
+integers, so a stock client can only send direction/distance pairs that some
+integer offset produces. An aimbot that writes the angle to a target's
+fractional position lands on one about 5% of the time (`AimCheckTests`).
+`[Server] AimCheck` / `--aim-check`: `off`, `log` (default: one line per
+connection, at the first), or `kick` (the line, then a kick after 30). The
+input is applied either way, so the check never changes the simulation.
+
+Measured in a stock client, 2026-10-05:
+
+| Fact | Consequence |
+|---|---|
+| `view_xview` is stored as an integer, and every width in `rooms_fix_views.gml` is even | the view centre is integral |
+| `mouse_x` is floored when the window is scaled (266.4 reads 266) | the pointer is integral at any window size |
+| the pointer is tracked outside the window (1500,900 in an 800x600 window) | **there is no distance ceiling**: byte 255 is legal in every direction and always passes |
+| `write_ushort`/`write_ubyte` round half away from zero and clamp (65536 writes 65535) | the encoding `AimCheck` inverts |
+| the pointer at the centre writes 0/0 | distance 0 is legal only with direction 0 |
+
+`Fixtures/aim-encoding-samples.txt` is the client's own encoding over a grid
+of offsets, and every row must pass; the full 38,746-row dump passed when it
+was taken. Against this server in `kick` mode, a stock client whose pointer was
+moved to a random position inside and outside the window every frame for 600
+frames, at 800x600 and scaled to 1000x750, logged nothing; the same client then
+writing `1/100` by hand was logged at the first and kicked at the thirtieth. **Log, not kick, by default** because a client-side plugin may
+compute aim differently, and only an operator can tell that from a cheat.
+**What would show this is stale:** a stock client's offset that fails
+`IsReachable`, which `EveryEncodingTheStockClientWroteIsReachable` checks
+against the fixture; a GG2 release that changes `ClientInputstate.gml` or the
+view sizes needs a new dump.
+
 ## What is left to the machine
 
 **None of the below is done for you, and the process cannot do it.** A
@@ -338,10 +371,13 @@ on purpose — an unrecorded decision gets retried.
   address, and `MaxJoiningConnections` bounds the total, but neither can tell a
   botnet from a LAN party. Past `ConnectionRateLimiter.MaxTracked` addresses the
   limiter **fails open** — see below — and the answer is the firewall.
-- **Cheating.** The client re-simulates physics itself and the server does not
-  re-check what it is told about aim. That is the protocol's design and cannot
-  be changed without breaking the stock client, which is this project's whole
-  premise. An aimbot is undetectable here by construction.
+- **Most cheating.** The server trusts the aim it is told and broadcasts every
+  player's state to every client, because the stock client re-simulates the
+  physics from it; changing either breaks the stock client. So an aimbot that
+  moves the real pointer, a triggerbot, and a wallhack are not detected. The
+  aim check above catches only aim bytes a pointer cannot produce. Movement,
+  damage, fire rate and ammunition are simulated here, so a modified client
+  cannot cheat them in the first place.
 - **The chat/name content itself.** Names and bubbles are relayed as the client
   sent them, modulo the length limit the reference already enforces. There is no
   filter, and adding one would be a policy decision rather than a security one.

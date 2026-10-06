@@ -376,6 +376,12 @@ public sealed class ServerOptions
     public bool Autobalance { get; set; } = true;
 
     /// <summary>
+    /// What to do about an <c>INPUTSTATE</c> whose aim no mouse could have produced.
+    /// <see cref="GG2.Server.AimCheck"/> for what is and is not caught. Read at use time.
+    /// </summary>
+    public AimCheckMode AimCheck { get; set; } = AimCheckMode.Log;
+
+    /// <summary>
     /// Announce this server to the public lobby at
     /// <c>ganggarrison.com:29944</c>, so it appears in the client's server list.
     /// </summary>
