@@ -893,7 +893,7 @@ public static class ControlCommands
     {
         for (var slot = 0; slot < server.RosterCount; slot++)
         {
-            if (server.SourceOf(slot) is GG2.Bots.HybridBot hybrid)
+            if (GG2.Bots.HybridBot.Of(server.SourceOf(slot)) is { } hybrid)
                 return hybrid.Tiers;
         }
 
@@ -1043,7 +1043,7 @@ public static class ControlCommands
         PlayerClass playerClass,
         GG2.Bots.BotBrainSpec? brain)
     {
-        if (source is not GG2.Bots.HybridBot hybrid)
+        if (GG2.Bots.HybridBot.Of(source) is not { } hybrid)
         {
             json.Append(",\"brain\":\"").Append(ScriptedBrain).Append('"');
             json.Append(",\"driving\":false");

@@ -696,6 +696,11 @@ public sealed class BotPopulationService
         // picks between its tiers per decision.
         IInputSource source = options.Brain is { } brain ? brain.Wrap(bot) : bot;
 
+        // Outermost, so it sees what the whole brain decided, and seeded from the
+        // stagger like the scripted layer's own stream.
+        if (_server.Options.BotHumanize)
+            source = new HumanizedBot(source, HumanizeOptions.Default, (uint)stagger);
+
         var slot = _server.AddBot(name, team, playerClass, source);
 
         // The query has to carry the class the server actually gave it, which

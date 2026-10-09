@@ -102,6 +102,7 @@ public sealed class CliCoverageTests
         ("AimCheck", ["--aim-check", "kick"], o => o.AimCheck),
         ("AimAnalysis", ["--no-aim-analysis"], o => o.AimAnalysis),
         ("BotEngagesBotsToo", ["--bot-engages-bots"], o => o.BotEngagesBotsToo),
+        ("BotHumanize", ["--bot-humanize"], o => o.BotHumanize),
         ("BotHandoverBubbles", ["--bot-handover-bubbles"], o => o.BotHandoverBubbles),
         ("BotSuspendMinutes", ["--bot-suspend-minutes", "15"], o => o.BotSuspendMinutes),
         ("IdleWhenEmpty", ["--no-idle-when-empty"], o => o.IdleWhenEmpty),

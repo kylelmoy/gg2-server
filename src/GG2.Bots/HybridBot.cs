@@ -76,6 +76,19 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// </remarks>
     public const double DuelEngagementRange = 300.0;
 
+    /// <summary>The hybrid driving a slot, through any output filter around it.</summary>
+    /// <remarks>
+    /// <b>Use this instead of <c>source is HybridBot</c></b>, for the reason
+    /// <see cref="ScriptedBot.Of"/> gives: a <see cref="HumanizedBot"/> wraps the
+    /// hybrid, and the direct type test would say the slot has no controller.
+    /// </remarks>
+    public static HybridBot? Of(IInputSource? source) => source switch
+    {
+        HybridBot hybrid => hybrid,
+        HumanizedBot humanized => Of(humanized.Inner),
+        _ => null,
+    };
+
     private readonly IMicroController[] _tiers;
     private readonly ScriptedBot _scripted;
     private readonly IMicroArbiter? _arbiter;

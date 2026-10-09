@@ -786,6 +786,7 @@ const STRINGS = {
       "NamePrefix": "Bot name prefix.",
       "ClassPolicy": "Class=name pairs choosing each class's driver; name is a checkpoint file name without extension, or 'scripted'. Unlisted classes: the loaded checkpoint that claims them, else scripted.",
       "Occupancy": "Penalise edges teammates already use so squads spread out. Behavioural: off drops match dispersion 0.785 to 0.634.",
+      "Humanize": "Inside a fight, hold movement keys a few ticks at a time and make aim flick and correct like a person's. Behavioural: also weaker.",
       "EngageBots": "Run the micro-controller in bot-vs-bot fights too. Costs tick time; does not improve play.",
       "HandoverBubbles": "Chat bubble on brain handover: z1 policy, z3 search, z2 scripted. Debug only; each bubble is a broadcast.",
       "AdaptiveBudget": "Lower the controller budget when ticks approach their deadline. Arbiter remains the upper bound.",

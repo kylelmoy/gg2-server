@@ -581,6 +581,18 @@ public sealed class ServerOptions
     public bool BotOccupancy { get; set; } = true;
 
     /// <summary>
+    /// Wrap every bot in <c>GG2.Bots.HumanizedBot</c>: inside a fight its
+    /// horizontal key is held a few ticks at a time and its aim flicks and
+    /// corrects the way a person's does, instead of flickering and slewing.
+    /// </summary>
+    /// <remarks>
+    /// <b>A behaviour switch, off by default until it is measured.</b> It changes
+    /// what a bot does, and a human-like bot is expected to be a weaker one;
+    /// <c>docs/TRAPS-BOTS.md</c>, "Human-like output", has both measurements.
+    /// </remarks>
+    public bool BotHumanize { get; set; }
+
+    /// <summary>
     /// How fast <see cref="GameServer.Run"/> paces the tick loop, relative to
     /// real time. 1.0 is the reference's 30 Hz; 4.0 runs four minutes of match
     /// per minute; <see cref="double.PositiveInfinity"/> is <b>unpaced</b> — the

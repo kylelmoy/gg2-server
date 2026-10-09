@@ -590,6 +590,11 @@ public static class ServerSettings
             "Bots", "Occupancy", nameof(ServerOptions.BotOccupancy),
             o => o.BotOccupancy, (o, v) => o.BotOccupancy = v));
 
+        // A BEHAVIOUR switch: it changes what a bot does, not what it costs.
+        settings.Add(BoolRow(
+            "Bots", "Humanize", nameof(ServerOptions.BotHumanize),
+            o => o.BotHumanize, (o, v) => o.BotHumanize = v));
+
         settings.Add(BoolRow(
             "Bots", "EngageBots", nameof(ServerOptions.BotEngagesBotsToo),
             o => o.BotEngagesBotsToo, (o, v) => o.BotEngagesBotsToo = v));
