@@ -218,7 +218,7 @@ public sealed class HeadlessMatch : DrivenWorld
     /// them is always zero.
     /// </para>
     /// </remarks>
-    public HybridBot? HybridBotFor(int slot) => SourceOf(slot) as HybridBot;
+    public HybridBot? HybridBotFor(int slot) => HybridBot.Of(SourceOf(slot));
 
     /// <summary>Advances one tick.</summary>
     /// <remarks>
@@ -413,6 +413,28 @@ public sealed class HeadlessMatch : DrivenWorld
 
         AssignRoles();
         WrapInBrain();
+        Humanize();
+    }
+
+    /// <summary>
+    /// Puts <see cref="HumanizedBot"/> outermost on <see cref="HeadlessMatchOptions.HumanizeTeam"/>'s bots.
+    /// </summary>
+    /// <remarks>
+    /// After <see cref="WrapInBrain"/>, so it filters what the whole brain
+    /// decided, and seeded from the slot as the scripted layer is.
+    /// </remarks>
+    private void Humanize()
+    {
+        if (Options.HumanizeTeam is not { } team)
+            return;
+
+        for (var slot = 1; slot < SlotCount; slot++)
+        {
+            if (State.Players[slot].Team != team || SourceOf(slot) is not { } source || ScriptedBot.Of(source) is null)
+                continue;
+
+            Drive(slot, new HumanizedBot(source, HumanizeOptions.Default, (uint)slot));
+        }
     }
 
     /// <summary>

@@ -46,7 +46,13 @@ public static class Tiers
     [
         ("full:5", 5, false), ("full:4", 4, false), ("full:3", 3, false), ("full:2", 2, false), ("full:1", 1, false),
         ("hc:4", 4, true), ("hc:3", 3, true), ("hc:2", 2, true), ("hc:1", 1, true),
+
+        // Tier 5 wrapped in HumanizedBot: what a human-like bot costs, against
+        // the same full:5 mirror every other arm is read against.
+        ("hum:5", 5, false),
     ];
+
+    private static bool Humanized(string arm) => arm.StartsWith("hum:", StringComparison.Ordinal);
 
     private sealed record Observation(
         string Map, string Arm, int Index, string Class, Team Subject, double Score, int Ticks,
@@ -102,7 +108,9 @@ public static class Tiers
             var subjectBot = Bot(world, brains.Value, subject, subjectSlot, arm);
             var otherBot = Bot(world, brains.Value, subject == Team.Red ? Team.Blue : Team.Red, otherSlot, ("ref", 5, false));
 
-            world.Drive(subjectSlot, subjectBot);
+            world.Drive(
+                subjectSlot,
+                Humanized(arm.Name) ? new HumanizedBot(subjectBot, HumanizeOptions.Default, (uint)subjectSlot) : subjectBot);
             world.Drive(otherSlot, otherBot);
 
             bool subjectDied = false, otherDied = false;
@@ -232,6 +240,7 @@ public static class Tiers
                 RedDifficulty = subject == Team.Red ? arm.Tier : 5,
                 BlueDifficulty = subject == Team.Blue ? arm.Tier : 5,
                 HandicapOnly = arm.HandicapOnly,
+                HumanizeTeam = Humanized(arm.Name) ? subject : null,
             };
 
             var match = HeadlessMatch.Load(options, maps, nav);

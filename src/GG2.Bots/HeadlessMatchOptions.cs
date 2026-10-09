@@ -38,6 +38,11 @@ namespace GG2.Bots;
 /// scripted layer plays at <see cref="Difficulty"/>. Isolates how much of a tier
 /// is the controller's handicap; with no <see cref="Brain"/> it changes nothing.
 /// </param>
+/// <param name="HumanizeTeam">
+/// The team whose bots are wrapped in <see cref="HumanizedBot"/>, or null for
+/// neither. One team, so the cost of the filter is one match against an
+/// unfiltered opponent rather than two batches compared after the fact.
+/// </param>
 public readonly record struct HeadlessMatchOptions(
     string Map,
     int Area,
@@ -57,7 +62,8 @@ public readonly record struct HeadlessMatchOptions(
     bool NavDistances = true,
     int? RedDifficulty = null,
     int? BlueDifficulty = null,
-    bool HandicapOnly = false)
+    bool HandicapOnly = false,
+    Team? HumanizeTeam = null)
 {
     /// <summary>
     /// A short match on <c>ctf_truefort</c> with twelve bots. ⚠️ The values are
