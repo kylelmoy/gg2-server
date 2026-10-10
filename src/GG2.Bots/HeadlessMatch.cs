@@ -433,7 +433,7 @@ public sealed class HeadlessMatch : DrivenWorld
             if (Options.HumanizeTeam is { } team && State.Players[slot].Team == team)
                 Drive(slot, new HumanizedBot(source, Options.HumanizeWith ?? HumanizeOptions.Default, (uint)slot));
             else if (Options.HumanAimByTier)
-                Drive(slot, HumanizedBot.ByTier(source, (uint)slot));
+                Drive(slot, HumanizedBot.ByTier(source, (uint)slot, Options.HumanAimWith));
         }
     }
 

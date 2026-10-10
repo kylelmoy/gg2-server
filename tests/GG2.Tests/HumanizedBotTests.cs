@@ -363,6 +363,33 @@ public sealed class HumanizedBotTests
             Assert.Equal(wanted[t], filter.Poll(in view, rig.Slot, t).NetAimDirection);
     }
 
+    /// <summary>
+    /// <b>D4 (<see cref="HumanizeOptions.Tracking2"/>)</b>: a large turn is closed
+    /// in partial strokes, and a moving correction reverses now and then.
+    /// </summary>
+    [Fact]
+    public void Tracking2ClosesALargeTurnInPartsAndTrembles()
+    {
+        static PlayerInput Input(int tick) => new(PlayerKeys.Attack, tick < 10 ? (ushort)0 : (ushort)(90 * 65536 / 360), 40);
+
+        var outputs = Run(Build(Input, fight: true, options: HumanizeOptions.Tracking2), 200);
+        var turns = new double[outputs.Length];
+
+        for (var t = 1; t < outputs.Length; t++)
+            turns[t] = Wrap180(Degrees(outputs[t].NetAimDirection) - Degrees(outputs[t - 1].NetAimDirection));
+
+        var biggest = turns.Skip(10).Max(Math.Abs);
+        Assert.True(biggest < 60, $"one tick turned {biggest:0.0} deg: a 90 deg error should be closed in parts");
+
+        var reversals = Enumerable.Range(11, turns.Length - 11).Count(t => turns[t] * turns[t - 1] < 0);
+        Assert.True(reversals > 0, "a moving correction never turned back");
+
+        var final = Degrees(outputs[^1].NetAimDirection);
+        Assert.True(Gap(final, 90) < 12, $"settled at {final:0.0} deg, more than the dead zone and a tremor from 90");
+    }
+
+    private static double Wrap180(double degrees) => ((degrees % 360) + 540) % 360 - 180;
+
     /// <summary>Past the idle flick threshold, a lazy aim still turns.</summary>
     [Fact]
     public void LazyAimStillFlicksAtALargeError()

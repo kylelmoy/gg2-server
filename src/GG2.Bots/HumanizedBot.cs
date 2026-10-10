@@ -121,8 +121,11 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
     /// <see cref="HumanizeOptions.Tracking"/>. Otherwise it is an exact pass-through
     /// that draws nothing, so tier 5 plays exactly as it would unwrapped.
     /// </summary>
-    public static HumanizedBot ByTier(IInputSource inner, uint seed) =>
-        new(inner, HumanizeOptions.Tracking, seed) { OnlyWhenSkillAsks = true };
+    /// <param name="inner">The brain.</param>
+    /// <param name="seed">The filter's own stream.</param>
+    /// <param name="options">The preset, or null for <see cref="HumanizeOptions.Tracking"/>; a bench arm sets it.</param>
+    public static HumanizedBot ByTier(IInputSource inner, uint seed, HumanizeOptions? options = null) =>
+        new(inner, options ?? HumanizeOptions.Tracking, seed) { OnlyWhenSkillAsks = true };
 
     /// <summary>Run only while the scripted layer's skill has <see cref="BotSkill.HumanAim"/>.</summary>
     public bool OnlyWhenSkillAsks { get; init; }
@@ -247,7 +250,7 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
             _reactLeft = -1;
             _velocity = 0;
             _strokeFrom = _aim;
-            _strokeAmplitude = error * (1 + (Options.SaccadeEndpointError * Gaussian()));
+            _strokeAmplitude = Options.SaccadeGain * error * (1 + (Options.SaccadeEndpointError * Gaussian()));
             _strokeTicks = Math.Clamp(
                 (int)Math.Round(Options.StrokeBaseTicks + (Math.Abs(_strokeAmplitude) / Options.StrokeDegreesPerTick)),
                 Options.MinStrokeTicks,
@@ -269,7 +272,14 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
         if (aimFor == 0.0 && Math.Abs(_velocity) < Options.StopDegrees)
             _velocity = 0;
         else if (_velocity != 0)
+        {
             _velocity *= 1 + (Options.PursuitNoise * Gaussian());
+
+            // D4: a moving hand trembles, so the aim sometimes turns back for a
+            // tick. Drawn only when set, so every preset without it is unchanged.
+            if (Options.PursuitTremorDegrees > 0)
+                _velocity += Options.PursuitTremorDegrees * Gaussian();
+        }
 
         _aim = Wrap(_aim + _velocity);
         return _aim;
@@ -356,6 +366,14 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
 /// </param>
 /// <param name="IdleDeadZoneDegrees"><paramref name="DeadZoneDegrees"/> between shots, or NaN. v5.</param>
 /// <param name="IdlePursuitGain"><paramref name="PursuitGain"/> between shots, or NaN. v5.</param>
+/// <param name="SaccadeGain">
+/// The fraction of the error a flick covers, before its endpoint error. 1 closes
+/// it; below 1 a flick is a partial correction that the next one finishes. D4.
+/// </param>
+/// <param name="PursuitTremorDegrees">
+/// An additive turn, one standard deviation, on every tick a correction is
+/// moving: the reversals a hand makes. 0 for none. D4.
+/// </param>
 /// <param name="HoldWithoutTarget">
 /// While the scripted layer has no target and an enemy is within <paramref name="Range"/>,
 /// hold the aim rather than following the walk. D2.
@@ -378,7 +396,9 @@ public sealed record HumanizeOptions(
     double IdleSaccadeDegrees = double.NaN,
     double IdleDeadZoneDegrees = double.NaN,
     double IdlePursuitGain = double.NaN,
-    bool HoldWithoutTarget = false)
+    bool HoldWithoutTarget = false,
+    double SaccadeGain = 1.0,
+    double PursuitTremorDegrees = 0)
 {
     /// <summary>
     /// v3, the shipped shape: one-tick flicks and unsmoothed corrections. These
@@ -443,15 +463,36 @@ public sealed record HumanizeOptions(
         PursuitGain: 0.08,
         DeadZoneDegrees: 16);
 
-    /// <summary>The preset names a setting can carry: <c>v3</c>, <c>strokes</c>, <c>lazy</c>, <c>hold</c> and <c>tracking</c>.</summary>
-    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy", "hold", "tracking"];
+    /// <summary>
+    /// D4, <see cref="Tracking"/> with the reversals and flicks it lacked. Errors
+    /// past 32° are closed by half, in 2-4 tick strokes that land within ±60%, so
+    /// they sometimes overshoot; corrections inside that start at 8° and tremble
+    /// by 0.75° a tick. Fitted open loop to the people's in-range turn size, still
+    /// share, aim error, smoothness, reversals, flicks over 30° and movement
+    /// length (<c>gg2-rl</c> <c>scripts/fit_humanize_tracking.py --d4</c>,
+    /// <c>docs/PLAN.md</c> phase 5, D4).
+    /// </summary>
+    public static HumanizeOptions Tracking2 { get; } = new(
+        SaccadeDegrees: 32,
+        SaccadeEndpointError: 0.6,
+        SaccadeGain: 0.5,
+        StrokeBaseTicks: 1,
+        StrokeDegreesPerTick: 10,
+        MinStrokeTicks: 2,
+        MaxStrokeTicks: 4,
+        PursuitGain: 0.08,
+        DeadZoneDegrees: 8,
+        PursuitTremorDegrees: 0.75);
+
+    /// <summary>The preset names a setting can carry: <c>v3</c>, <c>strokes</c>, <c>lazy</c>, <c>hold</c>, <c>tracking</c> and <c>tracking2</c>.</summary>
+    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy", "hold", "tracking", "tracking2"];
 
     /// <summary>A preset's canonical name in <see cref="PresetNames"/>, refusing anything else.</summary>
     /// <exception cref="FormatException">The name is not a preset.</exception>
     public static string PresetName(string name)
     {
         var options = ForPreset(name);
-        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : options == Hold ? "hold" : options == Tracking ? "tracking" : "v3";
+        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : options == Hold ? "hold" : options == Tracking ? "tracking" : options == Tracking2 ? "tracking2" : "v3";
     }
 
     /// <summary>A preset by name, case-insensitive.</summary>
@@ -463,6 +504,7 @@ public sealed record HumanizeOptions(
         "lazy" or "v5" => Lazy,
         "hold" or "d2" => Hold,
         "tracking" or "d3" => Tracking,
-        _ => throw new FormatException($"humanize preset '{name}': v3, strokes, lazy, hold or tracking"),
+        "tracking2" or "d4" => Tracking2,
+        _ => throw new FormatException($"humanize preset '{name}': v3, strokes, lazy, hold, tracking or tracking2"),
     };
 }

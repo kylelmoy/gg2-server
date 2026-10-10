@@ -272,6 +272,9 @@ public static class Tiers
                 HumanizeWith = HumanizeFor(arm.Name),
                 SpreadTurnTeam = Spread(arm.Name) ? subject : null,
                 HumanAimByTier = HumanAimByTier,
+                HumanAimWith = Environment.GetEnvironmentVariable("BENCH_HUMAN_AIM_PRESET") is { Length: > 0 } preset
+                    ? HumanizeOptions.ForPreset(preset)
+                    : null,
             };
 
             var match = HeadlessMatch.Load(options, maps, nav);
