@@ -401,7 +401,7 @@ public sealed class HumanizedBotTests
     {
         static PlayerInput Input(int tick) => new(PlayerKeys.None, tick < 20 ? (ushort)0 : (ushort)(180 * 65536 / 360), 40);
 
-        var options = engage ? HumanizeOptions.Tracking2Engaged : HumanizeOptions.Tracking2;
+        var options = HumanizeOptions.Tracking2 with { EngageWithoutTarget = engage };
         var outputs = Run(Build(Input, fight: false, enemyDx: 100, options: options), 23);
         var turn = Gap(Degrees(outputs[^1].NetAimDirection), Degrees(outputs[19].NetAimDirection));
 

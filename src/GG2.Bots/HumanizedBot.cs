@@ -485,6 +485,11 @@ public sealed record HumanizeOptions(
     /// <see cref="HumanizedBot.ByTier"/>: at tier 4 against <see cref="Tracking"/>, O2
     /// 0.883 to 0.809 with the ladder unchanged; the fleet discriminator read 0.617
     /// to 0.629, inside its noise, and the user adopted it on 2026-10-10.
+    /// <para>
+    /// <b>D5 added <see cref="EngageWithoutTarget"/></b>, so the brain's walk snaps
+    /// near an enemy are filtered too: O2 0.803 to 0.767, the fleet discriminator
+    /// 0.635 to 0.607 (0.771 to 0.652 at 300px), and the ladder still even.
+    /// </para>
     /// </summary>
     public static HumanizeOptions Tracking2 { get; } = new(
         SaccadeDegrees: 32,
@@ -496,24 +501,18 @@ public sealed record HumanizeOptions(
         MaxStrokeTicks: 4,
         PursuitGain: 0.08,
         DeadZoneDegrees: 8,
-        PursuitTremorDegrees: 0.75);
-
-    /// <summary>
-    /// D5's candidate: <see cref="Tracking2"/>, engaged whenever an enemy is close,
-    /// target or not (<see cref="EngageWithoutTarget"/>). <c>gg2-rl</c>
-    /// <c>docs/PLAN.md</c> phase 5, D5.
-    /// </summary>
-    public static HumanizeOptions Tracking2Engaged { get; } = Tracking2 with { EngageWithoutTarget = true };
+        PursuitTremorDegrees: 0.75,
+        EngageWithoutTarget: true);
 
     /// <summary>The preset names a setting can carry.</summary>
-    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy", "hold", "tracking", "tracking2", "tracking2e"];
+    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy", "hold", "tracking", "tracking2"];
 
     /// <summary>A preset's canonical name in <see cref="PresetNames"/>, refusing anything else.</summary>
     /// <exception cref="FormatException">The name is not a preset.</exception>
     public static string PresetName(string name)
     {
         var options = ForPreset(name);
-        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : options == Hold ? "hold" : options == Tracking ? "tracking" : options == Tracking2 ? "tracking2" : options == Tracking2Engaged ? "tracking2e" : "v3";
+        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : options == Hold ? "hold" : options == Tracking ? "tracking" : options == Tracking2 ? "tracking2" : "v3";
     }
 
     /// <summary>A preset by name, case-insensitive.</summary>
@@ -525,8 +524,8 @@ public sealed record HumanizeOptions(
         "lazy" or "v5" => Lazy,
         "hold" or "d2" => Hold,
         "tracking" or "d3" => Tracking,
-        "tracking2" or "d4" => Tracking2,
-        "tracking2e" or "d5" => Tracking2Engaged,
-        _ => throw new FormatException($"humanize preset '{name}': v3, strokes, lazy, hold, tracking, tracking2 or tracking2e"),
+        // tracking2e was D5's candidate, folded into Tracking2 when it passed.
+        "tracking2" or "d4" or "tracking2e" or "d5" => Tracking2,
+        _ => throw new FormatException($"humanize preset '{name}': v3, strokes, lazy, hold, tracking or tracking2"),
     };
 }

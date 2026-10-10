@@ -718,6 +718,14 @@ model.** Four gates, all off `BotSkill`:
   (−0.062 / −0.106 / −0.159 / −0.208). The fleet discriminator read 0.617 →
   0.629, inside its noise, and the user adopted it.
 
+  **D5 made `Tracking2` engage without a target.** With no target, the reference
+  brain points the aim along the walk, and the filter used to let that through:
+  6% of in-range ticks, 18% of the big turns. Counting a close enemy as a fight
+  filters it like any other turn (`EngageWithoutTarget`). At tier 4, O2 fell
+  0.803 → 0.767 (with jump take-offs in place of key presses, `gg2-rl`'s
+  corrected instrument), and the fleet discriminator fell 0.635 → 0.607 (0.771 →
+  0.652 at 300px). The ladder read −0.068 / −0.110 / −0.162 / −0.215, still even.
+
 - ⚠️ **Aim error is UNIFORM on [-1, 1], not Gaussian** (Quake III's
   `crandom()`), with two multipliers: moving-target scale, and **Quake
   III's close-range penalty** (every tier worse at point blank — an
