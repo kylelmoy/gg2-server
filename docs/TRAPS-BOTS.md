@@ -726,6 +726,17 @@ model.** Four gates, all off `BotSkill`:
   corrected instrument), and the fleet discriminator fell 0.635 → 0.607 (0.771 →
   0.652 at 300px). The ladder read −0.068 / −0.110 / −0.162 / −0.215, still even.
 
+  **D6 (`tracking3`) filtered the policy's legs and was left off.** Within 150px
+  the policy drives about half the ticks and dances: about three times the
+  people's reversals and take-offs, and almost never still. Averaging its
+  left/right into commit-or-stand, and thinning its jump presses, matched all
+  three, but the bots got slower (scout 3.40 → 2.95 px/tick; people 4.22). O2
+  improved only 0.017, the fleet discriminator got worse, and tier 4 lost
+  another 0.028. ⚠️ Two things the bench found on the way: the wheel changes
+  hands in short bursts, so a filter that restarts on each policy burst filters
+  nothing; and a per-press chance cannot thin jumps, because the policy presses
+  again until one lands. Only the refractory window limits them.
+
 - ⚠️ **Aim error is UNIFORM on [-1, 1], not Gaussian** (Quake III's
   `crandom()`), with two multipliers: moving-target scale, and **Quake
   III's close-range penalty** (every tier worse at point blank — an
