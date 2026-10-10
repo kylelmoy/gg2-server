@@ -166,8 +166,14 @@ simulation every decision, so it absorbs a physics change for free.
 
 ### The shipped bundle — `checkpoints/`
 
-A trained policy ships in `checkpoints/`: two `HybridBot` tiers at 150px under
-`HandoverRule.MacroTask`, covering five of the nine classes.
+A trained policy ships in `checkpoints/`: two `HybridBot` tiers under
+`HandoverRule.MacroTask`, covering five of the nine classes. A tier **takes** the
+wheel within 150px and, once driving, **keeps** it out to 300px
+(`BotBrainSpec.ReleaseRange`, the release band). The band keeps the policy in
+fights it is already in without widening when it takes the wheel, which is what
+a wider take radius cost the objective for. `BENCH_HANDOVER` measured the band
+against none, over eight maps and 1,600 paired matches an arm: control share
+4.44% to 5.97%, death share −0.60 ± 0.18, win share −0.87 ± 2.12.
 
 | file | drives |
 |---|---|

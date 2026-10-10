@@ -8,7 +8,7 @@ namespace Bench;
 
 /// <summary>
 /// <c>BENCH_HANDOVER=&lt;n&gt;</c>: changes to WHEN the policy holds the wheel,
-/// each paired against the shipped gate.
+/// each paired against no release band.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -20,11 +20,11 @@ namespace Bench;
 /// </para>
 /// <para>
 /// Arms (<c>BENCH_HANDOVER_ARMS</c> picks a subset): <c>control</c> (red
-/// all-scripted), <c>shipped</c>, <c>rel250</c> and <c>rel300</c>
+/// all-scripted), <c>noband</c> (the gate before the release band shipped), <c>rel250</c> and <c>rel300</c> (the shipped default)
 /// (<see cref="HybridBot.ReleaseRange"/>), and <c>goal</c>
 /// (<see cref="HybridBot.EngageNearOwnGoal"/>). Each prints red's death share
 /// (pooled), red's win share of decided matches and the control share. Against
-/// <c>shipped</c>, paired per match, it prints the death share difference (mean
+/// <c>noband</c>, paired per match, it prints the death share difference (mean
 /// of per-match differences, over matches where both had deaths) and the win
 /// share difference, each with a 95% interval: a normal one for the first and a
 /// paired bootstrap over matches for the second.
@@ -43,7 +43,7 @@ public static class HandoverArms
     private static readonly (string Name, double Release, bool NearGoal)[] ArmList =
     [
         ("control", double.NaN, false),
-        ("shipped", double.NaN, false),
+        ("noband", double.NaN, false),
         ("rel250", 250, false),
         ("rel300", 300, false),
         ("goal", double.NaN, true),
@@ -133,9 +133,9 @@ public static class HandoverArms
         var all = results.ToList();
 
         Console.WriteLine();
-        Console.WriteLine($"{"arm",-9} {"n",5} {"death share",12} {"win share",10} {"decided",8} {"control",8}   {"vs shipped: death",18} {"+/-95%",7} {"win",8} {"+/-95%",7}");
+        Console.WriteLine($"{"arm",-9} {"n",5} {"death share",12} {"win share",10} {"decided",8} {"control",8}   {"vs noband: death",18} {"+/-95%",7} {"win",8} {"+/-95%",7}");
 
-        var shipped = all.Where(o => o.Arm == "shipped").ToDictionary(o => (o.Map, o.Index));
+        var reference = all.Where(o => o.Arm == "noband").ToDictionary(o => (o.Map, o.Index));
 
         foreach (var arm in arms)
         {
@@ -149,10 +149,10 @@ public static class HandoverArms
 
             var line = $"{arm.Name,-9} {rows.Count,5} {Pct(red, deaths),12} {Pct(redWins, decided),10} {decided,8} {Pct(micro, ticks),8}";
 
-            if (arm.Name is not ("shipped" or "control") && shipped.Count > 0)
+            if (arm.Name is not ("noband" or "control") && reference.Count > 0)
             {
-                var (dDeath, ciDeath) = DeathDifference(rows, shipped);
-                var (dWin, ciWin) = WinDifference(rows, shipped);
+                var (dDeath, ciDeath) = DeathDifference(rows, reference);
+                var (dWin, ciWin) = WinDifference(rows, reference);
                 line += $"   {dDeath * 100,18:+0.00;-0.00} {ciDeath * 100,7:0.00} {dWin * 100,8:+0.00;-0.00} {ciWin * 100,7:0.00}";
             }
 
@@ -166,13 +166,13 @@ public static class HandoverArms
         whole == 0 ? "-" : (part * 100.0 / whole).ToString("0.00", CultureInfo.InvariantCulture) + "%";
 
     /// <summary>Mean of per-match red death share differences, and a 95% half-width.</summary>
-    private static (double Mean, double Half) DeathDifference(List<Observation> rows, Dictionary<(string, int), Observation> shipped)
+    private static (double Mean, double Half) DeathDifference(List<Observation> rows, Dictionary<(string, int), Observation> reference)
     {
         var diffs = new List<double>();
 
         foreach (var o in rows)
         {
-            if (!shipped.TryGetValue((o.Map, o.Index), out var b) || o.Red + o.Blue == 0 || b.Red + b.Blue == 0)
+            if (!reference.TryGetValue((o.Map, o.Index), out var b) || o.Red + o.Blue == 0 || b.Red + b.Blue == 0)
                 continue;
 
             diffs.Add((o.Red / (double)(o.Red + o.Blue)) - (b.Red / (double)(b.Red + b.Blue)));
@@ -187,11 +187,11 @@ public static class HandoverArms
     }
 
     /// <summary>Difference in red's win share of decided matches, with a paired-bootstrap 95% half-width.</summary>
-    private static (double Mean, double Half) WinDifference(List<Observation> rows, Dictionary<(string, int), Observation> shipped)
+    private static (double Mean, double Half) WinDifference(List<Observation> rows, Dictionary<(string, int), Observation> reference)
     {
         var pairs = rows
-            .Where(o => shipped.ContainsKey((o.Map, o.Index)))
-            .Select(o => (Arm: o.Winner, Base: shipped[(o.Map, o.Index)].Winner))
+            .Where(o => reference.ContainsKey((o.Map, o.Index)))
+            .Select(o => (Arm: o.Winner, Base: reference[(o.Map, o.Index)].Winner))
             .ToArray();
 
         static double Share(IEnumerable<Team?> winners)

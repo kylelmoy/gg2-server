@@ -143,8 +143,22 @@ public sealed record BotBrainSpec
     /// <summary>Whether the scripted layer keeps the wheel while carrying the intel.</summary>
     public bool ScriptedCarriesIntel { get; init; } = true;
 
-    /// <summary><see cref="HybridBot.ReleaseRange"/>: NaN, no release band, by default.</summary>
-    public double ReleaseRange { get; init; } = double.NaN;
+    /// <summary>
+    /// <see cref="HybridBot.ReleaseRange"/>: a controller that is driving keeps the
+    /// wheel out to 300px. Shipped.
+    /// </summary>
+    /// <remarks>
+    /// Measured with <c>BENCH_HANDOVER</c> (eight fleet maps, 1,600 paired matches
+    /// an arm, red hybrid against blue scripted). Against no band, the policy's
+    /// control share rises from 4.44% to 5.97%, death share improves by 0.60 ± 0.18
+    /// points, and win share moves −0.87 ± 2.12 points. That is inside the
+    /// pre-registered 1-point bar, but the interval cannot exclude a cost of about 3.
+    /// <c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, B2. NaN turns the band off.
+    /// </remarks>
+    public double ReleaseRange { get; init; } = DefaultReleaseRange;
+
+    /// <summary>The shipped release band, in pixels.</summary>
+    public const double DefaultReleaseRange = 300;
 
     /// <summary><see cref="HybridBot.EngageNearOwnGoal"/>: off by default.</summary>
     public bool EngageNearOwnGoal { get; init; }

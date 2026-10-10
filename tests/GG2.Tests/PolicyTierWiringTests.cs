@@ -1,4 +1,5 @@
 using GG2.Bots;
+using GG2.Protocol;
 using GG2.Host;
 using GG2.Server;
 
@@ -250,5 +251,37 @@ public sealed class PolicyTierWiringTests
         BotBrain.Build(options, lines.Add);
 
         Assert.DoesNotContain(lines, line => line.StartsWith("WARNING:", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A live server's brain carries the shipped release band through to every
+    /// <see cref="HybridBot"/> it wraps.
+    /// </summary>
+    /// <remarks>
+    /// The server builds its spec from <see cref="BotBrainSpec"/>'s defaults, so this
+    /// is what makes the measured band the one players meet. Nothing else in the
+    /// suite moved when the default changed, so without this a regression to "no
+    /// band" would go green.
+    /// </remarks>
+    [Fact]
+    public void TheServersBrainCarriesTheReleaseBand()
+    {
+        var options = new ServerOptions
+        {
+            MapDirectory = "maps",
+            BotMode = BotMode.Policy,
+            PolicyPaths = [PolicyFixture.Checkpoint],
+        };
+
+        BotBrain.Build(options, _ => { });
+
+        var spec = options.Bots.Brain;
+        Assert.NotNull(spec);
+        Assert.Equal(BotBrainSpec.DefaultReleaseRange, spec.ReleaseRange);
+        Assert.Equal(300, BotBrainSpec.DefaultReleaseRange);
+
+        var hybrid = spec.Wrap(new ScriptedBot(null, new NavQuery(Team.Red), BotSkill.ForTier(5), stagger: 0));
+        Assert.Equal(300, hybrid.ReleaseRange);
+        Assert.Equal(HybridBot.EngagementRange, hybrid.Range);
     }
 }
