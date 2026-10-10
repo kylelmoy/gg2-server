@@ -4,17 +4,18 @@ using GG2.Simulation;
 namespace GG2.Bots;
 
 /// <summary>
-/// Reshapes a bot's movement keys and aim, inside a fight, into the shape a
-/// person's take. It wraps whatever brain the server built (scripted or hybrid)
-/// and changes only what leaves it.
+/// Reshapes a bot's aim, inside a fight, into the shape a person's takes. It
+/// wraps whatever brain the server built (scripted or hybrid) and changes only
+/// the aim that leaves it.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>Why it exists.</b> A classifier given one second of in-range play tells the
 /// fleet's bots from its people at AUC 0.915 (<c>gg2-rl</c> <c>docs/STATUS.md</c>,
 /// phase 5, 2026-10-09; a human-vs-human control reads 0.514). Its three biggest
-/// signals are the ones this targets, and all of them are the same for the
-/// scripted and policy brains:
+/// signals are below, and all of them are the same for the scripted and policy
+/// brains. This targets the two an observer can see, the aim; the first is a key
+/// state (see the movement paragraph):
 /// </para>
 /// <list type="table">
 /// <listheader><term>enemy within 300px</term><description>people / <c>Policy</c> bots, fleet traces 2026-09-15 to 2026-10-09</description></listheader>
@@ -23,11 +24,14 @@ namespace GG2.Bots;
 /// <item><term>aim miss, p10</term><description>6.3 px / 1.7 px</description></item>
 /// </list>
 /// <para>
-/// <b>Movement: a minimum hold.</b> Once the horizontal key changes, the new
-/// value is held for <see cref="HumanizeOptions.MinHoldTicks"/> to
-/// <see cref="HumanizeOptions.MaxHoldTicks"/> ticks before another change is
-/// let through. That removes the one- and two-tick flickers that a person never
-/// produces. Jump, down and every other key pass through untouched.
+/// <b>No key is touched, movement included.</b> v2 held a new horizontal key for
+/// 5-12 ticks, which matched the people's key-hold lengths and made the bots
+/// <em>less</em> human to watch. A player sees motion, never keys, and the bots'
+/// velocity already reverses at the people's rate (0.41 a second against 0.45). A
+/// key held past where the brain let go overshoots and comes back: 0.54 a second.
+/// The hold bought no strength either. Most of the key churn is the path
+/// follower's arc tracker trimming on and off in the air, which is what makes its
+/// jumps land (<c>gg2-rl</c> <c>docs/PLAN.md</c>, phase 5, "the churn is in a key").
 /// </para>
 /// <para>
 /// <b>Aim: saccade and pursuit, not a constant slew.</b> A person moves the
@@ -46,9 +50,9 @@ namespace GG2.Bots;
 /// <para>
 /// <b>Only inside a fight.</b> The gate is the scripted layer's own: a visible
 /// combat target within <see cref="HumanizeOptions.Range"/>. Outside it the input
-/// passes through unchanged and the filter re-syncs to it, so routing, edge
-/// flights and objective play are exactly what they were and a fight starts from
-/// the brain's own aim rather than a stale one.
+/// passes through unchanged and the filter re-syncs to it, so rocket-jump aim and
+/// everything else outside a fight are exactly what they were, and a fight
+/// starts from the brain's own aim rather than a stale one.
 /// </para>
 /// <para>
 /// <b>Its own random stream.</b> Never <c>WorldState.Random</c>, which is
@@ -65,9 +69,6 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
 
     private int _slot = -1;
     private bool _engaged;
-
-    private PlayerKeys _horizontal;
-    private int _holdLeft;
 
     private double _aim;
     private int _reactLeft = -1;
@@ -122,19 +123,14 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
         {
             // Entering a fight: start from what the brain is doing now.
             _engaged = true;
-            _horizontal = input.Keys & Horizontal;
-            _holdLeft = 0;
             _aim = Degrees(input.NetAimDirection);
             _reactLeft = -1;
         }
 
-        var keys = HoldMovement(input.Keys);
         var aim = FollowAim(Degrees(input.NetAimDirection));
 
-        return new PlayerInput(keys, Wire(aim), input.AimDistance);
+        return new PlayerInput(input.Keys, Wire(aim), input.AimDistance);
     }
-
-    private const PlayerKeys Horizontal = PlayerKeys.Left | PlayerKeys.Right;
 
     private bool InFight(in WorldView world, int slot)
     {
@@ -148,25 +144,6 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
         var dy = target.Y - self.Y;
 
         return (dx * dx) + (dy * dy) <= Options.Range * Options.Range;
-    }
-
-    private PlayerKeys HoldMovement(PlayerKeys keys)
-    {
-        var wanted = keys & Horizontal;
-
-        if (_holdLeft > 0)
-            _holdLeft--;
-
-        if (wanted != _horizontal)
-        {
-            if (_holdLeft > 0)
-                return (keys & ~Horizontal) | _horizontal;
-
-            _horizontal = wanted;
-            _holdLeft = Options.MinHoldTicks + _random.NextInclusive(Options.MaxHoldTicks - Options.MinHoldTicks);
-        }
-
-        return keys;
     }
 
     private double FollowAim(double wanted)
@@ -247,12 +224,10 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
 /// bot a person still spots. <see cref="Default"/> was fitted by replaying a copy
 /// of this filter, open loop, over a recorded bots-only server's brain output and
 /// matching the people's in-range turn quantiles (p75-p99), still-mouse share,
-/// reversal rate and key-hold quantiles (<c>gg2-rl</c> <c>docs/PLAN.md</c>, phase 5).
+/// and reversal rate (<c>gg2-rl</c> <c>docs/PLAN.md</c>, phase 5).
 /// Open loop means the brain did not see the filtered output, which it does live.
 /// </remarks>
 /// <param name="Range">Pixels within which a visible target makes it a fight. The classifier's wider band.</param>
-/// <param name="MinHoldTicks">Shortest hold of a new horizontal key. The people's p25 is 5 ticks.</param>
-/// <param name="MaxHoldTicks">Longest forced hold. People hold for a median of 10 ticks; a floor drawn from 5-12 puts the filtered median near it.</param>
 /// <param name="SaccadeDegrees">An aim error at least this large is closed by a flick rather than a correction.</param>
 /// <param name="MinReactionTicks">Fewest ticks before a flick fires.</param>
 /// <param name="MaxReactionTicks">Most ticks before a flick fires. 2-4 ticks is 67-133 ms, on top of the scripted acquire delay.</param>
@@ -262,8 +237,6 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
 /// <param name="DeadZoneDegrees">Below this error the mouse is still. The people's share of ticks with no turn is 0.55.</param>
 public sealed record HumanizeOptions(
     double Range = 300,
-    int MinHoldTicks = 5,
-    int MaxHoldTicks = 12,
     double SaccadeDegrees = 20,
     int MinReactionTicks = 2,
     int MaxReactionTicks = 4,

@@ -6823,45 +6823,53 @@ without their clause; none is decoration.
 ## Human-like output
 
 `HumanizedBot`, `[Bots] Humanize` / `--bot-humanize`, off by default. It wraps
-whatever brain the server built and changes only that brain's output, and only
-while the scripted layer has a visible target within 300px:
+whatever brain the server built and changes only that brain's aim, and only
+while the scripted layer has a visible target within 300px: a flick when the
+error is 20° or more, after a 2–4 tick reaction with the mouse still. Below
+that, a partial correction whose noise scales with the step, and a still mouse
+under 1°.
 
-- **Movement keys:** a new horizontal key is held for 5–12 ticks.
-- **Aim:** a flick when the error is 20° or more, after a 2–4 tick
-  reaction with the mouse still. Below that, a partial correction whose noise
-  scales with the step, and a still mouse under 1°.
-
-The trigger, jump and every other key pass through. The class header has the
-reasons and the parameters say what they were fitted from.
+Every key passes through, movement included. The class header has the reasons
+and the parameters say what they were fitted from.
 
 **Why.** On the public fleet, a classifier given one second of in-range play
 tells bots from people at AUC 0.915, and both brains look alike: scripted and
 policy aim and movement give it away equally. `gg2-rl` `docs/STATUS.md`, phase 5.
 
-**Measured, at this commit's parent 2f1b425, shipped two-checkpoint bundle,
-fleet's eight maps.** `gg2-rl` `docs/PLAN.md` phase 5 has the pre-registration
-and the full tables.
+**Measured at 115b8e0 (v2, which also held movement keys) and v3 (aim only),
+shipped two-checkpoint bundle, fleet's eight maps, `tools/botrecord` arms of
+18,000 ticks a map, 5 trace splits at 150px.** `gg2-rl` `docs/PLAN.md` phase 5
+has the pre-registrations and the full tables.
 
-| | without | with |
-|---|---|---|
-| classifier AUC vs the fleet's people, 150px (5 trace splits, `tools/botrecord` arms of 18,000 ticks a map) | 0.922 | **0.822**, lower in all 5 splits |
-| the same at 300px | 0.905 | 0.844 |
-| aimscan "lock", share of judged bot sessions flagged | 23% of 240 | 17% of 264 |
-| opponent's death share against tier 5, 800 paired matches (`BENCH_TIERS`, arm `hum:5`) | 0.495 | 0.470: **−0.025 ± 0.003**, where one tier (`full:4`) is −0.054 |
+| | without | v2 | **v3** |
+|---|---|---|---|
+| classifier AUC vs the fleet's people, key-state features included | 0.910 | 0.810 | 0.830 |
+| the same, only what an observer can see (aim, jumps, motion) | 0.863 | 0.752 | **0.746** |
+| opponent's death share vs tier 5, 800 paired matches (`BENCH_TIERS`, `hum:5`) | 0.495 | −0.025 ± 0.003 | **−0.025 ± 0.003** |
+| aimscan "lock", share of judged bot sessions flagged | 23% of 240 | 17% of 264 | not re-run |
 
-**Reading.** It helps on the instrument it was measured with, and the
-pre-registered bar for "works" was a drop of 0.10, which this misses by 0.0005.
-It costs about half a difficulty tier. It does **not** fix aimscan's lock
-signal: the lock comes from tracking a moving target exactly, which a
-correction closes once the error is under the dead zone. What still gives the
-bots away, by weight, is horizontal-key churn (still about twice the people's
-rate), fire share and jump presses.
+One tier (`full:4`) is −0.054, so it costs about half a difficulty tier, all of
+it from the aim.
 
-**It is not the blind test.** The parameters were fitted to moments of the
+⚠️ **v2's key hold is gone because it made the bots worse to watch.** A player
+sees motion, never keys. The bots' velocity already reverses at the people's
+rate (0.41 a second against 0.45, at 2.5 px/tick hysteresis), and a key held past
+where the brain let go overshoots and comes back: 0.54. It beat a classifier
+feature that counts key changes, the same unobservable thing as a held trigger.
+Most of that key churn is the path follower's arc tracker trimming in the air,
+which is deliberate (`PathFollower.cs`) and is what makes its jumps land.
+
+**What still gives the bots away, visibly:** they move slower than people, most
+of all in the air (mean |hspeed| about 2.3 against 3.6–4.3 px/tick), and jump
+more. It does **not** fix aimscan's lock signal: the lock comes from tracking a
+moving target exactly, which a correction closes once the error is under the
+dead zone.
+
+**It is not the blind test.** The aim parameters were fitted to moments of the
 distributions the classifier's turn features summarise. A bot that beats this
 instrument can still be spotted by a person. What would show it is stale: a
-re-run of `gg2-rl`'s `scripts/human_style.py` against newer fleet traces
-reading a different gap.
+re-run of `gg2-rl`'s `scripts/human_style.py --observable` against newer fleet
+traces reading a different gap.
 
 **`tools/botrecord`** runs a bots-only server, unpaced, with `--record`, so a
 configuration produces traces in the fleet's format. It sets

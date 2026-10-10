@@ -100,42 +100,15 @@ public sealed class HumanizedBotTests
             Assert.Equal(Flicker(t), outputs[t]);
     }
 
+    /// <summary>
+    /// Every key passes through inside a fight too, a flickering strafe included.
+    /// A held key was v2 and made the visible motion less human, not more.
+    /// </summary>
     [Fact]
-    public void AFlickeringHorizontalKeyIsHeldBetweenChanges()
-    {
-        var rig = Build(Flicker, fight: true);
-        var outputs = Run(rig, 600);
-
-        var run = 0;
-        var changes = 0;
-
-        for (var t = 1; t < outputs.Length; t++)
-        {
-            var now = outputs[t].Keys & (PlayerKeys.Left | PlayerKeys.Right);
-            var before = outputs[t - 1].Keys & (PlayerKeys.Left | PlayerKeys.Right);
-            run++;
-
-            if (now != before)
-            {
-                // The first change can come at any point of the opening hold; every
-                // later one waits out at least the minimum.
-                if (changes > 0)
-                    Assert.True(run >= HumanizeOptions.Default.MinHoldTicks, $"a hold of {run} tick(s) at {t}");
-
-                changes++;
-                run = 0;
-            }
-        }
-
-        // And it still follows the brain rather than freezing on one key.
-        Assert.True(changes > 600 / (HumanizeOptions.Default.MaxHoldTicks + 2), $"only {changes} changes");
-    }
-
-    [Fact]
-    public void KeysOtherThanHorizontalPassThroughInAFight()
+    public void KeysPassThroughInAFight()
     {
         static PlayerInput Input(int tick) => new(
-            PlayerKeys.Right
+            Flicker(tick).Keys
             | (tick % 2 == 0 ? PlayerKeys.Jump : PlayerKeys.None)
             | (tick % 3 == 0 ? PlayerKeys.Attack : PlayerKeys.None)
             | (tick % 5 == 0 ? PlayerKeys.Special : PlayerKeys.None),
@@ -143,11 +116,10 @@ public sealed class HumanizedBotTests
             40);
 
         var outputs = Run(Build(Input, fight: true), 200);
-        const PlayerKeys Others = ~(PlayerKeys.Left | PlayerKeys.Right);
 
         for (var t = 0; t < outputs.Length; t++)
         {
-            Assert.Equal(Input(t).Keys & Others, outputs[t].Keys & Others);
+            Assert.Equal(Input(t).Keys, outputs[t].Keys);
             Assert.Equal(Input(t).AimDistance, outputs[t].AimDistance);
         }
     }
