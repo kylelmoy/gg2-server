@@ -629,6 +629,11 @@ internal static class CommandLine
                     options.BotHumanize = true;
                     break;
 
+                // Which HumanizedBot preset --bot-humanize uses: ServerOptions.BotHumanizePreset.
+                case "--bot-humanize-preset":
+                    options.BotHumanizePreset = HumanizeOptions.PresetName(cursor.Take());
+                    break;
+
                 // A behaviour switch: ServerOptions.BotSpreadTurn.
                 case "--bot-spread-turn":
                     options.BotSpreadTurn = true;
@@ -1206,6 +1211,9 @@ internal static class CommandLine
                             ticks at a time and make its aim flick and correct
                             the way a person's does. A behaviour switch: a
                             human-like bot is a weaker one.
+          --bot-humanize-preset v3|strokes|lazy
+                            which measured HumanizedBot preset --bot-humanize
+                            uses. v3 by default.
           --bot-spread-turn
                             spread each policy decision's aim turn over the
                             ticks it is held for, instead of turning on the

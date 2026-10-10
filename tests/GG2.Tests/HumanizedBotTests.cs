@@ -256,6 +256,43 @@ public sealed class HumanizedBotTests
     /// the reaction delay. The small corrections that follow its landing are not
     /// part of it.
     /// </remarks>
+    /// <summary>
+    /// <b>v5 (<see cref="HumanizeOptions.Lazy"/>) lets the aim drift between
+    /// shots and closes the same gap once the brain fires.</b>
+    /// </summary>
+    /// <remarks>
+    /// A 30° error is inside the idle dead zone (45°), so with the attack key up
+    /// the aim stays where it was; held down, it is v3's correction and arrives.
+    /// <c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, v5.
+    /// </remarks>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LazyAimDriftsBetweenShotsAndClosesWhenFiring(bool firing)
+    {
+        var keys = firing ? PlayerKeys.Attack : PlayerKeys.None;
+        PlayerInput Input(int tick) => new(keys, tick < 10 ? (ushort)0 : (ushort)(30 * 65536 / 360), 40);
+
+        var outputs = Run(Build(Input, fight: true, options: HumanizeOptions.Lazy), 90);
+        var final = Degrees(outputs[^1].NetAimDirection);
+
+        if (firing)
+            Assert.True(Gap(final, 30) < 3, $"firing, settled at {final:0.0} deg, wanted 30");
+        else
+            Assert.True(Gap(final, 0) < 0.01, $"between shots, drifted to {final:0.0} deg; a 30 deg error is inside the idle dead zone");
+    }
+
+    /// <summary>Past the idle flick threshold, a lazy aim still turns.</summary>
+    [Fact]
+    public void LazyAimStillFlicksAtALargeError()
+    {
+        static PlayerInput Input(int tick) => new(PlayerKeys.None, tick < 10 ? (ushort)0 : (ushort)(120 * 65536 / 360), 40);
+
+        var final = Degrees(Run(Build(Input, fight: true, options: HumanizeOptions.Lazy), 90)[^1].NetAimDirection);
+
+        Assert.True(Gap(final, 120) < 45, $"settled at {final:0.0} deg, more than the idle dead zone from 120");
+    }
+
     [Fact]
     public void ALargeTurnIsAStrokeThatArrives()
     {

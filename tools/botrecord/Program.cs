@@ -11,7 +11,8 @@
 //
 //   botrecord --out <dir> --maps a,b,c --ticks-per-map 18000
 //             [--mode policy|tiered|scripted] [--policy x.npz]... [--bots 12]
-//             [--humanize] [--spread-turn] [--map-dir <path>] [--nav <path>]
+//             [--humanize [--humanize-preset v3|strokes|lazy]] [--spread-turn]
+//             [--map-dir <path>] [--nav <path>]
 //
 // One server per map, run for --ticks-per-map ticks (30 a second), so a list of
 // maps gives the same play time on each.
@@ -26,6 +27,8 @@ var ticks = int.Parse(Flag("--ticks-per-map") ?? "18000", CultureInfo.InvariantC
 var bots = int.Parse(Flag("--bots") ?? "12", CultureInfo.InvariantCulture);
 var humanize = args.Contains("--humanize");
 var spreadTurn = args.Contains("--spread-turn");
+var preset = Flag("--humanize-preset") ?? "v3";
+_ = HumanizeOptions.ForPreset(preset);
 var mode = Flag("--mode") ?? "policy";
 var policies = Repeated("--policy");
 var root = FindRoot();
@@ -33,7 +36,7 @@ var mapDir = Flag("--map-dir") ?? Path.Combine(root, "maps");
 var navDir = Flag("--nav") ?? Path.Combine(root, "nav");
 
 Directory.CreateDirectory(outDir);
-Console.WriteLine($"{maps.Length} map(s) x {ticks} ticks, {bots} bots, mode {mode}, humanize {humanize}, spread turn {spreadTurn}, policies [{string.Join(", ", policies)}]");
+Console.WriteLine($"{maps.Length} map(s) x {ticks} ticks, {bots} bots, mode {mode}, humanize {humanize} ({preset}), spread turn {spreadTurn}, policies [{string.Join(", ", policies)}]");
 
 foreach (var map in maps)
 {
@@ -55,6 +58,7 @@ foreach (var map in maps)
         PolicyPaths = policies,
         BotEngagesBotsToo = true,
         BotHumanize = humanize,
+        BotHumanizePreset = preset,
         BotSpreadTurn = spreadTurn,
     };
 

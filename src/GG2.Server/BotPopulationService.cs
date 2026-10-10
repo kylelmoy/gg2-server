@@ -699,7 +699,7 @@ public sealed class BotPopulationService
         // Outermost, so it sees what the whole brain decided, and seeded from the
         // stagger like the scripted layer's own stream.
         if (_server.Options.BotHumanize)
-            source = new HumanizedBot(source, HumanizeOptions.Default, (uint)stagger);
+            source = new HumanizedBot(source, HumanizeOptions.ForPreset(_server.Options.BotHumanizePreset), (uint)stagger);
 
         var slot = _server.AddBot(name, team, playerClass, source);
 

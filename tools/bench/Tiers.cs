@@ -54,9 +54,17 @@ public static class Tiers
         // Tier 5 with each policy turn spread over its action repeat
         // (PolicyController.SpreadTurn): gg2-rl phase 5, C0.
         ("spread:5", 5, false),
+
+        // Tier 5 wrapped in HumanizedBot's v5 preset, lazy between shots
+        // (HumanizeOptions.Lazy): gg2-rl phase 5, v5.
+        ("lazy:5", 5, false),
     ];
 
-    private static bool Humanized(string arm) => arm.StartsWith("hum:", StringComparison.Ordinal);
+    private static bool Humanized(string arm) => arm.StartsWith("hum:", StringComparison.Ordinal) || Lazy(arm);
+
+    private static bool Lazy(string arm) => arm.StartsWith("lazy:", StringComparison.Ordinal);
+
+    private static HumanizeOptions HumanizeFor(string arm) => Lazy(arm) ? HumanizeOptions.Lazy : HumanizeOptions.Default;
 
     private static bool Spread(string arm) => arm.StartsWith("spread:", StringComparison.Ordinal);
 
@@ -116,7 +124,7 @@ public static class Tiers
 
             world.Drive(
                 subjectSlot,
-                Humanized(arm.Name) ? new HumanizedBot(subjectBot, HumanizeOptions.Default, (uint)subjectSlot) : subjectBot);
+                Humanized(arm.Name) ? new HumanizedBot(subjectBot, HumanizeFor(arm.Name), (uint)subjectSlot) : subjectBot);
             world.Drive(otherSlot, otherBot);
 
             bool subjectDied = false, otherDied = false;
@@ -247,6 +255,7 @@ public static class Tiers
                 BlueDifficulty = subject == Team.Blue ? arm.Tier : 5,
                 HandicapOnly = arm.HandicapOnly,
                 HumanizeTeam = Humanized(arm.Name) ? subject : null,
+                HumanizeWith = HumanizeFor(arm.Name),
                 SpreadTurnTeam = Spread(arm.Name) ? subject : null,
             };
 

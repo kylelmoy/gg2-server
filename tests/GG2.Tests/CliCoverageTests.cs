@@ -104,6 +104,7 @@ public sealed class CliCoverageTests
         ("BotEngagesBotsToo", ["--bot-engages-bots"], o => o.BotEngagesBotsToo),
         ("BotHumanize", ["--bot-humanize"], o => o.BotHumanize),
         ("BotSpreadTurn", ["--bot-spread-turn"], o => o.BotSpreadTurn),
+        ("BotHumanizePreset", ["--bot-humanize-preset", "lazy"], o => o.BotHumanizePreset),
         ("BotHandoverBubbles", ["--bot-handover-bubbles"], o => o.BotHandoverBubbles),
         ("BotSuspendMinutes", ["--bot-suspend-minutes", "15"], o => o.BotSuspendMinutes),
         ("IdleWhenEmpty", ["--no-idle-when-empty"], o => o.IdleWhenEmpty),

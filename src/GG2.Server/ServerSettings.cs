@@ -595,6 +595,13 @@ public static class ServerSettings
             "Bots", "Humanize", nameof(ServerOptions.BotHumanize),
             o => o.BotHumanize, (o, v) => o.BotHumanize = v));
 
+        settings.Add(ChoiceRow(
+            "Bots", "HumanizePreset", nameof(ServerOptions.BotHumanizePreset),
+            [.. HumanizeOptions.PresetNames],
+            o => o.BotHumanizePreset,
+            (o, v) => o.BotHumanizePreset = HumanizeOptions.PresetName(v),
+            "lazy"));
+
         settings.Add(BoolRow(
             "Bots", "SpreadTurn", nameof(ServerOptions.BotSpreadTurn),
             o => o.BotSpreadTurn, (o, v) => o.BotSpreadTurn = v));

@@ -433,7 +433,7 @@ public sealed class HeadlessMatch : DrivenWorld
             if (State.Players[slot].Team != team || SourceOf(slot) is not { } source || ScriptedBot.Of(source) is null)
                 continue;
 
-            Drive(slot, new HumanizedBot(source, HumanizeOptions.Default, (uint)slot));
+            Drive(slot, new HumanizedBot(source, Options.HumanizeWith ?? HumanizeOptions.Default, (uint)slot));
         }
     }
 

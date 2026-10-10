@@ -593,6 +593,16 @@ public sealed class ServerOptions
     public bool BotHumanize { get; set; }
 
     /// <summary>
+    /// Which of <c>GG2.Bots.HumanizeOptions</c>' presets <see cref="BotHumanize"/>
+    /// uses: <c>v3</c> (the default), <c>strokes</c> (v4) or <c>lazy</c> (v5).
+    /// </summary>
+    /// <remarks>
+    /// Each is a measured arm; <c>docs/TRAPS-BOTS.md</c>, "Human-like output", has
+    /// what each costs. Ignored unless <see cref="BotHumanize"/> is on.
+    /// </remarks>
+    public string BotHumanizePreset { get; set; } = "v3";
+
+    /// <summary>
     /// Spread each policy decision's turn over its action repeat
     /// (<c>GG2.Bots.PolicyController.SpreadTurn</c>) instead of turning on the
     /// decision's first tick.

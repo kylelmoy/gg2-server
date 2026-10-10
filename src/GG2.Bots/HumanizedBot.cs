@@ -142,7 +142,7 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
             _strokeTicks = 0;
         }
 
-        var aim = FollowAim(Degrees(input.NetAimDirection));
+        var aim = FollowAim(Degrees(input.NetAimDirection), firing: (input.Keys & (PlayerKeys.Attack | PlayerKeys.Special)) != 0);
 
         return new PlayerInput(input.Keys, Wire(aim), input.AimDistance);
     }
@@ -161,7 +161,7 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
         return (dx * dx) + (dy * dy) <= Options.Range * Options.Range;
     }
 
-    private double FollowAim(double wanted)
+    private double FollowAim(double wanted, bool firing)
     {
         // A stroke in flight runs to its end: a person does not re-aim halfway
         // through a flick, and corrections resume once it has landed.
@@ -171,7 +171,14 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
         var error = Wrap(wanted - _aim);
         var size = Math.Abs(error);
 
-        if (size >= Options.SaccadeDegrees)
+        // Between shots a person lets the aim drift, and a bot that keeps
+        // re-acquiring is turning twice as much as one. v5's idle values apply
+        // while the brain presses neither attack nor special; NaN is "as firing".
+        var saccade = firing || double.IsNaN(Options.IdleSaccadeDegrees) ? Options.SaccadeDegrees : Options.IdleSaccadeDegrees;
+        var deadZone = firing || double.IsNaN(Options.IdleDeadZoneDegrees) ? Options.DeadZoneDegrees : Options.IdleDeadZoneDegrees;
+        var gain = firing || double.IsNaN(Options.IdlePursuitGain) ? Options.PursuitGain : Options.IdlePursuitGain;
+
+        if (size >= saccade)
         {
             // A flick waits out a reaction time from the moment the error grew
             // past the threshold, and lands with an error that scales with how
@@ -207,7 +214,7 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
         // tick's turn carries into the next the way a hand's does. Its noise
         // scales with the velocity, so a still mouse stays still. Inside the dead
         // zone the hand coasts to a stop rather than freezing.
-        var aimFor = size >= Options.DeadZoneDegrees ? Options.PursuitGain * error : 0.0;
+        var aimFor = size >= deadZone ? gain * error : 0.0;
         _velocity += Options.PursuitSmoothing * (aimFor - _velocity);
 
         if (aimFor == 0.0 && Math.Abs(_velocity) < Options.StopDegrees)
@@ -294,6 +301,12 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
 /// <param name="PursuitNoise">A correction's noise, as a fraction of its own velocity, one standard deviation.</param>
 /// <param name="DeadZoneDegrees">Below this error the hand coasts to a stop.</param>
 /// <param name="StopDegrees">A coasting turn below this stops.</param>
+/// <param name="IdleSaccadeDegrees">
+/// <paramref name="SaccadeDegrees"/> while the brain presses neither attack nor
+/// special, or NaN for the same value. v5.
+/// </param>
+/// <param name="IdleDeadZoneDegrees"><paramref name="DeadZoneDegrees"/> between shots, or NaN. v5.</param>
+/// <param name="IdlePursuitGain"><paramref name="PursuitGain"/> between shots, or NaN. v5.</param>
 public sealed record HumanizeOptions(
     double Range = 300,
     double SaccadeDegrees = 20,
@@ -308,7 +321,10 @@ public sealed record HumanizeOptions(
     double PursuitSmoothing = 1.0,
     double PursuitNoise = 0.3,
     double DeadZoneDegrees = 1.0,
-    double StopDegrees = 0.3)
+    double StopDegrees = 0.3,
+    double IdleSaccadeDegrees = double.NaN,
+    double IdleDeadZoneDegrees = double.NaN,
+    double IdlePursuitGain = double.NaN)
 {
     /// <summary>
     /// v3, the shipped shape: one-tick flicks and unsmoothed corrections. These
@@ -334,4 +350,37 @@ public sealed record HumanizeOptions(
         PursuitSmoothing: 0.6,
         PursuitNoise: 0.5,
         DeadZoneDegrees: 2.0);
+
+    /// <summary>
+    /// v5: v3 while firing, and lazy between shots. With the attack key up the aim
+    /// drifts until the error passes 45°, then corrects at a fifth of it or flicks
+    /// past 50°. Fitted open loop to the people's turn and aim error within 150px,
+    /// split by fire: between shots people turn about 2°/tick and sit 35° off,
+    /// where v3 turns about 4°/tick. <c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, v5.
+    /// </summary>
+    public static HumanizeOptions Lazy { get; } = new(
+        IdleSaccadeDegrees: 50,
+        IdleDeadZoneDegrees: 45,
+        IdlePursuitGain: 0.2);
+
+    /// <summary>The preset names a setting can carry: <c>v3</c>, <c>strokes</c> and <c>lazy</c>.</summary>
+    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy"];
+
+    /// <summary>A preset's canonical name in <see cref="PresetNames"/>, refusing anything else.</summary>
+    /// <exception cref="FormatException">The name is not a preset.</exception>
+    public static string PresetName(string name)
+    {
+        var options = ForPreset(name);
+        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : "v3";
+    }
+
+    /// <summary>A preset by name, case-insensitive.</summary>
+    /// <exception cref="FormatException">The name is not one of <see cref="PresetNames"/>.</exception>
+    public static HumanizeOptions ForPreset(string name) => name.Trim().ToLowerInvariant() switch
+    {
+        "v3" => Default,
+        "strokes" or "v4" => Strokes,
+        "lazy" or "v5" => Lazy,
+        _ => throw new FormatException($"humanize preset '{name}': v3, strokes or lazy"),
+    };
 }
