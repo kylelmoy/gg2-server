@@ -12,7 +12,7 @@
 //   botrecord --out <dir> --maps a,b,c --ticks-per-map 18000
 //             [--mode policy|tiered|scripted] [--policy x.npz]... [--bots 12]
 //             [--humanize [--humanize-preset v3|strokes|lazy|hold]] [--spread-turn]
-//             [--map-dir <path>] [--nav <path>]
+//             [--difficulty 1-5] [--no-human-aim] [--map-dir <path>] [--nav <path>]
 //
 // One server per map, run for --ticks-per-map ticks (30 a second), so a list of
 // maps gives the same play time on each.
@@ -27,6 +27,8 @@ var ticks = int.Parse(Flag("--ticks-per-map") ?? "18000", CultureInfo.InvariantC
 var bots = int.Parse(Flag("--bots") ?? "12", CultureInfo.InvariantCulture);
 var humanize = args.Contains("--humanize");
 var spreadTurn = args.Contains("--spread-turn");
+var difficulty = int.Parse(Flag("--difficulty") ?? "5", CultureInfo.InvariantCulture);
+var humanAim = !args.Contains("--no-human-aim");
 var preset = Flag("--humanize-preset") ?? "v3";
 _ = HumanizeOptions.ForPreset(preset);
 var mode = Flag("--mode") ?? "policy";
@@ -36,7 +38,7 @@ var mapDir = Flag("--map-dir") ?? Path.Combine(root, "maps");
 var navDir = Flag("--nav") ?? Path.Combine(root, "nav");
 
 Directory.CreateDirectory(outDir);
-Console.WriteLine($"{maps.Length} map(s) x {ticks} ticks, {bots} bots, mode {mode}, humanize {humanize} ({preset}), spread turn {spreadTurn}, policies [{string.Join(", ", policies)}]");
+Console.WriteLine($"{maps.Length} map(s) x {ticks} ticks, {bots} bots, mode {mode}, humanize {humanize} ({preset}), spread turn {spreadTurn}, difficulty {difficulty}, human aim {humanAim}, policies [{string.Join(", ", policies)}]");
 
 foreach (var map in maps)
 {
@@ -48,7 +50,7 @@ foreach (var map in maps)
         MapDirectory = mapDir,
         NavCacheDirectory = navDir,
         RecordingDirectory = outDir,
-        Bots = new BotPopulationOptions(Enabled: true, FillToPlayers: bots, MaxBots: bots, MinHumans: 0, Difficulty: 5),
+        Bots = new BotPopulationOptions(Enabled: true, FillToPlayers: bots, MaxBots: bots, MinHumans: 0, Difficulty: difficulty),
         BotMode = mode switch
         {
             "scripted" => BotMode.Scripted,
@@ -60,6 +62,7 @@ foreach (var map in maps)
         BotHumanize = humanize,
         BotHumanizePreset = preset,
         BotSpreadTurn = spreadTurn,
+        BotHumanAim = humanAim,
     };
 
     BotBrain.Build(options, Console.WriteLine);

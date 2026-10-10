@@ -425,15 +425,15 @@ public sealed class HeadlessMatch : DrivenWorld
     /// </remarks>
     private void Humanize()
     {
-        if (Options.HumanizeTeam is not { } team)
-            return;
-
         for (var slot = 1; slot < SlotCount; slot++)
         {
-            if (State.Players[slot].Team != team || SourceOf(slot) is not { } source || ScriptedBot.Of(source) is null)
+            if (SourceOf(slot) is not { } source || ScriptedBot.Of(source) is null)
                 continue;
 
-            Drive(slot, new HumanizedBot(source, Options.HumanizeWith ?? HumanizeOptions.Default, (uint)slot));
+            if (Options.HumanizeTeam is { } team && State.Players[slot].Team == team)
+                Drive(slot, new HumanizedBot(source, Options.HumanizeWith ?? HumanizeOptions.Default, (uint)slot));
+            else if (Options.HumanAimByTier)
+                Drive(slot, HumanizedBot.ByTier(source, (uint)slot));
         }
     }
 

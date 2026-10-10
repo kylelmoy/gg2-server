@@ -602,6 +602,11 @@ public static class ServerSettings
             (o, v) => o.BotHumanizePreset = HumanizeOptions.PresetName(v),
             "lazy"));
 
+        // A BEHAVIOUR switch, and what tiers 1-4 mean: they aim like people.
+        settings.Add(BoolRow(
+            "Bots", "HumanAim", nameof(ServerOptions.BotHumanAim),
+            o => o.BotHumanAim, (o, v) => o.BotHumanAim = v));
+
         settings.Add(BoolRow(
             "Bots", "SpreadTurn", nameof(ServerOptions.BotSpreadTurn),
             o => o.BotSpreadTurn, (o, v) => o.BotSpreadTurn = v));

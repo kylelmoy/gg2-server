@@ -314,6 +314,55 @@ public sealed class HumanizedBotTests
         Assert.True(Gap(final, 180) < 0.01, $"no enemy within range, yet the aim held at {final:0.0} deg");
     }
 
+    /// <summary>
+    /// <b>D3, the difficulty knob:</b> tiers 1-4 have <see cref="BotSkill.HumanAim"/>
+    /// and tier 5 does not.
+    /// </summary>
+    [Fact]
+    public void OnlyTheTopTierTracksExactly()
+    {
+        for (var tier = 1; tier <= 4; tier++)
+            Assert.True(BotSkill.ForTier(tier).HumanAim, $"tier {tier}");
+
+        Assert.False(BotSkill.ForTier(5).HumanAim);
+    }
+
+    /// <summary>
+    /// <b><see cref="HumanizedBot.ByTier"/> is an exact pass-through at tier 5</b>,
+    /// filters at tier 4, and follows a live difficulty change.
+    /// </summary>
+    [Fact]
+    public void ByTierFiltersTheLowerTiersAndPassesTheTopOneThrough()
+    {
+        var random = new Random(3);
+        var wanted = new ushort[300];
+        var at = 0.0;
+
+        for (var t = 0; t < wanted.Length; t++)
+        {
+            at += random.NextDouble() < 0.05 ? random.NextDouble() * 200 - 100 : random.NextDouble() * 8 - 4;
+            wanted[t] = (ushort)((int)Math.Round(((at % 360) + 360) % 360 * 65536.0 / 360.0) & 0xFFFF);
+        }
+
+        var rig = Build(t => new PlayerInput(PlayerKeys.Attack, wanted[t], 40), fight: true);
+        var filter = HumanizedBot.ByTier(new HandBrain(rig.Bot, t => new PlayerInput(PlayerKeys.Attack, wanted[t], 40)), 7);
+        var view = new WorldView(in rig.World.State, rig.World.Collision);
+
+        rig.Bot.Skill = BotSkill.ForTier(5);
+        for (var t = 0; t < 100; t++)
+            Assert.Equal(wanted[t], filter.Poll(in view, rig.Slot, t).NetAimDirection);
+
+        rig.Bot.Skill = BotSkill.ForTier(4);
+        var changed = 0;
+        for (var t = 100; t < 200; t++)
+            changed += filter.Poll(in view, rig.Slot, t).NetAimDirection != wanted[t] ? 1 : 0;
+        Assert.True(changed > 50, $"tier 4 changed only {changed} of 100 ticks");
+
+        rig.Bot.Skill = BotSkill.ForTier(5);
+        for (var t = 200; t < 300; t++)
+            Assert.Equal(wanted[t], filter.Poll(in view, rig.Slot, t).NetAimDirection);
+    }
+
     /// <summary>Past the idle flick threshold, a lazy aim still turns.</summary>
     [Fact]
     public void LazyAimStillFlicksAtALargeError()
@@ -412,7 +461,9 @@ public sealed class HumanizedBotTests
     [Fact]
     public void TheServerWrapsEveryBotWhenAskedAndNoneOtherwise()
     {
-        foreach (var humanize in new[] { true, false })
+        // (Humanize, HumanAim): Humanize wins; HumanAim alone is the by-tier
+        // default; neither leaves the bot unwrapped.
+        foreach (var (humanize, humanAim) in new[] { (true, true), (false, true), (false, false) })
         {
             using var harness = new ServerHarness(o =>
             {
@@ -420,6 +471,7 @@ public sealed class HumanizedBotTests
                 o.NavCacheDirectory = ReferenceTree.NavCacheDirectory;
                 o.Bots = new BotPopulationOptions(Enabled: true, FillToPlayers: 4, MaxBots: 4, MinHumans: 0, Difficulty: 5);
                 o.BotHumanize = humanize;
+                o.BotHumanAim = humanAim;
             });
 
             harness.Tick(10);
@@ -428,7 +480,13 @@ public sealed class HumanizedBotTests
             Assert.NotEmpty(bots);
 
             foreach (var slot in bots)
-                Assert.Equal(humanize, harness.Server.SourceOf(slot) is HumanizedBot);
+            {
+                var source = harness.Server.SourceOf(slot);
+                Assert.Equal(humanize || humanAim, source is HumanizedBot);
+
+                if (source is HumanizedBot filter)
+                    Assert.Equal(!humanize, filter.OnlyWhenSkillAsks);
+            }
         }
     }
 }

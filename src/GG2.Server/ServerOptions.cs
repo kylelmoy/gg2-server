@@ -616,6 +616,19 @@ public sealed class ServerOptions
     public bool BotSpreadTurn { get; set; }
 
     /// <summary>
+    /// Bots at difficulty 1-4 aim like people: <c>GG2.Bots.HumanizedBot.ByTier</c>
+    /// with <c>HumanizeOptions.Tracking</c>, lagging the target instead of tracking
+    /// it exactly. Tier 5 is untouched. On by default.
+    /// </summary>
+    /// <remarks>
+    /// <b>A behaviour switch, and it is what tiers 1-4 mean</b> (the user's call,
+    /// 2026-10-10). It costs those tiers strength by design; <c>docs/TRAPS-BOTS.md</c>,
+    /// the difficulty chain, has the ladder. <see cref="BotHumanize"/>, when on, wins:
+    /// it filters every bot at every tier with its own preset.
+    /// </remarks>
+    public bool BotHumanAim { get; set; } = true;
+
+    /// <summary>
     /// How fast <see cref="GameServer.Run"/> paces the tick loop, relative to
     /// real time. 1.0 is the reference's 30 Hz; 4.0 runs four minutes of match
     /// per minute; <see cref="double.PositiveInfinity"/> is <b>unpaced</b> — the

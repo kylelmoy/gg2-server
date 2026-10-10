@@ -634,6 +634,11 @@ internal static class CommandLine
                     options.BotHumanizePreset = HumanizeOptions.PresetName(cursor.Take());
                     break;
 
+                // A behaviour switch, on by default: ServerOptions.BotHumanAim.
+                case "--no-bot-human-aim":
+                    options.BotHumanAim = false;
+                    break;
+
                 // A behaviour switch: ServerOptions.BotSpreadTurn.
                 case "--bot-spread-turn":
                     options.BotSpreadTurn = true;
@@ -1211,7 +1216,11 @@ internal static class CommandLine
                             ticks at a time and make its aim flick and correct
                             the way a person's does. A behaviour switch: a
                             human-like bot is a weaker one.
-          --bot-humanize-preset v3|strokes|lazy|hold
+          --no-bot-human-aim
+                            let difficulty 1-4 track targets exactly, as tier
+                            5 does. ON by default, the lower tiers aim like
+                            people: they lag a target and sit off it.
+          --bot-humanize-preset v3|strokes|lazy|hold|tracking
                             which measured HumanizedBot preset --bot-humanize
                             uses. v3 by default.
           --bot-spread-turn

@@ -111,8 +111,9 @@ public sealed class WrappedBotVisibilityTests
 
         foreach (var slot in slots)
         {
-            // The roster holds the WRAPPER...
-            Assert.IsType<HybridBot>(server.SourceOf(slot));
+            // The roster holds the WRAPPER (since D3, HumanizedBot.ByTier around
+            // the HybridBot by default)...
+            Assert.NotNull(HybridBot.Of(server.SourceOf(slot)));
 
             // ...and every site that wants the macro layer still reaches it.
             Assert.NotNull(ScriptedBot.Of(server.SourceOf(slot)));

@@ -115,9 +115,28 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
             source.PollCommands(in world, slot, tick, ref commands);
     }
 
+    /// <summary>
+    /// The difficulty knob: every bot is wrapped, and the filter runs only while the
+    /// bot's current <see cref="BotSkill.HumanAim"/> asks for it, with
+    /// <see cref="HumanizeOptions.Tracking"/>. Otherwise it is an exact pass-through
+    /// that draws nothing, so tier 5 plays exactly as it would unwrapped.
+    /// </summary>
+    public static HumanizedBot ByTier(IInputSource inner, uint seed) =>
+        new(inner, HumanizeOptions.Tracking, seed) { OnlyWhenSkillAsks = true };
+
+    /// <summary>Run only while the scripted layer's skill has <see cref="BotSkill.HumanAim"/>.</summary>
+    public bool OnlyWhenSkillAsks { get; init; }
+
     public PlayerInput Poll(in WorldView world, int slot, int tick)
     {
         var input = _inner.Poll(in world, slot, tick);
+
+        if (OnlyWhenSkillAsks && !_scripted.Skill.HumanAim)
+        {
+            _engaged = false;
+            _shown = double.NaN;
+            return input;
+        }
 
         if (slot != _slot)
         {
@@ -410,15 +429,27 @@ public sealed record HumanizeOptions(
     /// </summary>
     public static HumanizeOptions Hold { get; } = new(HoldWithoutTarget: true);
 
-    /// <summary>The preset names a setting can carry: <c>v3</c>, <c>strokes</c>, <c>lazy</c> and <c>hold</c>.</summary>
-    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy", "hold"];
+    /// <summary>
+    /// D3, tiers 1-4's aim: it lags the target the way people do. Corrections move
+    /// at 8% of the error a tick and stop inside 16°, and only an error past 120°
+    /// is flicked. Fitted open loop to the people's in-range turn size, p90, still
+    /// share, aim error and smoothness (<c>gg2-rl</c> <c>scripts/fit_humanize_tracking.py</c>,
+    /// <c>docs/PLAN.md</c> phase 5, D3). Applied by <see cref="HumanizedBot.ByTier"/>.
+    /// </summary>
+    public static HumanizeOptions Tracking { get; } = new(
+        SaccadeDegrees: 120,
+        PursuitGain: 0.08,
+        DeadZoneDegrees: 16);
+
+    /// <summary>The preset names a setting can carry: <c>v3</c>, <c>strokes</c>, <c>lazy</c>, <c>hold</c> and <c>tracking</c>.</summary>
+    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy", "hold", "tracking"];
 
     /// <summary>A preset's canonical name in <see cref="PresetNames"/>, refusing anything else.</summary>
     /// <exception cref="FormatException">The name is not a preset.</exception>
     public static string PresetName(string name)
     {
         var options = ForPreset(name);
-        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : options == Hold ? "hold" : "v3";
+        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : options == Hold ? "hold" : options == Tracking ? "tracking" : "v3";
     }
 
     /// <summary>A preset by name, case-insensitive.</summary>
@@ -429,6 +460,7 @@ public sealed record HumanizeOptions(
         "strokes" or "v4" => Strokes,
         "lazy" or "v5" => Lazy,
         "hold" or "d2" => Hold,
-        _ => throw new FormatException($"humanize preset '{name}': v3, strokes, lazy or hold"),
+        "tracking" or "d3" => Tracking,
+        _ => throw new FormatException($"humanize preset '{name}': v3, strokes, lazy, hold or tracking"),
     };
 }

@@ -259,7 +259,7 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
 
         foreach (var slot in slots)
         {
-            var bot = Assert.IsType<ScriptedBot>(harness.Server.SourceOf(slot));
+            var bot = Assert.IsType<ScriptedBot>(ScriptedBot.Of(harness.Server.SourceOf(slot)));
 
             Assert.NotNull(bot.Objective);
 
@@ -328,7 +328,7 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
         // still calls a bot is driven by one, which is what RemoveSlot's compaction
         // would break if the population manager removed by a stale index.
         foreach (var slot in harness.Server.BotSlots)
-            Assert.IsType<ScriptedBot>(harness.Server.SourceOf(slot));
+            Assert.IsType<ScriptedBot>(ScriptedBot.Of(harness.Server.SourceOf(slot)));
     }
 
     /// <summary>
@@ -370,7 +370,7 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
         Assert.Equal(2, harness.Server.BotSlots.Count);
 
         var bots = harness.Server.BotSlots
-            .Select(s => (ScriptedBot)harness.Server.SourceOf(s))
+            .Select(s => ScriptedBot.Of(harness.Server.SourceOf(s))!)
             .ToArray();
 
         // The OBJECTIVE instances, captured now. Holding the bots and reading
@@ -392,7 +392,7 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
         // (BotObjectiveTests.TeamDeathmatchGivesNoGoal) and not this test's; what is
         // under test here is that a rotation invalidates whatever nav state exists.
         var far = harness.Server.BotSlots
-            .Select(slot => ((ScriptedBot)harness.Server.SourceOf(slot), slot))
+            .Select(slot => (ScriptedBot.Of(harness.Server.SourceOf(slot))!, slot))
             .ToArray();
 
         foreach (var (bot, _) in far)
@@ -427,7 +427,7 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
 
         foreach (var slot in harness.Server.BotSlots)
         {
-            var bot = (ScriptedBot)harness.Server.SourceOf(slot);
+            var bot = ScriptedBot.Of(harness.Server.SourceOf(slot))!;
 
             // A fresh objective, not the one built against the previous map's graph.
             Assert.NotNull(bot.Objective);
@@ -483,7 +483,7 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
 
         foreach (var slot in harness.Server.BotSlots)
         {
-            var bot = (ScriptedBot)harness.Server.SourceOf(slot);
+            var bot = ScriptedBot.Of(harness.Server.SourceOf(slot))!;
             var team = harness.Server.TeamOf(slot);
 
             Assert.True(team is Team.Red or Team.Blue, $"bot in slot {slot} is still {team}");
@@ -617,7 +617,7 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
         Assert.Equal(2, slots.Count);
 
         var skills = slots
-            .Select(slot => Assert.IsType<ScriptedBot>(harness.Server.SourceOf(slot)).Skill)
+            .Select(slot => Assert.IsType<ScriptedBot>(ScriptedBot.Of(harness.Server.SourceOf(slot))).Skill)
             .ToArray();
 
         // Every bot on one server gets the same tier — a per-bot difference would

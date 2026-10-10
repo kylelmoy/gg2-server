@@ -42,6 +42,13 @@ namespace GG2.Bots;
 /// projectile and bot (<see cref="BotReflex"/>), not re-rolled each tick, which
 /// would make a miss vanishingly rare over a rocket's flight.
 /// </param>
+/// <param name="HumanAim">
+/// Whether this bot's aim, scripted or policy, goes through
+/// <see cref="HumanizeOptions.Tracking"/>: lagging its target the way people do.
+/// True for tiers 1-4 and false for tier 5, which stays the strongest bot there is
+/// (<c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, D3). Applied by
+/// <see cref="HumanizedBot.ByTier"/>, so a live difficulty change takes at once.
+/// </param>
 /// <param name="PolicyAimErrorDeg">
 /// The half-width of the uniform aim error a <see cref="HybridBot"/> adds to its
 /// controller's aim, redrawn every <see cref="AimInterval"/> ticks. The policy
@@ -62,7 +69,8 @@ public readonly record struct BotSkill(
     BotLeadMode LeadMode,
     int ReflexTicks = 0,
     double ReflexMissChance = 0,
-    double PolicyAimErrorDeg = 0)
+    double PolicyAimErrorDeg = 0,
+    bool HumanAim = false)
 {
     /// <summary>
     /// The knobs for a skill in <c>[0, 1]</c> — <c>botSkillApply.gml</c>.
@@ -126,8 +134,16 @@ public readonly record struct BotSkill(
     public static ReadOnlySpan<double> TierSkills => [0.15, 0.30, 0.42, 0.67, 0.95];
 
     /// <summary>The server's 1-5 difficulty as a skill, from <see cref="TierSkills"/>.</summary>
-    public static BotSkill ForTier(int tier) =>
-        For(TierSkills[Math.Clamp(tier, BotConstants.TierMin, BotConstants.TierMax) - BotConstants.TierMin]);
+    /// <remarks>
+    /// Tiers 1-4 aim like people (<see cref="HumanAim"/>); tier 5 does not, by the
+    /// user's call on 2026-10-10: "Max" is the best possible strength.
+    /// </remarks>
+    public static BotSkill ForTier(int tier)
+    {
+        var clamped = Math.Clamp(tier, BotConstants.TierMin, BotConstants.TierMax);
+
+        return For(TierSkills[clamped - BotConstants.TierMin]) with { HumanAim = clamped < BotConstants.TierMax };
+    }
 
     /// <summary>
     /// A four-anchor piecewise ramp — <c>botSkillLerp.gml</c>.

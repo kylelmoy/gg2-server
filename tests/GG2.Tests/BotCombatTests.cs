@@ -197,7 +197,8 @@ public sealed class BotCombatTests
 
         // The five server tiers land on 0.15 … 0.95, so tier 1 and tier 5 are
         // exactly the ends of the flat regions.
-        Assert.Equal(BotSkill.For(0.15), BotSkill.ForTier(1));
+        // Tiers 1-4 also aim like people (D3); that flag is the one difference.
+        Assert.Equal(BotSkill.For(0.15) with { HumanAim = true }, BotSkill.ForTier(1));
         Assert.Equal(BotSkill.For(0.95), BotSkill.ForTier(5));
     }
 

@@ -47,6 +47,11 @@ namespace GG2.Bots;
 /// The parameters <paramref name="HumanizeTeam"/>'s filter uses, or null for
 /// <see cref="HumanizeOptions.Default"/> (v3).
 /// </param>
+/// <param name="HumanAimByTier">
+/// Wrap every bot not already humanized in <see cref="HumanizedBot.ByTier"/>, as the
+/// live server does by default (<c>[Bots] HumanAim</c>): tiers 1-4 aim like people
+/// and tier 5 is untouched. Off here so every pinned match stays as it was.
+/// </param>
 /// <param name="SpreadTurnTeam">
 /// The team whose policy tiers spread each turn over the action repeat
 /// (<see cref="PolicyController.SpreadTurn"/>), or null for neither. One team,
@@ -74,7 +79,8 @@ public readonly record struct HeadlessMatchOptions(
     bool HandicapOnly = false,
     Team? HumanizeTeam = null,
     Team? SpreadTurnTeam = null,
-    HumanizeOptions? HumanizeWith = null)
+    HumanizeOptions? HumanizeWith = null,
+    bool HumanAimByTier = false)
 {
     /// <summary>
     /// A short match on <c>ctf_truefort</c> with twelve bots. ⚠️ The values are

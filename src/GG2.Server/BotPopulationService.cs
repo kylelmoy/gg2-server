@@ -700,6 +700,8 @@ public sealed class BotPopulationService
         // stagger like the scripted layer's own stream.
         if (_server.Options.BotHumanize)
             source = new HumanizedBot(source, HumanizeOptions.ForPreset(_server.Options.BotHumanizePreset), (uint)stagger);
+        else if (_server.Options.BotHumanAim)
+            source = HumanizedBot.ByTier(source, (uint)stagger);
 
         var slot = _server.AddBot(name, team, playerClass, source);
 

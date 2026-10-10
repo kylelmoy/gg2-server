@@ -76,6 +76,12 @@ public static class Tiers
 
     private static bool Spread(string arm) => arm.StartsWith("spread:", StringComparison.Ordinal);
 
+    /// <summary>
+    /// <c>BENCH_HUMAN_AIM=1</c>: every bot as the live server wraps it by default,
+    /// so tiers 1-4 aim like people (<see cref="HumanizedBot.ByTier"/>). Matches only.
+    /// </summary>
+    private static readonly bool HumanAimByTier = Environment.GetEnvironmentVariable("BENCH_HUMAN_AIM") == "1";
+
     private sealed record Observation(
         string Map, string Arm, int Index, string Class, Team Subject, double Score, int Ticks,
         long SubjectMicroTicks, string Detail);
@@ -265,6 +271,7 @@ public static class Tiers
                 HumanizeTeam = Humanized(arm.Name) ? subject : null,
                 HumanizeWith = HumanizeFor(arm.Name),
                 SpreadTurnTeam = Spread(arm.Name) ? subject : null,
+                HumanAimByTier = HumanAimByTier,
             };
 
             var match = HeadlessMatch.Load(options, maps, nav);
