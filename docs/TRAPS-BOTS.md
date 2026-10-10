@@ -6891,6 +6891,30 @@ instrument can still be spotted by a person. What would show it is stale: a
 re-run of `gg2-rl`'s `scripts/human_style.py --observable` against newer fleet
 traces reading a different gap.
 
+### Spreading a policy's turn: the timing tell goes, the classifier moves on
+
+`PolicyController.SpreadTurn`, `[Bots] SpreadTurn` / `--bot-spread-turn`, off.
+`ActionDecoder` normally applies a decision's whole turn on its first tick (X,
+0, 0, 0). Spread, it adds a quarter on each of the four ticks: the same total
+under the same cap. A checkpoint observes the same aim at every decision
+boundary, so it runs unchanged.
+
+**Measured** (shipped bundle, `botrecord` arms as above, 800 paired matches):
+
+| | without | spread |
+|---|---|---|
+| fleet discriminator AUC vs people, 150px / 300px | 0.769 / 0.904 | **0.700 / 0.818** |
+| O2 (observable + aim timing, refitted per arm), 150px | 0.946 | 0.943 |
+| scout turn autocorrelation (people 0.49) | 0.08 | 0.50 |
+| zero-turn share (people 0.41) | 0.65 | 0.26 |
+| death share vs `full:5` | | −0.010 ± 0.003 |
+
+**Reading:** it removes the aim-timing tell, which is why the discriminator
+that was not fitted to it drops so far. A classifier refitted on the new bots
+moves to what is left: turn size, too few still ticks, no flicks and extra
+jumps. Those are the policy's own decisions. So it stays off. `gg2-rl`
+`docs/PLAN.md` phase 5, C0, has the registration.
+
 **`tools/botrecord`** runs a bots-only server, unpaced, with `--record`, so a
 configuration produces traces in the fleet's format. It sets
 `BotEngagesBotsToo`, because with no humans present the live default keeps
