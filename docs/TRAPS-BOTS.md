@@ -6915,6 +6915,25 @@ moves to what is left: turn size, too few still ticks, no flicks and extra
 jumps. Those are the policy's own decisions. So it stays off. `gg2-rl`
 `docs/PLAN.md` phase 5, C0, has the registration.
 
+### Lazy aim between shots (v5): the total turn is conserved
+
+`HumanizeOptions.Lazy`, `[Bots] HumanizePreset = lazy`. While the brain presses
+neither attack nor special, the aim tolerates a 45° error before correcting.
+It was fitted open loop to people who, within 150px, turn about 2°/tick and sit
+35° off between shots.
+
+| | v3 | lazy | people |
+|---|---|---|---|
+| O2 AUC vs people, 150px | 0.866 | 0.879 | |
+| \|turn\| overall, deg/tick | 3.64 | 3.62 | 2.14 |
+| death share vs `full:5`, 800 paired matches | −0.024 ± 0.003 | −0.036 ± 0.003 | |
+
+**Reading:** the brain fires on about two thirds of in-range ticks, and the
+drift is paid back by a flick when it fires again, so total turning does not
+move. People turn less because they **fire half as often**. That is the
+scripted layer's attack logic, a key, and no aim filter reaches it. v3 stays
+the default.
+
 **`tools/botrecord`** runs a bots-only server, unpaced, with `--record`, so a
 configuration produces traces in the fleet's format. It sets
 `BotEngagesBotsToo`, because with no humans present the live default keeps

@@ -357,6 +357,9 @@ public sealed record HumanizeOptions(
     /// past 50°. Fitted open loop to the people's turn and aim error within 150px,
     /// split by fire: between shots people turn about 2°/tick and sit 35° off,
     /// where v3 turns about 4°/tick. <c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, v5.
+    /// <b>Measured and not the default</b>: live, the drift is paid back by a flick
+    /// when the brain fires again, so overall turning does not move. O2 reads 0.879
+    /// against v3's 0.866, at −0.036 death share against v3's −0.024.
     /// </summary>
     public static HumanizeOptions Lazy { get; } = new(
         IdleSaccadeDegrees: 50,
