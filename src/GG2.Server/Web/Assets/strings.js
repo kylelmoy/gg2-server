@@ -787,7 +787,7 @@ const STRINGS = {
       "ClassPolicy": "Class=name pairs choosing each class's driver; name is a checkpoint file name without extension, or 'scripted'. Unlisted classes: the loaded checkpoint that claims them, else scripted.",
       "Occupancy": "Penalise edges teammates already use so squads spread out. Behavioural: off drops match dispersion 0.785 to 0.634.",
       "Humanize": "Inside a fight, hold movement keys a few ticks at a time and make aim flick and correct like a person's. Behavioural: also weaker.",
-      "HumanizePreset": "Which measured humanize preset Humanize uses: v3 (default), strokes (v4), lazy (v5, lazy aim between shots) hold (D2, aim held while no target) tracking (D3) or tracking2 (D4-D5, what tiers 1-4 use).",
+      "HumanizePreset": "Which measured humanize preset Humanize uses: v3 (default), strokes (v4), lazy (v5, lazy aim between shots), hold (D2, aim held while no target), tracking (D3) or tracking2 (D4-D5, what tiers 1-4 use).",
       "HumanAim": "Difficulty 1-4 aim like people: they lag a target and sit off it. Tier 5 is untouched. Behavioural: the lower tiers are weaker for it.",
       "SpreadTurn": "Spread each policy decision's aim turn over the ticks it is held for, instead of turning on the first. Behavioural.",
       "EngageBots": "Run the micro-controller in bot-vs-bot fights too. Costs tick time; does not improve play.",
