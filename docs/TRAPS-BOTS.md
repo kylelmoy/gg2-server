@@ -6934,6 +6934,22 @@ move. People turn less because they **fire half as often**. That is the
 scripted layer's attack logic, a key, and no aim filter reaches it. v3 stays
 the default.
 
+### Holding the aim without a target (D2), and what is left
+
+`HumanizeOptions.Hold`. With no target, the reference brain points the aim
+along the walk, so a bot reversing near an enemy snaps 180°. `BENCH_TURNS`
+(in range, bots only) attributes 20% of the big turns to that from 7% of the
+ticks, and 51% to the policy. Holding the aim instead is free (death share
+−0.025 against v3's −0.024). But O2 rises from 0.864 to 0.890: a held aim is
+dead still, and then snaps more than 30° when a target is acquired.
+
+**Each filter so far traded its tell for another**: v4 and the spread traded
+smoothness for size, v5 traded turning between shots for turning on the next
+shot, and D2 traded the walk snap for stillness. Both brains track the target's
+bearing fully (about 4°/tick within 150px). People turn about 2°/tick and sit
+about 30° off. Tracking like a person means hitting less, so what is left is a
+strength trade, not a filter. `gg2-rl` `docs/PLAN.md` phase 5, D2.
+
 **`tools/botrecord`** runs a bots-only server, unpaced, with `--record`, so a
 configuration produces traces in the fleet's format. It sets
 `BotEngagesBotsToo`, because with no humans present the live default keeps

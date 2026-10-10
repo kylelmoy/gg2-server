@@ -404,7 +404,9 @@ public sealed record HumanizeOptions(
     /// <summary>
     /// D2: v3, holding the aim while the scripted layer has no target and an enemy
     /// is close, instead of pointing it along the walk. <c>gg2-rl</c>
-    /// <c>docs/PLAN.md</c> phase 5, D2.
+    /// <c>docs/PLAN.md</c> phase 5, D2. <b>Measured and not the default</b>: free in
+    /// strength, but O2 reads 0.890 against v3's 0.864, because a held aim is dead
+    /// still and then snaps when a target is acquired.
     /// </summary>
     public static HumanizeOptions Hold { get; } = new(HoldWithoutTarget: true);
 
