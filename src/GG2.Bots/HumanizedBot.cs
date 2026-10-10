@@ -34,11 +34,16 @@ namespace GG2.Bots;
 /// jumps land (<c>gg2-rl</c> <c>docs/PLAN.md</c>, phase 5, "the churn is in a key").
 /// </para>
 /// <para>
-/// <b>Aim: saccade and pursuit, not a constant slew.</b> A person moves the
-/// crosshair in two ways: a fast flick to a new target, after a reaction delay,
+/// <b>Aim: strokes and smoothed corrections, not a constant slew.</b> A person moves
+/// the crosshair in two ways: a flick to a new target, after a reaction delay,
 /// that lands a little off; and small corrections in between, with a still mouse
-/// much of the time and corrections noisy enough to overshoot. The brain's aim is treated as
-/// where the bot <em>wants</em> to look, and the output follows it that way.
+/// much of the time. Both are <em>smooth</em>: a person's turn on one tick predicts
+/// the next (lag-1 autocorrelation 0.43 within 300px, the bots' 0.27) and one
+/// movement lasts about 3.5 ticks. That smoothness is what a classifier reads
+/// best (<c>gg2-rl</c> <c>docs/PLAN.md</c>, phase 5, A2), so a flick is a
+/// minimum-jerk stroke over several ticks and a correction low-passes the turn
+/// rate. The brain's aim is treated as where the bot <em>wants</em> to look, and
+/// the output follows it that way.
 /// The output never feeds back: the brain keeps its own aim, as
 /// <see cref="HybridBot"/>'s handicap already relies on.
 /// </para>
@@ -72,6 +77,12 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
 
     private double _aim;
     private int _reactLeft = -1;
+    private double _velocity;
+
+    private double _strokeFrom;
+    private double _strokeAmplitude;
+    private int _strokeTicks;
+    private int _strokeAt;
 
     public HumanizedBot(IInputSource inner, HumanizeOptions options, uint seed)
     {
@@ -125,6 +136,8 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
             _engaged = true;
             _aim = Degrees(input.NetAimDirection);
             _reactLeft = -1;
+            _velocity = 0;
+            _strokeTicks = 0;
         }
 
         var aim = FollowAim(Degrees(input.NetAimDirection));
@@ -148,18 +161,23 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
 
     private double FollowAim(double wanted)
     {
+        // A stroke in flight runs to its end: a person does not re-aim halfway
+        // through a flick, and corrections resume once it has landed.
+        if (_strokeTicks > 0)
+            return AdvanceStroke();
+
         var error = Wrap(wanted - _aim);
         var size = Math.Abs(error);
 
         if (size >= Options.SaccadeDegrees)
         {
             // A flick waits out a reaction time from the moment the error grew
-            // past the threshold, then lands with an error that scales with how
+            // past the threshold, and lands with an error that scales with how
             // far it travelled.
             if (_reactLeft < 0)
                 _reactLeft = Options.MinReactionTicks + _random.NextInclusive(Options.MaxReactionTicks - Options.MinReactionTicks);
 
-            // Not reacted yet, so not moving towards it at all. A pursuit here
+            // Not reacted yet, so not moving towards it at all. A correction here
             // would close the gap before the flick was due and turn every flick
             // back into a slew.
             if (_reactLeft > 0)
@@ -169,20 +187,52 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
             }
 
             _reactLeft = -1;
-            _aim = Wrap(_aim + (error * (1 + (Options.SaccadeEndpointError * Gaussian()))));
-            return _aim;
+            _velocity = 0;
+            _strokeFrom = _aim;
+            _strokeAmplitude = error * (1 + (Options.SaccadeEndpointError * Gaussian()));
+            _strokeTicks = Math.Clamp(
+                (int)Math.Round(Options.StrokeBaseTicks + (Math.Abs(_strokeAmplitude) / Options.StrokeDegreesPerTick)),
+                Options.MinStrokeTicks,
+                Options.MaxStrokeTicks);
+            _strokeAt = 0;
+
+            return AdvanceStroke();
         }
 
         _reactLeft = -1;
 
-        // Close enough: the mouse is still. Otherwise a partial correction whose
-        // noise scales with the step, so a still mouse stays still and a large
-        // correction can overshoot and reverse. A constant per-tick tremor
-        // reversed five to seven times a second against the people's one.
-        if (size < Options.DeadZoneDegrees)
-            return _aim;
+        // A correction moves the turn RATE toward a fraction of the error, so one
+        // tick's turn carries into the next the way a hand's does. Its noise
+        // scales with the velocity, so a still mouse stays still. Inside the dead
+        // zone the hand coasts to a stop rather than freezing.
+        var aimFor = size >= Options.DeadZoneDegrees ? Options.PursuitGain * error : 0.0;
+        _velocity += Options.PursuitSmoothing * (aimFor - _velocity);
 
-        _aim = Wrap(_aim + (Options.PursuitGain * error * (1 + (Options.PursuitNoise * Gaussian()))));
+        if (aimFor == 0.0 && Math.Abs(_velocity) < Options.StopDegrees)
+            _velocity = 0;
+        else if (_velocity != 0)
+            _velocity *= 1 + (Options.PursuitNoise * Gaussian());
+
+        _aim = Wrap(_aim + _velocity);
+        return _aim;
+    }
+
+    /// <summary>One tick along the current flick's minimum-jerk profile.</summary>
+    /// <remarks>
+    /// <c>10τ³ − 15τ⁴ + 6τ⁵</c>: the standard model of a human pointing movement.
+    /// It starts and ends at rest with a bell-shaped speed, so consecutive ticks'
+    /// turns are correlated and the movement lasts several ticks, which is what
+    /// people's aim does and a one-tick jump does not.
+    /// </remarks>
+    private double AdvanceStroke()
+    {
+        _strokeAt++;
+        var tau = _strokeAt / (double)_strokeTicks;
+        _aim = Wrap(_strokeFrom + (_strokeAmplitude * ((10 * tau * tau * tau) - (15 * tau * tau * tau * tau) + (6 * tau * tau * tau * tau * tau))));
+
+        if (_strokeAt >= _strokeTicks)
+            _strokeTicks = 0;
+
         return _aim;
     }
 
@@ -224,7 +274,8 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
 /// bot a person still spots. <see cref="Default"/> was fitted by replaying a copy
 /// of this filter, open loop, over a recorded bots-only server's brain output and
 /// matching the people's in-range turn quantiles (p75-p99), still-mouse share,
-/// and reversal rate (<c>gg2-rl</c> <c>docs/PLAN.md</c>, phase 5).
+/// reversal rate, lag-1 autocorrelation and movement length (<c>gg2-rl</c>
+/// <c>docs/PLAN.md</c>, phase 5, v4).
 /// Open loop means the brain did not see the filtered output, which it does live.
 /// </remarks>
 /// <param name="Range">Pixels within which a visible target makes it a fight. The classifier's wider band.</param>
@@ -232,18 +283,30 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
 /// <param name="MinReactionTicks">Fewest ticks before a flick fires.</param>
 /// <param name="MaxReactionTicks">Most ticks before a flick fires. 2-4 ticks is 67-133 ms, on top of the scripted acquire delay.</param>
 /// <param name="SaccadeEndpointError">A flick lands off by this fraction of its size, one standard deviation.</param>
-/// <param name="PursuitGain">Fraction of a smaller error closed per tick.</param>
-/// <param name="PursuitNoise">A correction's noise, as a fraction of its own size, one standard deviation.</param>
-/// <param name="DeadZoneDegrees">Below this error the mouse is still. The people's share of ticks with no turn is 0.55.</param>
+/// <param name="StrokeBaseTicks">A flick's duration is this plus its size over <paramref name="StrokeDegreesPerTick"/>, rounded.</param>
+/// <param name="StrokeDegreesPerTick">How much longer a bigger flick takes.</param>
+/// <param name="MinStrokeTicks">Shortest flick.</param>
+/// <param name="MaxStrokeTicks">Longest flick.</param>
+/// <param name="PursuitGain">The turn rate a correction moves toward, as a fraction of the error.</param>
+/// <param name="PursuitSmoothing">How far the turn rate moves toward that each tick: 1 is no smoothing.</param>
+/// <param name="PursuitNoise">A correction's noise, as a fraction of its own velocity, one standard deviation.</param>
+/// <param name="DeadZoneDegrees">Below this error the hand coasts to a stop.</param>
+/// <param name="StopDegrees">A coasting turn below this stops.</param>
 public sealed record HumanizeOptions(
     double Range = 300,
-    double SaccadeDegrees = 20,
+    double SaccadeDegrees = 12,
     int MinReactionTicks = 2,
     int MaxReactionTicks = 4,
     double SaccadeEndpointError = 0.08,
-    double PursuitGain = 0.4,
-    double PursuitNoise = 0.3,
-    double DeadZoneDegrees = 1.0)
+    double StrokeBaseTicks = 2,
+    double StrokeDegreesPerTick = 40,
+    int MinStrokeTicks = 3,
+    int MaxStrokeTicks = 10,
+    double PursuitGain = 0.45,
+    double PursuitSmoothing = 0.6,
+    double PursuitNoise = 0.5,
+    double DeadZoneDegrees = 2.0,
+    double StopDegrees = 0.3)
 {
     public static HumanizeOptions Default { get; } = new();
 }

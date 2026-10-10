@@ -125,22 +125,36 @@ public sealed class HumanizedBotTests
     }
 
     /// <summary>
-    /// A large turn is closed by a flick, not a constant slew, and the aim still
-    /// ends up where the brain wants it.
+    /// A large turn is one stroke: a few ticks long, fastest in the middle, and it
+    /// arrives where the brain wants the aim.
     /// </summary>
+    /// <remarks>
+    /// Not a one-tick jump (v3, whose turn the next tick could not predict) and not
+    /// a constant slew (the brain's own 24-degree <see cref="BotSkill.TurnRate"/>
+    /// plateau). The stroke is the run of ticks turning more than 5 degrees after
+    /// the reaction delay. The small corrections that follow its landing are not
+    /// part of it.
+    /// </remarks>
     [Fact]
-    public void ALargeTurnIsAFlickThatArrives()
+    public void ALargeTurnIsAStrokeThatArrives()
     {
         // Still at 0 degrees, then the brain wants 120 degrees and holds it.
         static PlayerInput Input(int tick) => new(PlayerKeys.None, tick < 30 ? (ushort)0 : (ushort)(120 * 65536 / 360), 40);
 
         var outputs = Run(Build(Input, fight: true), 120);
-        var biggest = 0.0;
+        var turns = Enumerable.Range(1, outputs.Length - 1)
+            .Select(t => Gap(Degrees(outputs[t].NetAimDirection), Degrees(outputs[t - 1].NetAimDirection)))
+            .ToArray();
 
-        for (var t = 31; t < outputs.Length; t++)
-            biggest = Math.Max(biggest, Gap(Degrees(outputs[t].NetAimDirection), Degrees(outputs[t - 1].NetAimDirection)));
+        var start = Array.FindIndex(turns, 30, t => t > 5);
+        var end = Array.FindIndex(turns, start, t => t <= 5);
+        var stroke = turns[start..end];
+        var shown = string.Join(", ", stroke.Select(t => t.ToString("0.0")));
 
-        Assert.True(biggest > 60, $"the largest single turn was {biggest:0.0} deg: a slew, not a flick");
+        Assert.InRange(stroke.Length, HumanizeOptions.Default.MinStrokeTicks - 2, HumanizeOptions.Default.MaxStrokeTicks);
+        Assert.True(stroke.Max() < 0.6 * 120, $"the stroke's turns were {shown}: a jump");
+        Assert.True(stroke.Max() > 24, $"the stroke's turns were {shown}: no faster than the brain's own slew");
+        Assert.True(stroke.Max() > stroke[0] && stroke.Max() > stroke[^1], $"the stroke's turns were {shown}: not fastest in the middle");
 
         var final = Degrees(outputs[^1].NetAimDirection);
         Assert.True(Gap(final, 120) < 5, $"settled at {final:0.0} deg, wanted 120");
