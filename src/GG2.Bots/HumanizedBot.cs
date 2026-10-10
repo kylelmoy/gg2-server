@@ -189,7 +189,12 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
         var target = _scripted.Combat.Target;
 
         if (!target.Exists || !_scripted.Combat.Visible)
-            return false;
+        {
+            // D5: with no target the reference brain points the aim along the
+            // walk, and a bot reversing near an enemy snaps half a turn. Counting
+            // a close enemy as a fight sends that snap through the filter too.
+            return Options.EngageWithoutTarget && EnemyWithin(in world, slot);
+        }
 
         ref readonly var self = ref world.Character(slot);
         var dx = target.X - self.X;
@@ -374,6 +379,11 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
 /// An additive turn, one standard deviation, on every tick a correction is
 /// moving: the reversals a hand makes. 0 for none. D4.
 /// </param>
+/// <param name="EngageWithoutTarget">
+/// An enemy within <paramref name="Range"/> is a fight even while the scripted layer
+/// has no target, so the brain's walk-facing aim is filtered rather than passed
+/// through. D5.
+/// </param>
 /// <param name="HoldWithoutTarget">
 /// While the scripted layer has no target and an enemy is within <paramref name="Range"/>,
 /// hold the aim rather than following the walk. D2.
@@ -398,7 +408,8 @@ public sealed record HumanizeOptions(
     double IdlePursuitGain = double.NaN,
     bool HoldWithoutTarget = false,
     double SaccadeGain = 1.0,
-    double PursuitTremorDegrees = 0)
+    double PursuitTremorDegrees = 0,
+    bool EngageWithoutTarget = false)
 {
     /// <summary>
     /// v3, the shipped shape: one-tick flicks and unsmoothed corrections. These
@@ -487,15 +498,22 @@ public sealed record HumanizeOptions(
         DeadZoneDegrees: 8,
         PursuitTremorDegrees: 0.75);
 
-    /// <summary>The preset names a setting can carry: <c>v3</c>, <c>strokes</c>, <c>lazy</c>, <c>hold</c>, <c>tracking</c> and <c>tracking2</c>.</summary>
-    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy", "hold", "tracking", "tracking2"];
+    /// <summary>
+    /// D5's candidate: <see cref="Tracking2"/>, engaged whenever an enemy is close,
+    /// target or not (<see cref="EngageWithoutTarget"/>). <c>gg2-rl</c>
+    /// <c>docs/PLAN.md</c> phase 5, D5.
+    /// </summary>
+    public static HumanizeOptions Tracking2Engaged { get; } = Tracking2 with { EngageWithoutTarget = true };
+
+    /// <summary>The preset names a setting can carry.</summary>
+    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy", "hold", "tracking", "tracking2", "tracking2e"];
 
     /// <summary>A preset's canonical name in <see cref="PresetNames"/>, refusing anything else.</summary>
     /// <exception cref="FormatException">The name is not a preset.</exception>
     public static string PresetName(string name)
     {
         var options = ForPreset(name);
-        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : options == Hold ? "hold" : options == Tracking ? "tracking" : options == Tracking2 ? "tracking2" : "v3";
+        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : options == Hold ? "hold" : options == Tracking ? "tracking" : options == Tracking2 ? "tracking2" : options == Tracking2Engaged ? "tracking2e" : "v3";
     }
 
     /// <summary>A preset by name, case-insensitive.</summary>
@@ -508,6 +526,7 @@ public sealed record HumanizeOptions(
         "hold" or "d2" => Hold,
         "tracking" or "d3" => Tracking,
         "tracking2" or "d4" => Tracking2,
-        _ => throw new FormatException($"humanize preset '{name}': v3, strokes, lazy, hold, tracking or tracking2"),
+        "tracking2e" or "d5" => Tracking2Engaged,
+        _ => throw new FormatException($"humanize preset '{name}': v3, strokes, lazy, hold, tracking, tracking2 or tracking2e"),
     };
 }

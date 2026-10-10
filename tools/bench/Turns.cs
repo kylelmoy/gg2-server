@@ -39,21 +39,24 @@ public static class Turns
         public double Turn;
         public long Big;
         public double BigTurn;
+        public long Jumps;
+        public double Speed;
     }
 
     public static void Run(string maps, string nav, string checkpoints, int perMap)
     {
         var preset = Environment.GetEnvironmentVariable("BENCH_TURNS_PRESET") ?? "v3";
+        var tier = int.Parse(Environment.GetEnvironmentVariable("BENCH_TURNS_TIER") ?? "5", CultureInfo.InvariantCulture);
         var humanize = HumanizeOptions.ForPreset(preset);
         var list = Environment.GetEnvironmentVariable("BENCH_FOCUS") is { Length: > 0 } focus ? focus.Split(',') : PerMapEval.Maps;
         var brains = new ThreadLocal<BotBrainSpec>(() => BotBrainSpec.Of(
             new PolicyMicroSpec(PolicyNetwork.Load(Path.Combine(checkpoints, "tier0_combat4_s2.npz"))),
             new PolicyMicroSpec(PolicyNetwork.Load(Path.Combine(checkpoints, "tier2_pyro_rest3_s0.npz")))));
-        var acquire = BotSkill.ForTier(5).AcquireTicks;
+        var acquire = BotSkill.ForTier(tier).AcquireTicks;
         var totals = new ConcurrentDictionary<string, Tally>();
         var work = from map in list from i in Enumerable.Range(0, perMap) select (map, i);
 
-        Console.WriteLine($"{list.Length} maps x {perMap} matches, 12 bots, tier 5, red humanized ({preset}), 5-minute cap");
+        Console.WriteLine($"{list.Length} maps x {perMap} matches, 12 bots, tier {tier}, red humanized ({preset}), 5-minute cap");
 
         Parallel.ForEach(work, item =>
         {
@@ -70,6 +73,7 @@ public static class Turns
                 MaxTicks = 30 * 60 * 5,
                 AllowedClasses = Classes,
                 Brain = brains.Value,
+                Difficulty = tier,
                 HumanizeTeam = Team.Red,
                 HumanizeWith = humanize,
             };
@@ -77,6 +81,7 @@ public static class Turns
             var match = HeadlessMatch.Load(options, maps, nav);
             var previous = new double[WorldState.MaxSlots];
             var wasAlive = new bool[WorldState.MaxSlots];
+            var wasGrounded = new bool[WorldState.MaxSlots];
 
             while (match.Outcome == MatchOutcome.Running)
             {
@@ -88,6 +93,12 @@ public static class Turns
                     var alive = state.Alive[slot];
                     var aim = state.Characters[slot].AimDirection;
                     var continuing = alive && wasAlive[slot];
+                    ref readonly var body = ref state.Characters[slot];
+
+                    // A jump is leaving the ground going up; a fall off a ledge
+                    // leaves it going down or level.
+                    var jumped = continuing && wasGrounded[slot] && !body.OnGround && body.VSpeed < 0;
+                    wasGrounded[slot] = alive && body.OnGround;
                     var turn = Math.Abs((((aim - previous[slot]) % 360) + 540) % 360 - 180);
                     previous[slot] = aim;
                     wasAlive[slot] = alive;
@@ -112,6 +123,10 @@ public static class Turns
                     var tally = local[category];
                     tally.Ticks++;
                     tally.Turn += turn;
+                    tally.Speed += Math.Abs(body.HSpeed);
+
+                    if (jumped)
+                        tally.Jumps++;
 
                     if (turn > 10)
                     {
@@ -131,6 +146,8 @@ public static class Turns
                     total.Turn += tally.Turn;
                     total.Big += tally.Big;
                     total.BigTurn += tally.BigTurn;
+                    total.Jumps += tally.Jumps;
+                    total.Speed += tally.Speed;
                 }
             }
         });
@@ -141,17 +158,17 @@ public static class Turns
 
         Console.WriteLine();
         Console.WriteLine("red bots with a visible enemy within 150px, per tick of the character's aim");
-        Console.WriteLine("category        ticks   share   |turn|  share of turn   big%   share of big turns");
+        Console.WriteLine("category        ticks   share   |turn|  share of turn   big%   share of big turns   jumps/30t  |hspeed|");
 
         foreach (var category in Categories)
         {
             var t = totals.GetValueOrDefault(category) ?? new Tally();
             Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
-                $"{category,-12} {t.Ticks,9:N0}  {100.0 * t.Ticks / Math.Max(1, ticks),5:0.0}%  {t.Turn / Math.Max(1, t.Ticks),6:0.00}  {100.0 * t.Turn / Math.Max(1e-9, turnSum),12:0.0}%  {100.0 * t.Big / Math.Max(1, t.Ticks),5:0.0}%  {100.0 * t.Big / Math.Max(1, bigSum),12:0.0}%"));
+                $"{category,-12} {t.Ticks,9:N0}  {100.0 * t.Ticks / Math.Max(1, ticks),5:0.0}%  {t.Turn / Math.Max(1, t.Ticks),6:0.00}  {100.0 * t.Turn / Math.Max(1e-9, turnSum),12:0.0}%  {100.0 * t.Big / Math.Max(1, t.Ticks),5:0.0}%  {100.0 * t.Big / Math.Max(1, bigSum),12:0.0}%  {30.0 * t.Jumps / Math.Max(1, t.Ticks),9:0.00}  {t.Speed / Math.Max(1, t.Ticks),8:0.00}"));
         }
 
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
-            $"{"all",-12} {ticks,9:N0}  100.0%  {turnSum / Math.Max(1, ticks),6:0.00}  {100.0,12:0.0}%  {100.0 * bigSum / Math.Max(1, ticks),5:0.0}%"));
+            $"{"all",-12} {ticks,9:N0}  100.0%  {turnSum / Math.Max(1, ticks),6:0.00}  {100.0,12:0.0}%  {100.0 * bigSum / Math.Max(1, ticks),5:0.0}%  {"",12}  {30.0 * totals.Values.Sum(t => t.Jumps) / Math.Max(1, ticks),9:0.00}  {totals.Values.Sum(t => t.Speed) / Math.Max(1, ticks),8:0.00}"));
     }
 
     private static int Nearest(in WorldState state, int slot, out double distance)

@@ -11,7 +11,7 @@
 //
 //   botrecord --out <dir> --maps a,b,c --ticks-per-map 18000
 //             [--mode policy|tiered|scripted] [--policy x.npz]... [--bots 12]
-//             [--humanize [--humanize-preset v3|strokes|lazy|hold|tracking|tracking2]] [--spread-turn]
+//             [--humanize [--humanize-preset v3|strokes|lazy|hold|tracking|tracking2|tracking2e]] [--spread-turn]
 //             [--difficulty 1-5] [--no-human-aim] [--map-dir <path>] [--nav <path>]
 //
 // One server per map, run for --ticks-per-map ticks (30 a second), so a list of

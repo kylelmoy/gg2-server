@@ -390,6 +390,27 @@ public sealed class HumanizedBotTests
 
     private static double Wrap180(double degrees) => ((degrees % 360) + 540) % 360 - 180;
 
+    /// <summary>
+    /// <b>D5 (<see cref="HumanizeOptions.EngageWithoutTarget"/>)</b>: with no target
+    /// and an enemy close, a walk reversal is filtered, not passed through or held.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EngagingWithoutATargetFiltersAWalkReversal(bool engage)
+    {
+        static PlayerInput Input(int tick) => new(PlayerKeys.None, tick < 20 ? (ushort)0 : (ushort)(180 * 65536 / 360), 40);
+
+        var options = engage ? HumanizeOptions.Tracking2Engaged : HumanizeOptions.Tracking2;
+        var outputs = Run(Build(Input, fight: false, enemyDx: 100, options: options), 23);
+        var turn = Gap(Degrees(outputs[^1].NetAimDirection), Degrees(outputs[19].NetAimDirection));
+
+        if (engage)
+            Assert.True(turn < 120, $"engaged, a walk reversal still turned {turn:0.0} deg in three ticks");
+        else
+            Assert.True(Gap(Degrees(outputs[^1].NetAimDirection), 180) < 0.01, "not engaged, the walk should pass through");
+    }
+
     /// <summary>Past the idle flick threshold, a lazy aim still turns.</summary>
     [Fact]
     public void LazyAimStillFlicksAtALargeError()
