@@ -43,6 +43,11 @@ namespace GG2.Bots;
 /// neither. One team, so the cost of the filter is one match against an
 /// unfiltered opponent rather than two batches compared after the fact.
 /// </param>
+/// <param name="SpreadTurnTeam">
+/// The team whose policy tiers spread each turn over the action repeat
+/// (<see cref="PolicyController.SpreadTurn"/>), or null for neither. One team,
+/// for the same reason as <paramref name="HumanizeTeam"/>.
+/// </param>
 public readonly record struct HeadlessMatchOptions(
     string Map,
     int Area,
@@ -63,7 +68,8 @@ public readonly record struct HeadlessMatchOptions(
     int? RedDifficulty = null,
     int? BlueDifficulty = null,
     bool HandicapOnly = false,
-    Team? HumanizeTeam = null)
+    Team? HumanizeTeam = null,
+    Team? SpreadTurnTeam = null)
 {
     /// <summary>
     /// A short match on <c>ctf_truefort</c> with twelve bots. ⚠️ The values are

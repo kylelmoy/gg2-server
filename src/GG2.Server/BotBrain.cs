@@ -250,7 +250,7 @@ public static class BotBrain
                 // there is exactly one place a tier's class set is decided. A spec
                 // that sometimes carried null and sometimes a set would have two, and
                 // the null branch would be the one nothing configured ever exercises.
-                tiers.Add(new PolicyMicroSpec(policy, label, [.. drives]));
+                tiers.Add(new PolicyMicroSpec(policy, label, [.. drives]) { SpreadTurn = options.BotSpreadTurn });
             }
 
             // ⛔ AFTER the loop, so the message can name the labels that DO exist.

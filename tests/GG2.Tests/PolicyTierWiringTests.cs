@@ -284,4 +284,29 @@ public sealed class PolicyTierWiringTests
         Assert.Equal(300, hybrid.ReleaseRange);
         Assert.Equal(HybridBot.EngagementRange, hybrid.Range);
     }
+
+    /// <summary>
+    /// <c>[Bots] SpreadTurn</c> reaches every policy tier the server builds, and
+    /// is off when not asked for (gg2-rl phase 5, C0).
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TheSpreadTurnSettingReachesEveryPolicyTier(bool spread)
+    {
+        var options = new ServerOptions
+        {
+            MapDirectory = "maps",
+            BotMode = BotMode.Policy,
+            PolicyPaths = [PolicyFixture.Checkpoint],
+            BotSpreadTurn = spread,
+        };
+
+        BotBrain.Build(options, _ => { });
+
+        var policies = options.Bots.Brain!.Tiers.OfType<PolicyMicroSpec>().ToList();
+        Assert.NotEmpty(policies);
+        Assert.All(policies, p => Assert.Equal(spread, p.SpreadTurn));
+        Assert.All(policies, p => Assert.Equal(spread, ((PolicyController)p.Create()).SpreadTurn));
+    }
 }

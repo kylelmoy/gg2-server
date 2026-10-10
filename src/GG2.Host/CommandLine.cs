@@ -629,6 +629,11 @@ internal static class CommandLine
                     options.BotHumanize = true;
                     break;
 
+                // A behaviour switch: ServerOptions.BotSpreadTurn.
+                case "--bot-spread-turn":
+                    options.BotSpreadTurn = true;
+                    break;
+
                 // A debugging aid: watch a brain change hands from inside the
                 // game rather than off the panel. Accepted under every bot mode,
                 // including one with no controller to hand over to — it is
@@ -1201,6 +1206,10 @@ internal static class CommandLine
                             ticks at a time and make its aim flick and correct
                             the way a person's does. A behaviour switch: a
                             human-like bot is a weaker one.
+          --bot-spread-turn
+                            spread each policy decision's aim turn over the
+                            ticks it is held for, instead of turning on the
+                            first. A behaviour switch, off by default.
           --bot-engages-bots
                             let bots run their expensive micro-controller against
                             each other too. Without this a bot only hands the

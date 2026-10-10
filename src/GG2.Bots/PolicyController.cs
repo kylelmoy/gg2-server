@@ -33,6 +33,17 @@ public sealed class PolicyController : IMicroController
     private int _ticksLeftInDecision;
     private int _slot = -1;
 
+    /// <summary>
+    /// Spread each decision's turn over its action repeat instead of applying it
+    /// on the first tick. Off by default, which is how every checkpoint trained.
+    /// </summary>
+    /// <remarks>
+    /// See <see cref="ActionDecoder.Decode(int, EnvAction, bool, int)"/>: the
+    /// policy's observations are unchanged, and only the aim between decisions
+    /// moves. <c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, C0, measures it.
+    /// </remarks>
+    public bool SpreadTurn { get; init; }
+
     /// <summary>The checkpoint driving the classes it was trained on.</summary>
     public PolicyController(PolicyNetwork policy)
         : this(policy, drives: null)
@@ -186,7 +197,7 @@ public sealed class PolicyController : IMicroController
 
         _ticksLeftInDecision--;
 
-        return _decoder.Decode(slot, _action, firstTick);
+        return _decoder.Decode(slot, _action, firstTick, SpreadTurn ? Math.Max(1, _policy.ActionRepeat) : 1);
     }
 
     private void Decide(in WorldView world, int slot)

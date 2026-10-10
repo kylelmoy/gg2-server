@@ -184,7 +184,33 @@ public sealed class ActionDecoder
     /// happen here.
     /// </para>
     /// </remarks>
-    public PlayerInput Decode(int slot, EnvAction action, bool firstTickOfDecision)
+    public PlayerInput Decode(int slot, EnvAction action, bool firstTickOfDecision) =>
+        Decode(slot, action, firstTickOfDecision, turnTicks: 1);
+
+    /// <summary>
+    /// Decodes one action, spreading the decision's turn over <paramref name="turnTicks"/> ticks.
+    /// </summary>
+    /// <param name="slot">The roster slot.</param>
+    /// <param name="action">The heads.</param>
+    /// <param name="firstTickOfDecision">Whether this is the first tick of an action repeat.</param>
+    /// <param name="turnTicks">
+    /// 1 applies the whole turn on the first tick, the decoder every checkpoint
+    /// was trained with. k adds 1/k of it on every tick, so a caller that decodes
+    /// a decision k times turns by the same total under the same cap.
+    /// </param>
+    /// <remarks>
+    /// <b>Why spread.</b> Applied at once, a decision's turn moves the aim X, 0,
+    /// 0, 0, and that rhythm is what tells a policy's aim from a person's
+    /// (<c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, C0). A policy observes only at
+    /// decision boundaries, where the aim is the same either way (to rounding), so a checkpoint
+    /// runs unchanged under either; what differs is the aim on the ticks between,
+    /// and any shot fired on them.
+    /// <para>
+    /// ⚠️ <b>A caller that stops part way through a decision</b> (a handover out)
+    /// leaves the rest of the turn unapplied, as an abandoned decision should.
+    /// </para>
+    /// </remarks>
+    public PlayerInput Decode(int slot, EnvAction action, bool firstTickOfDecision, int turnTicks)
     {
         var keys = PlayerKeys.None;
 
@@ -206,9 +232,17 @@ public sealed class ActionDecoder
 
         // The turn is applied once per DECISION, not once per tick: repeating it
         // k times would make the effective cap k times larger and quietly undo
-        // the honesty property the cap exists for.
-        if (firstTickOfDecision)
-            _aim[slot] = Normalise(_aim[slot] + TurnFor(action.AimDelta));
+        // the honesty property the cap exists for. Spread, each tick carries
+        // 1/k of it, which is the same total.
+        if (turnTicks <= 1)
+        {
+            if (firstTickOfDecision)
+                _aim[slot] = Normalise(_aim[slot] + TurnFor(action.AimDelta));
+        }
+        else
+        {
+            _aim[slot] = Normalise(_aim[slot] + (TurnFor(action.AimDelta) / turnTicks));
+        }
 
         // Through PlayerInput.FromAim, so the angle lands on the same 65,536
         // steps a client's does. A bot that aimed on a finer grid than the wire

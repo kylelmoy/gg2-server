@@ -596,6 +596,10 @@ public static class ServerSettings
             o => o.BotHumanize, (o, v) => o.BotHumanize = v));
 
         settings.Add(BoolRow(
+            "Bots", "SpreadTurn", nameof(ServerOptions.BotSpreadTurn),
+            o => o.BotSpreadTurn, (o, v) => o.BotSpreadTurn = v));
+
+        settings.Add(BoolRow(
             "Bots", "EngageBots", nameof(ServerOptions.BotEngagesBotsToo),
             o => o.BotEngagesBotsToo, (o, v) => o.BotEngagesBotsToo = v));
 

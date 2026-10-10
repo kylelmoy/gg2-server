@@ -593,6 +593,19 @@ public sealed class ServerOptions
     public bool BotHumanize { get; set; }
 
     /// <summary>
+    /// Spread each policy decision's turn over its action repeat
+    /// (<c>GG2.Bots.PolicyController.SpreadTurn</c>) instead of turning on the
+    /// decision's first tick.
+    /// </summary>
+    /// <remarks>
+    /// <b>A behaviour switch, off by default until it is measured</b>
+    /// (<c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, C0). It changes only the aim
+    /// between a policy's decisions; the checkpoints observe the same thing
+    /// either way.
+    /// </remarks>
+    public bool BotSpreadTurn { get; set; }
+
+    /// <summary>
     /// How fast <see cref="GameServer.Run"/> paces the tick loop, relative to
     /// real time. 1.0 is the reference's 30 Hz; 4.0 runs four minutes of match
     /// per minute; <see cref="double.PositiveInfinity"/> is <b>unpaced</b> — the

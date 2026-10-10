@@ -139,6 +139,54 @@ public sealed class ActionDecoderTests
     }
 
     /// <summary>
+    /// <b>A spread turn arrives at the same place in equal steps</b>, under the
+    /// same cap: gg2-rl phase 5, C0.
+    /// </summary>
+    [Fact]
+    public void ASpreadTurnArrivesInEqualStepsAtTheSameTotal()
+    {
+        var once = new ActionDecoder();
+        var spread = new ActionDecoder();
+        once.SetAim(1, 350);
+        spread.SetAim(1, 350);
+
+        var turn = Action(aim: 13);
+        var step = ActionDecoder.TurnFor(13) / 4;
+
+        for (var tick = 0; tick < 4; tick++)
+        {
+            var before = spread.Aim(1);
+            spread.Decode(1, turn, firstTickOfDecision: tick == 0, turnTicks: 4);
+            once.Decode(1, turn, firstTickOfDecision: tick == 0);
+
+            var moved = ((spread.Aim(1) - before) % 360 + 360) % 360;
+            Assert.Equal(step, moved, 9);
+        }
+
+        Assert.Equal(once.Aim(1), spread.Aim(1), 9);
+    }
+
+    /// <summary>
+    /// <b>One tick of spread is the old decoder exactly</b>, so every checkpoint
+    /// that trained without it decodes the same.
+    /// </summary>
+    [Fact]
+    public void ASpreadOfOneIsTheDecoderEveryCheckpointTrainedWith()
+    {
+        var plain = new ActionDecoder();
+        var one = new ActionDecoder();
+        var random = new Random(7);
+
+        for (var tick = 0; tick < 400; tick++)
+        {
+            var action = Action(horizontal: (byte)random.Next(3), jump: (byte)random.Next(2), fire: (byte)random.Next(3), aim: (byte)random.Next(15));
+            var first = tick % 4 == 0;
+
+            Assert.Equal(plain.Decode(1, action, first), one.Decode(1, action, first, turnTicks: 1));
+        }
+    }
+
+    /// <summary>
     /// The aim reaches the wire on the same 65,536 steps a client's does.
     /// </summary>
     /// <remarks>

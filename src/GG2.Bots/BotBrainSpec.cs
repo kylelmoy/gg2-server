@@ -56,7 +56,10 @@ public sealed record PolicyMicroSpec(
 {
     public override string Name => Label is null ? "policy" : "policy:" + Label;
 
-    public override IMicroController Create() => new PolicyController(Policy, Drives);
+    /// <summary><see cref="PolicyController.SpreadTurn"/>: off by default.</summary>
+    public bool SpreadTurn { get; init; }
+
+    public override IMicroController Create() => new PolicyController(Policy, Drives) { SpreadTurn = SpreadTurn };
 }
 
 /// <summary>A rollout search driving keys and aim. <c>docs/BOTS.md</c>'s arm 3.</summary>
@@ -173,6 +176,15 @@ public sealed record BotBrainSpec
     /// through the one field a caller already sets to change what a bot is.
     /// </remarks>
     public bool Bubbles { get; init; }
+
+    /// <summary>
+    /// This brain with every policy tier spreading its turns
+    /// (<see cref="PolicyController.SpreadTurn"/>). Other tiers are unchanged.
+    /// </summary>
+    public BotBrainSpec WithSpreadTurn() => this with
+    {
+        Tiers = [.. Tiers.Select(t => t is PolicyMicroSpec p ? p with { SpreadTurn = true } : t)],
+    };
 
     /// <summary>One tier, default gate. The shape almost every caller wants.</summary>
     public static BotBrainSpec Of(params MicroControllerSpec[] tiers) =>
