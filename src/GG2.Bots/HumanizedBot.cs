@@ -294,19 +294,42 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
 /// <param name="StopDegrees">A coasting turn below this stops.</param>
 public sealed record HumanizeOptions(
     double Range = 300,
-    double SaccadeDegrees = 12,
+    double SaccadeDegrees = 20,
     int MinReactionTicks = 2,
     int MaxReactionTicks = 4,
     double SaccadeEndpointError = 0.08,
-    double StrokeBaseTicks = 2,
+    double StrokeBaseTicks = 0,
     double StrokeDegreesPerTick = 40,
-    int MinStrokeTicks = 3,
-    int MaxStrokeTicks = 10,
-    double PursuitGain = 0.45,
-    double PursuitSmoothing = 0.6,
-    double PursuitNoise = 0.5,
-    double DeadZoneDegrees = 2.0,
+    int MinStrokeTicks = 1,
+    int MaxStrokeTicks = 1,
+    double PursuitGain = 0.4,
+    double PursuitSmoothing = 1.0,
+    double PursuitNoise = 0.3,
+    double DeadZoneDegrees = 1.0,
     double StopDegrees = 0.3)
 {
+    /// <summary>
+    /// v3, the shipped shape: one-tick flicks and unsmoothed corrections. These
+    /// defaults reproduce v3's output exactly.
+    /// </summary>
     public static HumanizeOptions Default { get; } = new();
+
+    /// <summary>
+    /// v4: flicks as minimum-jerk strokes and smoothed corrections, fitted to the
+    /// people's aim smoothness. <b>Measured and not the default</b>: it removes the
+    /// smoothness tell (an independent learned discriminator ranks it most human,
+    /// 0.816 against v3's 0.868 at 300px), but the pre-registered instrument moves
+    /// by only 0.006 and it costs more strength (−0.042 death share against v3's
+    /// −0.025). <c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, v4.
+    /// </summary>
+    public static HumanizeOptions Strokes { get; } = new(
+        SaccadeDegrees: 12,
+        StrokeBaseTicks: 2,
+        StrokeDegreesPerTick: 40,
+        MinStrokeTicks: 3,
+        MaxStrokeTicks: 10,
+        PursuitGain: 0.45,
+        PursuitSmoothing: 0.6,
+        PursuitNoise: 0.5,
+        DeadZoneDegrees: 2.0);
 }

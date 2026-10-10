@@ -6859,6 +6859,26 @@ feature that counts key changes, the same unobservable thing as a held trigger.
 Most of that key churn is the path follower's arc tracker trimming in the air,
 which is deliberate (`PathFollower.cs`) and is what makes its jumps land.
 
+**`HumanizeOptions.Strokes` (v4), measured and not the default.** A richer
+classifier (aim timing features, and a learned model over the raw 30-tick
+course) shows the strongest tell is **aim smoothness**: a person's turn on one
+tick predicts the next (lag-1 autocorrelation 0.43 per 30-tick window, bots
+0.27), and one movement lasts about 3.5 ticks. v4 makes a flick a minimum-jerk
+stroke over 3–10 ticks and low-passes corrections, fitted to those numbers.
+
+| at 300px | v3 | v4 |
+|---|---|---|
+| observable + timing classifier vs people | 0.851 | 0.845 |
+| learned discriminator (not fitted to), vs held-out people | 0.868 | **0.816** |
+| death share vs `full:5`, 800 paired matches | −0.025 ± 0.003 | **−0.042 ± 0.003** |
+
+It removes the smoothness tell, which the independent learned model sees. The
+pre-registered instrument barely moves because its weight shifts to the next
+tell, turn size: the brain asks for large aim changes, and a stroke spreads
+them over ticks without shrinking them. It also costs more strength. The
+defaults stay v3, and `TheDefaultReproducesV3Exactly` holds them to it tick for
+tick.
+
 **What still gives the bots away, visibly:** they move slower than people, most
 of all in the air (mean |hspeed| about 2.3 against 3.6–4.3 px/tick), and jump
 more. It does **not** fix aimscan's lock signal: the lock comes from tracking a

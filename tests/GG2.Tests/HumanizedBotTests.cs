@@ -30,7 +30,8 @@ public sealed class HumanizedBotTests
 
     private sealed record Rig(ScenarioWorld World, int Slot, ScriptedBot Bot, HumanizedBot Filter);
 
-    private static Rig Build(Func<int, PlayerInput> input, bool fight, uint seed = 7, double enemyDx = 120)
+    private static Rig Build(
+        Func<int, PlayerInput> input, bool fight, uint seed = 7, double enemyDx = 120, HumanizeOptions? options = null)
     {
         var world = ScenarioWorld.Load(Map, 1, ReferenceTree.MapsDirectory, navDirectory: null);
         var slot = world.Place(PlayerClass.Soldier, Team.Red, StandX, StandY);
@@ -43,7 +44,7 @@ public sealed class HumanizedBotTests
             bot.Combat.Visible = true;
         }
 
-        return new Rig(world, slot, bot, new HumanizedBot(new HandBrain(bot, input), HumanizeOptions.Default, seed));
+        return new Rig(world, slot, bot, new HumanizedBot(new HandBrain(bot, input), options ?? HumanizeOptions.Default, seed));
     }
 
     private static PlayerInput[] Run(Rig rig, int ticks)
@@ -125,8 +126,128 @@ public sealed class HumanizedBotTests
     }
 
     /// <summary>
-    /// A large turn is one stroke: a few ticks long, fastest in the middle, and it
-    /// arrives where the brain wants the aim.
+    /// With <see cref="HumanizeOptions.Default"/>, a large turn is a one-tick flick,
+    /// not a constant slew, and it arrives where the brain wants the aim.
+    /// </summary>
+    [Fact]
+    public void ByDefaultALargeTurnIsAFlickThatArrives()
+    {
+        static PlayerInput Input(int tick) => new(PlayerKeys.None, tick < 30 ? (ushort)0 : (ushort)(120 * 65536 / 360), 40);
+
+        var outputs = Run(Build(Input, fight: true), 120);
+        var biggest = 0.0;
+
+        for (var t = 31; t < outputs.Length; t++)
+            biggest = Math.Max(biggest, Gap(Degrees(outputs[t].NetAimDirection), Degrees(outputs[t - 1].NetAimDirection)));
+
+        Assert.True(biggest > 60, $"the largest single turn was {biggest:0.0} deg: a slew, not a flick");
+
+        var final = Degrees(outputs[^1].NetAimDirection);
+        Assert.True(Gap(final, 120) < 5, $"settled at {final:0.0} deg, wanted 120");
+    }
+
+    /// <summary>
+    /// <see cref="HumanizeOptions.Default"/> reproduces v3, the measured shape,
+    /// exactly: the same output on every tick of a long, varied input.
+    /// </summary>
+    /// <remarks>
+    /// v4 generalised the aim into strokes and smoothed corrections, and v3 is
+    /// the special case with one-tick strokes and no smoothing. Every number
+    /// measured for v3 (<c>gg2-rl</c> <c>docs/PLAN.md</c>, phase 5) is about the
+    /// default only while this holds. <see cref="V3"/> is v3's aim, copied from
+    /// the commit that was measured (8593cab) and kept here as the reference.
+    /// </remarks>
+    [Fact]
+    public void TheDefaultReproducesV3Exactly()
+    {
+        var random = new Random(11);
+        var wanted = new ushort[3000];
+        var at = 0.0;
+
+        for (var t = 0; t < wanted.Length; t++)
+        {
+            // Mostly small drifts, sometimes a jump: both of the filter's branches.
+            at += random.NextDouble() < 0.03 ? random.NextDouble() * 300 - 150 : random.NextDouble() * 6 - 3;
+            wanted[t] = (ushort)((int)Math.Round(((at % 360) + 360) % 360 * 65536.0 / 360.0) & 0xFFFF);
+        }
+
+        var outputs = Run(Build(t => new PlayerInput(PlayerKeys.None, wanted[t], 40), fight: true, seed: 5), wanted.Length);
+        var reference = new V3(5);
+
+        for (var t = 0; t < wanted.Length; t++)
+            Assert.Equal(reference.Next(wanted[t], first: t == 0), outputs[t].NetAimDirection);
+    }
+
+    /// <summary>v3's aim, verbatim but for the class around it: the reference for <see cref="TheDefaultReproducesV3Exactly"/>.</summary>
+    private sealed class V3(uint seed)
+    {
+        private GmlRandom _random = new(seed ^ 0x9E3779B9u);
+        private double _aim;
+        private int _reactLeft = -1;
+
+        public ushort Next(ushort wire, bool first)
+        {
+            if (first)
+                _aim = wire * 360.0 / 65536.0;
+
+            var error = Wrap((wire * 360.0 / 65536.0) - _aim);
+            var size = Math.Abs(error);
+
+            if (size >= 20)
+            {
+                if (_reactLeft < 0)
+                    _reactLeft = 2 + _random.NextInclusive(2);
+
+                if (_reactLeft > 0)
+                {
+                    _reactLeft--;
+                    return Wire(_aim);
+                }
+
+                _reactLeft = -1;
+                _aim = Wrap(_aim + (error * (1 + (0.08 * Gaussian()))));
+                return Wire(_aim);
+            }
+
+            _reactLeft = -1;
+
+            if (size < 1.0)
+                return Wire(_aim);
+
+            _aim = Wrap(_aim + (0.4 * error * (1 + (0.3 * Gaussian()))));
+            return Wire(_aim);
+        }
+
+        private double Gaussian()
+        {
+            var u1 = 1.0 - _random.Next(1);
+            var u2 = _random.Next(1);
+            return Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);
+        }
+
+        private static ushort Wire(double degrees)
+        {
+            var d = degrees % 360.0;
+            if (d < 0)
+                d += 360.0;
+
+            return (ushort)((int)Math.Round(d * 65536.0 / 360.0) & 0xFFFF);
+        }
+
+        private static double Wrap(double degrees)
+        {
+            var d = (degrees + 180.0) % 360.0;
+            if (d < 0)
+                d += 360.0;
+
+            return d - 180.0;
+        }
+    }
+
+    /// <summary>
+    /// With <see cref="HumanizeOptions.Strokes"/>, a large turn is one stroke: a
+    /// few ticks long, fastest in the middle, and it arrives where the brain wants
+    /// the aim.
     /// </summary>
     /// <remarks>
     /// Not a one-tick jump (v3, whose turn the next tick could not predict) and not
@@ -141,7 +262,7 @@ public sealed class HumanizedBotTests
         // Still at 0 degrees, then the brain wants 120 degrees and holds it.
         static PlayerInput Input(int tick) => new(PlayerKeys.None, tick < 30 ? (ushort)0 : (ushort)(120 * 65536 / 360), 40);
 
-        var outputs = Run(Build(Input, fight: true), 120);
+        var outputs = Run(Build(Input, fight: true, options: HumanizeOptions.Strokes), 120);
         var turns = Enumerable.Range(1, outputs.Length - 1)
             .Select(t => Gap(Degrees(outputs[t].NetAimDirection), Degrees(outputs[t - 1].NetAimDirection)))
             .ToArray();
@@ -151,7 +272,7 @@ public sealed class HumanizedBotTests
         var stroke = turns[start..end];
         var shown = string.Join(", ", stroke.Select(t => t.ToString("0.0")));
 
-        Assert.InRange(stroke.Length, HumanizeOptions.Default.MinStrokeTicks - 2, HumanizeOptions.Default.MaxStrokeTicks);
+        Assert.InRange(stroke.Length, HumanizeOptions.Strokes.MinStrokeTicks - 2, HumanizeOptions.Strokes.MaxStrokeTicks);
         Assert.True(stroke.Max() < 0.6 * 120, $"the stroke's turns were {shown}: a jump");
         Assert.True(stroke.Max() > 24, $"the stroke's turns were {shown}: no faster than the brain's own slew");
         Assert.True(stroke.Max() > stroke[0] && stroke.Max() > stroke[^1], $"the stroke's turns were {shown}: not fastest in the middle");
