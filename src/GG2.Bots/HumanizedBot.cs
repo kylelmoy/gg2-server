@@ -34,15 +34,17 @@ namespace GG2.Bots;
 /// jumps land (<c>gg2-rl</c> <c>docs/PLAN.md</c>, phase 5, "the churn is in a key").
 /// </para>
 /// <para>
-/// <b>Aim: strokes and smoothed corrections, not a constant slew.</b> A person moves
+/// <b>Aim: a flick and corrections, not a constant slew.</b> A person moves
 /// the crosshair in two ways: a flick to a new target, after a reaction delay,
 /// that lands a little off; and small corrections in between, with a still mouse
 /// much of the time. Both are <em>smooth</em>: a person's turn on one tick predicts
 /// the next (lag-1 autocorrelation 0.43 within 300px, the bots' 0.27) and one
 /// movement lasts about 3.5 ticks. That smoothness is what a classifier reads
-/// best (<c>gg2-rl</c> <c>docs/PLAN.md</c>, phase 5, A2), so a flick is a
-/// minimum-jerk stroke over several ticks and a correction low-passes the turn
-/// rate. The brain's aim is treated as where the bot <em>wants</em> to look, and
+/// best (<c>gg2-rl</c> <c>docs/PLAN.md</c>, phase 5, A2). With
+/// <see cref="HumanizeOptions.Strokes"/> a flick is a minimum-jerk stroke over several
+/// ticks and a correction low-passes the turn rate; the defaults are v3, one-tick
+/// flicks and unsmoothed corrections (see <see cref="HumanizeOptions.Default"/>).
+/// The brain's aim is treated as where the bot <em>wants</em> to look, and
 /// the output follows it that way.
 /// The output never feeds back: the brain keeps its own aim, as
 /// <see cref="HybridBot"/>'s handicap already relies on.
