@@ -403,6 +403,9 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     /// </remarks>
     public int ParkedTicks { get; private set; }
 
+    /// <summary>Whether this poll pressed JUMP to dodge a rocket, for a bench to attribute jumps.</summary>
+    public bool Dodged { get; private set; }
+
     /// <summary>
     /// Where the bot was on the previous poll, for <see cref="ParkedTicks"/>.
     /// </summary>
@@ -760,7 +763,9 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         // between them they fired often enough, precisely where the follower has
         // arrived and is returning no movement keys at all, that bots in a
         // firefight read as stuck in place jumping.
-        if (self.OnGround && BotReflex.RocketDodge(in world, slot, Skill.ReflexTicks, Skill.ReflexMissChance))
+        Dodged = self.OnGround && BotReflex.RocketDodge(in world, slot, Skill.ReflexTicks, Skill.ReflexMissChance);
+
+        if (Dodged)
             navKeys |= PlayerKeys.Jump;
 
         // Grounded, nothing to walk to, and not deliberately standing to fight:

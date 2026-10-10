@@ -87,6 +87,17 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
     private int _strokeTicks;
     private int _strokeAt;
 
+    // D6, the legs: their own stream, so a preset without them draws the aim's
+    // sequence unchanged.
+    private readonly HybridBot? _hybrid;
+    private GmlRandom _legsRandom;
+    private bool _legsOn;
+    private double _intent;
+    private int _heading;
+    private bool? _jumpDecision;
+    private bool _jumpOut;
+    private int _jumpAt = int.MinValue / 2;
+
     public HumanizedBot(IInputSource inner, HumanizeOptions options, uint seed)
     {
         _inner = inner;
@@ -97,6 +108,8 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
         // Offset from the stagger the scripted layer seeds itself with, so the
         // two streams of one bot are not the same sequence.
         _random = new GmlRandom(seed ^ 0x9E3779B9u);
+        _legsRandom = new GmlRandom(seed ^ 0x85EBCA6Bu);
+        _hybrid = HybridBot.Of(inner);
     }
 
     public HumanizeOptions Options { get; }
@@ -131,6 +144,13 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
     public bool OnlyWhenSkillAsks { get; init; }
 
     public PlayerInput Poll(in WorldView world, int slot, int tick)
+    {
+        var input = PollAim(in world, slot, tick);
+
+        return Options.FiltersLegs ? Legs(input, in world, slot, tick) : input;
+    }
+
+    private PlayerInput PollAim(in WorldView world, int slot, int tick)
     {
         var input = _inner.Poll(in world, slot, tick);
 
@@ -182,6 +202,96 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
         _shown = aim;
 
         return new PlayerInput(input.Keys, Wire(aim), input.AimDistance);
+    }
+
+    /// <summary>
+    /// D6: on ticks the policy drives, commit or stand. The brain's left/right is
+    /// averaged, a direction starts only once the average is clearly one way and
+    /// stops once it is not, and a reversal passes through a stop. A fast dance
+    /// averages out, so the legs stand. Jump presses are thinned. The scripted
+    /// layer's ticks pass untouched, since its jump arcs need every key.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The state runs on every tick, not only the policy's.</b> The wheel
+    /// changes hands in short bursts, and a filter that restarted on each one let
+    /// the dance and its jumps straight through.
+    /// </remarks>
+    private PlayerInput Legs(PlayerInput input, in WorldView world, int slot, int tick)
+    {
+        if ((OnlyWhenSkillAsks && !_scripted.Skill.HumanAim) || !world.IsAlive(slot))
+        {
+            _legsOn = false;
+            _jumpDecision = null;
+            _jumpOut = false;
+            return input;
+        }
+
+        var keys = input.Keys;
+        var wanted = ((keys & PlayerKeys.Right) != 0 ? 1 : 0) - ((keys & PlayerKeys.Left) != 0 ? 1 : 0);
+        var jump = (keys & PlayerKeys.Jump) != 0;
+        var policy = _hybrid is { MicroDrove: true };
+
+        if (!_legsOn)
+        {
+            _legsOn = true;
+            _intent = wanted;
+            _heading = wanted;
+        }
+        else
+        {
+            _intent = (Options.LegMemory * _intent) + ((1 - Options.LegMemory) * wanted);
+
+            if (_heading == 0)
+            {
+                if (Math.Abs(_intent) >= Options.LegStartIntent)
+                    _heading = Math.Sign(_intent);
+            }
+            else if (_intent * _heading < Options.LegStopIntent)
+            {
+                _heading = 0;
+            }
+        }
+
+        // One decision a hold of the brain's key, made when passing it would be a
+        // press: stripping only a press's first tick would make its second one.
+        if (!jump)
+        {
+            _jumpDecision = null;
+        }
+        else if (_jumpDecision is null)
+        {
+            if (!policy || _jumpOut)
+            {
+                _jumpDecision = true;
+            }
+            else
+            {
+                _jumpDecision = tick - _jumpAt >= Options.JumpRefractoryTicks && _legsRandom.Next(1) < Options.JumpKeep;
+
+                if (_jumpDecision == true)
+                    _jumpAt = tick;
+            }
+        }
+
+        if (!policy)
+        {
+            _jumpOut = jump;
+            return input;
+        }
+
+        keys &= ~(PlayerKeys.Left | PlayerKeys.Right);
+
+        if (_heading > 0)
+            keys |= PlayerKeys.Right;
+        else if (_heading < 0)
+            keys |= PlayerKeys.Left;
+
+        if (jump && _jumpDecision != true)
+            keys &= ~PlayerKeys.Jump;
+
+        _jumpOut = (keys & PlayerKeys.Jump) != 0;
+
+        return new PlayerInput(keys, input.NetAimDirection, input.AimDistance);
     }
 
     private bool InFight(in WorldView world, int slot)
@@ -384,6 +494,15 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
 /// has no target, so the brain's walk-facing aim is filtered rather than passed
 /// through. D5.
 /// </param>
+/// <param name="LegMemory">
+/// D6. On ticks the policy drives, the brain's left/right is averaged with this
+/// weight on the past (an exponential average). NaN, the default, leaves the legs
+/// alone.
+/// </param>
+/// <param name="LegStartIntent">Standing, the legs start once the average reaches this, either way.</param>
+/// <param name="LegStopIntent">Moving, they stop once the average toward the heading falls below this.</param>
+/// <param name="JumpKeep">The chance a policy jump press passes.</param>
+/// <param name="JumpRefractoryTicks">No policy jump passes within this many ticks of the last one that did.</param>
 /// <param name="HoldWithoutTarget">
 /// While the scripted layer has no target and an enemy is within <paramref name="Range"/>,
 /// hold the aim rather than following the walk. D2.
@@ -409,8 +528,16 @@ public sealed record HumanizeOptions(
     bool HoldWithoutTarget = false,
     double SaccadeGain = 1.0,
     double PursuitTremorDegrees = 0,
-    bool EngageWithoutTarget = false)
+    bool EngageWithoutTarget = false,
+    double LegMemory = double.NaN,
+    double LegStartIntent = 0.5,
+    double LegStopIntent = 0.2,
+    double JumpKeep = 1.0,
+    int JumpRefractoryTicks = 0)
 {
+    /// <summary>Whether D6's leg filter is on.</summary>
+    public bool FiltersLegs => !double.IsNaN(LegMemory);
+
     /// <summary>
     /// v3, the shipped shape: one-tick flicks and unsmoothed corrections. These
     /// defaults reproduce v3's output exactly.
@@ -504,15 +631,32 @@ public sealed record HumanizeOptions(
         PursuitTremorDegrees: 0.75,
         EngageWithoutTarget: true);
 
+    /// <summary>
+    /// D6's candidate: <see cref="Tracking2"/> with legs. On ticks the policy drives,
+    /// its left/right is averaged at 0.9 a tick; the legs start at 0.75 and stop
+    /// when the average crosses zero, and one jump press in ten passes, at most one
+    /// every 90 ticks. Fitted with <c>BENCH_TURNS</c> at tier 4 to the people's
+    /// still share, \|Δhspeed\|, reversals and take-offs within 150px
+    /// (<c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, D6).
+    /// </summary>
+    public static HumanizeOptions Tracking3 { get; } = Tracking2 with
+    {
+        LegMemory = 0.9,
+        LegStartIntent = 0.75,
+        LegStopIntent = 0.0,
+        JumpKeep = 0.1,
+        JumpRefractoryTicks = 90,
+    };
+
     /// <summary>The preset names a setting can carry.</summary>
-    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy", "hold", "tracking", "tracking2"];
+    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy", "hold", "tracking", "tracking2", "tracking3"];
 
     /// <summary>A preset's canonical name in <see cref="PresetNames"/>, refusing anything else.</summary>
     /// <exception cref="FormatException">The name is not a preset.</exception>
     public static string PresetName(string name)
     {
         var options = ForPreset(name);
-        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : options == Hold ? "hold" : options == Tracking ? "tracking" : options == Tracking2 ? "tracking2" : "v3";
+        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : options == Hold ? "hold" : options == Tracking ? "tracking" : options == Tracking2 ? "tracking2" : options == Tracking3 ? "tracking3" : "v3";
     }
 
     /// <summary>A preset by name, case-insensitive.</summary>
@@ -526,6 +670,7 @@ public sealed record HumanizeOptions(
         "tracking" or "d3" => Tracking,
         // tracking2e was D5's candidate, folded into Tracking2 when it passed.
         "tracking2" or "d4" or "tracking2e" or "d5" => Tracking2,
-        _ => throw new FormatException($"humanize preset '{name}': v3, strokes, lazy, hold, tracking or tracking2"),
+        "tracking3" or "d6" => Tracking3,
+        _ => throw new FormatException($"humanize preset '{name}': v3, strokes, lazy, hold, tracking, tracking2 or tracking3"),
     };
 }

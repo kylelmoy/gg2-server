@@ -40,7 +40,12 @@ public static class Turns
         public long Big;
         public double BigTurn;
         public long Jumps;
+        public long Dodges;
+        public long Keyed;
         public double Speed;
+        public long Still;
+        public double Accel;
+        public long Reversals;
     }
 
     public static void Run(string maps, string nav, string checkpoints, int perMap)
@@ -48,6 +53,21 @@ public static class Turns
         var preset = Environment.GetEnvironmentVariable("BENCH_TURNS_PRESET") ?? "v3";
         var tier = int.Parse(Environment.GetEnvironmentVariable("BENCH_TURNS_TIER") ?? "5", CultureInfo.InvariantCulture);
         var humanize = HumanizeOptions.ForPreset(preset);
+
+        // D6's fit: BENCH_LEGS=memory,start,stop,keep,refractory overrides the preset's legs.
+        if (Environment.GetEnvironmentVariable("BENCH_LEGS") is { Length: > 0 } legs)
+        {
+            var v = legs.Split(',').Select(x => double.Parse(x, CultureInfo.InvariantCulture)).ToArray();
+            humanize = humanize with
+            {
+                LegMemory = v[0],
+                LegStartIntent = v[1],
+                LegStopIntent = v[2],
+                JumpKeep = v[3],
+                JumpRefractoryTicks = (int)v[4],
+            };
+            preset += $" legs {legs}";
+        }
         var list = Environment.GetEnvironmentVariable("BENCH_FOCUS") is { Length: > 0 } focus ? focus.Split(',') : PerMapEval.Maps;
         var brains = new ThreadLocal<BotBrainSpec>(() => BotBrainSpec.Of(
             new PolicyMicroSpec(PolicyNetwork.Load(Path.Combine(checkpoints, "tier0_combat4_s2.npz"))),
@@ -82,6 +102,9 @@ public static class Turns
             var previous = new double[WorldState.MaxSlots];
             var wasAlive = new bool[WorldState.MaxSlots];
             var wasGrounded = new bool[WorldState.MaxSlots];
+            var speed = new double[WorldState.MaxSlots];
+            var heading = new int[WorldState.MaxSlots];
+            var dodgedLast = new bool[WorldState.MaxSlots];
 
             while (match.Outcome == MatchOutcome.Running)
             {
@@ -99,9 +122,24 @@ public static class Turns
                     // leaves it going down or level.
                     var jumped = continuing && wasGrounded[slot] && !body.OnGround && body.VSpeed < 0;
                     wasGrounded[slot] = alive && body.OnGround;
+
+                    // O2's reversal: a direction held until the speed passes 2.5px
+                    // a tick the other way (gg2-rl scripts/human_style.py).
+                    var accel = Math.Abs(body.HSpeed - speed[slot]);
+                    speed[slot] = body.HSpeed;
+                    var now = body.HSpeed > 2.5 ? 1 : body.HSpeed < -2.5 ? -1 : 0;
+                    var reversed = continuing && now != 0 && heading[slot] != 0 && now != heading[slot];
+
+                    if (!continuing)
+                        heading[slot] = 0;
+
+                    if (now != 0)
+                        heading[slot] = now;
                     var turn = Math.Abs((((aim - previous[slot]) % 360) + 540) % 360 - 180);
                     previous[slot] = aim;
                     wasAlive[slot] = alive;
+                    var dodged = dodgedLast[slot];
+                    dodgedLast[slot] = match.HybridBotFor(slot) is { } h && h.ScriptedBot.Dodged;
 
                     if (!continuing || state.Players[slot].Team != Team.Red || match.HybridBotFor(slot) is not { } hybrid)
                         continue;
@@ -124,9 +162,25 @@ public static class Turns
                     tally.Ticks++;
                     tally.Turn += turn;
                     tally.Speed += Math.Abs(body.HSpeed);
+                    tally.Accel += accel;
+
+                    if (Math.Abs(body.HSpeed) < 0.5)
+                        tally.Still++;
+
+                    if (reversed)
+                        tally.Reversals++;
 
                     if (jumped)
+                    {
                         tally.Jumps++;
+
+                        if (((body.KeyState | body.PressedKeys) & PlayerKeys.Jump) != 0)
+                            tally.Keyed++;
+
+                        // The dodge pressed on this poll or the one before.
+                        if (!hybrid.MicroDrove && (dodged || dodgedLast[slot]))
+                            tally.Dodges++;
+                    }
 
                     if (turn > 10)
                     {
@@ -147,7 +201,12 @@ public static class Turns
                     total.Big += tally.Big;
                     total.BigTurn += tally.BigTurn;
                     total.Jumps += tally.Jumps;
+                    total.Dodges += tally.Dodges;
+                    total.Keyed += tally.Keyed;
                     total.Speed += tally.Speed;
+                    total.Still += tally.Still;
+                    total.Accel += tally.Accel;
+                    total.Reversals += tally.Reversals;
                 }
             }
         });
@@ -158,17 +217,17 @@ public static class Turns
 
         Console.WriteLine();
         Console.WriteLine("red bots with a visible enemy within 150px, per tick of the character's aim");
-        Console.WriteLine("category        ticks   share   |turn|  share of turn   big%   share of big turns   jumps/30t  |hspeed|");
+        Console.WriteLine("category        ticks   share   |turn|  share of turn   big%   share of big turns   jumps/30t  |hspeed|  dodges/30t  still   |dv|  revs/30t  keyed/30t");
 
         foreach (var category in Categories)
         {
             var t = totals.GetValueOrDefault(category) ?? new Tally();
             Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
-                $"{category,-12} {t.Ticks,9:N0}  {100.0 * t.Ticks / Math.Max(1, ticks),5:0.0}%  {t.Turn / Math.Max(1, t.Ticks),6:0.00}  {100.0 * t.Turn / Math.Max(1e-9, turnSum),12:0.0}%  {100.0 * t.Big / Math.Max(1, t.Ticks),5:0.0}%  {100.0 * t.Big / Math.Max(1, bigSum),12:0.0}%  {30.0 * t.Jumps / Math.Max(1, t.Ticks),9:0.00}  {t.Speed / Math.Max(1, t.Ticks),8:0.00}"));
+                $"{category,-12} {t.Ticks,9:N0}  {100.0 * t.Ticks / Math.Max(1, ticks),5:0.0}%  {t.Turn / Math.Max(1, t.Ticks),6:0.00}  {100.0 * t.Turn / Math.Max(1e-9, turnSum),12:0.0}%  {100.0 * t.Big / Math.Max(1, t.Ticks),5:0.0}%  {100.0 * t.Big / Math.Max(1, bigSum),12:0.0}%  {30.0 * t.Jumps / Math.Max(1, t.Ticks),9:0.00}  {t.Speed / Math.Max(1, t.Ticks),8:0.00}  {30.0 * t.Dodges / Math.Max(1, t.Ticks),10:0.00}  {(double)t.Still / Math.Max(1, t.Ticks),5:0.00}  {t.Accel / Math.Max(1, t.Ticks),5:0.00}  {30.0 * t.Reversals / Math.Max(1, t.Ticks),8:0.00}  {30.0 * t.Keyed / Math.Max(1, t.Ticks),9:0.00}"));
         }
 
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
-            $"{"all",-12} {ticks,9:N0}  100.0%  {turnSum / Math.Max(1, ticks),6:0.00}  {100.0,12:0.0}%  {100.0 * bigSum / Math.Max(1, ticks),5:0.0}%  {"",12}  {30.0 * totals.Values.Sum(t => t.Jumps) / Math.Max(1, ticks),9:0.00}  {totals.Values.Sum(t => t.Speed) / Math.Max(1, ticks),8:0.00}"));
+            $"{"all",-12} {ticks,9:N0}  100.0%  {turnSum / Math.Max(1, ticks),6:0.00}  {100.0,12:0.0}%  {100.0 * bigSum / Math.Max(1, ticks),5:0.0}%  {"",12}  {30.0 * totals.Values.Sum(t => t.Jumps) / Math.Max(1, ticks),9:0.00}  {totals.Values.Sum(t => t.Speed) / Math.Max(1, ticks),8:0.00}  {30.0 * totals.Values.Sum(t => t.Dodges) / Math.Max(1, ticks),10:0.00}  {(double)totals.Values.Sum(t => t.Still) / Math.Max(1, ticks),5:0.00}  {totals.Values.Sum(t => t.Accel) / Math.Max(1, ticks),5:0.00}  {30.0 * totals.Values.Sum(t => t.Reversals) / Math.Max(1, ticks),8:0.00}"));
     }
 
     private static int Nearest(in WorldState state, int slot, out double distance)
