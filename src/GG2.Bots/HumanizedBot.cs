@@ -435,6 +435,8 @@ public sealed record HumanizeOptions(
     /// is flicked. Fitted open loop to the people's in-range turn size, p90, still
     /// share, aim error and smoothness (<c>gg2-rl</c> <c>scripts/fit_humanize_tracking.py</c>,
     /// <c>docs/PLAN.md</c> phase 5, D3). Applied by <see cref="HumanizedBot.ByTier"/>.
+    /// Measured at tier 4: O2 0.901 to 0.870, and the fleet discriminator 0.747 to
+    /// 0.618 within 150px.
     /// </summary>
     public static HumanizeOptions Tracking { get; } = new(
         SaccadeDegrees: 120,

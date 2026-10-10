@@ -58,6 +58,7 @@ near them", has the state rules that apply to everyone, bot work included.
 | the rollout search, and as a controller | `RolloutSearch.cs`, `SearchController.cs` | `RolloutRestrictionTests`, `SearchBotTests` |
 | the next-hop route table (CPD-Search) and the exact A\* heuristic — **ON by default**, `--no-nav-distances` | `NavDistances.cs`, `NavDistanceSet.cs`, `NavSearch.cs` | `NavDistancesTests`, `NavDistanceSetTests`, `NavSearchTests` |
 | the tables **on disk** — `nav/<key>.dist.gz`, next-hop only, cost rebuilt on load | `NavDistanceFile.cs`, `NavDistances.FromNextHops` | `NavDistanceFileTests` |
+| difficulty 1-4 aim like people, tier 5 untouched, `--no-bot-human-aim` to turn off (on) | `HumanizedBot.ByTier`, `BotSkill.HumanAim` | `HumanizedBotTests`, `BotCombatTests` |
 | human-like output inside a fight, `--bot-humanize` (off) | `HumanizedBot.cs` | `HumanizedBotTests` |
 | policy turns spread over the action repeat, `--bot-spread-turn` (off) | `ActionDecoder.cs`, `PolicyController.cs` | `ActionDecoderTests`, `PolicyTierWiringTests` |
 | route dispersion: occupancy (on) and static lanes (measured, not adopted), `--no-bot-occupancy` | `BotLanes.cs`, `BotRoles.cs`, `ScriptedBot.cs` | `BotLanesTests`, `BotOccupancyFlagTests`, `RouteDiversityTests` |

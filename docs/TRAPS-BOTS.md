@@ -652,7 +652,8 @@ model.** Four gates, all off `BotSkill`:
   `HybridBotSeamTests`, "AtTheTopTier…" and "BelowTheTopTier…"; what would show
   this stale is a new knob that is nonzero at tier 5.
 - **The tiers are tuned to be evenly apart in a match**, through
-  `BotSkill.TierSkills` (0.15, 0.30, 0.42, 0.67, 0.95; evenly spaced skills cost
+  `BotSkill.TierSkills` (0.15, 0.30, 0.42, 0.67, 0.95 until 2026-10-10, ⚠️ now
+  shifted: see the next item; evenly spaced skills cost
   twice as much per step at the bottom as at the top). `BENCH_TIERS=40` and
   `BENCH_TIERDUEL=200` (`tools/bench/README.md`), every shipped map, the subject
   at tier t against tier 5 with the shipped two-checkpoint policy brain on both
@@ -680,6 +681,35 @@ model.** Four gates, all off `BotSkill`:
   has moved. `capped` differs across match arms (about 300 at `full:5`, 100 at
   `full:1`), which is why the match statistic is the death share and not a win
   rate.
+
+- ⛔ **Since 2026-10-10, tiers 1-4 AIM LIKE PEOPLE and tier 5 does not** (the
+  user's call: tier 5, "Max", is the best possible strength). `BotSkill.HumanAim`
+  is set for tiers 1-4, and every bot is wrapped in `HumanizedBot.ByTier`
+  (`[Bots] HumanAim`, on by default). That applies `HumanizeOptions.Tracking`
+  while the bot's current skill asks for it, and is an exact pass-through
+  otherwise, so a live difficulty change takes at once and tier 5 is untouched.
+  `Tracking` lags the target the way people do: corrections at 8% of the error
+  a tick, nothing inside 16°, and a flick only past 120°. It was fitted to the
+  people's in-range turn size, still share, smoothness and aim error.
+  **Human aim costs about one tier step, so `TierSkills` moved up one place**
+  to 0.30, 0.42, 0.67, 0.95, 0.95. Tier 4 is tier 5's skill aiming like a person,
+  so its reflexes equal tier 5's (`BotReflexTests`). Measured with `BENCH_TIERS`
+  and `BENCH_HUMAN_AIM=1`, 800 paired matches on the fleet's eight maps:
+
+  | death share vs `full:5` (mirror 0.496) | `full:4` | `full:3` | `full:2` | `full:1` |
+  |---|---|---|---|---|
+  | old skills, no human aim | −0.054 | −0.109 | −0.163 | −0.212 |
+  | old skills, human aim | −0.109 | −0.157 | −0.203 | −0.250 |
+  | **shipped: shifted skills, human aim** | **−0.065** | **−0.109** | **−0.157** | **−0.203** |
+
+  **What it buys**, at tier 4 (`botrecord --difficulty 4`, against people
+  within 150px):
+  - O2 falls from 0.901 to 0.870;
+  - the fleet discriminator falls from 0.747 to 0.618 (0.852 to 0.767 at
+    300px), the largest move any human-likeness change has made.
+
+  What is left is a lack of flicks and of aim reversals. `gg2-rl` `docs/PLAN.md`
+  phase 5, D3.
 
 - ⚠️ **Aim error is UNIFORM on [-1, 1], not Gaussian** (Quake III's
   `crandom()`), with two multipliers: moving-target scale, and **Quake
