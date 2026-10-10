@@ -711,6 +711,13 @@ model.** Four gates, all off `BotSkill`:
   What is left is a lack of flicks and of aim reversals. `gg2-rl` `docs/PLAN.md`
   phase 5, D3.
 
+  **`Tracking2` replaced `Tracking` the same day (D4)**: errors past 32° are
+  closed by half in 2-4 tick strokes that sometimes overshoot, and a moving
+  correction trembles by 0.75° a tick. That gives the people's aim reversals and
+  short movements. At tier 4, O2 fell 0.883 → 0.809. The ladder was unchanged
+  (−0.062 / −0.106 / −0.159 / −0.208). The fleet discriminator read 0.617 →
+  0.629, inside its noise, and the user adopted it.
+
 - ⚠️ **Aim error is UNIFORM on [-1, 1], not Gaussian** (Quake III's
   `crandom()`), with two multipliers: moving-target scale, and **Quake
   III's close-range penalty** (every tier worse at point blank — an

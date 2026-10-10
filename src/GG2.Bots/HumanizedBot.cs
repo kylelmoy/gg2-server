@@ -118,14 +118,14 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
     /// <summary>
     /// The difficulty knob: every bot is wrapped, and the filter runs only while the
     /// bot's current <see cref="BotSkill.HumanAim"/> asks for it, with
-    /// <see cref="HumanizeOptions.Tracking"/>. Otherwise it is an exact pass-through
+    /// <see cref="HumanizeOptions.Tracking2"/> (D4; <see cref="HumanizeOptions.Tracking"/> was D3). Otherwise it is an exact pass-through
     /// that draws nothing, so tier 5 plays exactly as it would unwrapped.
     /// </summary>
     /// <param name="inner">The brain.</param>
     /// <param name="seed">The filter's own stream.</param>
-    /// <param name="options">The preset, or null for <see cref="HumanizeOptions.Tracking"/>; a bench arm sets it.</param>
+    /// <param name="options">The preset, or null for <see cref="HumanizeOptions.Tracking2"/>; a bench arm sets it.</param>
     public static HumanizedBot ByTier(IInputSource inner, uint seed, HumanizeOptions? options = null) =>
-        new(inner, options ?? HumanizeOptions.Tracking, seed) { OnlyWhenSkillAsks = true };
+        new(inner, options ?? HumanizeOptions.Tracking2, seed) { OnlyWhenSkillAsks = true };
 
     /// <summary>Run only while the scripted layer's skill has <see cref="BotSkill.HumanAim"/>.</summary>
     public bool OnlyWhenSkillAsks { get; init; }
@@ -454,8 +454,8 @@ public sealed record HumanizeOptions(
     /// at 8% of the error a tick and stop inside 16°, and only an error past 120°
     /// is flicked. Fitted open loop to the people's in-range turn size, p90, still
     /// share, aim error and smoothness (<c>gg2-rl</c> <c>scripts/fit_humanize_tracking.py</c>,
-    /// <c>docs/PLAN.md</c> phase 5, D3). Applied by <see cref="HumanizedBot.ByTier"/>.
-    /// Measured at tier 4: O2 0.901 to 0.870, and the fleet discriminator 0.747 to
+    /// <c>docs/PLAN.md</c> phase 5, D3). Tiers 1-4 used it until <see cref="Tracking2"/>
+    /// replaced it the same day. Measured at tier 4: O2 0.901 to 0.870, and the fleet discriminator 0.747 to
     /// 0.618 within 150px.
     /// </summary>
     public static HumanizeOptions Tracking { get; } = new(
@@ -470,7 +470,10 @@ public sealed record HumanizeOptions(
     /// by 0.75° a tick. Fitted open loop to the people's in-range turn size, still
     /// share, aim error, smoothness, reversals, flicks over 30° and movement
     /// length (<c>gg2-rl</c> <c>scripts/fit_humanize_tracking.py --d4</c>,
-    /// <c>docs/PLAN.md</c> phase 5, D4).
+    /// <c>docs/PLAN.md</c> phase 5, D4). <b>What tiers 1-4 use</b>, through
+    /// <see cref="HumanizedBot.ByTier"/>: at tier 4 against <see cref="Tracking"/>, O2
+    /// 0.883 to 0.809 with the ladder unchanged; the fleet discriminator read 0.617
+    /// to 0.629, inside its noise, and the user adopted it on 2026-10-10.
     /// </summary>
     public static HumanizeOptions Tracking2 { get; } = new(
         SaccadeDegrees: 32,

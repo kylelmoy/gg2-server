@@ -44,7 +44,7 @@ namespace GG2.Bots;
 /// </param>
 /// <param name="HumanAim">
 /// Whether this bot's aim, scripted or policy, goes through
-/// <see cref="HumanizeOptions.Tracking"/>: lagging its target the way people do.
+/// <see cref="HumanizeOptions.Tracking2"/>: lagging its target the way people do.
 /// True for tiers 1-4 and false for tier 5, which stays the strongest bot there is
 /// (<c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, D3). Applied by
 /// <see cref="HumanizedBot.ByTier"/>, so a live difficulty change takes at once.

@@ -54,7 +54,7 @@ namespace GG2.Bots;
 /// </param>
 /// <param name="HumanAimWith">
 /// The preset <paramref name="HumanAimByTier"/> applies, or null for the server's
-/// (<see cref="HumanizeOptions.Tracking"/>). A bench arm for a candidate.
+/// (<see cref="HumanizeOptions.Tracking2"/>). A bench arm for a candidate.
 /// </param>
 /// <param name="SpreadTurnTeam">
 /// The team whose policy tiers spread each turn over the action repeat
