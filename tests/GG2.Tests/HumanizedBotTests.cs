@@ -282,6 +282,38 @@ public sealed class HumanizedBotTests
             Assert.True(Gap(final, 0) < 0.01, $"between shots, drifted to {final:0.0} deg; a 30 deg error is inside the idle dead zone");
     }
 
+    /// <summary>
+    /// <b>D2 (<see cref="HumanizeOptions.Hold"/>): with no target and an enemy
+    /// close, a walk reversal does not swing the aim</b>, and v3 passes it through.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WithNoTargetTheHoldPresetKeepsTheAimThroughAWalkReversal(bool hold)
+    {
+        // The brain points along its walk: right, then left from tick 20.
+        static PlayerInput Input(int tick) => new(PlayerKeys.None, tick < 20 ? (ushort)0 : (ushort)(180 * 65536 / 360), 40);
+
+        var outputs = Run(Build(Input, fight: false, enemyDx: 100, options: hold ? HumanizeOptions.Hold : HumanizeOptions.Default), 40);
+        var final = Degrees(outputs[^1].NetAimDirection);
+
+        if (hold)
+            Assert.True(Gap(final, 0) < 0.01, $"held, the aim swung to {final:0.0} deg");
+        else
+            Assert.True(Gap(final, 180) < 0.01, $"v3 should pass the walk through, got {final:0.0} deg");
+    }
+
+    /// <summary>With no enemy in range, the hold preset follows the walk like v3.</summary>
+    [Fact]
+    public void WithNoEnemyCloseTheHoldPresetFollowsTheWalk()
+    {
+        static PlayerInput Input(int tick) => new(PlayerKeys.None, tick < 20 ? (ushort)0 : (ushort)(180 * 65536 / 360), 40);
+
+        var final = Degrees(Run(Build(Input, fight: false, enemyDx: 600, options: HumanizeOptions.Hold), 40)[^1].NetAimDirection);
+
+        Assert.True(Gap(final, 180) < 0.01, $"no enemy within range, yet the aim held at {final:0.0} deg");
+    }
+
     /// <summary>Past the idle flick threshold, a lazy aim still turns.</summary>
     [Fact]
     public void LazyAimStillFlicksAtALargeError()

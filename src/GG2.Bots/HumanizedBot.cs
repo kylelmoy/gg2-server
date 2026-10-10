@@ -80,6 +80,7 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
     private double _aim;
     private int _reactLeft = -1;
     private double _velocity;
+    private double _shown = double.NaN;
 
     private double _strokeFrom;
     private double _strokeAmplitude;
@@ -124,25 +125,39 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
             _engaged = false;
         }
 
-        var engaged = world.IsAlive(slot) && InFight(in world, slot);
+        var alive = world.IsAlive(slot);
+        var engaged = alive && InFight(in world, slot);
 
         if (!engaged)
         {
             _engaged = false;
+
+            // D2: with no target and an enemy close by, the reference brain points
+            // the aim along the walk, so a bot that reverses snaps half a turn.
+            // Holding it instead is what a person does between targets.
+            if (Options.HoldWithoutTarget && alive && !double.IsNaN(_shown)
+                && !_scripted.Combat.Target.Exists && EnemyWithin(in world, slot))
+            {
+                return new PlayerInput(input.Keys, Wire(_shown), input.AimDistance);
+            }
+
+            _shown = alive ? Degrees(input.NetAimDirection) : double.NaN;
             return input;
         }
 
         if (!_engaged)
         {
-            // Entering a fight: start from what the brain is doing now.
+            // Entering a fight: start from what the brain is doing now, or, when
+            // the aim was being held, from where it is actually pointing.
             _engaged = true;
-            _aim = Degrees(input.NetAimDirection);
+            _aim = Options.HoldWithoutTarget && !double.IsNaN(_shown) ? _shown : Degrees(input.NetAimDirection);
             _reactLeft = -1;
             _velocity = 0;
             _strokeTicks = 0;
         }
 
         var aim = FollowAim(Degrees(input.NetAimDirection), firing: (input.Keys & (PlayerKeys.Attack | PlayerKeys.Special)) != 0);
+        _shown = aim;
 
         return new PlayerInput(input.Keys, Wire(aim), input.AimDistance);
     }
@@ -157,6 +172,21 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
         ref readonly var self = ref world.Character(slot);
         var dx = target.X - self.X;
         var dy = target.Y - self.Y;
+
+        return (dx * dx) + (dy * dy) <= Options.Range * Options.Range;
+    }
+
+    private bool EnemyWithin(in WorldView world, int slot)
+    {
+        Span<int> nearest = stackalloc int[1];
+
+        if (world.NearestEnemies(slot, nearest) == 0)
+            return false;
+
+        ref readonly var self = ref world.Character(slot);
+        ref readonly var enemy = ref world.Character(nearest[0]);
+        var dx = enemy.X - self.X;
+        var dy = enemy.Y - self.Y;
 
         return (dx * dx) + (dy * dy) <= Options.Range * Options.Range;
     }
@@ -307,6 +337,10 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
 /// </param>
 /// <param name="IdleDeadZoneDegrees"><paramref name="DeadZoneDegrees"/> between shots, or NaN. v5.</param>
 /// <param name="IdlePursuitGain"><paramref name="PursuitGain"/> between shots, or NaN. v5.</param>
+/// <param name="HoldWithoutTarget">
+/// While the scripted layer has no target and an enemy is within <paramref name="Range"/>,
+/// hold the aim rather than following the walk. D2.
+/// </param>
 public sealed record HumanizeOptions(
     double Range = 300,
     double SaccadeDegrees = 20,
@@ -324,7 +358,8 @@ public sealed record HumanizeOptions(
     double StopDegrees = 0.3,
     double IdleSaccadeDegrees = double.NaN,
     double IdleDeadZoneDegrees = double.NaN,
-    double IdlePursuitGain = double.NaN)
+    double IdlePursuitGain = double.NaN,
+    bool HoldWithoutTarget = false)
 {
     /// <summary>
     /// v3, the shipped shape: one-tick flicks and unsmoothed corrections. These
@@ -366,15 +401,22 @@ public sealed record HumanizeOptions(
         IdleDeadZoneDegrees: 45,
         IdlePursuitGain: 0.2);
 
-    /// <summary>The preset names a setting can carry: <c>v3</c>, <c>strokes</c> and <c>lazy</c>.</summary>
-    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy"];
+    /// <summary>
+    /// D2: v3, holding the aim while the scripted layer has no target and an enemy
+    /// is close, instead of pointing it along the walk. <c>gg2-rl</c>
+    /// <c>docs/PLAN.md</c> phase 5, D2.
+    /// </summary>
+    public static HumanizeOptions Hold { get; } = new(HoldWithoutTarget: true);
+
+    /// <summary>The preset names a setting can carry: <c>v3</c>, <c>strokes</c>, <c>lazy</c> and <c>hold</c>.</summary>
+    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy", "hold"];
 
     /// <summary>A preset's canonical name in <see cref="PresetNames"/>, refusing anything else.</summary>
     /// <exception cref="FormatException">The name is not a preset.</exception>
     public static string PresetName(string name)
     {
         var options = ForPreset(name);
-        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : "v3";
+        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : options == Hold ? "hold" : "v3";
     }
 
     /// <summary>A preset by name, case-insensitive.</summary>
@@ -384,6 +426,7 @@ public sealed record HumanizeOptions(
         "v3" => Default,
         "strokes" or "v4" => Strokes,
         "lazy" or "v5" => Lazy,
-        _ => throw new FormatException($"humanize preset '{name}': v3, strokes or lazy"),
+        "hold" or "d2" => Hold,
+        _ => throw new FormatException($"humanize preset '{name}': v3, strokes, lazy or hold"),
     };
 }

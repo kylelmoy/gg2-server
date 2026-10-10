@@ -58,13 +58,21 @@ public static class Tiers
         // Tier 5 wrapped in HumanizedBot's v5 preset, lazy between shots
         // (HumanizeOptions.Lazy): gg2-rl phase 5, v5.
         ("lazy:5", 5, false),
+
+        // Tier 5 wrapped in HumanizedBot's D2 preset, the aim held while there is
+        // no target (HumanizeOptions.Hold): gg2-rl phase 5, D2.
+        ("hold:5", 5, false),
     ];
 
-    private static bool Humanized(string arm) => arm.StartsWith("hum:", StringComparison.Ordinal) || Lazy(arm);
+    private static bool Humanized(string arm) =>
+        arm.StartsWith("hum:", StringComparison.Ordinal) || Lazy(arm) || arm.StartsWith("hold:", StringComparison.Ordinal);
 
     private static bool Lazy(string arm) => arm.StartsWith("lazy:", StringComparison.Ordinal);
 
-    private static HumanizeOptions HumanizeFor(string arm) => Lazy(arm) ? HumanizeOptions.Lazy : HumanizeOptions.Default;
+    private static HumanizeOptions HumanizeFor(string arm) =>
+        Lazy(arm) ? HumanizeOptions.Lazy
+        : arm.StartsWith("hold:", StringComparison.Ordinal) ? HumanizeOptions.Hold
+        : HumanizeOptions.Default;
 
     private static bool Spread(string arm) => arm.StartsWith("spread:", StringComparison.Ordinal);
 

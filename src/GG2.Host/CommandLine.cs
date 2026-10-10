@@ -1211,7 +1211,7 @@ internal static class CommandLine
                             ticks at a time and make its aim flick and correct
                             the way a person's does. A behaviour switch: a
                             human-like bot is a weaker one.
-          --bot-humanize-preset v3|strokes|lazy
+          --bot-humanize-preset v3|strokes|lazy|hold
                             which measured HumanizedBot preset --bot-humanize
                             uses. v3 by default.
           --bot-spread-turn

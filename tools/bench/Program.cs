@@ -196,6 +196,12 @@ if (Environment.GetEnvironmentVariable("BENCH_RELEASE") is { } releaseSeeds)
     return;
 }
 
+if (Environment.GetEnvironmentVariable("BENCH_TURNS") is { } turnMatches)
+{
+    Bench.Turns.Run(maps, Beside(maps, "nav", "GG2_NAV"), Beside(maps, "checkpoints", "CHECKPOINTS"), int.Parse(turnMatches));
+    return;
+}
+
 if (Environment.GetEnvironmentVariable("BENCH_TIERS") is { } tierMatches)
 {
     Bench.Tiers.RunMatches(maps, Beside(maps, "nav", "GG2_NAV"), Beside(maps, "checkpoints", "CHECKPOINTS"), int.Parse(tierMatches));
