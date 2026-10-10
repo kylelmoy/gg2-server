@@ -245,6 +245,33 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     public HandoverRule Rule { get; init; } = HandoverRule.MacroTask;
 
     /// <summary>
+    /// The range a controller already driving keeps the wheel within, or NaN for
+    /// <see cref="Range"/> (no band).
+    /// </summary>
+    /// <remarks>
+    /// <b>Hysteresis: take the wheel at <see cref="Range"/>, give it back past
+    /// this.</b> It keeps the controller in fights it is already in without
+    /// widening when it takes the wheel, which is what Q22 measured to cost the
+    /// objective. It is still read only at a decision boundary, so there is no
+    /// flapping to damp. The rest of the gate (the engage hold under
+    /// <c>MacroTask</c>) applies unchanged. <c>gg2-rl</c> <c>docs/PLAN.md</c>
+    /// phase 5, B2, has the measurement.
+    /// </remarks>
+    public double ReleaseRange { get; init; } = double.NaN;
+
+    /// <summary>
+    /// Whether a fight near the bot's own goal is handed over too.
+    /// </summary>
+    /// <remarks>
+    /// Off, the gate reads <see cref="ScriptedBot.WantsToEngage"/>, which is false
+    /// near the bot's own goal. On, it reads
+    /// <see cref="ScriptedBot.WantsToEngageNearGoal"/>, so a defender fighting on
+    /// its own point fights with the controller. 13% of the in-range ticks a
+    /// policy class spends scripted are this term (<c>BENCH_RELEASE</c>).
+    /// </remarks>
+    public bool EngageNearOwnGoal { get; init; }
+
+    /// <summary>
     /// Whether a bot opponent is worth engaging a controller for.
     /// </summary>
     /// <remarks>
@@ -435,8 +462,11 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
 
         // Combat.Ally, not a bool: the predicate is Handover's and the fact is
         // the scripted layer's, the same split WantsToEngage already uses.
+        var range = _driving >= 0 && !double.IsNaN(ReleaseRange) ? Math.Max(Range, ReleaseRange) : Range;
+        var wants = EngageNearOwnGoal ? _scripted.WantsToEngageNearGoal : _scripted.WantsToEngage;
+
         if (!Handover.ShouldEngage(
-                in world, slot, Range, Rule, _scripted.WantsToEngage, Engage, _scripted.Combat.Ally))
+                in world, slot, range, Rule, wants, Engage, _scripted.Combat.Ally))
             return Scripted(scripted);
 
         var chosen = Choose(in world, tick, slot, eligible);

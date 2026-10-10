@@ -143,6 +143,12 @@ public sealed record BotBrainSpec
     /// <summary>Whether the scripted layer keeps the wheel while carrying the intel.</summary>
     public bool ScriptedCarriesIntel { get; init; } = true;
 
+    /// <summary><see cref="HybridBot.ReleaseRange"/>: NaN, no release band, by default.</summary>
+    public double ReleaseRange { get; init; } = double.NaN;
+
+    /// <summary><see cref="HybridBot.EngageNearOwnGoal"/>: off by default.</summary>
+    public bool EngageNearOwnGoal { get; init; }
+
     /// <summary>
     /// Whether every bot puts up a chat bubble when the wheel changes hands.
     /// </summary>
@@ -205,6 +211,8 @@ public sealed record BotBrainSpec
         {
             Rule = Rule,
             Range = Range,
+            ReleaseRange = ReleaseRange,
+            EngageNearOwnGoal = EngageNearOwnGoal,
             Engage = Engage,
             ScriptedCarriesIntel = ScriptedCarriesIntel,
             Bubbles = Bubbles,

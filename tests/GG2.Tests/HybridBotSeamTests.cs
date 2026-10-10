@@ -627,4 +627,87 @@ public sealed class HybridBotSeamTests
         Assert.True(withheldAfterDelay > 0, "the hold-fire roll never came up");
         Assert.True(offAim > 0, "the aim was never off");
     }
+
+    /// <summary>
+    /// A release band keeps a controller already driving out to
+    /// <see cref="HybridBot.ReleaseRange"/>, and never widens where it takes the
+    /// wheel.
+    /// </summary>
+    /// <remarks>
+    /// Under <see cref="HandoverRule.Distance"/>, so the range is the only term.
+    /// The enemy is moved, not the bot, so nothing about the bot's own state
+    /// changes between the steps. The control is the same sequence with no band,
+    /// which gives the wheel back at 200px.
+    /// </remarks>
+    [Theory]
+    [InlineData(double.NaN, false)]
+    [InlineData(250.0, true)]
+    public void AReleaseBandKeepsTheWheelInAFightAlreadyTaken(double release, bool keptAt200)
+    {
+        var world = World();
+        var micro = new Stub("policy", cost: 1, PlayerKeys.None);
+        var bot = new HybridBot(micro, Scripted(world)) { Rule = HandoverRule.Distance, ReleaseRange = release };
+        var red = Duel(world);
+        var blue = red + 1;
+        var x = world.State.Characters[red].X;
+
+        Run(bot, world, red, 5);
+        Assert.Same(micro, bot.Driving);
+
+        world.State.Characters[blue].X = x + 200;
+        Run(bot, world, red, 3);
+        Assert.Equal(keptAt200, bot.Driving is not null);
+
+        // Past the band, it goes back whatever the band is.
+        world.State.Characters[blue].X = x + 280;
+        Run(bot, world, red, 3);
+        Assert.Null(bot.Driving);
+
+        // And at 200px with no controller driving, the band does not take it.
+        world.State.Characters[blue].X = x + 200;
+        Run(bot, world, red, 3);
+        Assert.Null(bot.Driving);
+    }
+
+    /// <summary>
+    /// <see cref="HybridBot.EngageNearOwnGoal"/> hands over a fight the engage
+    /// hold leaves to the scripted layer only because the bot stands on its goal.
+    /// </summary>
+    /// <remarks>
+    /// The goal is pinned 100px from the bot, every tick, so the hold's
+    /// near-goal term is false throughout and nothing else is. Not ON the bot:
+    /// standing on a goal is arrival, which clears it. The control is
+    /// the shipped gate, which leaves the wheel with the scripted layer, and
+    /// the premise check is that the hold's other terms said fight.
+    /// </remarks>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NearItsOwnGoalTheFightIsHandedOverOnlyWhenAsked(bool nearGoal)
+    {
+        var world = World();
+        var micro = new Stub("policy", cost: 1, PlayerKeys.None);
+        var scripted = Scripted(world);
+        var bot = new HybridBot(micro, scripted) { EngageNearOwnGoal = nearGoal };
+        var red = Duel(world);
+        var otherTermsSaidFight = false;
+
+        for (var tick = 0; tick < 40; tick++)
+        {
+            ref readonly var self = ref world.State.Characters[red];
+            scripted.Path.HasGoal = true;
+            scripted.Path.GoalX = self.X - 100;
+            scripted.Path.GoalY = self.Y;
+
+            var view = new WorldView(in world.State, world.Collision);
+            bot.Poll(in view, red, tick);
+            world.Step();
+
+            Assert.False(scripted.WantsToEngage, "the bot is on its goal, so the hold should be off");
+            otherTermsSaidFight |= scripted.WantsToEngageNearGoal;
+        }
+
+        Assert.True(otherTermsSaidFight, "the hold's other terms never said fight, so this gates nothing");
+        Assert.Equal(nearGoal, micro.Polls > 0);
+    }
 }

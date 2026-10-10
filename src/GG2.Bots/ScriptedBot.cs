@@ -294,6 +294,19 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     public bool WantsToEngage { get; private set; }
 
     /// <summary>
+    /// <see cref="WantsToEngage"/> without its near-goal term: every other part of
+    /// the hold says fight.
+    /// </summary>
+    /// <remarks>
+    /// The hold lets a bot within <c>BOT_ENGAGE_GOAL_NEAR</c> of its own goal keep
+    /// walking, because there taking the point beats winning the fight. That is
+    /// right for the scripted layer's own movement. Whether a controller should
+    /// take the wheel for a fight ON the point is a separate question, and
+    /// <see cref="HybridBot.EngageNearOwnGoal"/> asks it with this.
+    /// </remarks>
+    public bool WantsToEngageNearGoal { get; private set; }
+
+    /// <summary>
     /// Everything a bot is told about its place in the roster, in one call: its
     /// role, its lateral spread, its nav query and its objective layer.
     /// </summary>
@@ -1129,6 +1142,7 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
             // the hold cannot apply either way and the answer from the ground it
             // left is still the right one to hand a controller mid-arc.
             WantsToEngage = false;
+            WantsToEngageNearGoal = false;
             return navKeys;
         }
 
@@ -1160,10 +1174,11 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         // would be an ungated change to shipped behaviour with no demonstrated
         // effect. docs/TRAPS-BOTS.md, "Team Deathmatch", has the measurement and
         // the open question.
-        WantsToEngage = !self.CarryingIntel
+        WantsToEngageNearGoal = !self.CarryingIntel
             && distance <= BotTargeting.ClassRange(self.Class)
-            && tick - Combat.TargetAt <= BotConstants.EngageTicks
-            && GoalDistance(in self) > BotConstants.EngageGoalNear;
+            && tick - Combat.TargetAt <= BotConstants.EngageTicks;
+
+        WantsToEngage = WantsToEngageNearGoal && GoalDistance(in self) > BotConstants.EngageGoalNear;
 
         if (WantsToEngage)
         {
