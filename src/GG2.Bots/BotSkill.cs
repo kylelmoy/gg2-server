@@ -127,11 +127,17 @@ public readonly record struct BotSkill(
     /// <c>BENCH_TIERS</c> as the opponent's share of a match's deaths against tier 5
     /// (<c>docs/TRAPS-BOTS.md</c>, the difficulty chain). Evenly spaced skills
     /// (0.15, 0.35, 0.55, 0.75) are not evenly spaced in play: the bottom two
-    /// steps cost twice what the top two did. The ends stay at 0.15 and 0.95,
-    /// exactly the ends of <see cref="Lerp"/>'s flat regions, so tier 1 and tier 5
-    /// are what they always were.
+    /// steps cost twice what the top two did.
+    /// <para>
+    /// <b>Shifted up one place on 2026-10-10, when tiers 1-4 began to aim like
+    /// people</b> (<see cref="HumanAim"/>, D3). Human aim costs about one step, so
+    /// the old skills under it doubled the 4-to-5 step. Each lower tier now plays
+    /// the skill the tier above it used to, plus human aim: tier 4 is tier 5's
+    /// skill aiming like a person, and the ladder keeps its even steps.
+    /// <c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, D3, has both ladders.
+    /// </para>
     /// </remarks>
-    public static ReadOnlySpan<double> TierSkills => [0.15, 0.30, 0.42, 0.67, 0.95];
+    public static ReadOnlySpan<double> TierSkills => [0.30, 0.42, 0.67, 0.95, 0.95];
 
     /// <summary>The server's 1-5 difficulty as a skill, from <see cref="TierSkills"/>.</summary>
     /// <remarks>

@@ -551,10 +551,20 @@ public sealed class BotReflexTests(ITestOutputHelper output)
         Assert.Equal(0, top.ReflexTicks);
         Assert.Equal(0, top.ReflexMissChance);
 
+        // Since D3 tier 4 plays tier 5's skill and differs only in aiming like a
+        // person (BotSkill.TierSkills), so its reflexes equal tier 5's: strictly
+        // weaker down from tier 4, and never better than the tier above.
         for (var tier = BotConstants.TierMin; tier < BotConstants.TierMax; tier++)
         {
             var lower = BotSkill.ForTier(tier);
             var upper = BotSkill.ForTier(tier + 1);
+
+            if (tier + 1 == BotConstants.TierMax)
+            {
+                Assert.True(lower.ReflexTicks >= upper.ReflexTicks, $"tier {tier} reacts faster than {tier + 1}");
+                Assert.True(lower.ReflexMissChance >= upper.ReflexMissChance, $"tier {tier} misses less than {tier + 1}");
+                continue;
+            }
 
             Assert.True(lower.ReflexTicks > upper.ReflexTicks, $"tier {tier} reacts no slower than {tier + 1}");
             Assert.True(lower.ReflexMissChance > upper.ReflexMissChance, $"tier {tier} misses no more than {tier + 1}");
