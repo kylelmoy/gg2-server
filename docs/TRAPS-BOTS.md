@@ -745,7 +745,7 @@ model.** Four gates, all off `BotSkill`:
   worse than with no leg filter, and tier 4 lost another 0.033. At tier 4 the
   remaining tell is aim timing, not movement.
 
-  **D8 (`tracking5`) refitted `Tracking2`'s timing and awaits a decision.**
+  **D8 (`tracking5`) refitted `Tracking2`'s timing.**
   `Tracking2` bunches its closing into 2–4-tick strokes, open loop as well as
   live. Stroking only errors past 48°, with pursuit gain 0.12 and tremor 1.0,
   brought the lag-3 autocorrelation to the people's. O2 fell 0.035 and the
@@ -753,7 +753,8 @@ model.** Four gates, all off `BotSkill`:
   pursuit aims slightly *better* than people do (median error 26° against 29°).
   D9 (`tracking6`, pursuit gain 0.10) gave the error back (29.8°). The
   discriminator still read it as worse at 150px and better at 300px, so aim
-  accuracy was not its cue.
+  accuracy was not its cue. **The user adopted D9 on 2026-10-11, over the
+  registered bars: `Tracking6` is what tiers 1-4 use now.**
 
 - ⚠️ **Aim error is UNIFORM on [-1, 1], not Gaussian** (Quake III's
   `crandom()`), with two multipliers: moving-target scale, and **Quake

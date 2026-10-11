@@ -617,7 +617,7 @@ public sealed class ServerOptions
 
     /// <summary>
     /// Bots at difficulty 1-4 aim like people: <c>GG2.Bots.HumanizedBot.ByTier</c>
-    /// with <c>HumanizeOptions.Tracking2</c>, lagging the target instead of tracking
+    /// with <c>HumanizeOptions.Tracking6</c>, lagging the target instead of tracking
     /// it exactly. Tier 5 is untouched. On by default.
     /// </summary>
     /// <remarks>
