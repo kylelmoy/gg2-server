@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>navscan</AssemblyName>
+    <RootNamespace>NavScan</RootNamespace>
+
+    <!-- Same reason tools/bench relaxes this: an instrument is written to
+         answer one question and is often left with an unused local. The
+         projects it references keep the strict settings. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+
+    <!-- Deliberately NOT in GG2.sln, like tools/bench. Build it explicitly. -->
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/GG2.Protocol/GG2.Protocol.csproj" />
+    <ProjectReference Include="../../src/GG2.Maps/GG2.Maps.csproj" />
+    <ProjectReference Include="../../src/GG2.Server/GG2.Server.csproj" />
+    <ProjectReference Include="../../src/GG2.Parity/GG2.Parity.csproj" />
+  </ItemGroup>
+</Project>
