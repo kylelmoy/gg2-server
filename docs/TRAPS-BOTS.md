@@ -737,6 +737,14 @@ model.** Four gates, all off `BotSkill`:
   nothing; and a per-press chance cannot thin jumps, because the policy presses
   again until one lands. Only the refractory window limits them.
 
+  **D7 (`tracking4`) kept the policy's legs running and was left off too.** A
+  dance keeps the current direction, a reversal needs sustained opposite
+  intent, and the legs stop only when the brain lets go. Scout motion came out
+  at the people's on reversals, still share and take-offs, and faster than D6
+  (3.54 px/tick). But O2 barely moved (−0.004), the fleet discriminator was
+  worse than with no leg filter, and tier 4 lost another 0.033. At tier 4 the
+  remaining tell is aim timing, not movement.
+
 - ⚠️ **Aim error is UNIFORM on [-1, 1], not Gaussian** (Quake III's
   `crandom()`), with two multipliers: moving-target scale, and **Quake
   III's close-range penalty** (every tier worse at point blank — an
