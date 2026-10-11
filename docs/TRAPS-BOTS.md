@@ -753,7 +753,9 @@ model.** Four gates, all off `BotSkill`:
   pursuit aims slightly *better* than people do (median error 26° against 29°).
   D9 (`tracking6`, pursuit gain 0.10) gave the error back (29.8°). The
   discriminator still read it as worse at 150px and better at 300px, so aim
-  accuracy was not its cue. **The user adopted D9 on 2026-10-11, over the
+  accuracy was not its cue. ⚠️ Corrected the same day: that reading came from
+  one trained network. Re-scored over five, D9 is level with D5 at 150px and
+  better at 300px; the arms now get five. **The user adopted D9 on 2026-10-11, over the
   registered bars: `Tracking6` is what tiers 1-4 use now.**
 
   **D10 (`tracking7`) found why the legs failed and is off by its bars.**
