@@ -243,11 +243,11 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// </remarks>
     /// <para>
     /// ✅ <b>Re-recorded 2026-10-11 for held flight</b> (<see cref="PathFollower.HeldFlight"/>,
-    /// <c>gg2-rl</c> <c>docs/PLAN.md</c>, navigation, N1): arrived 31,520 → 31,556,
-    /// stranded 535 → 499, ticks 1,474,882 → 1,430,222, blacklists 7,963 → 7,628,
-    /// flown 3,626 → 3,642; the premises did not move. Per edge, 98 flights that
-    /// stranded now arrive and 62 that arrived now strand (<c>HeldFlightCensus</c>).
-    /// The no-tables arm moved the same way: stranded 578 → 471.
+    /// <c>gg2-rl</c> <c>docs/PLAN.md</c>, navigation, N1): arrived 31,520 → 31,561,
+    /// stranded 535 → 494, ticks 1,474,882 → 1,411,258, blacklists 7,963 → 7,569,
+    /// flown 3,626 → 3,644; the premises did not move. Per edge, 107 flights that
+    /// stranded now arrive and 66 that arrived now strand (<c>HeldFlightCensus</c>).
+    /// The no-tables arm moved the same way: stranded 578 → 459.
     /// </para>
     [Fact]
     public void EveryEdgeOfEveryShippedGraphIsFlownOnTheShippingArm()
@@ -266,16 +266,16 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
             new EdgeFlightTally(
                 Candidates: 116_316,
                 Measured: 32_055,
-                Arrived: 31_556,
-                Flown: 3_642,
-                Stranded: 499,
+                Arrived: 31_561,
+                Flown: 3_644,
+                Stranded: 494,
                 RoutedAround: 72_926,
                 Shadowed: 10_869,
                 NoRoute: 466,
                 StartUnresolved: 0,
                 GoalUnresolved: 0,
-                Ticks: 1_430_222,
-                Blacklists: 7_628,
+                Ticks: 1_411_258,
+                Blacklists: 7_569,
                 StartBlocked: 0,
                 TeamSwapped: 178,
                 Diverted: 33),
@@ -325,16 +325,16 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
             new EdgeFlightTally(
                 Candidates: 116_316,
                 Measured: 37_787,
-                Arrived: 37_316,
-                Flown: 5_567,
-                Stranded: 471,
+                Arrived: 37_328,
+                Flown: 5_571,
+                Stranded: 459,
                 RoutedAround: 67_194,
                 Shadowed: 10_869,
                 NoRoute: 466,
                 StartUnresolved: 0,
                 GoalUnresolved: 0,
-                Ticks: 1_873_193,
-                Blacklists: 9_458,
+                Ticks: 1_833_740,
+                Blacklists: 9_399,
                 StartBlocked: 0,
                 TeamSwapped: 206,
                 Diverted: 16),

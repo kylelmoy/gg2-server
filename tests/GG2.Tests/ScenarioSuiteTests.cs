@@ -69,25 +69,25 @@ public sealed class ScenarioSuiteTests(ITestOutputHelper output)
     /// names — the same reason <see cref="Unmet"/> is checked both ways.
     /// </para>
     /// </remarks>
-    // Re-recorded 2026-10-11 for held flight (N1): seven legs faster, the
-    // largest truefort-spawn-to-intel 1548 -> 1442 and valley-shaft-crate 95 -> 70,
-    // and oldfort-perch-reroutes 1190 -> 1192.
+    // Re-recorded 2026-10-11 for held flight (N1): eleven legs faster, none
+    // slower; the largest valley-floor-to-point 219 -> 132, truefort-spawn-to-intel
+    // 1548 -> 1391 and valley-shaft-crate 95 -> 70.
     private static readonly Dictionary<string, int> Baseline = new(StringComparer.Ordinal)
     {
-        ["valley-floor-to-point"] = 180,
-        ["valley-spawn-to-point"] = 520,
-        ["valley-point-to-spawn"] = 429,
+        ["valley-floor-to-point"] = 132,
+        ["valley-spawn-to-point"] = 457,
+        ["valley-point-to-spawn"] = 387,
         ["valley-shaft-crate-to-point"] = 70,
-        ["valley-shaft-floor-to-point"] = 132,
-        ["truefort-spawn-to-intel"] = 1442,
-        ["truefort-blue-spawn-exit-west"] = 53,
+        ["valley-shaft-floor-to-point"] = 113,
+        ["truefort-spawn-to-intel"] = 1391,
+        ["truefort-blue-spawn-exit-west"] = 42,
         ["avanti-ramp-pocket-to-intel"] = 217,
-        ["gallery-pit-climb"] = 261,
+        ["gallery-pit-climb"] = 259,
         ["soldier-shells-generator"] = 600,
         ["soldier-holds-and-fires"] = 400,
         ["sniper-fires-at-close-range"] = 400,
         ["atalia-ground-to-point"] = 59,
-        ["oldfort-perch-reroutes"] = 1192,
+        ["oldfort-perch-reroutes"] = 1157,
     };
 
     /// <summary>
@@ -98,7 +98,10 @@ public sealed class ScenarioSuiteTests(ITestOutputHelper output)
     /// where it used to offer six is a regression that a presence test cannot see,
     /// and the count is quoted as fact in `docs/TRAPS-BOTS.md`.
     /// </remarks>
-    private const int BaselineRocketJumps = 10;
+    // 10 until held flight (N1, 2026-10-11): the legs re-plan less and two of
+    // them reach their goal before the rocket arc they used to fly. The search
+    // offers the same arcs; held flight touches only plain jumps.
+    private const int BaselineRocketJumps = 8;
 
     private static ScenarioWorld Load(Scenario s) =>
         ScenarioWorld.Load(s.Map, s.Area, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);

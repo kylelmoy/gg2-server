@@ -198,6 +198,10 @@ public sealed partial class PathFollower
         // walking back to and fell, every attempt.
         var landPlan = NavGraph.ColumnWorldX(takeoff) + (jumpDir * jumpDistance);
 
+        // ...unless the route goes on the same way, where landing further on is
+        // landing closer to the next edge, which is what a person does over a gap.
+        var overshoot = HeldOvershoot(state, landPlan, jumpDir);
+
         if (!character.OnGround)
         {
             state.AirTicks++;
@@ -267,7 +271,7 @@ public sealed partial class PathFollower
             // over only if none of them lands.
             if (state.HeldDir != 0 && edge.Type == NavEdgeType.Jump && Collision is { } air)
             {
-                if (HeldKey(air, state, in character, next, landPlan, jumpDir) is { } key)
+                if (HeldKey(air, state, in character, next, landPlan, jumpDir, overshoot) is { } key)
                 {
                     steer.Hold = true;
                     steer.HoldDir = key;
@@ -317,7 +321,7 @@ public sealed partial class PathFollower
             && Collision is { } ground
             && !state.JumpHeld
             && Math.Abs(column - takeoff) <= BotConstants.RunupCells
-            && CanLaunchHeld(ground, in character, jumpDir, next, landPlan))
+            && CanLaunchHeld(ground, in character, jumpDir, next, landPlan, overshoot))
         {
             Launch(state, ref steer, rocket: false);
             state.HeldDir = jumpDir;
@@ -830,14 +834,15 @@ public sealed partial class PathFollower
     /// flip: a coast that lands is not traded back for a press that also lands.
     /// </remarks>
     private int? HeldKey(
-        CollisionWorld world, BotPathState state, in CharacterState character, int next, double landPlan, int jumpDir)
+        CollisionWorld world, BotPathState state, in CharacterState character, int next, double landPlan, int jumpDir,
+        double overshoot)
     {
         Span<int> order = [state.HeldKey, state.HeldDir, 0, -state.HeldDir];
 
         foreach (var key in order)
         {
             if (FlightPredictor.Land(world, in character, key, jump: false, out var x, out var y, out _)
-                && InLandingWindow(x, y, next, landPlan, jumpDir))
+                && InLandingWindow(x, y, next, landPlan, jumpDir, overshoot))
             {
                 state.HeldKey = key;
                 return key;
@@ -852,14 +857,15 @@ public sealed partial class PathFollower
     /// comes down in the landing window: held, let go, or reversed after the
     /// first tick. The flight then picks between them tick by tick.
     /// </summary>
-    private bool CanLaunchHeld(CollisionWorld world, in CharacterState character, int jumpDir, int next, double landPlan)
+    private bool CanLaunchHeld(
+        CollisionWorld world, in CharacterState character, int jumpDir, int next, double landPlan, double overshoot)
     {
         Span<int> then = [jumpDir, 0, -jumpDir];
 
         foreach (var key in then)
         {
             if (FlightPredictor.Land(world, in character, jumpDir, key, jump: true, out var x, out var y, out _)
-                && InLandingWindow(x, y, next, landPlan, jumpDir))
+                && InLandingWindow(x, y, next, landPlan, jumpDir, overshoot))
             {
                 return true;
             }
@@ -868,12 +874,36 @@ public sealed partial class PathFollower
         return false;
     }
 
-    /// <summary>On the destination, and no more than <see cref="HeldOvershoot"/> past the planned landing.</summary>
-    private bool InLandingWindow(double x, double y, int next, double landPlan, int jumpDir) =>
-        _graph.NodeFromWorld(x, y) == next && (x - landPlan) * jumpDir <= HeldOvershoot;
+    /// <summary>On the destination, and no more than <paramref name="overshoot"/> past the planned landing.</summary>
+    private bool InLandingWindow(double x, double y, int next, double landPlan, int jumpDir, double overshoot) =>
+        _graph.NodeFromWorld(x, y) == next && (x - landPlan) * jumpDir <= overshoot;
 
-    /// <summary>How far past the planned landing a held flight may come down, in px: two cells.</summary>
-    private const double HeldOvershoot = 12;
+    /// <summary>
+    /// How far past the planned landing a held flight may come down, in px.
+    /// </summary>
+    /// <remarks>
+    /// Anywhere on the destination when the route goes on the way the jump goes,
+    /// or the goal lies further on; otherwise two cells, because the next edge
+    /// turns back and a body that lands far past the plan at full speed overruns
+    /// it (cp_dirtbowl 335 -> 320 -> 323).
+    /// </remarks>
+    private double HeldOvershoot(BotPathState state, double landPlan, int jumpDir)
+    {
+        var after = state.PathAt + 2;
+
+        if (after < state.Path.Count)
+        {
+            var node = _graph.Nodes[state.Path[after]];
+            var afterX = NavGraph.ColumnWorldX((node.X0 + node.X1) / 2);
+
+            return (afterX - landPlan) * jumpDir > 0 ? double.PositiveInfinity : HeldSlack;
+        }
+
+        return Math.Max(HeldSlack, ((state.GoalX - landPlan) * jumpDir) + HeldSlack);
+    }
+
+    /// <summary>The overshoot allowed where the route turns back, in px: two cells.</summary>
+    private const double HeldSlack = 12;
 
     /// <summary>Commits to the arc: ask for the press and reset the per-arc state.</summary>
     /// <param name="rocket">
