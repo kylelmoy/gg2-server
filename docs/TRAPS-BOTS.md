@@ -756,6 +756,15 @@ model.** Four gates, all off `BotSkill`:
   accuracy was not its cue. **The user adopted D9 on 2026-10-11, over the
   registered bars: `Tracking6` is what tiers 1-4 use now.**
 
+  **D10 (`tracking7`) found why the legs failed and is off by its bars.**
+  D6 and D7 limited the policy's jumps to match the people's take-off count,
+  but people spend more time in the air per take-off (drops, knockback), so
+  those bots spent too long on the ground, and the fleet discriminator read
+  exactly that. Thinning the jumps to the people's grounded share instead
+  (half the presses pass) put D7's legs at the people's speed and airtime. O2
+  and the 150px discriminator credit it; the 300px discriminator reads it
+  slightly worse, and tier 4 loses another 0.029.
+
 - ⚠️ **Aim error is UNIFORM on [-1, 1], not Gaussian** (Quake III's
   `crandom()`), with two multipliers: moving-target scale, and **Quake
   III's close-range penalty** (every tier worse at point blank — an
