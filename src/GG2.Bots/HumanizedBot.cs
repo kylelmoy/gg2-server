@@ -711,15 +711,22 @@ public sealed record HumanizeOptions(
         PursuitTremorDegrees = 1.0,
     };
 
+    /// <summary>
+    /// D9's candidate: <see cref="Tracking5"/> with pursuit gain 0.10, between D4's
+    /// and D8's, to give back the aim error the fleet discriminator read in D8
+    /// (<c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, D9).
+    /// </summary>
+    public static HumanizeOptions Tracking6 { get; } = Tracking5 with { PursuitGain = 0.10 };
+
     /// <summary>The preset names a setting can carry.</summary>
-    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy", "hold", "tracking", "tracking2", "tracking3", "tracking4", "tracking5"];
+    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy", "hold", "tracking", "tracking2", "tracking3", "tracking4", "tracking5", "tracking6"];
 
     /// <summary>A preset's canonical name in <see cref="PresetNames"/>, refusing anything else.</summary>
     /// <exception cref="FormatException">The name is not a preset.</exception>
     public static string PresetName(string name)
     {
         var options = ForPreset(name);
-        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : options == Hold ? "hold" : options == Tracking ? "tracking" : options == Tracking2 ? "tracking2" : options == Tracking3 ? "tracking3" : options == Tracking4 ? "tracking4" : options == Tracking5 ? "tracking5" : "v3";
+        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : options == Hold ? "hold" : options == Tracking ? "tracking" : options == Tracking2 ? "tracking2" : options == Tracking3 ? "tracking3" : options == Tracking4 ? "tracking4" : options == Tracking5 ? "tracking5" : options == Tracking6 ? "tracking6" : "v3";
     }
 
     /// <summary>A preset by name, case-insensitive.</summary>
@@ -736,6 +743,7 @@ public sealed record HumanizeOptions(
         "tracking3" or "d6" => Tracking3,
         "tracking4" or "d7" => Tracking4,
         "tracking5" or "d8" => Tracking5,
-        _ => throw new FormatException($"humanize preset '{name}': v3, strokes, lazy, hold, tracking, tracking2, tracking3, tracking4 or tracking5"),
+        "tracking6" or "d9" => Tracking6,
+        _ => throw new FormatException($"humanize preset '{name}': v3, strokes, lazy, hold, tracking, tracking2, tracking3, tracking4, tracking5 or tracking6"),
     };
 }
