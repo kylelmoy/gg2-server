@@ -434,7 +434,9 @@ public static class EdgeFlights
         Team team = Team.Red,
         int budget = DefaultBudget,
         NavDistanceSet? distances = null,
-        bool warmWeapon = false)
+        bool warmWeapon = false,
+        bool heldFlight = true,
+        Action<int, ScenarioWorld, BotPathState>? onTick = null)
     {
         ArgumentNullException.ThrowIfNull(world);
 
@@ -442,7 +444,7 @@ public static class EdgeFlights
             ?? throw new InvalidOperationException("a flight needs a nav graph; this world has none");
 
         var edge = graph.Edges[edgeIndex];
-        var follower = new PathFollower(graph) { Distances = distances, Collision = world.Collision };
+        var follower = new PathFollower(graph) { Distances = distances, Collision = world.Collision, HeldFlight = heldFlight };
         var state = new BotPathState();
 
         EdgeFlight Skipped(EdgeFlightOutcome outcome) =>
@@ -531,6 +533,7 @@ public static class EdgeFlights
         for (; ticks < budget && !flightState.Arrived; ticks++)
         {
             world.Step();
+            onTick?.Invoke(slot, world, flightState);
 
             // Which edge the follower is steering RIGHT NOW. A re-plan mid-flight
             // can put the bot on a different route to the same node, and the
@@ -673,7 +676,8 @@ public static class EdgeFlights
         int threads = 1,
         Func<string, int, bool>? include = null,
         Action<string, int, IReadOnlyList<EdgeFlight>>? onGraph = null,
-        bool warmWeapon = false)
+        bool warmWeapon = false,
+        bool heldFlight = true)
     {
         ArgumentNullException.ThrowIfNull(mapDirectory);
         ArgumentNullException.ThrowIfNull(navDirectory);
@@ -732,7 +736,7 @@ public static class EdgeFlights
         {
             var (graphIndex, edgeIndex) = work[i];
             var graph = graphs[graphIndex];
-            flights[i] = Fly(graph.World(), edgeIndex, team, budget, graph.Distances, warmWeapon);
+            flights[i] = Fly(graph.World(), edgeIndex, team, budget, graph.Distances, warmWeapon, heldFlight);
         });
 
         if (onGraph is not null)

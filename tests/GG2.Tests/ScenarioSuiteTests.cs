@@ -69,22 +69,25 @@ public sealed class ScenarioSuiteTests(ITestOutputHelper output)
     /// names — the same reason <see cref="Unmet"/> is checked both ways.
     /// </para>
     /// </remarks>
+    // Re-recorded 2026-10-11 for held flight (N1): seven legs faster, the
+    // largest truefort-spawn-to-intel 1548 -> 1442 and valley-shaft-crate 95 -> 70,
+    // and oldfort-perch-reroutes 1190 -> 1192.
     private static readonly Dictionary<string, int> Baseline = new(StringComparer.Ordinal)
     {
-        ["valley-floor-to-point"] = 219,
-        ["valley-spawn-to-point"] = 523,
-        ["valley-point-to-spawn"] = 438,
-        ["valley-shaft-crate-to-point"] = 95,
+        ["valley-floor-to-point"] = 180,
+        ["valley-spawn-to-point"] = 520,
+        ["valley-point-to-spawn"] = 429,
+        ["valley-shaft-crate-to-point"] = 70,
         ["valley-shaft-floor-to-point"] = 132,
-        ["truefort-spawn-to-intel"] = 1548,
+        ["truefort-spawn-to-intel"] = 1442,
         ["truefort-blue-spawn-exit-west"] = 53,
-        ["avanti-ramp-pocket-to-intel"] = 220,
+        ["avanti-ramp-pocket-to-intel"] = 217,
         ["gallery-pit-climb"] = 261,
         ["soldier-shells-generator"] = 600,
         ["soldier-holds-and-fires"] = 400,
         ["sniper-fires-at-close-range"] = 400,
-        ["atalia-ground-to-point"] = 62,
-        ["oldfort-perch-reroutes"] = 1190,
+        ["atalia-ground-to-point"] = 59,
+        ["oldfort-perch-reroutes"] = 1192,
     };
 
     /// <summary>

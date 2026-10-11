@@ -232,6 +232,18 @@ public sealed partial class PathFollower
     public NavDistanceSet? Distances { get; set; }
 
     /// <summary>
+    /// Plain jumps are taken where a held jump is predicted to land, and flown
+    /// holding the key (N1), with the gate and the tracker as the fallback. On by
+    /// default; needs <see cref="Collision"/>, and does nothing without it.
+    /// </summary>
+    /// <remarks>
+    /// <c>gg2-rl</c> <c>docs/PLAN.md</c>, navigation: bots used to brake to the
+    /// arc's planned speed, jump at about half the people's speed and chatter the
+    /// keys in the air. People run at the obstacle and hold the key.
+    /// </remarks>
+    public bool HeldFlight { get; set; } = true;
+
+    /// <summary>
     /// Advances one bot's route by a tick and returns the movement keys.
     /// </summary>
     /// <param name="state">The bot's navigation state, updated in place.</param>
@@ -605,6 +617,7 @@ public sealed partial class PathFollower
         {
             state.TakeoffTicks = 0;
             state.RunupAt = -1;
+            state.HeldDir = 0;
         }
 
         state.EdgeFrom = current;
@@ -724,7 +737,17 @@ public sealed partial class PathFollower
         // accelerating into it from a stop — sounds better, and measured no
         // better on koth_valley (three trials at <90, 273 and 277 frames against
         // 220 and 239 without it). It stays out.
-        if (steer.Braking)
+        if (steer.Hold)
+        {
+            // A held flight: one key, or none, chosen by where it lands.
+            keys &= ~(PlayerKeys.Left | PlayerKeys.Right);
+
+            if (steer.HoldDir > 0)
+                keys |= PlayerKeys.Right;
+            else if (steer.HoldDir < 0)
+                keys |= PlayerKeys.Left;
+        }
+        else if (steer.Braking)
         {
             keys &= ~(PlayerKeys.Left | PlayerKeys.Right);
 

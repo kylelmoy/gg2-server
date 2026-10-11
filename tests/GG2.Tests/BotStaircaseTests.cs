@@ -201,6 +201,8 @@ public sealed class BotStaircaseTests(ITestOutputHelper output)
 
         Assert.Equal(0, sweep.Shuttled);
         Assert.Equal(24, sweep.Arrived);
-        Assert.InRange(sweep.MeanTicks, 1590, 1625);
+        // 1590-1625 until held flight (N1, 2026-10-11) took the stairs' plain
+        // jumps at speed: about 1,510 since. Still no shuttle and every start arrives.
+        Assert.InRange(sweep.MeanTicks, 1490, 1530);
     }
 }

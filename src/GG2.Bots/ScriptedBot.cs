@@ -1090,6 +1090,31 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         SpotBanUntil = tick + SpotBanTicks;
     }
 
+    /// <summary>
+    /// A hold: no walking, and no held-flight take-off either.
+    /// </summary>
+    /// <remarks>
+    /// The follower launches a held flight (N1) from up to six columns short of
+    /// the take-off, on a prediction that assumed it would also walk. A hold that
+    /// stripped only the direction turned that into a hop straight up, and the
+    /// flight then carried the bot off: a heavy told to stand and fight left its
+    /// post by 157px (<c>BotUnderFireTests</c>). <see cref="BotPathState.HeldDir"/>
+    /// is non-zero on the ground only on the tick of such a launch.
+    /// </remarks>
+    private PlayerKeys Hold(PlayerKeys navKeys)
+    {
+        navKeys &= ~(PlayerKeys.Left | PlayerKeys.Right);
+
+        if (Path.HeldDir != 0)
+        {
+            navKeys &= ~PlayerKeys.Jump;
+            Path.HeldDir = 0;
+            Path.JumpHeld = false;
+        }
+
+        return navKeys;
+    }
+
     private PlayerKeys ApplyHolds(in WorldView world, int slot, int tick, PlayerKeys navKeys)
     {
         ref readonly var self = ref world.Character(slot);
@@ -1120,7 +1145,7 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
             }
             else
             {
-                navKeys &= ~(PlayerKeys.Left | PlayerKeys.Right);
+                navKeys = Hold(navKeys);
 
                 // And clear the stuck counter, which is the other half of the
                 // same mistake. The follower runs its detector on the keys it
@@ -1187,7 +1212,7 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
 
         if (WantsToEngage)
         {
-            navKeys &= ~(PlayerKeys.Left | PlayerKeys.Right);
+            navKeys = Hold(navKeys);
             Path.StuckTicks = 0;
 
             // A class that has to be NEARER than its attention band before it

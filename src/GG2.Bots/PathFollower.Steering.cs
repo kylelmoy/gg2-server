@@ -22,6 +22,12 @@ public sealed partial class PathFollower
         /// <summary>Ask for a jump this tick. Edge-triggered — see <see cref="Press"/>.</summary>
         public bool WantJump;
 
+        /// <summary>A held flight's key: <see cref="HoldDir"/> replaces the steering keys.</summary>
+        public bool Hold;
+
+        /// <inheritdoc cref="Hold"/>
+        public int HoldDir;
+
         /// <summary>Fly the plan instead of steering: <see cref="TrackX"/> replaces the keys.</summary>
         public bool Tracking;
 
@@ -184,6 +190,14 @@ public sealed partial class PathFollower
         var along = character.HSpeed * jumpDir;
         var isRocket = edge.Type == NavEdgeType.RocketJump;
 
+        // Where the planned arc comes down. A held flight may land anywhere on
+        // the destination from its near end up to a little past this, and no
+        // further: the route after it was planned from about here, and a body
+        // that lands far past it at full speed has to come back for the next
+        // edge — cp_dirtbowl 335 -> 320 -> 323 overran the small ledge it was
+        // walking back to and fell, every attempt.
+        var landPlan = NavGraph.ColumnWorldX(takeoff) + (jumpDir * jumpDistance);
+
         if (!character.OnGround)
         {
             state.AirTicks++;
@@ -248,6 +262,23 @@ public sealed partial class PathFollower
                 state.DoubleJumps++;
             }
 
+            // A held flight keeps its key while that still lands on the
+            // destination, then coasts, then counter-steers; the tracker takes
+            // over only if none of them lands.
+            if (state.HeldDir != 0 && edge.Type == NavEdgeType.Jump && Collision is { } air)
+            {
+                if (HeldKey(air, state, in character, next, landPlan, jumpDir) is { } key)
+                {
+                    steer.Hold = true;
+                    steer.HoldDir = key;
+                    state.FlyingEdge = true;
+                    return;
+                }
+
+                state.HeldDir = 0;
+                state.HeldFallbacks++;
+            }
+
             // Where the plan says to be now, clamped at the landing so a bot that
             // is late keeps pressing toward it rather than aiming past it.
             steer.TrackX = NavGraph.ColumnWorldX(takeoff)
@@ -271,6 +302,30 @@ public sealed partial class PathFollower
             steer.TrackDir = jumpDir;
 
             state.FlyingEdge = true;
+            return;
+        }
+
+        state.HeldDir = 0;
+
+        // N1: jump where a person would. Near the takeoff, if jumping now and
+        // holding toward the landing comes down on the destination, go: no
+        // speed ceiling, no braking, no run-up. JumpHeld is checked because a
+        // press on the tick after one is not a press, and the prediction assumed
+        // one.
+        if (HeldFlight
+            && edge.Type == NavEdgeType.Jump
+            && Collision is { } ground
+            && !state.JumpHeld
+            && Math.Abs(column - takeoff) <= BotConstants.RunupCells
+            && CanLaunchHeld(ground, in character, jumpDir, next, landPlan))
+        {
+            Launch(state, ref steer, rocket: false);
+            state.HeldDir = jumpDir;
+            state.HeldKey = jumpDir;
+            state.HeldLaunches++;
+            state.Launches++;
+            steer.Hold = true;
+            steer.HoldDir = jumpDir;
             return;
         }
 
@@ -764,6 +819,61 @@ public sealed partial class PathFollower
 
         return false;
     }
+
+    /// <summary>
+    /// The key a held flight presses this tick: the one it pressed last if that
+    /// still lands on <paramref name="next"/>, else the held direction, else
+    /// none, else the other way; null when nothing lands there.
+    /// </summary>
+    /// <remarks>
+    /// Keeping last tick's key first is what makes the flight hold rather than
+    /// flip: a coast that lands is not traded back for a press that also lands.
+    /// </remarks>
+    private int? HeldKey(
+        CollisionWorld world, BotPathState state, in CharacterState character, int next, double landPlan, int jumpDir)
+    {
+        Span<int> order = [state.HeldKey, state.HeldDir, 0, -state.HeldDir];
+
+        foreach (var key in order)
+        {
+            if (FlightPredictor.Land(world, in character, key, jump: false, out var x, out var y, out _)
+                && InLandingWindow(x, y, next, landPlan, jumpDir))
+            {
+                state.HeldKey = key;
+                return key;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether a take-off now, pressed toward the landing, has a key plan that
+    /// comes down in the landing window: held, let go, or reversed after the
+    /// first tick. The flight then picks between them tick by tick.
+    /// </summary>
+    private bool CanLaunchHeld(CollisionWorld world, in CharacterState character, int jumpDir, int next, double landPlan)
+    {
+        Span<int> then = [jumpDir, 0, -jumpDir];
+
+        foreach (var key in then)
+        {
+            if (FlightPredictor.Land(world, in character, jumpDir, key, jump: true, out var x, out var y, out _)
+                && InLandingWindow(x, y, next, landPlan, jumpDir))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>On the destination, and no more than <see cref="HeldOvershoot"/> past the planned landing.</summary>
+    private bool InLandingWindow(double x, double y, int next, double landPlan, int jumpDir) =>
+        _graph.NodeFromWorld(x, y) == next && (x - landPlan) * jumpDir <= HeldOvershoot;
+
+    /// <summary>How far past the planned landing a held flight may come down, in px: two cells.</summary>
+    private const double HeldOvershoot = 12;
 
     /// <summary>Commits to the arc: ask for the press and reset the per-arc state.</summary>
     /// <param name="rocket">

@@ -1608,10 +1608,12 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         // `UnsupportedEdgeTicks` does not see this: the ban is one of the counters
         // above, and it stays at zero because the dispatch switch saw a type it
         // handles.
-        Assert.Equal(1578, grabbedAt);
-        Assert.Equal(31, bot.Path.Replans);
+        // 1578, 31 replans and 10 off-route fires until held flight (N1,
+        // 2026-10-11) took the plain jumps without braking to the arc's speed.
+        Assert.Equal(1472, grabbedAt);
+        Assert.Equal(28, bot.Path.Replans);
         Assert.Equal(0, bot.Path.StuckFires);
-        Assert.Equal(10, bot.Path.OffRouteFires);
+        Assert.Equal(9, bot.Path.OffRouteFires);
         Assert.Equal(0, bot.Path.BlacklistFires);
 
         // And it turns round. The goal has to be re-decided on the objective

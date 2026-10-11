@@ -510,6 +510,26 @@ public sealed class BotPathState
 
     public int Launches { get; set; }
 
+    /// <summary>
+    /// The direction held through a <b>held flight</b> (N1), or 0 when the current
+    /// arc, if any, is the tracker's.
+    /// </summary>
+    /// <remarks>
+    /// Set when the bot launched because <see cref="FlightPredictor"/> said a
+    /// held jump from here lands on the edge's destination, and cleared on the
+    /// ground or a change of edge. <c>gg2-rl</c> <c>docs/PLAN.md</c>, navigation.
+    /// </remarks>
+    public int HeldDir { get; set; }
+
+    /// <summary>What the held flight pressed last tick (−1, 0 or 1), kept while it still lands.</summary>
+    public int HeldKey { get; set; }
+
+    /// <summary>Launches made on a predicted held flight.</summary>
+    public int HeldLaunches { get; set; }
+
+    /// <summary>Held flights handed back to the tracker because no key was predicted to land.</summary>
+    public int HeldFallbacks { get; set; }
+
     /// <inheritdoc cref="Launches"/>
     public int LaunchesUnderspeed { get; set; }
 
