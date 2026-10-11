@@ -323,6 +323,18 @@ public sealed partial class PathFollower
             && Math.Abs(column - takeoff) <= BotConstants.RunupCells
             && CanLaunchHeld(ground, in character, jumpDir, next, landPlan, overshoot))
         {
+            // N2: a held jump would land, but a person would not take it yet
+            // if running on still gains speed and the jump will still be there
+            // a tick from now. Keep running toward the landing instead: the
+            // approach below would brake to the arc's own speed.
+            if (!LastOrFastest(ground, in character, jumpDir, current, next, landPlan, overshoot))
+            {
+                state.HeldDeferred++;
+                steer.Hold = true;
+                steer.HoldDir = jumpDir;
+                return;
+            }
+
             Launch(state, ref steer, rocket: false);
             state.HeldDir = jumpDir;
             state.HeldKey = jumpDir;
@@ -873,6 +885,39 @@ public sealed partial class PathFollower
 
         return false;
     }
+
+    /// <summary>
+    /// Whether a feasible held take-off should go now: running on would gain
+    /// almost nothing, would leave the node it jumps from, or would leave no held
+    /// jump that lands (N2).
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Leaving the node is not leaving the ground.</b> On ctf_truefort's
+    /// stairs (edge 70 -> 9) the take-off is a one-column step, and a tick more
+    /// toward the landing walks the bot down onto the step below, still on the
+    /// ground: it lost the edge, re-planned and climbed back, eight blacklists
+    /// and 190 extra ticks.
+    /// </remarks>
+    private bool LastOrFastest(
+        CollisionWorld world, in CharacterState character, int jumpDir, int current, int next, double landPlan,
+        double overshoot)
+    {
+        var ahead = character;
+
+        if (!FlightPredictor.Run(world, ref ahead, jumpDir) || !ahead.OnGround
+            || _graph.NodeFromWorld(ahead.X, ahead.Y) != current)
+        {
+            return true;
+        }
+
+        if ((ahead.HSpeed - character.HSpeed) * jumpDir < AtSpeed)
+            return true;
+
+        return !CanLaunchHeld(world, in ahead, jumpDir, next, landPlan, overshoot);
+    }
+
+    /// <summary>A tick's speed gain below this is running flat out, in px/tick.</summary>
+    private const double AtSpeed = 0.15;
 
     /// <summary>On the destination, and no more than <paramref name="overshoot"/> past the planned landing.</summary>
     private bool InLandingWindow(double x, double y, int next, double landPlan, int jumpDir, double overshoot) =>

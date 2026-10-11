@@ -71,17 +71,19 @@ public sealed class ScenarioSuiteTests(ITestOutputHelper output)
     /// </remarks>
     // Re-recorded 2026-10-11 for held flight (N1): eleven legs faster, none
     // slower; the largest valley-floor-to-point 219 -> 132, truefort-spawn-to-intel
-    // 1548 -> 1391 and valley-shaft-crate 95 -> 70.
+    // 1548 -> 1391 and valley-shaft-crate 95 -> 70. Then N2 (launch at speed):
+    // truefort 1391 -> 1372, and four legs gave a little back (the shaft crate
+    // 70 -> 88, still under 95).
     private static readonly Dictionary<string, int> Baseline = new(StringComparer.Ordinal)
     {
         ["valley-floor-to-point"] = 132,
-        ["valley-spawn-to-point"] = 457,
+        ["valley-spawn-to-point"] = 462,
         ["valley-point-to-spawn"] = 387,
-        ["valley-shaft-crate-to-point"] = 70,
-        ["valley-shaft-floor-to-point"] = 113,
-        ["truefort-spawn-to-intel"] = 1391,
+        ["valley-shaft-crate-to-point"] = 88,
+        ["valley-shaft-floor-to-point"] = 118,
+        ["truefort-spawn-to-intel"] = 1372,
         ["truefort-blue-spawn-exit-west"] = 42,
-        ["avanti-ramp-pocket-to-intel"] = 217,
+        ["avanti-ramp-pocket-to-intel"] = 218,
         ["gallery-pit-climb"] = 259,
         ["soldier-shells-generator"] = 600,
         ["soldier-holds-and-fires"] = 400,

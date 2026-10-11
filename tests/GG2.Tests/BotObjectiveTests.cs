@@ -1610,11 +1610,12 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         // handles.
         // The intel at 1578, 31 replans and 10 off-route fires until held flight
         // (N1, 2026-10-11) took the plain jumps without braking to the arc's
-        // speed: faster, fewer replans, one more landing off the route.
-        Assert.Equal(1421, grabbedAt);
-        Assert.Equal(30, bot.Path.Replans);
+        // speed, and N2 ran up to speed first: the intel at 1398, 29 replans and
+        // 9 off-route landings.
+        Assert.Equal(1398, grabbedAt);
+        Assert.Equal(29, bot.Path.Replans);
         Assert.Equal(0, bot.Path.StuckFires);
-        Assert.Equal(11, bot.Path.OffRouteFires);
+        Assert.Equal(9, bot.Path.OffRouteFires);
         Assert.Equal(0, bot.Path.BlacklistFires);
 
         // And it turns round. The goal has to be re-decided on the objective

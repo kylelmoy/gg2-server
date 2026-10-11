@@ -104,5 +104,23 @@ public static class FlightPredictor
         return false;
     }
 
+    /// <summary>
+    /// One tick of <paramref name="c"/> holding <paramref name="dir"/> and no
+    /// jump, with the same held keys a flight keeps.
+    /// </summary>
+    /// <returns>Whether it is still alive.</returns>
+    public static bool Run(CollisionWorld world, ref CharacterState c, int dir)
+    {
+        var kept = c.KeyState & (PlayerKeys.Attack | PlayerKeys.Special);
+        c.ApplyInput(new PlayerInput(Key(dir) | kept, c.NetAimDirection, c.AimDistance));
+
+        CharacterPhysics.BeginStepInput(world, ref c);
+        CharacterPhysics.BeginStepAccelerate(world, ref c);
+        CharacterPhysics.Step(world, ref c);
+        CharacterPhysics.HeavyStep(ref c);
+
+        return !CharacterPhysics.EndStep(world, ref c);
+    }
+
     private static PlayerKeys Key(int dir) => dir > 0 ? PlayerKeys.Right : dir < 0 ? PlayerKeys.Left : PlayerKeys.None;
 }

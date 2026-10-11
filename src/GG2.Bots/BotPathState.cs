@@ -527,6 +527,9 @@ public sealed class BotPathState
     /// <summary>Launches made on a predicted held flight.</summary>
     public int HeldLaunches { get; set; }
 
+    /// <summary>Ticks a feasible held take-off was put off to run up to speed (N2).</summary>
+    public int HeldDeferred { get; set; }
+
     /// <summary>Held flights handed back to the tracker because no key was predicted to land.</summary>
     public int HeldFallbacks { get; set; }
 
