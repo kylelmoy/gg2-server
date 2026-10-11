@@ -549,6 +549,14 @@ and `PathFollower.HeldFlight` switches it off.
   changes 0.25 → 0.07; flights with no key change 5% → 64% (people 67%).
 - Gap take-offs are still slower than people's (3.72 against 5.07).
 
+**N2, launch at speed.** A feasible held take-off now waits while one more tick
+of running still gains speed, keeps the bot on the take-off node, and keeps a
+landing jump. ⚠️ **A node is not the ground:** the first build checked only
+that the bot stayed grounded. On ctf_truefort's one-column stair steps, one more
+tick walked it down onto the step below, still grounded, so it lost the edge
+every time. That cost eight blacklists on the edge and 343 plain jumps across
+the corpus. Step take-off speed is now the people's (3.41), and gaps 4.05.
+
 ### Phase 7 item 4c-i: what to shoot at, and where to point
 
 `GG2.Bots.{BotTargeting, BotAim}`. Gated by `BotTargetingTests` and
