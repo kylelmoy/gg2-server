@@ -508,6 +508,47 @@ on the *search* refusing an edge never reaches the follower: the double-jump
 control passed with `CanDoubleJump` deleted until made to plan as a scout
 and fly as something else.
 
+### Held flight: plain jumps taken the way a person takes them (2026-10-11)
+
+**Why.** Measured against people in the fleet's traces (`tools/navscan`,
+`gg2-rl` `docs/PLAN.md`, navigation), bots braked to the arc's planned speed,
+jumped at about half the people's speed, and changed keys every four ticks in
+the air. People run at the obstacle and hold one key.
+
+**What.** `FlightPredictor` steps a copy of the character through the real
+per-tick physics against the map. For a plain `Jump` edge, the follower
+launches the first tick near the take-off that a jump pressed toward the
+landing, then held, let go or reversed, comes down in the landing window.
+In the air it keeps last tick's key while that still lands, then tries the held
+direction, none, and the reverse. The gate and the tracker remain the fallback,
+and `PathFollower.HeldFlight` switches it off.
+
+**⚠️ Three traps, each found by a bar before any number was read:**
+- **"Lands on the destination" is not a safe target.** Where the route turns
+  back after the jump, a held jump that lands far past the planned arc leaves
+  the bot running back at full speed. On cp_dirtbowl 335 → 320 → 323 it
+  overran the small ledge it was returning to, every attempt, and the corpus
+  sweep stranded 535 → 717. So the window ends two cells past the planned
+  landing, unless the next node or the goal lies further on in the jump's
+  direction. In that case it reaches the end of the destination, which is what
+  made held flight engage over gaps at all.
+- **A prediction must carry every held key, not only the ones it is
+  choosing.** A heavy firing its minigun runs slower. Predicted without the
+  trigger, its jump fell short onto another node, and a heavy told to hold its
+  post under fire left it by 157px. The predictor keeps attack and special as
+  they were held.
+- **A hold that strips only the direction turns a held take-off into a hop.**
+  The follower can launch up to six columns short of the take-off, and the
+  engage and regroup holds stripped left and right but not jump. They now cancel
+  a held launch made that tick.
+
+**Result:**
+- Corpus sweep: stranded 535 → 494, ticks −4.3%. Every scenario leg that moved
+  got faster.
+- At difficulty 3, step take-off speed 1.58 → 3.26 (people 3.41); air key
+  changes 0.25 → 0.07; flights with no key change 5% → 64% (people 67%).
+- Gap take-offs are still slower than people's (3.72 against 5.07).
+
 ### Phase 7 item 4c-i: what to shoot at, and where to point
 
 `GG2.Bots.{BotTargeting, BotAim}`. Gated by `BotTargetingTests` and
