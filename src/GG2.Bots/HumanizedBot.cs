@@ -93,6 +93,7 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
     private GmlRandom _legsRandom;
     private bool _legsOn;
     private double _intent;
+    private double _activity;
     private int _heading;
     private bool? _jumpDecision;
     private bool _jumpOut;
@@ -235,13 +236,31 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
         {
             _legsOn = true;
             _intent = wanted;
+            _activity = Math.Abs(wanted);
             _heading = wanted;
         }
         else
         {
             _intent = (Options.LegMemory * _intent) + ((1 - Options.LegMemory) * wanted);
+            _activity = (Options.LegMemory * _activity) + ((1 - Options.LegMemory) * Math.Abs(wanted));
 
-            if (_heading == 0)
+            if (Options.KeepsRunning)
+            {
+                if (_heading == 0)
+                {
+                    if (Math.Abs(_intent) >= Options.LegStartIntent || _activity >= Options.LegStartIntent)
+                        _heading = _intent != 0 ? Math.Sign(_intent) : wanted;
+                }
+                else if (_intent * _heading <= -Options.LegReverseIntent)
+                {
+                    _heading = -_heading;
+                }
+                else if (_activity < Options.LegIdleActivity)
+                {
+                    _heading = 0;
+                }
+            }
+            else if (_heading == 0)
             {
                 if (Math.Abs(_intent) >= Options.LegStartIntent)
                     _heading = Math.Sign(_intent);
@@ -501,6 +520,14 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
 /// </param>
 /// <param name="LegStartIntent">Standing, the legs start once the average reaches this, either way.</param>
 /// <param name="LegStopIntent">Moving, they stop once the average toward the heading falls below this.</param>
+/// <param name="LegReverseIntent">
+/// D7. Set, the legs keep running through a dance: moving, they reverse straight
+/// away once the average against the heading reaches this, and stop only once the
+/// brain's activity (the average of \|left/right\|) falls below
+/// <paramref name="LegIdleActivity"/>. Standing, a dance starts them too.
+/// <paramref name="LegStopIntent"/> is then unused. NaN, the default, is D6.
+/// </param>
+/// <param name="LegIdleActivity">D7. Moving, the legs stop once the brain's activity falls below this.</param>
 /// <param name="JumpKeep">The chance a policy jump press passes.</param>
 /// <param name="JumpRefractoryTicks">No policy jump passes within this many ticks of the last one that did.</param>
 /// <param name="HoldWithoutTarget">
@@ -533,10 +560,15 @@ public sealed record HumanizeOptions(
     double LegStartIntent = 0.5,
     double LegStopIntent = 0.2,
     double JumpKeep = 1.0,
-    int JumpRefractoryTicks = 0)
+    int JumpRefractoryTicks = 0,
+    double LegReverseIntent = double.NaN,
+    double LegIdleActivity = 0.2)
 {
     /// <summary>Whether D6's leg filter is on.</summary>
     public bool FiltersLegs => !double.IsNaN(LegMemory);
+
+    /// <summary>Whether the legs keep running through a dance (D7) rather than stand (D6).</summary>
+    public bool KeepsRunning => !double.IsNaN(LegReverseIntent);
 
     /// <summary>
     /// v3, the shipped shape: one-tick flicks and unsmoothed corrections. These
@@ -648,15 +680,31 @@ public sealed record HumanizeOptions(
         JumpRefractoryTicks = 90,
     };
 
+    /// <summary>
+    /// D7's candidate: <see cref="Tracking3"/>'s jumps, with legs that keep running
+    /// through the policy's dance instead of standing. Averaged at 0.95 a tick; a
+    /// reversal needs the average at 0.75 against the heading, and the legs stop
+    /// once the brain's activity falls below 0.3. Fitted with <c>BENCH_TURNS</c> at
+    /// tier 4 to the people's reversals, \|Δhspeed\| and take-offs and a speed
+    /// target (<c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, D7).
+    /// </summary>
+    public static HumanizeOptions Tracking4 { get; } = Tracking3 with
+    {
+        LegMemory = 0.95,
+        LegStartIntent = 0.75,
+        LegReverseIntent = 0.75,
+        LegIdleActivity = 0.3,
+    };
+
     /// <summary>The preset names a setting can carry.</summary>
-    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy", "hold", "tracking", "tracking2", "tracking3"];
+    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy", "hold", "tracking", "tracking2", "tracking3", "tracking4"];
 
     /// <summary>A preset's canonical name in <see cref="PresetNames"/>, refusing anything else.</summary>
     /// <exception cref="FormatException">The name is not a preset.</exception>
     public static string PresetName(string name)
     {
         var options = ForPreset(name);
-        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : options == Hold ? "hold" : options == Tracking ? "tracking" : options == Tracking2 ? "tracking2" : options == Tracking3 ? "tracking3" : "v3";
+        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : options == Hold ? "hold" : options == Tracking ? "tracking" : options == Tracking2 ? "tracking2" : options == Tracking3 ? "tracking3" : options == Tracking4 ? "tracking4" : "v3";
     }
 
     /// <summary>A preset by name, case-insensitive.</summary>
@@ -671,6 +719,7 @@ public sealed record HumanizeOptions(
         // tracking2e was D5's candidate, folded into Tracking2 when it passed.
         "tracking2" or "d4" or "tracking2e" or "d5" => Tracking2,
         "tracking3" or "d6" => Tracking3,
-        _ => throw new FormatException($"humanize preset '{name}': v3, strokes, lazy, hold, tracking, tracking2 or tracking3"),
+        "tracking4" or "d7" => Tracking4,
+        _ => throw new FormatException($"humanize preset '{name}': v3, strokes, lazy, hold, tracking, tracking2, tracking3 or tracking4"),
     };
 }

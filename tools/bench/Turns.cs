@@ -54,7 +54,8 @@ public static class Turns
         var tier = int.Parse(Environment.GetEnvironmentVariable("BENCH_TURNS_TIER") ?? "5", CultureInfo.InvariantCulture);
         var humanize = HumanizeOptions.ForPreset(preset);
 
-        // D6's fit: BENCH_LEGS=memory,start,stop,keep,refractory overrides the preset's legs.
+        // D6's fit: BENCH_LEGS=memory,start,stop,keep,refractory[,reverse,idle] overrides the
+        // preset's legs; the last two are D7's.
         if (Environment.GetEnvironmentVariable("BENCH_LEGS") is { Length: > 0 } legs)
         {
             var v = legs.Split(',').Select(x => double.Parse(x, CultureInfo.InvariantCulture)).ToArray();
@@ -65,6 +66,8 @@ public static class Turns
                 LegStopIntent = v[2],
                 JumpKeep = v[3],
                 JumpRefractoryTicks = (int)v[4],
+                LegReverseIntent = v.Length > 5 ? v[5] : double.NaN,
+                LegIdleActivity = v.Length > 6 ? v[6] : 0.2,
             };
             preset += $" legs {legs}";
         }

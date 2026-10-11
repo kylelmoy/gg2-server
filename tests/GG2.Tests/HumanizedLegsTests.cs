@@ -53,7 +53,9 @@ public sealed class HumanizedLegsTests
         JumpRefractoryTicks = 15,
     };
 
-    private static (int Changes, int Presses, int PolicyTicks) Run(HumanizeOptions options, int ticks)
+    private static HumanizeOptions Running { get; } = Legs with { LegReverseIntent = 0.5, LegIdleActivity = 0.2 };
+
+    private static (int Changes, int Presses, int PolicyTicks, int Moving) Run(HumanizeOptions options, int ticks)
     {
         var world = ScenarioWorld.Load("ctf_truefort", 1, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
         var red = world.Place(PlayerClass.Soldier, Team.Red, 600, 850);
@@ -66,6 +68,7 @@ public sealed class HumanizedLegsTests
         var changes = 0;
         var presses = 0;
         var policyTicks = 0;
+        var moving = 0;
         var last = PlayerKeys.None;
 
         for (var tick = 0; tick < ticks; tick++)
@@ -76,6 +79,9 @@ public sealed class HumanizedLegsTests
             if (hybrid.MicroDrove)
             {
                 policyTicks++;
+
+                if ((keys & (PlayerKeys.Left | PlayerKeys.Right)) != 0)
+                    moving++;
 
                 if ((keys & (PlayerKeys.Left | PlayerKeys.Right)) != (last & (PlayerKeys.Left | PlayerKeys.Right)))
                     changes++;
@@ -88,7 +94,7 @@ public sealed class HumanizedLegsTests
             world.Step();
         }
 
-        return (changes, presses, policyTicks);
+        return (changes, presses, policyTicks, moving);
     }
 
     /// <summary>
@@ -105,6 +111,19 @@ public sealed class HumanizedLegsTests
         Assert.True(off.Changes > off.PolicyTicks / 3, $"without legs, {off.Changes} changes: the control did not dance");
         Assert.True(on.Changes < off.Changes / 5, $"legs: {on.Changes} changes against {off.Changes}");
         Assert.True(on.Presses < off.Presses / 2, $"legs: {on.Presses} presses against {off.Presses}");
+    }
+
+    /// <summary>D7: the same dance keeps the legs running instead of standing.</summary>
+    [Fact]
+    public void ADanceKeepsRunning()
+    {
+        var off = Run(HumanizeOptions.Tracking2, 300);
+        var stand = Run(Legs, 300);
+        var run = Run(Running, 300);
+
+        Assert.True(run.Changes < off.Changes / 5, $"running: {run.Changes} changes against {off.Changes}");
+        Assert.True(run.Moving > run.PolicyTicks * 9 / 10, $"running: moving {run.Moving} of {run.PolicyTicks} policy ticks");
+        Assert.True(stand.Moving < stand.PolicyTicks / 2, $"standing: moving {stand.Moving} of {stand.PolicyTicks}, so the contrast proves little");
     }
 
     /// <summary>Tier 5 passes through exactly, legs and all.</summary>
