@@ -132,14 +132,14 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
     /// <summary>
     /// The difficulty knob: every bot is wrapped, and the filter runs only while the
     /// bot's current <see cref="BotSkill.HumanAim"/> asks for it, with
-    /// <see cref="HumanizeOptions.Tracking6"/> (D9; <see cref="HumanizeOptions.Tracking2"/> was D4-D5 and <see cref="HumanizeOptions.Tracking"/> D3). Otherwise it is an exact pass-through
+    /// <see cref="HumanizeOptions.Tracking7"/> (D10; <see cref="HumanizeOptions.Tracking6"/> was D9, <see cref="HumanizeOptions.Tracking2"/> D4-D5 and <see cref="HumanizeOptions.Tracking"/> D3). Otherwise it is an exact pass-through
     /// that draws nothing, so tier 5 plays exactly as it would unwrapped.
     /// </summary>
     /// <param name="inner">The brain.</param>
     /// <param name="seed">The filter's own stream.</param>
-    /// <param name="options">The preset, or null for <see cref="HumanizeOptions.Tracking6"/>; a bench arm sets it.</param>
+    /// <param name="options">The preset, or null for <see cref="HumanizeOptions.Tracking7"/>; a bench arm sets it.</param>
     public static HumanizedBot ByTier(IInputSource inner, uint seed, HumanizeOptions? options = null) =>
-        new(inner, options ?? HumanizeOptions.Tracking6, seed) { OnlyWhenSkillAsks = true };
+        new(inner, options ?? HumanizeOptions.Tracking7, seed) { OnlyWhenSkillAsks = true };
 
     /// <summary>Run only while the scripted layer's skill has <see cref="BotSkill.HumanAim"/>.</summary>
     public bool OnlyWhenSkillAsks { get; init; }
@@ -714,7 +714,7 @@ public sealed record HumanizeOptions(
     /// <summary>
     /// D9: <see cref="Tracking5"/> with pursuit gain 0.10, between D4's and D8's,
     /// to give back the aim error the fleet discriminator read in D8 (<c>gg2-rl</c>
-    /// <c>docs/PLAN.md</c> phase 5, D9). <b>What tiers 1-4 use</b>, through
+    /// <c>docs/PLAN.md</c> phase 5, D9). <b>What tiers 1-4 used until D10</b>, through
     /// <see cref="HumanizedBot.ByTier"/>, adopted by the user on 2026-10-11 over the
     /// registered bars: at tier 4 O2 fell 0.761 to 0.734 (bar 0.03) with the ladder
     /// even, and the fleet discriminator read 0.580 to 0.596 at 150px and 0.648 to
@@ -727,7 +727,11 @@ public sealed record HumanizeOptions(
     /// legs, and the policy's jumps thinned to the people's grounded share rather
     /// than their take-off count: half the presses pass, with no refractory window.
     /// Fitted with <c>BENCH_TURNS</c>'s grounded share at tier 4 (<c>gg2-rl</c>
-    /// <c>docs/PLAN.md</c> phase 5, D10).
+    /// <c>docs/PLAN.md</c> phase 5, D10). <b>What tiers 1-4 use</b>, through
+    /// <see cref="HumanizedBot.ByTier"/>, adopted by the user on 2026-10-11 over its
+    /// bars, with <see cref="BotSkill.TierSkills"/> respread: at tier 4 against D9, O2
+    /// 0.753 to 0.712 and the fleet discriminator better at 150px (−0.020, −0.011 on
+    /// two recordings) and worse at 300px (+0.007, +0.012).
     /// </summary>
     public static HumanizeOptions Tracking7 { get; } = Tracking6 with
     {

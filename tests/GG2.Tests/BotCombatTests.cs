@@ -196,8 +196,9 @@ public sealed class BotCombatTests
         Assert.True(lastSlope > middleSlope);
 
         // Tier 5 is the top of the ramp. Since D3 tier 4 plays the same skill and
-        // differs only in aiming like a person; tier 1 starts one place up the ramp.
-        Assert.Equal(BotSkill.For(0.30) with { HumanAim = true }, BotSkill.ForTier(1));
+        // differs only in aiming like a person; since D10 tiers 1-3 are spread
+        // further apart, because tier 4's legs widened the top step.
+        Assert.Equal(BotSkill.For(0.20) with { HumanAim = true }, BotSkill.ForTier(1));
         Assert.Equal(BotSkill.For(0.95) with { HumanAim = true }, BotSkill.ForTier(4));
         Assert.Equal(BotSkill.For(0.95), BotSkill.ForTier(5));
     }

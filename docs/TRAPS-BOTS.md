@@ -769,6 +769,11 @@ model.** Four gates, all off `BotSkill`:
   recording. The 300px loss sits in the legs' own close-range ticks and goes
   with higher aim error. D11 (`tracking8`, pursuit gain 0.12) did not lower the
   error and was left off.
+  **The user adopted D10 on 2026-10-11 with the ladder respread:
+  `Tracking7` is what tiers 1-4 use, and `TierSkills` is 0.20, 0.37, 0.61,
+  0.95, 0.95.** Tier 4 already plays the top skill, so the legs' cost could not
+  be bought back there. Instead tiers 1-3 were spaced further apart, and the
+  ladder reads −0.091 / −0.153 / −0.225 / −0.292. Easy got easier.
 
 - ⚠️ **Aim error is UNIFORM on [-1, 1], not Gaussian** (Quake III's
   `crandom()`), with two multipliers: moving-target scale, and **Quake

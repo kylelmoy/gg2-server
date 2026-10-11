@@ -44,7 +44,7 @@ namespace GG2.Bots;
 /// </param>
 /// <param name="HumanAim">
 /// Whether this bot's aim, scripted or policy, goes through
-/// <see cref="HumanizeOptions.Tracking6"/>: lagging its target the way people do.
+/// <see cref="HumanizeOptions.Tracking7"/>: lagging its target the way people do.
 /// True for tiers 1-4 and false for tier 5, which stays the strongest bot there is
 /// (<c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, D3). Applied by
 /// <see cref="HumanizedBot.ByTier"/>, so a live difficulty change takes at once.
@@ -136,8 +136,15 @@ public readonly record struct BotSkill(
     /// skill aiming like a person, and the ladder keeps its even steps.
     /// <c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, D3, has both ladders.
     /// </para>
+    /// <para>
+    /// <b>Tiers 1-3 spread on 2026-10-11, when tiers 1-4 began to move like people</b>
+    /// (<see cref="HumanizeOptions.Tracking7"/>, D10). Tier 4 already plays the top
+    /// skill, so the legs' cost widened the 4-to-5 step and no skill could close it;
+    /// tiers 1-3 were spaced further apart (from 0.30, 0.42, 0.67) so every step is
+    /// within half a step of the others. Easy got easier.
+    /// </para>
     /// </remarks>
-    public static ReadOnlySpan<double> TierSkills => [0.30, 0.42, 0.67, 0.95, 0.95];
+    public static ReadOnlySpan<double> TierSkills => [0.20, 0.37, 0.61, 0.95, 0.95];
 
     /// <summary>The server's 1-5 difficulty as a skill, from <see cref="TierSkills"/>.</summary>
     /// <remarks>
