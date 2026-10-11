@@ -46,6 +46,7 @@ public static class Turns
         public long Still;
         public double Accel;
         public long Reversals;
+        public long Grounded;
     }
 
     public static void Run(string maps, string nav, string checkpoints, int perMap)
@@ -170,6 +171,9 @@ public static class Turns
                     if (Math.Abs(body.HSpeed) < 0.5)
                         tally.Still++;
 
+                    if (body.OnGround)
+                        tally.Grounded++;
+
                     if (reversed)
                         tally.Reversals++;
 
@@ -210,6 +214,7 @@ public static class Turns
                     total.Still += tally.Still;
                     total.Accel += tally.Accel;
                     total.Reversals += tally.Reversals;
+                    total.Grounded += tally.Grounded;
                 }
             }
         });
@@ -220,17 +225,17 @@ public static class Turns
 
         Console.WriteLine();
         Console.WriteLine("red bots with a visible enemy within 150px, per tick of the character's aim");
-        Console.WriteLine("category        ticks   share   |turn|  share of turn   big%   share of big turns   jumps/30t  |hspeed|  dodges/30t  still   |dv|  revs/30t  keyed/30t");
+        Console.WriteLine("category        ticks   share   |turn|  share of turn   big%   share of big turns   jumps/30t  |hspeed|  dodges/30t  still   |dv|  revs/30t  keyed/30t  ground");
 
         foreach (var category in Categories)
         {
             var t = totals.GetValueOrDefault(category) ?? new Tally();
             Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
-                $"{category,-12} {t.Ticks,9:N0}  {100.0 * t.Ticks / Math.Max(1, ticks),5:0.0}%  {t.Turn / Math.Max(1, t.Ticks),6:0.00}  {100.0 * t.Turn / Math.Max(1e-9, turnSum),12:0.0}%  {100.0 * t.Big / Math.Max(1, t.Ticks),5:0.0}%  {100.0 * t.Big / Math.Max(1, bigSum),12:0.0}%  {30.0 * t.Jumps / Math.Max(1, t.Ticks),9:0.00}  {t.Speed / Math.Max(1, t.Ticks),8:0.00}  {30.0 * t.Dodges / Math.Max(1, t.Ticks),10:0.00}  {(double)t.Still / Math.Max(1, t.Ticks),5:0.00}  {t.Accel / Math.Max(1, t.Ticks),5:0.00}  {30.0 * t.Reversals / Math.Max(1, t.Ticks),8:0.00}  {30.0 * t.Keyed / Math.Max(1, t.Ticks),9:0.00}"));
+                $"{category,-12} {t.Ticks,9:N0}  {100.0 * t.Ticks / Math.Max(1, ticks),5:0.0}%  {t.Turn / Math.Max(1, t.Ticks),6:0.00}  {100.0 * t.Turn / Math.Max(1e-9, turnSum),12:0.0}%  {100.0 * t.Big / Math.Max(1, t.Ticks),5:0.0}%  {100.0 * t.Big / Math.Max(1, bigSum),12:0.0}%  {30.0 * t.Jumps / Math.Max(1, t.Ticks),9:0.00}  {t.Speed / Math.Max(1, t.Ticks),8:0.00}  {30.0 * t.Dodges / Math.Max(1, t.Ticks),10:0.00}  {(double)t.Still / Math.Max(1, t.Ticks),5:0.00}  {t.Accel / Math.Max(1, t.Ticks),5:0.00}  {30.0 * t.Reversals / Math.Max(1, t.Ticks),8:0.00}  {30.0 * t.Keyed / Math.Max(1, t.Ticks),9:0.00}  {(double)t.Grounded / Math.Max(1, t.Ticks),6:0.000}"));
         }
 
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
-            $"{"all",-12} {ticks,9:N0}  100.0%  {turnSum / Math.Max(1, ticks),6:0.00}  {100.0,12:0.0}%  {100.0 * bigSum / Math.Max(1, ticks),5:0.0}%  {"",12}  {30.0 * totals.Values.Sum(t => t.Jumps) / Math.Max(1, ticks),9:0.00}  {totals.Values.Sum(t => t.Speed) / Math.Max(1, ticks),8:0.00}  {30.0 * totals.Values.Sum(t => t.Dodges) / Math.Max(1, ticks),10:0.00}  {(double)totals.Values.Sum(t => t.Still) / Math.Max(1, ticks),5:0.00}  {totals.Values.Sum(t => t.Accel) / Math.Max(1, ticks),5:0.00}  {30.0 * totals.Values.Sum(t => t.Reversals) / Math.Max(1, ticks),8:0.00}"));
+            $"{"all",-12} {ticks,9:N0}  100.0%  {turnSum / Math.Max(1, ticks),6:0.00}  {100.0,12:0.0}%  {100.0 * bigSum / Math.Max(1, ticks),5:0.0}%  {"",12}  {30.0 * totals.Values.Sum(t => t.Jumps) / Math.Max(1, ticks),9:0.00}  {totals.Values.Sum(t => t.Speed) / Math.Max(1, ticks),8:0.00}  {30.0 * totals.Values.Sum(t => t.Dodges) / Math.Max(1, ticks),10:0.00}  {(double)totals.Values.Sum(t => t.Still) / Math.Max(1, ticks),5:0.00}  {totals.Values.Sum(t => t.Accel) / Math.Max(1, ticks),5:0.00}  {30.0 * totals.Values.Sum(t => t.Reversals) / Math.Max(1, ticks),8:0.00}  {"",9}  {(double)totals.Values.Sum(t => t.Grounded) / Math.Max(1, ticks),6:0.000}"));
     }
 
     private static int Nearest(in WorldState state, int slot, out double distance)

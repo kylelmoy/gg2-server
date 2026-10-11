@@ -722,15 +722,32 @@ public sealed record HumanizeOptions(
     /// </summary>
     public static HumanizeOptions Tracking6 { get; } = Tracking5 with { PursuitGain = 0.10 };
 
+    /// <summary>
+    /// D10's candidate: <see cref="Tracking6"/>'s aim with <see cref="Tracking4"/>'s
+    /// legs, and the policy's jumps thinned to the people's grounded share rather
+    /// than their take-off count: half the presses pass, with no refractory window.
+    /// Fitted with <c>BENCH_TURNS</c>'s grounded share at tier 4 (<c>gg2-rl</c>
+    /// <c>docs/PLAN.md</c> phase 5, D10).
+    /// </summary>
+    public static HumanizeOptions Tracking7 { get; } = Tracking6 with
+    {
+        LegMemory = 0.95,
+        LegStartIntent = 0.75,
+        LegReverseIntent = 0.75,
+        LegIdleActivity = 0.3,
+        JumpKeep = 0.5,
+        JumpRefractoryTicks = 0,
+    };
+
     /// <summary>The preset names a setting can carry.</summary>
-    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy", "hold", "tracking", "tracking2", "tracking3", "tracking4", "tracking5", "tracking6"];
+    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy", "hold", "tracking", "tracking2", "tracking3", "tracking4", "tracking5", "tracking6", "tracking7"];
 
     /// <summary>A preset's canonical name in <see cref="PresetNames"/>, refusing anything else.</summary>
     /// <exception cref="FormatException">The name is not a preset.</exception>
     public static string PresetName(string name)
     {
         var options = ForPreset(name);
-        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : options == Hold ? "hold" : options == Tracking ? "tracking" : options == Tracking2 ? "tracking2" : options == Tracking3 ? "tracking3" : options == Tracking4 ? "tracking4" : options == Tracking5 ? "tracking5" : options == Tracking6 ? "tracking6" : "v3";
+        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : options == Hold ? "hold" : options == Tracking ? "tracking" : options == Tracking2 ? "tracking2" : options == Tracking3 ? "tracking3" : options == Tracking4 ? "tracking4" : options == Tracking5 ? "tracking5" : options == Tracking6 ? "tracking6" : options == Tracking7 ? "tracking7" : "v3";
     }
 
     /// <summary>A preset by name, case-insensitive.</summary>
@@ -748,6 +765,7 @@ public sealed record HumanizeOptions(
         "tracking4" or "d7" => Tracking4,
         "tracking5" or "d8" => Tracking5,
         "tracking6" or "d9" => Tracking6,
-        _ => throw new FormatException($"humanize preset '{name}': v3, strokes, lazy, hold, tracking, tracking2, tracking3, tracking4, tracking5 or tracking6"),
+        "tracking7" or "d10" => Tracking7,
+        _ => throw new FormatException($"humanize preset '{name}': v3, strokes, lazy, hold, tracking, tracking2, tracking3, tracking4, tracking5, tracking6 or tracking7"),
     };
 }
