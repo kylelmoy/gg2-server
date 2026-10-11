@@ -745,6 +745,13 @@ model.** Four gates, all off `BotSkill`:
   worse than with no leg filter, and tier 4 lost another 0.033. At tier 4 the
   remaining tell is aim timing, not movement.
 
+  **D8 (`tracking5`) refitted `Tracking2`'s timing and awaits a decision.**
+  `Tracking2` bunches its closing into 2–4-tick strokes, open loop as well as
+  live. Stroking only errors past 48°, with pursuit gain 0.12 and tremor 1.0,
+  brought the lag-3 autocorrelation to the people's. O2 fell 0.035 and the
+  ladder stayed even. But the fleet discriminator got worse at 150px: the faster
+  pursuit aims slightly *better* than people do (median error 26° against 29°).
+
 - ⚠️ **Aim error is UNIFORM on [-1, 1], not Gaussian** (Quake III's
   `crandom()`), with two multipliers: moving-target scale, and **Quake
   III's close-range penalty** (every tier worse at point blank — an
