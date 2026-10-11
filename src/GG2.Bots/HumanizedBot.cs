@@ -696,15 +696,30 @@ public sealed record HumanizeOptions(
         LegIdleActivity = 0.3,
     };
 
+    /// <summary>
+    /// D8's candidate: <see cref="Tracking2"/> with its timing refitted. Only errors
+    /// past 48° are stroked, the pursuit closes 12% a tick and trembles by 1°, so
+    /// more of the closing is persistent motion rather than short bursts. Fitted open
+    /// loop with the people's window p90, lag-3 autocorrelation and jerk added to D4's
+    /// targets (<c>gg2-rl</c> <c>scripts/fit_humanize_tracking.py --d8 --d8b</c>,
+    /// <c>docs/PLAN.md</c> phase 5, D8).
+    /// </summary>
+    public static HumanizeOptions Tracking5 { get; } = Tracking2 with
+    {
+        SaccadeDegrees = 48,
+        PursuitGain = 0.12,
+        PursuitTremorDegrees = 1.0,
+    };
+
     /// <summary>The preset names a setting can carry.</summary>
-    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy", "hold", "tracking", "tracking2", "tracking3", "tracking4"];
+    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy", "hold", "tracking", "tracking2", "tracking3", "tracking4", "tracking5"];
 
     /// <summary>A preset's canonical name in <see cref="PresetNames"/>, refusing anything else.</summary>
     /// <exception cref="FormatException">The name is not a preset.</exception>
     public static string PresetName(string name)
     {
         var options = ForPreset(name);
-        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : options == Hold ? "hold" : options == Tracking ? "tracking" : options == Tracking2 ? "tracking2" : options == Tracking3 ? "tracking3" : options == Tracking4 ? "tracking4" : "v3";
+        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : options == Hold ? "hold" : options == Tracking ? "tracking" : options == Tracking2 ? "tracking2" : options == Tracking3 ? "tracking3" : options == Tracking4 ? "tracking4" : options == Tracking5 ? "tracking5" : "v3";
     }
 
     /// <summary>A preset by name, case-insensitive.</summary>
@@ -720,6 +735,7 @@ public sealed record HumanizeOptions(
         "tracking2" or "d4" or "tracking2e" or "d5" => Tracking2,
         "tracking3" or "d6" => Tracking3,
         "tracking4" or "d7" => Tracking4,
-        _ => throw new FormatException($"humanize preset '{name}': v3, strokes, lazy, hold, tracking, tracking2, tracking3 or tracking4"),
+        "tracking5" or "d8" => Tracking5,
+        _ => throw new FormatException($"humanize preset '{name}': v3, strokes, lazy, hold, tracking, tracking2, tracking3, tracking4 or tracking5"),
     };
 }
