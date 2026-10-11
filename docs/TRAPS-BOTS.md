@@ -765,7 +765,10 @@ model.** Four gates, all off `BotSkill`:
   exactly that. Thinning the jumps to the people's grounded share instead
   (half the presses pass) put D7's legs at the people's speed and airtime. O2
   and the 150px discriminator credit it; the 300px discriminator reads it
-  slightly worse, and tier 4 loses another 0.029.
+  slightly worse, and tier 4 loses another 0.029. That trade held on a second
+  recording. The 300px loss sits in the legs' own close-range ticks and goes
+  with higher aim error. D11 (`tracking8`, pursuit gain 0.12) did not lower the
+  error and was left off.
 
 - ⚠️ **Aim error is UNIFORM on [-1, 1], not Gaussian** (Quake III's
   `crandom()`), with two multipliers: moving-target scale, and **Quake
