@@ -244,6 +244,13 @@ public sealed partial class PathFollower
     public bool HeldFlight { get; set; } = true;
 
     /// <summary>
+    /// Whether a held flight may plan a scout's second jump (N3): on
+    /// double-jump edges and plain ones, at people's timing, and as a rescue in
+    /// the air. Off, a scout's held flights are single jumps, as before N3.
+    /// </summary>
+    public bool HeldDoubles { get; set; } = true;
+
+    /// <summary>
     /// Advances one bot's route by a tick and returns the movement keys.
     /// </summary>
     /// <param name="state">The bot's navigation state, updated in place.</param>

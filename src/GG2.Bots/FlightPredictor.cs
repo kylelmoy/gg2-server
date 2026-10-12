@@ -69,7 +69,18 @@ public static class FlightPredictor
     /// </remarks>
     public static bool Land(
         CollisionWorld world, in CharacterState start, int firstDir, int dir, bool jump, int rejump,
-        out double x, out double y, out int ticks)
+        out double x, out double y, out int ticks) =>
+        Land(world, in start, firstDir, dir, 1, dir, jump, rejump, out x, out y, out ticks);
+
+    /// <summary>
+    /// As the overloads above, with <paramref name="firstDir"/> on tick 1,
+    /// <paramref name="earlyDir"/> up to tick <paramref name="earlyTicks"/>, and
+    /// <paramref name="dir"/> after: up first and over after, the way a person
+    /// gets onto a ledge (N4).
+    /// </summary>
+    public static bool Land(
+        CollisionWorld world, in CharacterState start, int firstDir, int earlyDir, int earlyTicks, int dir, bool jump,
+        int rejump, out double x, out double y, out int ticks)
     {
         var c = start;
 
@@ -78,12 +89,13 @@ public static class FlightPredictor
         // a firing heavy on a node it never reached (BotUnderFireTests).
         var kept = start.KeyState & (PlayerKeys.Attack | PlayerKeys.Special);
         var first = Key(firstDir) | kept;
+        var early = Key(earlyDir) | kept;
         var keys = Key(dir) | kept;
         var airborne = !c.OnGround;
 
         for (var t = 1; t <= MaxTicks; t++)
         {
-            var held = (t == 1 ? first : keys)
+            var held = (t == 1 ? first : t <= earlyTicks ? early : keys)
                 | ((jump && t == 1) || t == rejump ? PlayerKeys.Jump : PlayerKeys.None);
             c.ApplyInput(new PlayerInput(held, c.NetAimDirection, c.AimDistance));
 

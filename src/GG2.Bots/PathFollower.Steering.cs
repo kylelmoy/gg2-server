@@ -247,7 +247,7 @@ public sealed partial class PathFollower
             // landing. First, so the generator's own second jump below is the
             // tracker's alone.
             if (state.HeldDir != 0
-                && edge.Type is NavEdgeType.Jump or NavEdgeType.DoubleJump
+                && (edge.Type == NavEdgeType.Jump || (HeldDoubles && edge.Type == NavEdgeType.DoubleJump))
                 && Collision is { } air)
             {
                 if (HeldKey(air, state, in character, in query, next, landPlan, jumpDir, overshoot, out var press) is { } key)
@@ -331,13 +331,13 @@ public sealed partial class PathFollower
         // one. N3: a scout's plans include a second jump, timed as people time
         // theirs, on double-jump arcs and plain ones alike.
         if (HeldFlight
-            && edge.Type is NavEdgeType.Jump or NavEdgeType.DoubleJump
+            && (edge.Type == NavEdgeType.Jump || (HeldDoubles && edge.Type == NavEdgeType.DoubleJump))
             && Collision is { } ground
             && !state.JumpHeld
             && Math.Abs(column - takeoff) <= BotConstants.RunupCells)
         {
             Span<int> options = stackalloc int[MaxLaunchOptions];
-            options = options[..LaunchOptions(state, in query, current, next, options)];
+            options = options[..LaunchOptions(state, HeldDoubles && query.CanDoubleJump, current, next, options)];
 
             if (CanLaunchHeld(ground, in character, jumpDir, next, landPlan, overshoot, options, out var rejump))
             {
@@ -895,7 +895,7 @@ public sealed partial class PathFollower
             return key;
         }
 
-        if (!query.CanDoubleJump || character.DoubleJumpUsed || state.Rejumped)
+        if (!HeldDoubles || !query.CanDoubleJump || character.DoubleJumpUsed || state.Rejumped)
             return null;
 
         foreach (var r in RescueTicks)
@@ -987,9 +987,9 @@ public sealed partial class PathFollower
     /// and its launch count, so it holds through an approach and a sweep stays
     /// deterministic.
     /// </remarks>
-    private static int LaunchOptions(BotPathState state, in NavQuery query, int current, int next, Span<int> options)
+    private static int LaunchOptions(BotPathState state, bool doubles, int current, int next, Span<int> options)
     {
-        if (!query.CanDoubleJump)
+        if (!doubles)
         {
             options[0] = -1;
             return 1;

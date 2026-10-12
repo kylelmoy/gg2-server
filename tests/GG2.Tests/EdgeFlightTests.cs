@@ -288,6 +288,53 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     }
 
     /// <summary>
+    /// Every plain and double-jump edge, flown by a scout.
+    /// </summary>
+    /// <remarks>
+    /// The shipping arm flies plain jumps as a soldier, so a scout's own plans
+    /// over them — a second jump drawn on a plain jump, a rescue in the air
+    /// (<c>gg2-rl</c> <c>docs/PLAN.md</c>, N3) — are measured here and nowhere
+    /// else. Recorded 2026-10-11; with the second-jump plans off
+    /// (<see cref="PathFollower.HeldDoubles"/>) the same sweep strands 216 and
+    /// takes 509,023 ticks, and per edge 63 flights are won and 11 lost
+    /// (<c>HeldFlightCensus.ScoutSecondJumps</c>).
+    /// </remarks>
+    [Fact]
+    public void EveryJumpIsFlownByAScoutToo()
+    {
+        ReferenceTree.RequireNavCache();
+
+        var tally = EdgeFlightTally.Of(EdgeFlights.SweepAll(
+            ReferenceTree.MapsDirectory,
+            ReferenceTree.NavCacheDirectory,
+            [NavEdgeType.Jump, NavEdgeType.DoubleJump],
+            distances: true,
+            threads: SweepThreads,
+            flyAs: PlayerClass.Scout));
+
+        output.WriteLine($"scout arm: {tally}");
+
+        Assert.Equal(
+            new EdgeFlightTally(
+                Candidates: 69_691,
+                Measured: 7_543,
+                Arrived: 7_379,
+                Flown: 593,
+                Stranded: 164,
+                RoutedAround: 60_308,
+                Shadowed: 1_540,
+                NoRoute: 300,
+                StartUnresolved: 0,
+                GoalUnresolved: 0,
+                Ticks: 491_677,
+                Blacklists: 589,
+                StartBlocked: 0,
+                TeamSwapped: 40,
+                Diverted: 0),
+            tally);
+    }
+
+    /// <summary>
     /// The two routing arms do not measure the same corpus, and the gap is a
     /// third of the arcs.
     /// </summary>

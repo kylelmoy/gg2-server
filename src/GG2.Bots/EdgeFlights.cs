@@ -436,7 +436,9 @@ public static class EdgeFlights
         NavDistanceSet? distances = null,
         bool warmWeapon = false,
         bool heldFlight = true,
-        Action<int, ScenarioWorld, BotPathState>? onTick = null)
+        Action<int, ScenarioWorld, BotPathState>? onTick = null,
+        PlayerClass? flyAs = null,
+        bool heldDoubles = true)
     {
         ArgumentNullException.ThrowIfNull(world);
 
@@ -444,7 +446,11 @@ public static class EdgeFlights
             ?? throw new InvalidOperationException("a flight needs a nav graph; this world has none");
 
         var edge = graph.Edges[edgeIndex];
-        var follower = new PathFollower(graph) { Distances = distances, Collision = world.Collision, HeldFlight = heldFlight };
+        var follower = new PathFollower(graph)
+        {
+            Distances = distances, Collision = world.Collision, HeldFlight = heldFlight, HeldDoubles = heldDoubles,
+        };
+        var cls = flyAs ?? ClassFor(edge.Type);
         var state = new BotPathState();
 
         EdgeFlight Skipped(EdgeFlightOutcome outcome) =>
@@ -463,7 +469,7 @@ public static class EdgeFlights
         // a team gate is solid to the other team, so a node inside one is a place
         // that team can never be. Fly it as somebody who can — see
         // EdgeFlightOutcome.StartBlocked for the 148 flights this was costing.
-        var box = CharacterBox.For(ClassFor(edge.Type));
+        var box = CharacterBox.For(cls);
         var flying = team;
         var swapped = false;
 
@@ -478,7 +484,7 @@ public static class EdgeFlights
             swapped = true;
         }
 
-        var query = QueryFor(edge.Type, flying);
+        var query = QueryFor(edge.Type, flying) with { CanDoubleJump = BotClassProfile.AirJump(cls) };
 
         // Premise 1b, the same check on the other end: SetGoal snaps, and a goal
         // that snaps somewhere else is a route to somewhere else.
@@ -510,7 +516,7 @@ public static class EdgeFlights
         var flightState = new BotPathState();
         follower.SetGoal(flightState, Midpoint(graph, edge.To), graph.StandY(edge.To));
 
-        var slot = world.Place(ClassFor(edge.Type), flying, startX, startY);
+        var slot = world.Place(cls, flying, startX, startY);
 
         // ⛔ OFF by default, and the default is the pinned arm. `ScenarioWorld.Place`
         // spawns a character, and `Weapon.events/Create.xml` starts a fresh weapon
@@ -677,7 +683,9 @@ public static class EdgeFlights
         Func<string, int, bool>? include = null,
         Action<string, int, IReadOnlyList<EdgeFlight>>? onGraph = null,
         bool warmWeapon = false,
-        bool heldFlight = true)
+        bool heldFlight = true,
+        PlayerClass? flyAs = null,
+        bool heldDoubles = true)
     {
         ArgumentNullException.ThrowIfNull(mapDirectory);
         ArgumentNullException.ThrowIfNull(navDirectory);
@@ -736,7 +744,9 @@ public static class EdgeFlights
         {
             var (graphIndex, edgeIndex) = work[i];
             var graph = graphs[graphIndex];
-            flights[i] = Fly(graph.World(), edgeIndex, team, budget, graph.Distances, warmWeapon, heldFlight);
+            flights[i] = Fly(
+                graph.World(), edgeIndex, team, budget, graph.Distances, warmWeapon, heldFlight,
+                flyAs: flyAs, heldDoubles: heldDoubles);
         });
 
         if (onGraph is not null)
