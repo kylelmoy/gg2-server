@@ -252,7 +252,10 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// no-tables 459 → 467. Then N3 (a scout's second jump, planned and rescued):
     /// stranded 489 → 470, ticks 1,419,589 → 1,402,544, flown 3,644 → 3,600 (a
     /// double-jump arc that lands on one held jump is no longer double jumped);
-    /// no-tables 467 → 444.
+    /// no-tables 467 → 444. Then N4 (two-phase plans, and a landing must come to
+    /// rest in the window where the route turns back or a standing take-off
+    /// follows): stranded 470 → 445, arrived 31,585 → 31,610, ticks 1,402,544 →
+    /// 1,367,620; no-tables 444 → 409.
     /// </para>
     [Fact]
     public void EveryEdgeOfEveryShippedGraphIsFlownOnTheShippingArm()
@@ -271,16 +274,16 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
             new EdgeFlightTally(
                 Candidates: 116_316,
                 Measured: 32_055,
-                Arrived: 31_585,
-                Flown: 3_600,
-                Stranded: 470,
+                Arrived: 31_610,
+                Flown: 3_624,
+                Stranded: 445,
                 RoutedAround: 72_926,
                 Shadowed: 10_869,
                 NoRoute: 466,
                 StartUnresolved: 0,
                 GoalUnresolved: 0,
-                Ticks: 1_402_544,
-                Blacklists: 7_498,
+                Ticks: 1_367_620,
+                Blacklists: 7_333,
                 StartBlocked: 0,
                 TeamSwapped: 178,
                 Diverted: 33),
@@ -294,10 +297,11 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// The shipping arm flies plain jumps as a soldier, so a scout's own plans
     /// over them — a second jump drawn on a plain jump, a rescue in the air
     /// (<c>gg2-rl</c> <c>docs/PLAN.md</c>, N3) — are measured here and nowhere
-    /// else. Recorded 2026-10-11; with the second-jump plans off
-    /// (<see cref="PathFollower.HeldDoubles"/>) the same sweep strands 216 and
-    /// takes 509,023 ticks, and per edge 63 flights are won and 11 lost
-    /// (<c>HeldFlightCensus.ScoutSecondJumps</c>).
+    /// else. Recorded 2026-10-11 at N3 (164 stranded, 491,677 ticks); with the
+    /// second-jump plans off (<see cref="PathFollower.HeldDoubles"/>) that sweep
+    /// stranded 216 and took 509,023 ticks, and per edge 63 flights were won and
+    /// 11 lost (<c>HeldFlightCensus.ScoutSecondJumps</c>). N4: 164 → 162, ticks
+    /// 491,677 → 480,304.
     /// </remarks>
     [Fact]
     public void EveryJumpIsFlownByAScoutToo()
@@ -318,16 +322,16 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
             new EdgeFlightTally(
                 Candidates: 69_691,
                 Measured: 7_543,
-                Arrived: 7_379,
-                Flown: 593,
-                Stranded: 164,
+                Arrived: 7_381,
+                Flown: 607,
+                Stranded: 162,
                 RoutedAround: 60_308,
                 Shadowed: 1_540,
                 NoRoute: 300,
                 StartUnresolved: 0,
                 GoalUnresolved: 0,
-                Ticks: 491_677,
-                Blacklists: 589,
+                Ticks: 480_304,
+                Blacklists: 500,
                 StartBlocked: 0,
                 TeamSwapped: 40,
                 Diverted: 0),
@@ -377,16 +381,16 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
             new EdgeFlightTally(
                 Candidates: 116_316,
                 Measured: 37_787,
-                Arrived: 37_343,
-                Flown: 5_524,
-                Stranded: 444,
+                Arrived: 37_378,
+                Flown: 5_545,
+                Stranded: 409,
                 RoutedAround: 67_194,
                 Shadowed: 10_869,
                 NoRoute: 466,
                 StartUnresolved: 0,
                 GoalUnresolved: 0,
-                Ticks: 1_822_849,
-                Blacklists: 9_390,
+                Ticks: 1_787_821,
+                Blacklists: 9_439,
                 StartBlocked: 0,
                 TeamSwapped: 206,
                 Diverted: 16),
@@ -591,10 +595,10 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(11, measured);
         Assert.Equal(11, arrived);
 
-        // FOUR, from ten, 2026-10-11 (gg2-rl N3): a held flight takes the
-        // second jump only where its plan needs or draws one, and seven of these
+        // FIVE, from ten, 2026-10-11 (gg2-rl N3, N4): a held flight takes the
+        // second jump only where its plan needs or draws one, and six of these
         // arcs land on one held jump. Every one still arrives.
-        Assert.Equal(4, flown);
+        Assert.Equal(5, flown);
 
         // ONE, re-recorded 2026-09-05 from zero when the start moved a pixel out
         // of the floor (EdgeFlights.StandingY). Every other number on this map is

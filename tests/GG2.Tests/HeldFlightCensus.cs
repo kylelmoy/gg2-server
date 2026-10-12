@@ -72,6 +72,53 @@ public sealed class HeldFlightCensus(Xunit.Abstractions.ITestOutputHelper output
             output.WriteLine(line);
     }
 
+    /// <summary>The shipping arm and the scout arm with and without two-phase plans (N4), diffed edge by edge.</summary>
+    [Fact(Skip = "a census: run by hand")]
+    public void SwitchPlans()
+    {
+        ReferenceTree.RequireNavCache();
+        var threads = Math.Max(1, Environment.ProcessorCount - 2);
+
+        foreach (var (label, types, cls) in new (string, NavEdgeType[]?, PlayerClass?)[]
+        {
+            ("shipping", null, null),
+            ("scout", [NavEdgeType.Jump, NavEdgeType.DoubleJump], PlayerClass.Scout),
+        })
+        {
+            var off = new Dictionary<(string, int), IReadOnlyList<EdgeFlight>>();
+            var on = new Dictionary<(string, int), IReadOnlyList<EdgeFlight>>();
+
+            EdgeFlights.SweepAll(ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory, types, distances: true, threads: threads,
+                onGraph: (map, area, flights) => off[(map, area)] = flights.ToArray(), flyAs: cls, heldSwitchPlans: false);
+            EdgeFlights.SweepAll(ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory, types, distances: true, threads: threads,
+                onGraph: (map, area, flights) => on[(map, area)] = flights.ToArray(), flyAs: cls, heldSwitchPlans: true);
+
+            var lost = new List<string>();
+            var won = 0;
+            var slower = 0L;
+
+            foreach (var (key, a) in off)
+            {
+                var b = on[key];
+
+                for (var i = 0; i < a.Count; i++)
+                {
+                    if (a[i].Measured && b[i].Measured)
+                        slower += b[i].Ticks - a[i].Ticks;
+
+                    if (a[i].Outcome == EdgeFlightOutcome.Arrived && b[i].Outcome == EdgeFlightOutcome.Stranded)
+                        lost.Add($"{key.Item1}/{key.Item2} e{a[i].Edge} {a[i].Type} {a[i].From}->{a[i].To} ticks {a[i].Ticks} vs {b[i].Ticks} miss {b[i].MissX:0.#}");
+                    else if (a[i].Outcome == EdgeFlightOutcome.Stranded && b[i].Outcome == EdgeFlightOutcome.Arrived)
+                        won++;
+                }
+            }
+
+            output.WriteLine($"{label}: lost {lost.Count}, won {won}, ticks on both-measured {slower:+0;-0}");
+            foreach (var line in lost.OrderBy(l => l.Length).Take(40))
+                output.WriteLine("  " + line);
+        }
+    }
+
     /// <summary>
     /// A scout's plain and double jumps, with and without second-jump planning
     /// (N3), diffed edge by edge. The shipping sweep flies plain jumps as a
@@ -118,18 +165,24 @@ public sealed class HeldFlightCensus(Xunit.Abstractions.ITestOutputHelper output
 }
 
 /// <summary>
-/// What a scout's out-of-combat take-offs in a match are flown by, and for those
+/// What bots' out-of-combat take-offs in a match are flown by, and for those
 /// the tracker flies, whether any held plan from the first air tick lands on
 /// the edge's destination (N3).
 /// </summary>
-public sealed class ScoutTakeoffCensus(Xunit.Abstractions.ITestOutputHelper output)
+public sealed class TakeoffCensus(Xunit.Abstractions.ITestOutputHelper output)
 {
     private static readonly string[] Maps =
         ["ctf_2dfort", "ctf_conflict", "ctf_classicwell", "ctf_truefort", "ctf_waterway", "koth_corinth", "koth_harvest", "koth_valley"];
 
     [Fact(Skip = "a census: run by hand")]
-    public void ScoutTakeoffsInAMatch()
+    public void ScoutTakeoffsInAMatch() => Census([PlayerClass.Scout]);
+
+    [Fact(Skip = "a census: run by hand")]
+    public void EveryClassTakeoffsInAMatch() => Census(null);
+
+    private void Census(PlayerClass[]? classes)
     {
+        var byClass = new SortedDictionary<string, int[]>(StringComparer.Ordinal);
         var maps = MapDirectory.Resolve();
         var navDir = MapDirectory.ResolveNav();
         var counts = new SortedDictionary<string, List<double>>(StringComparer.Ordinal);
@@ -146,7 +199,7 @@ public sealed class ScoutTakeoffCensus(Xunit.Abstractions.ITestOutputHelper outp
         {
             var options = HeadlessMatchOptions.Default with
             {
-                Map = map, Seed = 7, MaxTicks = 9000, Difficulty = 3, AllowedClasses = [PlayerClass.Scout],
+                Map = map, Seed = 7, MaxTicks = 9000, Difficulty = 3, AllowedClasses = classes,
             };
 
             var match = HeadlessMatch.Load(options, maps, navDir);
@@ -175,6 +228,10 @@ public sealed class ScoutTakeoffCensus(Xunit.Abstractions.ITestOutputHelper outp
 
                     var path = bot.Path;
                     var speed = Math.Abs(c.HSpeed);
+                    var cls = c.Class.ToString();
+                    if (!byClass.TryGetValue(cls, out var tally))
+                        byClass[cls] = tally = new int[3];
+                    tally[path.HeldDir != 0 ? 0 : 1]++;
 
                     if (path.HeldDir != 0)
                     {
@@ -250,12 +307,15 @@ public sealed class ScoutTakeoffCensus(Xunit.Abstractions.ITestOutputHelper outp
         }
 
         var total = counts.Values.Sum(l => l.Count);
-        output.WriteLine($"{total} out-of-combat scout take-offs");
+        output.WriteLine($"{total} out-of-combat take-offs (sub-rows under \"nothing lands\" are counted twice)");
         foreach (var (key, list) in counts)
         {
             list.Sort();
             output.WriteLine($"{key,-70} {list.Count,6} {100.0 * list.Count / total,5:0.0}%  speed median {list[list.Count / 2]:0.00}");
         }
+
+        foreach (var (cls, t) in byClass)
+            output.WriteLine($"{cls,-10} held {t[0],6}  not held {t[1],6}  held share {100.0 * t[0] / Math.Max(1, t[0] + t[1]):0.0}%");
 
         foreach (var e in examples)
             output.WriteLine(e);

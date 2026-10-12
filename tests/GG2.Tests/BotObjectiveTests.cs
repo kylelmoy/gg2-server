@@ -1611,9 +1611,10 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         // The intel at 1578, 31 replans and 10 off-route fires until held flight
         // (N1, 2026-10-11) took the plain jumps without braking to the arc's
         // speed, and N2 ran up to speed first: the intel at 1398, 29 replans and
-        // 9 off-route landings.
-        Assert.Equal(1398, grabbedAt);
-        Assert.Equal(29, bot.Path.Replans);
+        // 9 off-route landings. N4 (two-phase plans, and a landing short of a
+        // standing take-off must come to rest): 1379 and 27 replans.
+        Assert.Equal(1379, grabbedAt);
+        Assert.Equal(27, bot.Path.Replans);
         Assert.Equal(0, bot.Path.StuckFires);
         Assert.Equal(9, bot.Path.OffRouteFires);
         Assert.Equal(0, bot.Path.BlacklistFires);

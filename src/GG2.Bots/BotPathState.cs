@@ -539,6 +539,19 @@ public sealed class BotPathState
     /// </summary>
     public int HeldRejump { get; set; } = -1;
 
+    /// <summary>
+    /// A held flight's first-phase key (N4): pressed while
+    /// <see cref="AirTicks"/> is below <see cref="HeldSwitchAt"/>, and
+    /// <see cref="HeldKey"/> after.
+    /// </summary>
+    public int HeldEarly { get; set; }
+
+    /// <summary>The air tick a held flight's first phase lasts until, or 0 for none (N4).</summary>
+    public int HeldSwitchAt { get; set; }
+
+    /// <summary>Held flights re-planned in the air as let go or pressed away, then toward (N4).</summary>
+    public int HeldSwitches { get; set; }
+
     /// <summary>Held launches planned with a second jump.</summary>
     public int HeldDoubles { get; set; }
 

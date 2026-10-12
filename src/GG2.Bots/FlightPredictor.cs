@@ -82,6 +82,21 @@ public static class FlightPredictor
         CollisionWorld world, in CharacterState start, int firstDir, int earlyDir, int earlyTicks, int dir, bool jump,
         int rejump, out double x, out double y, out int ticks)
     {
+        var landed = Fly(world, in start, firstDir, earlyDir, earlyTicks, dir, jump, rejump, out var end, out ticks);
+        x = end.X;
+        y = end.Y;
+        return landed;
+    }
+
+    /// <summary>
+    /// As <see cref="Land(CollisionWorld, in CharacterState, int, int, int, int, bool, int, out double, out double, out int)"/>,
+    /// handing back the whole character where the flight ended, so a caller
+    /// can step it on from the landing.
+    /// </summary>
+    public static bool Fly(
+        CollisionWorld world, in CharacterState start, int firstDir, int earlyDir, int earlyTicks, int dir, bool jump,
+        int rejump, out CharacterState end, out int ticks)
+    {
         var c = start;
 
         // Whatever else is held is held through the flight: a heavy firing its
@@ -114,8 +129,7 @@ public static class FlightPredictor
             }
             else if (airborne)
             {
-                x = c.X;
-                y = c.Y;
+                end = c;
                 ticks = t;
                 return true;
             }
@@ -125,8 +139,7 @@ public static class FlightPredictor
             }
         }
 
-        x = c.X;
-        y = c.Y;
+        end = c;
         ticks = 0;
         return false;
     }

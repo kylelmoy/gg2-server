@@ -287,33 +287,38 @@ public sealed class MatchActuallyHappensTests
     /// the next zone for well over a thousand bot-ticks — so any small fixed set
     /// pins a coin flip and goes red on a change that improved the aggregate.
     /// Measured at 12 bots over a full ten-minute match: <b>0 of 8</b> seeds
-    /// advanced on the code that had the bug, and 7 of 8 advance now.
+    /// advanced on the code that had the bug, and 7 of 8 after the fix. Now
+    /// thirty-two seeds: 28 advance (2026-10-11).
     /// </para>
     /// </remarks>
     [Fact]
     public void TheControlPointsFrontlineMovesPastTheOpeningFight()
     {
-        uint[] seeds = [11, 4242, 90210, 7, 31337, 555, 2024, 88];
-        var advancedOn = new List<uint>();
-        var stalledOn = new List<string>();
+        // Thirty-two seeds in parallel, not eight in a row. Whether a particular
+        // seed's losing team completes a capture on the point beyond the middle
+        // is close-run — the attacking team stands in that zone for over a
+        // thousand bot-ticks on seeds that never take it — so eight fixed seeds
+        // pinned a coin flip: they read 7 and then 5 across a change (gg2-rl N4)
+        // that, over these thirty-two, read 29 before and 28 after. The
+        // threshold is the alarm: on the code that had the bug NONE of the
+        // original eight advanced.
+        var seeds = Enumerable.Range(0, 32).Select(i => (uint)(1000 + (i * 7919))).ToArray();
+        var advancedOn = new System.Collections.Concurrent.ConcurrentBag<uint>();
+        var stalledOn = new System.Collections.Concurrent.ConcurrentBag<string>();
 
-        foreach (var seed in seeds)
+        Parallel.ForEach(seeds, seed =>
+        {
             if (FrontlineAdvanced(seed, out var detail))
                 advancedOn.Add(seed);
             else
                 stalledOn.Add(detail);
+        });
 
-        // Six of eight, not eight of eight. Whether a particular seed's losing team
-        // completes a capture on the point beyond the middle is close-run — the
-        // attacking team stands in that zone for over a thousand bot-ticks on seeds
-        // that never take it — so a fixed handful of seeds pins a coin flip. The
-        // threshold is the alarm: on the code that had the bug NONE of these eight
-        // advanced, and both sides of the goal-oscillation fix score seven.
         Assert.True(
-            advancedOn.Count >= 6,
+            advancedOn.Count >= 24,
             $"only {advancedOn.Count} of {seeds.Length} seeds moved the frontline past the "
             + $"opening fight — the teams took the middle and stopped. "
-            + string.Join(" | ", stalledOn));
+            + string.Join(" | ", stalledOn.Take(4)));
     }
 
     private static bool FrontlineAdvanced(uint seed, out string detail)

@@ -323,13 +323,15 @@ public sealed partial class PathFollower
 
         state.HeldDir = 0;
         state.HeldRejump = -1;
+        state.HeldSwitchAt = 0;
 
         // N1: jump where a person would. Near the takeoff, if jumping now and
         // holding toward the landing comes down on the destination, go: no
         // speed ceiling, no braking, no run-up. JumpHeld is checked because a
         // press on the tick after one is not a press, and the prediction assumed
         // one. N3: a scout's plans include a second jump, timed as people time
-        // theirs, on double-jump arcs and plain ones alike.
+        // theirs, on double-jump arcs and plain ones alike. N4: and where no
+        // one key lands, rise first and steer onto the ledge after.
         if (HeldFlight
             && (edge.Type == NavEdgeType.Jump || (HeldDoubles && edge.Type == NavEdgeType.DoubleJump))
             && Collision is { } ground
@@ -339,7 +341,7 @@ public sealed partial class PathFollower
             Span<int> options = stackalloc int[MaxLaunchOptions];
             options = options[..LaunchOptions(state, HeldDoubles && query.CanDoubleJump, current, next, options)];
 
-            if (CanLaunchHeld(ground, in character, jumpDir, next, landPlan, overshoot, options, out var rejump))
+            if (CanLaunchHeld(ground, in character, jumpDir, next, landPlan, overshoot, options, out var rejump, out var early, out var switchAt))
             {
                 // N2: a held jump would land, but a person would not take it yet
                 // if running on still gains speed and the jump will still be there
@@ -357,6 +359,8 @@ public sealed partial class PathFollower
                 state.HeldDir = jumpDir;
                 state.HeldKey = jumpDir;
                 state.HeldRejump = rejump;
+                state.HeldEarly = early;
+                state.HeldSwitchAt = switchAt;
                 state.HeldLaunches++;
                 state.Launches++;
 
@@ -889,10 +893,44 @@ public sealed partial class PathFollower
                 pending = 2;
         }
 
+        // N4: a plan still in its first phase (let go, or pressed away, until
+        // the switch tick) keeps it while it still lands.
+        if (state.HeldSwitchAt > state.AirTicks)
+        {
+            if (HeldLands(
+                    world, in character, state.HeldEarly, state.HeldEarly, state.HeldSwitchAt - state.AirTicks, state.HeldKey,
+                    jump: false, pending, next, landPlan, jumpDir, overshoot))
+            {
+                press = pending == 1;
+                return state.HeldEarly;
+            }
+        }
+
+        state.HeldSwitchAt = 0;
+
         if (HeldKeyWith(world, state, in character, next, landPlan, jumpDir, overshoot, pending) is { } key)
         {
             press = pending == 1;
             return key;
+        }
+
+        // N4: no one key lands. Rise first, then steer onto the ledge.
+        Span<int> earlies = [0, -state.HeldDir];
+
+        foreach (var early in earlies[..(HeldSwitchPlans ? 2 : 0)])
+        {
+            foreach (var k in AirSwitchTicks)
+            {
+                if (HeldLands(world, in character, early, early, k, state.HeldDir, jump: false, pending, next, landPlan, jumpDir, overshoot))
+                {
+                    state.HeldEarly = early;
+                    state.HeldSwitchAt = state.AirTicks + k;
+                    state.HeldKey = state.HeldDir;
+                    state.HeldSwitches++;
+                    press = pending == 1;
+                    return early;
+                }
+            }
         }
 
         if (!HeldDoubles || !query.CanDoubleJump || character.DoubleJumpUsed || state.Rejumped)
@@ -921,6 +959,14 @@ public sealed partial class PathFollower
     /// </summary>
     private static readonly int[] RescueTicks = [1, 3, 5, 7, 0];
 
+    /// <summary>How long a flight's first phase may last when re-planned in the air, in ticks (N4).</summary>
+    /// <remarks>Longest first: steering over once clear of the ledge lands slowest, and nearest the plan.</remarks>
+    private static readonly int[] AirSwitchTicks = [13, 10, 7, 5, 3, 1];
+
+    /// <summary>The air tick a take-off's first phase may last until (N4).</summary>
+    /// <remarks>Longest first, as <see cref="AirSwitchTicks"/>.</remarks>
+    private static readonly int[] LaunchSwitchTicks = [14, 11, 8, 6, 4, 2];
+
     /// <summary><see cref="HeldKey"/>'s key order, flown with a second jump on predictor tick <paramref name="rejump"/> (0 none).</summary>
     private int? HeldKeyWith(
         CollisionWorld world, BotPathState state, in CharacterState character, int next, double landPlan, int jumpDir,
@@ -930,8 +976,7 @@ public sealed partial class PathFollower
 
         foreach (var key in order)
         {
-            if (FlightPredictor.Land(world, in character, key, key, jump: false, rejump, out var x, out var y, out _)
-                && InLandingWindow(x, y, next, landPlan, jumpDir, overshoot))
+            if (HeldLands(world, in character, key, key, 1, key, jump: false, rejump, next, landPlan, jumpDir, overshoot))
             {
                 state.HeldKey = key;
                 return key;
@@ -945,25 +990,62 @@ public sealed partial class PathFollower
     /// Whether a take-off now, pressed toward the landing, has a key plan that
     /// comes down in the landing window: held, let go, or reversed after the
     /// first tick, with each of <paramref name="options"/>' second jumps in
-    /// turn. The flight then picks between them tick by tick.
+    /// turn. The flight then picks between them tick by tick. If none lands,
+    /// let go or pressed away until a switch tick, then toward (N4), with no
+    /// second jump and with the first planned one.
     /// </summary>
     /// <param name="rejump">The air tick of the planned second jump, or −1 for none.</param>
+    /// <param name="early">The key before the switch tick.</param>
+    /// <param name="switchAt">The air tick the first phase lasts until, or 0 for a one-phase plan.</param>
     private bool CanLaunchHeld(
         CollisionWorld world, in CharacterState character, int jumpDir, int next, double landPlan, double overshoot,
-        ReadOnlySpan<int> options, out int rejump)
+        ReadOnlySpan<int> options, out int rejump, out int early, out int switchAt)
     {
         Span<int> then = [jumpDir, 0, -jumpDir];
+        early = 0;
+        switchAt = 0;
 
         foreach (var r in options)
         {
             foreach (var key in then)
             {
                 // Air tick r is predictor tick r + 1: tick 1 is the take-off.
-                if (FlightPredictor.Land(world, in character, jumpDir, key, jump: true, r < 0 ? 0 : r + 1, out var x, out var y, out _)
-                    && InLandingWindow(x, y, next, landPlan, jumpDir, overshoot))
+                if (HeldLands(world, in character, jumpDir, key, 1, key, jump: true, r < 0 ? 0 : r + 1, next, landPlan, jumpDir, overshoot))
                 {
                     rejump = r;
                     return true;
+                }
+            }
+        }
+
+        // Air tick S is predictor tick S + 1, so the first phase covers
+        // predictor ticks 2 to S: earlyTicks is S.
+        var drawn = -1;
+        foreach (var r in options)
+        {
+            if (r >= 0)
+            {
+                drawn = r;
+                break;
+            }
+        }
+
+        Span<int> rejumps = [-1, drawn];
+        Span<int> earlies = [0, -jumpDir];
+
+        foreach (var r in rejumps[..(!HeldSwitchPlans ? 0 : drawn >= 0 ? 2 : 1)])
+        {
+            foreach (var e in earlies)
+            {
+                foreach (var s in LaunchSwitchTicks)
+                {
+                    if (HeldLands(world, in character, jumpDir, e, s, jumpDir, jump: true, r < 0 ? 0 : r + 1, next, landPlan, jumpDir, overshoot))
+                    {
+                        rejump = r;
+                        early = e;
+                        switchAt = s;
+                        return true;
+                    }
                 }
             }
         }
@@ -1068,11 +1150,83 @@ public sealed partial class PathFollower
         if ((ahead.HSpeed - character.HSpeed) * jumpDir < AtSpeed)
             return true;
 
-        return !CanLaunchHeld(world, in ahead, jumpDir, next, landPlan, overshoot, options, out _);
+        return !CanLaunchHeld(world, in ahead, jumpDir, next, landPlan, overshoot, options, out _, out _, out _);
     }
 
     /// <summary>A tick's speed gain below this is running flat out, in px/tick.</summary>
     private const double AtSpeed = 0.15;
+
+    /// <summary>
+    /// Whether a held plan comes down in the landing window and, where the route
+    /// does not go on the way the jump goes, can stop there.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Landing on the node is not staying on it.</b> A two-phase plan
+    /// (N4) that let go early and pressed toward late came down 8px from the
+    /// far end of cp_dirtbowl's node 355 at 4.9 px/tick, slid off, and fell to
+    /// the floor below: edge 352 -> 355, 41 ticks before and stranded after.
+    /// So the landing is stepped on, braking, until the bot is all but still,
+    /// and it must stay on the node.
+    /// </remarks>
+    private bool HeldLands(
+        CollisionWorld world, in CharacterState character, int firstDir, int earlyDir, int earlyTicks, int dir, bool jump,
+        int rejump, int next, double landPlan, int jumpDir, double overshoot)
+    {
+        if (!FlightPredictor.Fly(world, in character, firstDir, earlyDir, earlyTicks, dir, jump, rejump, out var landed, out _)
+            || !InLandingWindow(landed.X, landed.Y, next, landPlan, jumpDir, overshoot))
+        {
+            return false;
+        }
+
+        if (double.IsPositiveInfinity(overshoot))
+            return true;
+
+        // Where the route turns back, the window is about where the bot comes
+        // to rest, not only where it touches down: ctf_waterway 382 -> 344 ->
+        // 351 landed inside it at 5.4 px/tick, stopped past it, and the run
+        // back overran the narrow 351 and fell, every attempt.
+        return StopsOn(world, _graph, landed, next, out var restX)
+            && (restX - landPlan) * jumpDir <= overshoot;
+    }
+
+    /// <summary>Whether a character that has just landed brakes to a stop without leaving <paramref name="node"/>.</summary>
+    /// <remarks>
+    /// The node, not merely the floor: tried as "does not fall", the shipping
+    /// arm strands 455 and the scout arm 190; as "stays on the node", 467 and
+    /// 167.
+    /// </remarks>
+    private static bool StopsOn(CollisionWorld world, NavGraph graph, CharacterState c, int node, out double restX)
+    {
+        var y0 = c.Y;
+        restX = c.X;
+
+        for (var t = 0; t < StopTicks; t++)
+        {
+            // On the ground: braking in the air off the far end passes through
+            // zero speed too (gg_debug 28 -> 12).
+            if (Math.Abs(c.HSpeed) < Stopped && c.OnGround)
+            {
+                restX = c.X;
+                return true;
+            }
+
+            if (!FlightPredictor.Run(world, ref c, c.HSpeed > 0 ? -1 : 1))
+                return false;
+
+            var at = graph.NodeFromWorld(c.X, c.Y);
+
+            if (at != node && (at >= 0 || c.Y > y0 + (2 * NavConstants.CellSize)))
+                return false;
+        }
+
+        return false;
+    }
+
+    /// <summary>Ticks of braking allowed after a landing, and the speed that counts as stopped (px/tick).</summary>
+    private const int StopTicks = 30;
+
+    /// <inheritdoc cref="StopTicks"/>
+    private const double Stopped = 0.5;
 
     /// <summary>On the destination, and no more than <paramref name="overshoot"/> past the planned landing.</summary>
     private bool InLandingWindow(double x, double y, int next, double landPlan, int jumpDir, double overshoot) =>
@@ -1085,7 +1239,9 @@ public sealed partial class PathFollower
     /// Anywhere on the destination when the route goes on the way the jump goes,
     /// or the goal lies further on; otherwise two cells, because the next edge
     /// turns back and a body that lands far past the plan at full speed overruns
-    /// it (cp_dirtbowl 335 -> 320 -> 323).
+    /// it (cp_dirtbowl 335 -> 320 -> 323). Two cells too where a rocket or sticky
+    /// jump follows within <see cref="StandingLookahead"/> edges. A finite window
+    /// also asks where the bot comes to rest (<see cref="HeldLands"/>).
     /// </remarks>
     private double HeldOvershoot(BotPathState state, double landPlan, int jumpDir)
     {
@@ -1096,7 +1252,24 @@ public sealed partial class PathFollower
             var node = _graph.Nodes[state.Path[after]];
             var afterX = NavGraph.ColumnWorldX((node.X0 + node.X1) / 2);
 
-            return (afterX - landPlan) * jumpDir > 0 ? double.PositiveInfinity : HeldSlack;
+            if ((afterX - landPlan) * jumpDir <= 0)
+                return HeldSlack;
+
+            // ...but not when a standing take-off is close ahead: a rocket or
+            // sticky jump is gated from the take-off column at the arc's own
+            // speed, and a bot that lands at full speed runs past it. ctf_truefort
+            // 365 -> 299, then two one-step walks to 285's rocket jump: overran,
+            // climbed on to 276, and banned two edges.
+            for (var i = state.PathAt + 1; i + 1 < state.Path.Count && i <= state.PathAt + StandingLookahead; i++)
+            {
+                if (TryFindEdge(_graph, state, state.Path[i], state.Path[i + 1], out var ahead)
+                    && ahead.Type is NavEdgeType.RocketJump or NavEdgeType.StickyJump)
+                {
+                    return HeldSlack;
+                }
+            }
+
+            return double.PositiveInfinity;
         }
 
         return Math.Max(HeldSlack, ((state.GoalX - landPlan) * jumpDir) + HeldSlack);
@@ -1104,6 +1277,9 @@ public sealed partial class PathFollower
 
     /// <summary>The overshoot allowed where the route turns back, in px: two cells.</summary>
     private const double HeldSlack = 12;
+
+    /// <summary>How many edges past the landing are checked for a standing take-off.</summary>
+    private const int StandingLookahead = 4;
 
     /// <summary>Commits to the arc: ask for the press and reset the per-arc state.</summary>
     /// <param name="rocket">

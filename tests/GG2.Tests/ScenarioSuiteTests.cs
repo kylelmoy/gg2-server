@@ -73,23 +73,26 @@ public sealed class ScenarioSuiteTests(ITestOutputHelper output)
     // slower; the largest valley-floor-to-point 219 -> 132, truefort-spawn-to-intel
     // 1548 -> 1391 and valley-shaft-crate 95 -> 70. Then N2 (launch at speed):
     // truefort 1391 -> 1372, and four legs gave a little back (the shaft crate
-    // 70 -> 88, still under 95).
+    // 70 -> 88, still under 95). Then N4 (two-phase plans, landings that must
+    // come to rest short of a turn-back or a standing take-off): avanti
+    // 218 -> 146, truefort 1372 -> 1349, and valley-floor-to-point gave back
+    // 132 -> 160 (219 before N1).
     private static readonly Dictionary<string, int> Baseline = new(StringComparer.Ordinal)
     {
-        ["valley-floor-to-point"] = 132,
-        ["valley-spawn-to-point"] = 462,
+        ["valley-floor-to-point"] = 160,
+        ["valley-spawn-to-point"] = 453,
         ["valley-point-to-spawn"] = 387,
         ["valley-shaft-crate-to-point"] = 88,
         ["valley-shaft-floor-to-point"] = 118,
-        ["truefort-spawn-to-intel"] = 1372,
+        ["truefort-spawn-to-intel"] = 1349,
         ["truefort-blue-spawn-exit-west"] = 42,
-        ["avanti-ramp-pocket-to-intel"] = 218,
+        ["avanti-ramp-pocket-to-intel"] = 146,
         ["gallery-pit-climb"] = 259,
         ["soldier-shells-generator"] = 600,
         ["soldier-holds-and-fires"] = 400,
         ["sniper-fires-at-close-range"] = 400,
-        ["atalia-ground-to-point"] = 59,
-        ["oldfort-perch-reroutes"] = 1157,
+        ["atalia-ground-to-point"] = 49,
+        ["oldfort-perch-reroutes"] = 1156,
     };
 
     /// <summary>

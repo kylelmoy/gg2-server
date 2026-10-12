@@ -251,6 +251,12 @@ public sealed partial class PathFollower
     public bool HeldDoubles { get; set; } = true;
 
     /// <summary>
+    /// Whether a held flight may plan two phases (N4): let go or pressed away
+    /// until a switch tick, then toward, where no one key lands.
+    /// </summary>
+    public bool HeldSwitchPlans { get; set; } = true;
+
+    /// <summary>
     /// Advances one bot's route by a tick and returns the movement keys.
     /// </summary>
     /// <param name="state">The bot's navigation state, updated in place.</param>
