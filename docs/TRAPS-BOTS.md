@@ -557,6 +557,41 @@ tick walked it down onto the step below, still grounded, so it lost the edge
 every time. That cost eight blacklists on the edge and 343 plain jumps across
 the corpus. Step take-off speed is now the people's (3.41), and gaps 4.05.
 
+**N3, a scout's second jump.** The predictor takes a second press. A scout's
+held plans include one, drawn per attempt at the people's timing (near the top
+of the arc) and rate (46%), on double-jump arcs and plain jumps alike. In the
+air a second jump is re-timed or found when the plan stops landing.
+`PathFollower.HeldDoubles` switches it off. ⚠️ **The shipping sweep flies
+plain jumps as a soldier**, so it cannot see a scout's plans on them. A scout
+arm now does (`EveryJumpIsFlownByAScoutToo`).
+
+**N4, up first, then over.** About a quarter of out-of-combat take-offs had no
+one-key plan that landed. Most were ledges a person rises past and then steers
+onto. Held plans may now let go, or press away, until a switch tick, then
+steer toward. `PathFollower.HeldSwitchPlans` switches it off. ⚠️ **Three traps,
+all one lesson: where a flight lands is not where the bot ends up.**
+- **Landing on the node is not staying on it.** A plan that touched down 8px
+  from the far end of a narrow goal at 4.9 px/tick slid off (cp_dirtbowl
+  352 → 355). Where the window is finite, the landing is stepped on, braking,
+  and must stop on the node.
+- **Braking in the air passes through zero speed.** The first stop check read
+  "stopped" while the bot was falling off the far end (gg_debug 28 → 12). A
+  stop must be on the ground.
+- **"The route goes on" does not mean "land at any speed".** A held jump
+  landed at full speed, two one-step walks short of a rocket jump that is
+  gated from a near-standstill, ran past the take-off column and banned two
+  edges (ctf_truefort 365 → 299 → 285). And where the route turns back, a
+  landing inside the window still came to rest beyond it, so the run back
+  overran a narrow ledge and fell (ctf_waterway 382 → 344 → 351). A finite
+  window now bounds where the bot comes to rest, and a rocket or sticky jump
+  within four edges makes it finite.
+
+Sweep stranded 470 → 445, scout arm 164 → 162. Of out-of-combat take-offs in
+a match, 95% of scouts' and 89% of other classes' are now held (71% and 72%).
+⚠️ **Eight fixed seeds pinned a coin flip**: `MatchActuallyHappensTests`'
+frontline read 7 of 8 and then 5 across this change, which over thirty-two
+seeds read 29 before and 28 after. The gate now runs thirty-two.
+
 ### Phase 7 item 4c-i: what to shoot at, and where to point
 
 `GG2.Bots.{BotTargeting, BotAim}`. Gated by `BotTargetingTests` and
