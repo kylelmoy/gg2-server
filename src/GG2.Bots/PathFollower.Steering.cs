@@ -240,6 +240,35 @@ public sealed partial class PathFollower
                 return;
             }
 
+            // A held flight keeps its key while that still lands on the
+            // destination, then coasts, then counter-steers; the tracker takes
+            // over only if none of them lands. A scout's second jump goes when
+            // its plan says (N3), and is re-timed, or found, if the plan stops
+            // landing. First, so the generator's own second jump below is the
+            // tracker's alone.
+            if (state.HeldDir != 0
+                && edge.Type is NavEdgeType.Jump or NavEdgeType.DoubleJump
+                && Collision is { } air)
+            {
+                if (HeldKey(air, state, in character, in query, next, landPlan, jumpDir, overshoot, out var press) is { } key)
+                {
+                    if (press)
+                    {
+                        steer.WantJump = true;
+                        state.Rejumped = true;
+                        state.DoubleJumps++;
+                    }
+
+                    steer.Hold = true;
+                    steer.HoldDir = key;
+                    state.FlyingEdge = true;
+                    return;
+                }
+
+                state.HeldDir = 0;
+                state.HeldFallbacks++;
+            }
+
             // ⚠️ The second impulse, on a double-jump arc. Rejump is the tick the
             // generator proved the arc at, counted from takeoff the same way
             // AirTicks is, and -1 on every other edge kind — so this is inert for
@@ -264,23 +293,6 @@ public sealed partial class PathFollower
                 steer.WantJump = true;
                 state.Rejumped = true;
                 state.DoubleJumps++;
-            }
-
-            // A held flight keeps its key while that still lands on the
-            // destination, then coasts, then counter-steers; the tracker takes
-            // over only if none of them lands.
-            if (state.HeldDir != 0 && edge.Type == NavEdgeType.Jump && Collision is { } air)
-            {
-                if (HeldKey(air, state, in character, next, landPlan, jumpDir, overshoot) is { } key)
-                {
-                    steer.Hold = true;
-                    steer.HoldDir = key;
-                    state.FlyingEdge = true;
-                    return;
-                }
-
-                state.HeldDir = 0;
-                state.HeldFallbacks++;
             }
 
             // Where the plan says to be now, clamped at the landing so a bot that
@@ -310,39 +322,51 @@ public sealed partial class PathFollower
         }
 
         state.HeldDir = 0;
+        state.HeldRejump = -1;
 
         // N1: jump where a person would. Near the takeoff, if jumping now and
         // holding toward the landing comes down on the destination, go: no
         // speed ceiling, no braking, no run-up. JumpHeld is checked because a
         // press on the tick after one is not a press, and the prediction assumed
-        // one.
+        // one. N3: a scout's plans include a second jump, timed as people time
+        // theirs, on double-jump arcs and plain ones alike.
         if (HeldFlight
-            && edge.Type == NavEdgeType.Jump
+            && edge.Type is NavEdgeType.Jump or NavEdgeType.DoubleJump
             && Collision is { } ground
             && !state.JumpHeld
-            && Math.Abs(column - takeoff) <= BotConstants.RunupCells
-            && CanLaunchHeld(ground, in character, jumpDir, next, landPlan, overshoot))
+            && Math.Abs(column - takeoff) <= BotConstants.RunupCells)
         {
-            // N2: a held jump would land, but a person would not take it yet
-            // if running on still gains speed and the jump will still be there
-            // a tick from now. Keep running toward the landing instead: the
-            // approach below would brake to the arc's own speed.
-            if (!LastOrFastest(ground, in character, jumpDir, current, next, landPlan, overshoot))
+            Span<int> options = stackalloc int[MaxLaunchOptions];
+            options = options[..LaunchOptions(state, in query, current, next, options)];
+
+            if (CanLaunchHeld(ground, in character, jumpDir, next, landPlan, overshoot, options, out var rejump))
             {
-                state.HeldDeferred++;
+                // N2: a held jump would land, but a person would not take it yet
+                // if running on still gains speed and the jump will still be there
+                // a tick from now. Keep running toward the landing instead: the
+                // approach below would brake to the arc's own speed.
+                if (!LastOrFastest(ground, in character, jumpDir, current, next, landPlan, overshoot, options))
+                {
+                    state.HeldDeferred++;
+                    steer.Hold = true;
+                    steer.HoldDir = jumpDir;
+                    return;
+                }
+
+                Launch(state, ref steer, rocket: false);
+                state.HeldDir = jumpDir;
+                state.HeldKey = jumpDir;
+                state.HeldRejump = rejump;
+                state.HeldLaunches++;
+                state.Launches++;
+
+                if (rejump >= 0)
+                    state.HeldDoubles++;
+
                 steer.Hold = true;
                 steer.HoldDir = jumpDir;
                 return;
             }
-
-            Launch(state, ref steer, rocket: false);
-            state.HeldDir = jumpDir;
-            state.HeldKey = jumpDir;
-            state.HeldLaunches++;
-            state.Launches++;
-            steer.Hold = true;
-            steer.HoldDir = jumpDir;
-            return;
         }
 
         if (Math.Abs(column - takeoff) > BotConstants.JumpLead)
@@ -844,16 +868,69 @@ public sealed partial class PathFollower
     /// <remarks>
     /// Keeping last tick's key first is what makes the flight hold rather than
     /// flip: a coast that lands is not traded back for a press that also lands.
+    /// Every key is flown with the planned second jump, if one is still to come.
+    /// When none lands, a scout with its second jump left tries it now, a little
+    /// later, or not at all, the way a person rescues a jump (N3).
+    /// <paramref name="press"/> is whether the second jump goes this tick.
     /// </remarks>
     private int? HeldKey(
+        CollisionWorld world, BotPathState state, in CharacterState character, in NavQuery query, int next,
+        double landPlan, int jumpDir, double overshoot, out bool press)
+    {
+        press = false;
+        var pending = 0;
+
+        if (state.HeldRejump >= 0 && !state.Rejumped)
+        {
+            pending = Math.Max(1, state.HeldRejump - state.AirTicks + 1);
+
+            // A press on the tick after a press is a hold: put it off a tick.
+            if (pending == 1 && state.JumpHeld)
+                pending = 2;
+        }
+
+        if (HeldKeyWith(world, state, in character, next, landPlan, jumpDir, overshoot, pending) is { } key)
+        {
+            press = pending == 1;
+            return key;
+        }
+
+        if (!query.CanDoubleJump || character.DoubleJumpUsed || state.Rejumped)
+            return null;
+
+        foreach (var r in RescueTicks)
+        {
+            if (r == pending || (r == 1 && state.JumpHeld))
+                continue;
+
+            if (HeldKeyWith(world, state, in character, next, landPlan, jumpDir, overshoot, r) is { } rescued)
+            {
+                state.HeldRejump = r == 0 ? -1 : state.AirTicks + r - 1;
+                state.HeldRescues++;
+                press = r == 1;
+                return rescued;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The second jumps tried when a held flight's plan stops landing, as
+    /// predictor ticks: now, two, four or six ticks on, or none.
+    /// </summary>
+    private static readonly int[] RescueTicks = [1, 3, 5, 7, 0];
+
+    /// <summary><see cref="HeldKey"/>'s key order, flown with a second jump on predictor tick <paramref name="rejump"/> (0 none).</summary>
+    private int? HeldKeyWith(
         CollisionWorld world, BotPathState state, in CharacterState character, int next, double landPlan, int jumpDir,
-        double overshoot)
+        double overshoot, int rejump)
     {
         Span<int> order = [state.HeldKey, state.HeldDir, 0, -state.HeldDir];
 
         foreach (var key in order)
         {
-            if (FlightPredictor.Land(world, in character, key, jump: false, out var x, out var y, out _)
+            if (FlightPredictor.Land(world, in character, key, key, jump: false, rejump, out var x, out var y, out _)
                 && InLandingWindow(x, y, next, landPlan, jumpDir, overshoot))
             {
                 state.HeldKey = key;
@@ -867,23 +944,101 @@ public sealed partial class PathFollower
     /// <summary>
     /// Whether a take-off now, pressed toward the landing, has a key plan that
     /// comes down in the landing window: held, let go, or reversed after the
-    /// first tick. The flight then picks between them tick by tick.
+    /// first tick, with each of <paramref name="options"/>' second jumps in
+    /// turn. The flight then picks between them tick by tick.
     /// </summary>
+    /// <param name="rejump">The air tick of the planned second jump, or −1 for none.</param>
     private bool CanLaunchHeld(
-        CollisionWorld world, in CharacterState character, int jumpDir, int next, double landPlan, double overshoot)
+        CollisionWorld world, in CharacterState character, int jumpDir, int next, double landPlan, double overshoot,
+        ReadOnlySpan<int> options, out int rejump)
     {
         Span<int> then = [jumpDir, 0, -jumpDir];
 
-        foreach (var key in then)
+        foreach (var r in options)
         {
-            if (FlightPredictor.Land(world, in character, jumpDir, key, jump: true, out var x, out var y, out _)
-                && InLandingWindow(x, y, next, landPlan, jumpDir, overshoot))
+            foreach (var key in then)
             {
-                return true;
+                // Air tick r is predictor tick r + 1: tick 1 is the take-off.
+                if (FlightPredictor.Land(world, in character, jumpDir, key, jump: true, r < 0 ? 0 : r + 1, out var x, out var y, out _)
+                    && InLandingWindow(x, y, next, landPlan, jumpDir, overshoot))
+                {
+                    rejump = r;
+                    return true;
+                }
             }
         }
 
+        rejump = -1;
         return false;
+    }
+
+    /// <summary>
+    /// The second jumps a take-off may plan, in the order tried, as air ticks
+    /// (−1 for none). Written into <paramref name="options"/>; returns how many.
+    /// </summary>
+    /// <remarks>
+    /// A class with no second jump plans one jump. A scout draws, once per
+    /// attempt at an edge, whether to try a double jump first
+    /// (<see cref="DoubleShare"/>) and when to take it
+    /// (<see cref="RejumpStyle"/>), then tries ticks around that one. The fleet's
+    /// people double jump on 46% of their out-of-combat jumps, over steps, gaps
+    /// and flat ground alike, mostly a little before the top of the arc
+    /// (<c>gg2-rl</c> <c>docs/PLAN.md</c>, N3). The draw hashes the bot, the edge
+    /// and its launch count, so it holds through an approach and a sweep stays
+    /// deterministic.
+    /// </remarks>
+    private static int LaunchOptions(BotPathState state, in NavQuery query, int current, int next, Span<int> options)
+    {
+        if (!query.CanDoubleJump)
+        {
+            options[0] = -1;
+            return 1;
+        }
+
+        var h = Mix((uint)state.ReplanStagger, (uint)current, (uint)next, (uint)state.Launches);
+        var drawn = RejumpStyle[(int)(h % (uint)RejumpStyle.Length)];
+        var doubleFirst = ((h >> 16) & 0xFFFF) < DoubleShare * 65536;
+        var count = 0;
+
+        if (!doubleFirst)
+            options[count++] = -1;
+
+        foreach (var d in RejumpSpread)
+        {
+            if (drawn + d >= 2)
+                options[count++] = drawn + d;
+        }
+
+        if (doubleFirst)
+            options[count++] = -1;
+
+        return count;
+    }
+
+    /// <summary>The share of scout jumps that try a double jump first: the fleet's people's.</summary>
+    private const double DoubleShare = 0.46;
+
+    /// <summary>
+    /// The air tick of a person's second jump, at about evenly spaced quantiles
+    /// of the fleet's scouts (5th to 95th percentile).
+    /// </summary>
+    private static readonly int[] RejumpStyle = [5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 19, 23];
+
+    /// <summary>Offsets from the drawn tick tried after it, nearest first.</summary>
+    private static readonly int[] RejumpSpread = [0, -2, 2, -4, 4, 8];
+
+    /// <summary>One plan with no second jump and every <see cref="RejumpSpread"/>.</summary>
+    private const int MaxLaunchOptions = 7;
+
+    private static uint Mix(uint a, uint b, uint c, uint d)
+    {
+        var h = (a * 0x9E3779B1u) ^ (b * 0x85EBCA77u) ^ (c * 0xC2B2AE3Du) ^ (d * 0x27D4EB2Fu);
+        h ^= h >> 15;
+        h *= 0x2C1B3C6Du;
+        h ^= h >> 12;
+        h *= 0x297A2D39u;
+        h ^= h >> 15;
+        return h;
     }
 
     /// <summary>
@@ -900,7 +1055,7 @@ public sealed partial class PathFollower
     /// </remarks>
     private bool LastOrFastest(
         CollisionWorld world, in CharacterState character, int jumpDir, int current, int next, double landPlan,
-        double overshoot)
+        double overshoot, ReadOnlySpan<int> options)
     {
         var ahead = character;
 
@@ -913,7 +1068,7 @@ public sealed partial class PathFollower
         if ((ahead.HSpeed - character.HSpeed) * jumpDir < AtSpeed)
             return true;
 
-        return !CanLaunchHeld(world, in ahead, jumpDir, next, landPlan, overshoot);
+        return !CanLaunchHeld(world, in ahead, jumpDir, next, landPlan, overshoot, options, out _);
     }
 
     /// <summary>A tick's speed gain below this is running flat out, in px/tick.</summary>

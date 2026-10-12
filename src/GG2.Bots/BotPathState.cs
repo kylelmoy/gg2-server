@@ -533,6 +533,18 @@ public sealed class BotPathState
     /// <summary>Held flights handed back to the tracker because no key was predicted to land.</summary>
     public int HeldFallbacks { get; set; }
 
+    /// <summary>
+    /// The air tick a held flight's second jump is planned for (N3), or −1 for
+    /// none. Counted as <see cref="AirTicks"/> is.
+    /// </summary>
+    public int HeldRejump { get; set; } = -1;
+
+    /// <summary>Held launches planned with a second jump.</summary>
+    public int HeldDoubles { get; set; }
+
+    /// <summary>Held flights whose second jump was re-timed, found or dropped in the air to keep them landing.</summary>
+    public int HeldRescues { get; set; }
+
     /// <inheritdoc cref="Launches"/>
     public int LaunchesUnderspeed { get; set; }
 

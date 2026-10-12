@@ -55,6 +55,20 @@ public static class FlightPredictor
     /// </summary>
     public static bool Land(
         CollisionWorld world, in CharacterState start, int firstDir, int dir, bool jump,
+        out double x, out double y, out int ticks) =>
+        Land(world, in start, firstDir, dir, jump, 0, out x, out y, out ticks);
+
+    /// <summary>
+    /// As the overloads above, pressing jump again on tick
+    /// <paramref name="rejump"/> (1 is the first tick stepped; 0 never): a
+    /// scout's second jump, if it has one left.
+    /// </summary>
+    /// <remarks>
+    /// A press, not a hold, exactly as the world takes it: a press on the tick
+    /// after another is held, not pressed, and changes nothing. N3.
+    /// </remarks>
+    public static bool Land(
+        CollisionWorld world, in CharacterState start, int firstDir, int dir, bool jump, int rejump,
         out double x, out double y, out int ticks)
     {
         var c = start;
@@ -69,7 +83,8 @@ public static class FlightPredictor
 
         for (var t = 1; t <= MaxTicks; t++)
         {
-            var held = (t == 1 ? first : keys) | (jump && t == 1 ? PlayerKeys.Jump : PlayerKeys.None);
+            var held = (t == 1 ? first : keys)
+                | ((jump && t == 1) || t == rejump ? PlayerKeys.Jump : PlayerKeys.None);
             c.ApplyInput(new PlayerInput(held, c.NetAimDirection, c.AimDistance));
 
             CharacterPhysics.BeginStepInput(world, ref c);

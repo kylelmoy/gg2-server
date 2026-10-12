@@ -19,6 +19,8 @@
 //   landing      the height gained (px, up positive), and for a jump that
 //                follows a landing within 60 ticks, the ticks on the ground
 //                between them (stairs)
+//   double jump  the air tick of a second jump (-1 if none), and the vspeed
+//                the tick before it (negative still rising, positive falling)
 //
 // Output: CSV on stdout. gg2-rl docs/PLAN.md, the navigation study, reads it.
 
@@ -80,7 +82,7 @@ internal static class Program
             }
         });
 
-        Console.WriteLine("trace,map,slot,participant,controller,class,context,feature_px,rise,speed,speed_max_pre,still_pre,reversals_pre,air_ticks,air_key_changes,air_no_key,air_reversals,air_speed,ground_gap,enemy_px");
+        Console.WriteLine("trace,map,slot,participant,controller,class,context,feature_px,rise,speed,speed_max_pre,still_pre,reversals_pre,air_ticks,air_key_changes,air_no_key,air_reversals,air_speed,ground_gap,enemy_px,rejump,rejump_vs");
 
         foreach (var row in rows.OrderBy(r => r, StringComparer.Ordinal))
             Console.WriteLine(row);
@@ -115,6 +117,9 @@ internal static class Program
         public double SpeedSum;
         public PlayerKeys LastKeys;
         public int LastSign;
+        public double LastVs;
+        public int Rejump = -1;
+        public double RejumpVs;
     }
 
     private static void Scan(string file, string maps, ConcurrentBag<string> rows)
@@ -183,7 +188,9 @@ internal static class Program
                                     air.Reversals,
                                     F(air.SpeedSum / air.Ticks),
                                     air.GroundGap,
-                                    F(air.Enemy)));
+                                    F(air.Enemy),
+                                    air.Rejump,
+                                    F(air.RejumpVs)));
                             }
 
                             s.Air = null;
@@ -204,6 +211,13 @@ internal static class Program
                             if (sign != 0)
                                 air.LastSign = sign;
                             air.SpeedSum += Math.Abs(c.HSpeed);
+                            if (c.DoubleJumpUsed && air.Rejump < 0)
+                            {
+                                air.Rejump = air.Ticks;
+                                air.RejumpVs = air.LastVs;
+                            }
+
+                            air.LastVs = c.VSpeed;
                         }
                         else
                         {
@@ -249,6 +263,7 @@ internal static class Program
                                 GroundGap = groundGap,
                                 LastKeys = keys,
                                 LastSign = dir,
+                                LastVs = c.VSpeed,
                             };
                         }
                     }

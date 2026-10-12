@@ -16,7 +16,7 @@ namespace GG2.Tests;
 /// </remarks>
 public sealed class FlightPredictorTests(Xunit.Abstractions.ITestOutputHelper output)
 {
-    private sealed class Plan(int runTicks, int runDir, int holdDir) : IInputSource
+    private sealed class Plan(int runTicks, int runDir, int holdDir, int rejump = 0) : IInputSource
     {
         public int JumpTick { get; set; } = int.MaxValue;
 
@@ -24,7 +24,7 @@ public sealed class FlightPredictorTests(Xunit.Abstractions.ITestOutputHelper ou
         {
             var keys = tick < JumpTick ? Key(runDir) : Key(holdDir);
 
-            if (tick == JumpTick)
+            if (tick == JumpTick || (rejump > 0 && JumpTick != int.MaxValue && tick == JumpTick + rejump - 1))
                 keys |= PlayerKeys.Jump;
 
             return new PlayerInput(keys, 0, 0);
@@ -48,18 +48,26 @@ public sealed class FlightPredictorTests(Xunit.Abstractions.ITestOutputHelper ou
         var nodes = graph.Nodes.Length;
         var compared = 0;
         var landed = 0;
+        var doubled = 0;
 
         for (var n = 0; n < nodes; n += Math.Max(1, nodes / 40))
         {
             foreach (var cls in new[] { PlayerClass.Scout, PlayerClass.Heavy })
             {
-                foreach (var (run, runDir, holdDir) in new[] { (0, 0, 1), (8, 1, 1), (8, -1, -1), (8, 1, 0), (12, 1, -1) })
+                foreach (var (run, runDir, holdDir, rejump) in new[]
+                {
+                    (0, 0, 1, 0), (8, 1, 1, 0), (8, -1, -1, 0), (8, 1, 0, 0), (12, 1, -1, 0),
+
+                    // A second jump (N3): near the top, early, late, and on the
+                    // tick after the first, where it is a hold and does nothing.
+                    (8, 1, 1, 11), (8, -1, -1, 5), (0, 0, 1, 20), (8, 1, 1, 2),
+                })
                 {
                     var world = ScenarioWorld.Load(map, 1, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
                     var node = graph.Nodes[n];
                     var x = NavGraph.ColumnWorldX((node.X0 + node.X1) / 2);
                     var slot = world.Place(cls, Team.Red, x, EdgeFlights.StandingY(graph, n));
-                    var plan = new Plan(run, runDir, holdDir);
+                    var plan = new Plan(run, runDir, holdDir, rejump);
                     world.Drive(slot, plan);
                     world.Step(5 + run);
 
@@ -68,7 +76,7 @@ public sealed class FlightPredictorTests(Xunit.Abstractions.ITestOutputHelper ou
 
                     plan.JumpTick = world.Tick;
                     var predicted = FlightPredictor.Land(
-                        world.Collision, in world.State.Characters[slot], holdDir, jump: true,
+                        world.Collision, in world.State.Characters[slot], holdDir, holdDir, jump: true, rejump,
                         out var px, out var py, out var pt);
 
                     var actual = false;
@@ -89,6 +97,8 @@ public sealed class FlightPredictorTests(Xunit.Abstractions.ITestOutputHelper ou
                         if (!c.OnGround)
                         {
                             air = true;
+                            if (c.DoubleJumpUsed && t == rejump)
+                                doubled++;
                         }
                         else if (air)
                         {
@@ -106,19 +116,20 @@ public sealed class FlightPredictorTests(Xunit.Abstractions.ITestOutputHelper ou
 
                     compared++;
 
-                    Assert.True(predicted == actual, $"{map} node {n} {cls} run {run}/{runDir} hold {holdDir}: predicted {predicted}, world {actual}");
+                    Assert.True(predicted == actual, $"{map} node {n} {cls} run {run}/{runDir} hold {holdDir} rejump {rejump}: predicted {predicted}, world {actual}");
 
                     if (actual)
                     {
                         landed++;
                         Assert.True(px == ax && py == ay && pt == at,
-                            $"{map} node {n} {cls} run {run}/{runDir} hold {holdDir}: predicted ({px}, {py}) at {pt}, world ({ax}, {ay}) at {at}");
+                            $"{map} node {n} {cls} run {run}/{runDir} hold {holdDir} rejump {rejump}: predicted ({px}, {py}) at {pt}, world ({ax}, {ay}) at {at}");
                     }
                 }
             }
         }
 
-        output.WriteLine($"{map}: {compared} jumps compared, {landed} landed");
+        output.WriteLine($"{map}: {compared} jumps compared, {landed} landed, {doubled} second jumps");
         Assert.True(landed > 100, $"{map}: only {landed} jumps landed, too few to say the predictor agrees");
+        Assert.True(doubled > 20, $"{map}: only {doubled} second jumps were taken, too few to say the predictor models them");
     }
 }
