@@ -608,6 +608,18 @@ and a plan that lands from standing there (`PathFollower.FaceHops`, set by
 Face-hop sweep (`EveryEdgeIsFlownWithFaceHops`) stranded 440 against the
 shipping arm's 445, ticks +2.2%; ladder even. Tier 5 is untouched.
 
+**N6, a take-off is a ground jump.** ⚠️ **`CharacterState.OnGround` is set at
+the start of a tick, before its move**, so after a predictor step it says where
+the body *was*. N2's look-ahead read it and let a scout defer one tick past a
+lip. The press there was the scout's mid-air jump, which the predictor lands,
+so the plan looked fine and the second jump was spent on the take-off (52% of
+scouts' gap second jumps). Held launches now test solid ground one pixel under
+the body (`GroundUnder`), the physics' own start-of-tick test.
+⚠️ **And a netcode test was measuring bot navigation.**
+`JoinDuringDeathTests` piled bots wherever one stood at tick 300. N6 moved
+that bot, and the new pile killed nobody on a join tick. The pile is now a
+fixed point.
+
 ### Phase 7 item 4c-i: what to shoot at, and where to point
 
 `GG2.Bots.{BotTargeting, BotAim}`. Gated by `BotTargetingTests` and
