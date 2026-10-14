@@ -37,11 +37,13 @@ public static class EdgeSearch
     /// <summary>
     /// Searches from <paramref name="start"/> to standing on <paramref name="to"/>
     /// within <see cref="BotConstants.ArriveTol"/> of <paramref name="goalX"/>, at
-    /// under 1 px/tick: the follower's own arrival test.
+    /// under 1 px/tick: the follower's own arrival test. With
+    /// <paramref name="stop"/> false, standing on <paramref name="to"/> at any
+    /// speed and anywhere on it, for a node a route goes on from.
     /// </summary>
     public static Result Fastest(
         CollisionWorld world, NavGraph graph, in CharacterState start, int to, double goalX,
-        int maxTicks = 400, int beam = 2000)
+        int maxTicks = 400, int beam = 2000, bool stop = true)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(graph);
@@ -95,7 +97,8 @@ public static class EdgeSearch
                         keysOf.Add(keys);
                         var trail = parents.Count - 1;
 
-                        if (c.OnGround && Math.Abs(c.HSpeed) < 1 && Math.Abs(c.X - goalX) <= BotConstants.ArriveTol
+                        if (c.OnGround
+                            && (!stop || (Math.Abs(c.HSpeed) < 1 && Math.Abs(c.X - goalX) <= BotConstants.ArriveTol))
                             && graph.NodeFromWorld(c.X, c.Y) == to)
                         {
                             return new Result(true, tick, Read(parents, keysOf, trail), expanded);
