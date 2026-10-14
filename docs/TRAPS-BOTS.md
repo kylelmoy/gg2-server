@@ -620,6 +620,15 @@ the body (`GroundUnder`), the physics' own start-of-tick test.
 that bot, and the new pile killed nobody on a join tick. The pile is now a
 fixed point.
 
+**N7, second-jump plans first.** ⚠️ **The order plans are tried in is a
+behaviour, not a detail.** A drawn second jump was tried only with one key
+held. If that missed, a single one-key jump that landed won, and the two-phase
+double plans that land from standing at a step were never reached. Scouts
+planned a second jump on 24% of plain jumps against a 46% draw, and on 7% of
+face hops. With every double plan tried before any single one, those figures
+are 39% and 28%. Scouts' second-jump share is 31% / 36.5% over steps and gaps
+(people 49% / 45%), at people's timing. Sweeps and ladder level.
+
 ### Phase 7 item 4c-i: what to shoot at, and where to point
 
 `GG2.Bots.{BotTargeting, BotAim}`. Gated by `BotTargetingTests` and
