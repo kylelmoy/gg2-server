@@ -299,7 +299,8 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// into the step's face, stand, and hop from standing. Recorded 2026-10-13
     /// against the shipping arm's 445 stranded and 1,367,620 ticks: per edge 713
     /// flights changed, 22 that stranded now arrive and 10 that arrived now
-    /// strand (<c>HeldFlightCensus.FaceHops</c>).
+    /// strand (<c>HeldFlightCensus.FaceHops</c>). N5b, a face hop wherever one is
+    /// valid (share 0.35 → 1.0): stranded 433 → 440, ticks 1,375,827 → 1,398,087.
     /// </remarks>
     [Fact]
     public void EveryEdgeIsFlownWithFaceHops()
@@ -319,16 +320,16 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
             new EdgeFlightTally(
                 Candidates: 116_316,
                 Measured: 32_055,
-                Arrived: 31_622,
-                Flown: 3_620,
-                Stranded: 433,
+                Arrived: 31_615,
+                Flown: 3_621,
+                Stranded: 440,
                 RoutedAround: 72_926,
                 Shadowed: 10_869,
                 NoRoute: 466,
                 StartUnresolved: 0,
                 GoalUnresolved: 0,
-                Ticks: 1_375_827,
-                Blacklists: 7_370,
+                Ticks: 1_398_087,
+                Blacklists: 7_446,
                 StartBlocked: 0,
                 TeamSwapped: 178,
                 Diverted: 33),

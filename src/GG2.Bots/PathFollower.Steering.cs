@@ -1292,8 +1292,12 @@ public sealed partial class PathFollower
         return false;
     }
 
-    /// <summary>The share of step attempts drawn as face hops, a little above people's third.</summary>
-    private const double FaceShare = 0.35;
+    /// <summary>
+    /// The share of valid face hops taken. All of them (N5b): a face hop is valid on
+    /// only part of the step jumps, and at 0.35 bots stood at the face for 15% of
+    /// them against people's 33%; at 1.0, 37%.
+    /// </summary>
+    private const double FaceShare = 1.0;
 
     /// <summary>Ticks stood at the face, at about people's quantiles (median 9; a quarter past 15).</summary>
     private static readonly int[] FaceWaits = [2, 3, 4, 6, 8, 10, 13, 16, 19, 24];
