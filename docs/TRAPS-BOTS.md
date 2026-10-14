@@ -656,10 +656,29 @@ touches down, not about where it can run to.** Requiring run-up room before
 the destination's own leaving jump fixed it and gave the gain back (13.0%),
 and raised step key changes to 0.06. Reverted. gg2-rl `docs/PLAN.md`, N9 /
 N9b.
-⚠️ **Open, seen there and not caused by N9:** standing off the route on node
-37, the follower fired `OffRoute` on 182 consecutive ticks, pressing nothing
-and not moving. A re-plan that leaves the bot in the same state every tick is a
-stall loop in `OffRoute` / `Plan`.
+**N10, no standing still off the route (fixed; seen first under N9).** Standing
+off the route, the follower fires `OffRoute` every tick, and `OffRoute` calls
+`Plan`. When `Plan` returns without a route, the bot presses nothing. On
+master this was 94 stalls of 2 seconds or more in 24 matches, 0.9% of bot ticks
+(`OffRouteStallCensus`). Two causes:
+- ⚠️ **A failure throttle outlives where it failed.** `PlanFailUntil` parked
+  every search for 45 ticks after one failed, usually a search made in the air,
+  on no node. A bot that then landed off its route waited it out. The throttle
+  now holds only at the node the failed search started from
+  (`PlanFailStart`).
+- ⚠️ **A ban on the only way back strands the bot for 150 ticks.** A search
+  that fails only because of the bot's own blacklist now takes the banned route
+  (`BannedRoutes`). The ban still steers every search that has a way round.
+
+Now 0 stalls of 2 seconds or more. Sweep ticks −1.5% and blacklists −11%, but
+shipping stranded 443 → 453. Those are rocket jumps that arrived late before,
+and they came from the throttle half. gg2-rl `docs/PLAN.md`, N10 / N10b.
+
+⚠️ **`TwelveBotsRunWellUnderTheTickBudget` under the full parallel suite: two
+failures now** (9.4 ms at N4, 9.7 ms at N10b, against the 8.3 ms it asserts).
+Alone it reads 0.6–1.4 ms. The same test, margin and condition each time: a
+recurrence, and it is about suite contention, not bot cost (N10b re-plans 23.1
+per 1,000 bot ticks against 22.8 before). Not changed; flagged.
 
 ### Phase 7 item 4c-i: what to shoot at, and where to point
 
