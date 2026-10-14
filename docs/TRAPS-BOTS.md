@@ -629,6 +629,23 @@ face hops. With every double plan tried before any single one, those figures
 are 39% and 28%. Scouts' second-jump share is 31% / 36.5% over steps and gaps
 (people 49% / 45%), at people's timing. Sweeps and ladder level.
 
+**N8, running hops.** Tiers 1–4 with no target hop now and then while
+running, at about people's rate (`PathFollower.RunHops`, set with
+`FaceHops`). Three traps, all found by a census after a recording read zero:
+- ⚠️ **Most running is not on a walk edge.** 71% of a bot's running is along
+  a node toward a jump edge's take-off. A behaviour that hangs off walk edges
+  reaches a quarter of it.
+- ⚠️ **A floor is many nodes.** A running hop covers about 130px and lands
+  several short nodes on. The landing check walks the route ahead over walk
+  edges, and the follower's forward-only route search advances to wherever
+  the bot comes down.
+- ⚠️ **A jump edge's air steering flies any airborne bot as that jump.** A hop
+  taken on the way to a take-off holds its own direction until it lands
+  (`BotPathState.RunHopAir`).
+And a draw is not a hop: only a third had room at the drawn tick, so a drawn
+hop waits up to 30 ticks for room. Rate calibrations went 0.43 → 0.62 → 1.27
+→ 2.32 per 1,000 running ticks (people 2.50).
+
 ### Phase 7 item 4c-i: what to shoot at, and where to point
 
 `GG2.Bots.{BotTargeting, BotAim}`. Gated by `BotTargetingTests` and
