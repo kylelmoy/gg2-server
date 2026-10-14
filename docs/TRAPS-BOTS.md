@@ -592,6 +592,22 @@ a match, 95% of scouts' and 89% of other classes' are now held (71% and 72%).
 frontline read 7 of 8 and then 5 across this change, which over thirty-two
 seeds read 29 before and 28 after. The gate now runs thirty-two.
 
+**N5, face hops.** A third of people's step jumps start standing against the
+step's face, after a median 9-tick pause. Tiers 1–4 with no combat target now
+do the same wherever the predictor finds the face inside the take-off node
+and a plan that lands from standing there (`PathFollower.FaceHops`, set by
+`ScriptedBot` each tick; off in the sweeps unless asked for). Two traps:
+- ⚠️ **Wait with no keys.** Held toward the wall, the stuck test counts a
+  pressed key that does not move the bot, and blacklists the edge after 12
+  ticks, shorter than many of the drawn waits.
+- ⚠️ **A drawn share is not the share you get.** At 0.35, bots stood at the
+  face on 15% of step jumps, not about 30%. Most draws were invalid, because
+  the face belonged to the next node's edge. So N5b takes every valid one,
+  which comes out at 37%.
+
+Face-hop sweep (`EveryEdgeIsFlownWithFaceHops`) stranded 440 against the
+shipping arm's 445, ticks +2.2%; ladder even. Tier 5 is untouched.
+
 ### Phase 7 item 4c-i: what to shoot at, and where to point
 
 `GG2.Bots.{BotTargeting, BotAim}`. Gated by `BotTargetingTests` and
