@@ -1006,25 +1006,7 @@ public sealed partial class PathFollower
         CollisionWorld world, in CharacterState character, int jumpDir, int next, double landPlan, double overshoot,
         ReadOnlySpan<int> options, out int rejump, out int early, out int switchAt)
     {
-        Span<int> then = [jumpDir, 0, -jumpDir];
-        early = 0;
-        switchAt = 0;
-
-        foreach (var r in options)
-        {
-            foreach (var key in then)
-            {
-                // Air tick r is predictor tick r + 1: tick 1 is the take-off.
-                if (HeldLands(world, in character, jumpDir, key, 1, key, jump: true, r < 0 ? 0 : r + 1, next, landPlan, jumpDir, overshoot))
-                {
-                    rejump = r;
-                    return true;
-                }
-            }
-        }
-
-        // Air tick S is predictor tick S + 1, so the first phase covers
-        // predictor ticks 2 to S: earlyTicks is S.
+        var c = character;
         var drawn = -1;
         foreach (var r in options)
         {
@@ -1035,28 +1017,95 @@ public sealed partial class PathFollower
             }
         }
 
-        Span<int> rejumps = [-1, drawn];
-        Span<int> earlies = [0, -jumpDir];
+        early = 0;
+        switchAt = 0;
 
-        foreach (var r in rejumps[..(!HeldSwitchPlans ? 0 : drawn >= 0 ? 2 : 1)])
+        // N7: where the draw puts a second jump first, every second-jump plan,
+        // one key and two-phase, goes before any single one. Otherwise a single
+        // held jump that lands wins over the rise, jump again and steer over
+        // that a person makes from standing at a step. The single plan is last.
+        if (options.Length > 1 && options[0] >= 0)
         {
-            foreach (var e in earlies)
+            if (Constant(options[..^1], out rejump))
+                return true;
+
+            if (Switched(drawn, out early, out switchAt))
             {
-                foreach (var s in LaunchSwitchTicks)
+                rejump = drawn;
+                return true;
+            }
+
+            if (Constant(options[^1..], out rejump))
+                return true;
+
+            rejump = -1;
+            return Switched(-1, out early, out switchAt);
+        }
+
+        if (Constant(options, out rejump))
+            return true;
+
+        rejump = -1;
+        if (Switched(-1, out early, out switchAt))
+            return true;
+
+        if (drawn >= 0 && Switched(drawn, out early, out switchAt))
+        {
+            rejump = drawn;
+            return true;
+        }
+
+        return false;
+
+        // Held, let go, or reversed after the first tick, with each second jump
+        // in turn. Air tick r is predictor tick r + 1: tick 1 is the take-off.
+        bool Constant(ReadOnlySpan<int> rejumps, out int found)
+        {
+            Span<int> then = [jumpDir, 0, -jumpDir];
+
+            foreach (var r in rejumps)
+            {
+                foreach (var key in then)
                 {
-                    if (HeldLands(world, in character, jumpDir, e, s, jumpDir, jump: true, r < 0 ? 0 : r + 1, next, landPlan, jumpDir, overshoot))
+                    if (HeldLands(world, in c, jumpDir, key, 1, key, jump: true, r < 0 ? 0 : r + 1, next, landPlan, jumpDir, overshoot))
                     {
-                        rejump = r;
-                        early = e;
-                        switchAt = s;
+                        found = r;
                         return true;
                     }
                 }
             }
+
+            found = -1;
+            return false;
         }
 
-        rejump = -1;
-        return false;
+        // N4: let go or pressed away until air tick S, then toward. Air tick S
+        // is predictor tick S + 1, so the first phase covers predictor ticks 2
+        // to S: earlyTicks is S.
+        bool Switched(int r, out int e, out int s)
+        {
+            Span<int> earlies = [0, -jumpDir];
+
+            if (HeldSwitchPlans)
+            {
+                foreach (var candidate in earlies)
+                {
+                    foreach (var at in LaunchSwitchTicks)
+                    {
+                        if (HeldLands(world, in c, jumpDir, candidate, at, jumpDir, jump: true, r < 0 ? 0 : r + 1, next, landPlan, jumpDir, overshoot))
+                        {
+                            e = candidate;
+                            s = at;
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            e = 0;
+            s = 0;
+            return false;
+        }
     }
 
     /// <summary>
