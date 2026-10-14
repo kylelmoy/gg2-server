@@ -723,10 +723,14 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
             CanRocketJump = RocketModel.Capable(in self, in world.Weapon(slot)),
         };
 
-        // N5: tiers 1-4 walk up to some steps and hop from standing, as people
-        // do, but not with a target held (last tick's: combat steps after).
+        // N5, N8: tiers 1-4 walk up to some steps and hop from standing, and hop
+        // now and then while running, as people do, but not with a target held
+        // (last tick's: combat steps after).
         if (_graph is not null)
+        {
             _follower.FaceHops = Skill.HumanAim && !Combat.Target.Exists;
+            _follower.RunHops = _follower.FaceHops;
+        }
 
         var navKeys = _graph is null
             ? PlayerKeys.None

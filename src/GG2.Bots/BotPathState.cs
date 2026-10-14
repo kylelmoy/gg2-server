@@ -589,6 +589,32 @@ public sealed class BotPathState
     /// <summary>Face hops that launched from the face.</summary>
     public int FaceLaunches { get; set; }
 
+    /// <summary>Whether the bot is in the air on a running hop (N8).</summary>
+    public bool RunHopAir { get; set; }
+
+    /// <summary>The direction a running hop in the air holds.</summary>
+    public int RunHopDir { get; set; }
+
+    /// <summary>
+    /// Ground ticks until a chained running hop, counted down from its landing,
+    /// or −1 for none.
+    /// </summary>
+    public int RunHopChain { get; set; } = -1;
+
+    /// <summary>
+    /// Ticks a drawn running hop still waits for room, or −1 for none (N8c).
+    /// </summary>
+    public int RunHopPending { get; set; } = -1;
+
+    /// <summary>Whether the pending hop is a chained one.</summary>
+    public bool RunHopPendingChained { get; set; }
+
+    /// <summary>Running hops taken (N8).</summary>
+    public int RunHopsTaken { get; set; }
+
+    /// <summary>Running hops that followed another's landing.</summary>
+    public int RunHopsChained { get; set; }
+
     /// <inheritdoc cref="Launches"/>
     public int LaunchesUnderspeed { get; set; }
 

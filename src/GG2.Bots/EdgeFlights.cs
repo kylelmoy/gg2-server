@@ -451,7 +451,7 @@ public static class EdgeFlights
         var follower = new PathFollower(graph)
         {
             Distances = distances, Collision = world.Collision, HeldFlight = heldFlight, HeldDoubles = heldDoubles,
-            HeldSwitchPlans = heldSwitchPlans, FaceHops = faceHops,
+            HeldSwitchPlans = heldSwitchPlans, FaceHops = faceHops, RunHops = faceHops,
         };
         var cls = flyAs ?? ClassFor(edge.Type);
         var state = new BotPathState();

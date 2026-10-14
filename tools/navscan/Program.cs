@@ -22,6 +22,9 @@
 //   double jump  the air tick of a second jump (-1 if none), and the vspeed
 //                the tick before it (negative still rising, positive falling)
 //
+// And on stderr, for rates: out-of-combat ground ticks running faster than 2
+// px/tick, per participant kind and class ("running,<who>,<class>,<ticks>").
+//
 // Output: CSV on stdout. gg2-rl docs/PLAN.md, the navigation study, reads it.
 
 using System.Collections.Concurrent;
@@ -65,6 +68,7 @@ internal static class Program
 
         files.Sort(StringComparer.Ordinal);
         var rows = new ConcurrentBag<string>();
+        var running = new ConcurrentDictionary<string, long>(StringComparer.Ordinal);
         var read = 0;
         var failed = 0;
 
@@ -72,7 +76,7 @@ internal static class Program
         {
             try
             {
-                Scan(file, maps, rows);
+                Scan(file, maps, rows, running);
                 Interlocked.Increment(ref read);
             }
             catch (Exception e)
@@ -86,6 +90,10 @@ internal static class Program
 
         foreach (var row in rows.OrderBy(r => r, StringComparer.Ordinal))
             Console.WriteLine(row);
+
+        // Exposure, for rates: ground ticks running (over 2 px/tick) out of combat.
+        foreach (var (key, count) in running.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+            Console.Error.WriteLine($"running,{key},{count}");
 
         Console.Error.WriteLine($"{read} trace(s) scanned, {failed} failed");
         return read == 0 ? 1 : 0;
@@ -122,7 +130,7 @@ internal static class Program
         public double RejumpVs;
     }
 
-    private static void Scan(string file, string maps, ConcurrentBag<string> rows)
+    private static void Scan(string file, string maps, ConcurrentBag<string> rows, ConcurrentDictionary<string, long> running)
     {
         var trace = Trace.Decode(File.ReadAllBytes(file));
 
@@ -267,6 +275,9 @@ internal static class Program
                             };
                         }
                     }
+
+                    if (c.OnGround && Math.Abs(c.HSpeed) > 2 && NearestEnemy(in world, i) > CombatRange)
+                        running.AddOrUpdate($"{s.Participant},{c.Class}", 1, (_, n) => n + 1);
 
                     s.Speed[s.Seen % History] = c.HSpeed;
                     s.Seen++;

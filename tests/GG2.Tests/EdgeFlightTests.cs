@@ -295,7 +295,8 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     }
 
     /// <summary>
-    /// The shipping arm with face hops on (<see cref="PathFollower.FaceHops"/>),
+    /// The shipping arm with face hops and running hops on
+    /// (<see cref="PathFollower.FaceHops"/>, <see cref="PathFollower.RunHops"/>),
     /// as tiers 1-4 fly out of combat.
     /// </summary>
     /// <remarks>
@@ -306,6 +307,8 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// strand (<c>HeldFlightCensus.FaceHops</c>). N5b, a face hop wherever one is
     /// valid (share 0.35 → 1.0): stranded 433 → 440, ticks 1,375,827 → 1,398,087.
     /// N6: 440 → 436, ticks 1,398,087 → 1,403,067. N7: 436 → 438.
+    /// N8c (running hops, which a single-edge sweep barely walks): ticks 1,403,578 →
+    /// 1,403,731.
     /// </remarks>
     [Fact]
     public void EveryEdgeIsFlownWithFaceHops()
@@ -333,7 +336,7 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
                 NoRoute: 466,
                 StartUnresolved: 0,
                 GoalUnresolved: 0,
-                Ticks: 1_403_578,
+                Ticks: 1_403_731,
                 Blacklists: 7_453,
                 StartBlocked: 0,
                 TeamSwapped: 178,

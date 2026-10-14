@@ -265,6 +265,13 @@ public sealed partial class PathFollower
     public bool FaceHops { get; set; }
 
     /// <summary>
+    /// Whether the bot hops now and then while running along a walk edge (N8),
+    /// as people do about once every 13 seconds of running, half of them in
+    /// pairs or runs. Off by default; set with <see cref="FaceHops"/>.
+    /// </summary>
+    public bool RunHops { get; set; }
+
+    /// <summary>
     /// Advances one bot's route by a tick and returns the movement keys.
     /// </summary>
     /// <param name="state">The bot's navigation state, updated in place.</param>
@@ -688,6 +695,17 @@ public sealed partial class PathFollower
             steer.TargetColumn = Math.Clamp(column + (dirToNext * BotConstants.EntryLead), to.X0, to.X1);
         }
 
+        if (state.RunHopAir && onGround)
+            RunHopLanded(state, tick);
+
+        // N8b: a running hop in the air holds its direction. It is not the edge's
+        // jump, and a jump edge's air steering would fly it as one.
+        if (state.RunHopAir)
+        {
+            steer.Hold = true;
+            steer.HoldDir = state.RunHopDir;
+        }
+        else
         switch (edge.Type)
         {
             case NavEdgeType.DropThrough:
@@ -722,6 +740,27 @@ public sealed partial class PathFollower
                 // number rather than into silently flying an arc nobody modelled.
                 state.UnsupportedEdgeTicks++;
                 break;
+        }
+
+        // N8: now and then a hop, running along a walk edge or toward a jump's
+        // take-off, unless the edge's own steering has the keys.
+        if (RunHops && Collision is { } ground && onGround && !state.RunHopAir && state.RunupAt < 0
+            && !steer.WantJump && !steer.Hold && !steer.Braking && !steer.Tracking && !steer.Abandon)
+        {
+            var hopDir = 0;
+
+            if (edge.Type == NavEdgeType.Walk)
+            {
+                hopDir = dirToNext;
+            }
+            else if (edge.Type is NavEdgeType.Jump or NavEdgeType.DoubleJump or NavEdgeType.RocketJump or NavEdgeType.StickyJump)
+            {
+                var takeoffX = NavGraph.ColumnWorldX(edge.Takeoff >= 0 ? edge.Takeoff : (dirToNext >= 0 ? from.X1 : from.X0));
+                hopDir = Math.Sign(takeoffX - x);
+            }
+
+            if (hopDir != 0)
+                RunHop(state, ground, in character, hopDir, tick, ref steer);
         }
 
         var keys = edge.Type == NavEdgeType.DropThrough

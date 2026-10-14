@@ -1211,6 +1211,158 @@ public sealed partial class PathFollower
     private const double AtSpeed = 0.15;
 
     /// <summary>
+    /// A hop while running along the route (N8): drawn at
+    /// <see cref="RunHopStart"/> a tick, or chained after the last one landed,
+    /// and taken at the first tick within <see cref="RunHopWait"/> that a held hop
+    /// comes down on the route ahead (N8c).
+    /// </summary>
+    /// <remarks>
+    /// People hop on flat ground while running, 2.5 times per 1,000 running ticks
+    /// out of combat, and 55% of those follow another jump's landing, after a
+    /// median of 18 ground ticks (<c>gg2-rl</c> <c>docs/PLAN.md</c>, N8). The
+    /// draws hash the bot, the tick and the route position, so a run stays
+    /// deterministic.
+    /// <para>
+    /// ⚠️ <b>Most running is toward a jump's take-off, not along a walk edge</b>
+    /// (71% against 24%), and a floor is often several short nodes, so a hop may
+    /// land anywhere on the route ahead that walk edges reach (N8b). Where the
+    /// route leaves that node by a jump, the landing must leave the run-up for it.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A draw is not a hop.</b> Only a third of draws had room at the tick
+    /// they were drawn, so a drawn hop waits for room, as a person does who has
+    /// decided to hop (N8c).
+    /// </para>
+    /// </remarks>
+    private void RunHop(
+        BotPathState state, CollisionWorld world, in CharacterState character, int dir, int tick, ref Steering steer)
+    {
+        if (state.RunHopChain >= 0)
+        {
+            if (state.RunHopChain-- > 0)
+                return;
+
+            state.RunHopPending = RunHopChainWait;
+            state.RunHopPendingChained = true;
+        }
+
+        if (state.RunHopPending < 0)
+        {
+            var h = Mix((uint)state.ReplanStagger ^ RunHopSalt, (uint)tick, (uint)state.PathAt, (uint)state.Path[state.PathAt]);
+            if ((h & 0xFFFF) >= RunHopStart * 65536)
+                return;
+
+            state.RunHopPending = RunHopWait;
+            state.RunHopPendingChained = false;
+        }
+
+        // Counted down here, so a pending hop that never finds room lapses.
+        state.RunHopPending--;
+
+        if (state.JumpHeld || character.HSpeed * dir <= RunHopSpeed || !GroundUnder(world, in character)
+            || !FlightPredictor.Land(world, in character, dir, dir, jump: true, out var x, out var y, out _)
+            || !RunHopLands(state, x, y, dir))
+        {
+            return;
+        }
+
+        steer.WantJump = true;
+        steer.Hold = true;
+        steer.HoldDir = dir;
+        state.RunHopAir = true;
+        state.RunHopDir = dir;
+        state.RunHopPending = -1;
+        state.RunHopsTaken++;
+
+        if (state.RunHopPendingChained)
+            state.RunHopsChained++;
+    }
+
+    /// <summary>
+    /// Whether a running hop landing at (<paramref name="x"/>, <paramref name="y"/>)
+    /// is on the route, reached from here by walk edges alone, with room left.
+    /// </summary>
+    private bool RunHopLands(BotPathState state, double x, double y, int dir)
+    {
+        var at = _graph.NodeFromWorld(x, y);
+        if (at < 0)
+            return false;
+
+        var path = state.Path;
+
+        for (var j = state.PathAt; j < path.Count && j <= state.PathAt + RunHopReach; j++)
+        {
+            if (j > state.PathAt && !(TryFindEdge(_graph, state, path[j - 1], path[j], out var walked) && walked.Type == NavEdgeType.Walk))
+                return false;
+
+            if (path[j] != at)
+                continue;
+
+            var node = _graph.Nodes[at];
+
+            if (j + 1 < path.Count && TryFindEdge(_graph, state, path[j], path[j + 1], out var leaving)
+                && leaving.Type is NavEdgeType.Jump or NavEdgeType.DoubleJump or NavEdgeType.RocketJump or NavEdgeType.StickyJump)
+            {
+                var to = _graph.Nodes[path[j + 1]];
+                var takeoff = leaving.Takeoff >= 0 ? leaving.Takeoff
+                    : (to.X0 + to.X1) >= (node.X0 + node.X1) ? node.X1 : node.X0;
+
+                return (NavGraph.ColumnWorldX(takeoff) - x) * dir >= RunHopRunup;
+            }
+
+            var end = dir > 0 ? NavGraph.ColumnWorldX(node.X1) - x : x - NavGraph.ColumnWorldX(node.X0);
+            return end >= RunHopRoom;
+        }
+
+        return false;
+    }
+
+    /// <summary>A running hop has landed: draw whether another follows, and after how long.</summary>
+    private static void RunHopLanded(BotPathState state, int tick)
+    {
+        state.RunHopAir = false;
+
+        var h = Mix((uint)state.ReplanStagger ^ RunHopSalt, (uint)tick, (uint)state.RunHopsTaken, 0x9E37u);
+        state.RunHopChain = ((h >> 16) & 0xFFFF) < RunHopChainShare * 65536
+            ? RunHopGaps[(int)((h & 0xFFFF) % (uint)RunHopGaps.Length)]
+            : -1;
+    }
+
+    /// <summary>
+    /// The chance a tick of running draws a hop. People's rate before chains is
+    /// about 0.0011 a running tick; this allows for the running a hop is not
+    /// offered on and draws that find no room (N8c).
+    /// </summary>
+    private const double RunHopStart = 0.0033;
+
+    /// <summary>Ticks a drawn hop waits for room, and a chained one.</summary>
+    private const int RunHopWait = 30;
+
+    /// <inheritdoc cref="RunHopWait"/>
+    private const int RunHopChainWait = 10;
+
+    /// <summary>The share of running hops followed by another, as people's.</summary>
+    private const double RunHopChainShare = 0.55;
+
+    /// <summary>Ground ticks before a chained hop, at about people's quantiles (median 18).</summary>
+    private static readonly int[] RunHopGaps = [3, 5, 7, 10, 14, 18, 22, 27, 33, 47];
+
+    /// <summary>Running is faster than this toward the next node, in px/tick.</summary>
+    private const double RunHopSpeed = 2;
+
+    /// <summary>A hop must land at least this far before its node's far end, in px.</summary>
+    private const double RunHopRoom = 24;
+
+    /// <summary>...and this far short of the take-off of a jump that leaves its node, in px.</summary>
+    private const double RunHopRunup = 48;
+
+    /// <summary>How many nodes on along the route a hop may land.</summary>
+    private const int RunHopReach = 4;
+
+    /// <summary>Keeps the running-hop draws apart from the others.</summary>
+    private const uint RunHopSalt = 0x40B5C0DEu;
+
+    /// <summary>
     /// Whether a jump pressed now leaves the ground (N6): solid one pixel under the
     /// body, which is the physics' own start-of-tick test.
     /// </summary>
