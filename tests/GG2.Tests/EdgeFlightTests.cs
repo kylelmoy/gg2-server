@@ -308,7 +308,7 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// valid (share 0.35 → 1.0): stranded 433 → 440, ticks 1,375,827 → 1,398,087.
     /// N6: 440 → 436, ticks 1,398,087 → 1,403,067. N7: 436 → 438.
     /// N8c (running hops, which a single-edge sweep barely walks): ticks 1,403,578 →
-    /// 1,403,731.
+    /// 1,403,731. N8d (hop hazard 0.008): 1,404,023.
     /// </remarks>
     [Fact]
     public void EveryEdgeIsFlownWithFaceHops()
@@ -336,8 +336,8 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
                 NoRoute: 466,
                 StartUnresolved: 0,
                 GoalUnresolved: 0,
-                Ticks: 1_403_731,
-                Blacklists: 7_453,
+                Ticks: 1_404_023,
+                Blacklists: 7_447,
                 StartBlocked: 0,
                 TeamSwapped: 178,
                 Diverted: 33),

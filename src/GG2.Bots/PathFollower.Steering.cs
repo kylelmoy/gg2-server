@@ -1331,9 +1331,10 @@ public sealed partial class PathFollower
     /// <summary>
     /// The chance a tick of running draws a hop. People's rate before chains is
     /// about 0.0011 a running tick; this allows for the running a hop is not
-    /// offered on and draws that find no room (N8c).
+    /// offered on and draws that find no room (N8c, N8d: 1.27 at 0.0033, 2.32
+    /// here, people 2.50, same-level flat hops a 1,000 running ticks).
     /// </summary>
-    private const double RunHopStart = 0.0033;
+    private const double RunHopStart = 0.008;
 
     /// <summary>Ticks a drawn hop waits for room, and a chained one.</summary>
     private const int RunHopWait = 30;
