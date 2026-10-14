@@ -646,6 +646,21 @@ And a draw is not a hop: only a third had room at the drawn tick, so a drawn
 hop waits up to 30 ticks for room. Rate calibrations went 0.43 → 0.62 → 1.27
 → 2.32 per 1,000 running ticks (people 2.50).
 
+**N9, tried and not adopted: hold on over gaps.** Pressing toward first where
+the window is open-ended, and accepting landings further along the route, cut
+gap let-go ticks from 14.5% to 11.0%. But on ctf_oldfort it brought a bot down
+on node 27 at 2.3 px/tick, short of the jump that leaves 27, and the bot ran
+off the far end, off the route (`oldfort-perch-reroutes` 1156 → 1374, with a
+blacklist). ⚠️ **An open-ended window is open-ended about where the bot
+touches down, not about where it can run to.** Requiring run-up room before
+the destination's own leaving jump fixed it and gave the gain back (13.0%),
+and raised step key changes to 0.06. Reverted. gg2-rl `docs/PLAN.md`, N9 /
+N9b.
+⚠️ **Open, seen there and not caused by N9:** standing off the route on node
+37, the follower fired `OffRoute` on 182 consecutive ticks, pressing nothing
+and not moving. A re-plan that leaves the bot in the same state every tick is a
+stall loop in `OffRoute` / `Plan`.
+
 ### Phase 7 item 4c-i: what to shoot at, and where to point
 
 `GG2.Bots.{BotTargeting, BotAim}`. Gated by `BotTargetingTests` and
