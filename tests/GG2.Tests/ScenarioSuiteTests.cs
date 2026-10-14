@@ -80,11 +80,11 @@ public sealed class ScenarioSuiteTests(ITestOutputHelper output)
     private static readonly Dictionary<string, int> Baseline = new(StringComparer.Ordinal)
     {
         ["valley-floor-to-point"] = 160,
-        ["valley-spawn-to-point"] = 453,
-        ["valley-point-to-spawn"] = 387,
+        ["valley-spawn-to-point"] = 427,
+        ["valley-point-to-spawn"] = 366,
         ["valley-shaft-crate-to-point"] = 88,
         ["valley-shaft-floor-to-point"] = 118,
-        ["truefort-spawn-to-intel"] = 1349,
+        ["truefort-spawn-to-intel"] = 1277,
         ["truefort-blue-spawn-exit-west"] = 42,
         ["avanti-ramp-pocket-to-intel"] = 146,
         ["gallery-pit-climb"] = 248,
@@ -92,7 +92,7 @@ public sealed class ScenarioSuiteTests(ITestOutputHelper output)
         ["soldier-holds-and-fires"] = 400,
         ["sniper-fires-at-close-range"] = 400,
         ["atalia-ground-to-point"] = 49,
-        ["oldfort-perch-reroutes"] = 1156,
+        ["oldfort-perch-reroutes"] = 1118,
     };
 
     /// <summary>

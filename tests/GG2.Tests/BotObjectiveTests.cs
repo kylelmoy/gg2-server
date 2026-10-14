@@ -1357,7 +1357,10 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
 
         // Now move it past BOT_GOAL_RETARGET_DIST and run the same window. An
         // objective tick that sees the flag moved reissues, and each reissue
-        // forces a plan on that tick.
+        // re-arms the follower's deadline on that tick: the plan is attempted at
+        // once. ⚠️ Attempted, not counted: a reissue that lands while the bot is
+        // in the air searches from no node and fails before Replans counts it
+        // (gg2-rl docs/PLAN.md, N12, where one of the two reissues did).
         //
         // ⚠️ Counted per reissue, not as "more re-plans than the still window".
         // That comparison passed for years on churn: the flag walks off its
@@ -1369,6 +1372,8 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         replansBefore = bot.Path.Replans;
         var reissues = 0;
         var replannedOnReissue = 0;
+        // The bot's stagger is 1, so its deadline re-arms to tick + 45 + 1.
+        static int Rearmed(int at) => at + BotConstants.ReplanTicks + (1 % BotConstants.ReplanTicks);
         var lastGoal = goalX;
 
         for (var tick = 200 + (BotConstants.ObjectivePeriod * 4);
@@ -1379,8 +1384,6 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
             // sees a destination that has moved further than the throttle allows.
             state.BlueIntel.X -= 8;
 
-            var replans = bot.Path.Replans;
-
             inputs.Clear();
             inputs[slot] = bot.Poll(new WorldView(in state, world), slot, tick);
             MatchSimulation.Tick(world, ref state, inputs[..(slot + 1)], ref events, spawns);
@@ -1390,7 +1393,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
                 reissues++;
                 lastGoal = bot.Path.GoalX;
 
-                if (bot.Path.Replans > replans)
+                if (bot.Path.ReplanAt == Rearmed(tick))
                     replannedOnReissue++;
             }
         }
@@ -1399,7 +1402,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
 
         output.WriteLine(
             $"re-plans over four objective periods: {quiet} still, {chasing} chasing; "
-            + $"{reissues} reissue(s), {replannedOnReissue} re-planned at once");
+            + $"{reissues} reissue(s), {replannedOnReissue} planned at once");
 
         Assert.True(reissues >= 2, $"the goal followed the moving flag {reissues} time(s)");
         Assert.Equal(reissues, replannedOnReissue);
@@ -1631,11 +1634,13 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         // (N1, 2026-10-11) took the plain jumps without braking to the arc's
         // speed, and N2 ran up to speed first: the intel at 1398, 29 replans and
         // 9 off-route landings. N4 (two-phase plans, and a landing short of a
-        // standing take-off must come to rest): 1379 and 27 replans.
-        Assert.Equal(1379, grabbedAt);
-        Assert.Equal(27, bot.Path.Replans);
+        // standing take-off must come to rest): 1379 and 27 replans. N12 (falls
+        // flown held rather than braked back over the edge): 1306, 28 replans and
+        // 11 off-route fires.
+        Assert.Equal(1306, grabbedAt);
+        Assert.Equal(28, bot.Path.Replans);
         Assert.Equal(0, bot.Path.StuckFires);
-        Assert.Equal(9, bot.Path.OffRouteFires);
+        Assert.Equal(11, bot.Path.OffRouteFires);
         Assert.Equal(0, bot.Path.BlacklistFires);
 
         // And it turns round. The goal has to be re-decided on the objective

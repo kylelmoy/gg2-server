@@ -272,6 +272,13 @@ public sealed partial class PathFollower
     public bool RunHops { get; set; }
 
     /// <summary>
+    /// Whether a fall is flown held (N12): in the air, a key the predictor lands
+    /// on the destination, kept while it still does, with the tracker only where
+    /// none does.
+    /// </summary>
+    public bool HeldFalls { get; set; } = true;
+
+    /// <summary>
     /// Advances one bot's route by a tick and returns the movement keys.
     /// </summary>
     /// <param name="state">The bot's navigation state, updated in place.</param>
@@ -716,7 +723,7 @@ public sealed partial class PathFollower
                 break;
 
             case NavEdgeType.Fall:
-                SteerFall(state, onGround, in edge, in from, in to, ref steer);
+                SteerFall(state, in character, onGround, in edge, in from, in to, next, ref steer);
                 break;
 
             case NavEdgeType.Jump:

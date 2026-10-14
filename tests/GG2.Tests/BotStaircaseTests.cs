@@ -203,7 +203,8 @@ public sealed class BotStaircaseTests(ITestOutputHelper output)
         Assert.Equal(24, sweep.Arrived);
         // 1590-1625 until held flight (N1, 2026-10-11) took the stairs' plain
         // jumps at speed: about 1,436 since, and 1,386 since N4's two-phase
-        // plans. Still no shuttle and every start arrives.
-        Assert.InRange(sweep.MeanTicks, 1365, 1405);
+        // plans. Still no shuttle and every start arrives. About 1,332 since
+        // N12 flew the falls between the flights held.
+        Assert.InRange(sweep.MeanTicks, 1310, 1355);
     }
 }

@@ -101,9 +101,9 @@ public sealed partial class PathFollower
     /// drop a cell wide of the sweep that proved it.
     /// </para>
     /// </remarks>
-    private static void SteerFall(
-        BotPathState state, bool onGround, in NavEdge edge,
-        in NavNode from, in NavNode to, ref Steering steer)
+    private void SteerFall(
+        BotPathState state, in CharacterState character, bool onGround, in NavEdge edge,
+        in NavNode from, in NavNode to, int next, ref Steering steer)
     {
         var takeoff = edge.Takeoff;
 
@@ -122,7 +122,47 @@ public sealed partial class PathFollower
             : from.X0 - BotConstants.EntryLead;
 
         if (onGround)
+        {
+            state.FallDir = 0;
+            state.FallTracked = false;
             return;
+        }
+
+        // N12: held, as a jump is. The tracker holds the take-off column in the
+        // air, so a bot that walked off at speed braked back over the edge: falls
+        // kept 0.37 of their speed and braked hard on 28% of their air ticks
+        // (gg2-rl docs/PLAN.md, N12). Now the bot keeps a key that the predictor
+        // lands on the destination, and the tracker flies the rest of a fall only
+        // once none does.
+        if (HeldFalls && !state.FallTracked && Collision is { } world)
+        {
+            if (state.FallDir == 0)
+            {
+                state.FallDir = character.HSpeed > 0.5 ? 1
+                    : character.HSpeed < -0.5 ? -1
+                    : NavGraph.ColumnWorldX((to.X0 + to.X1) / 2) >= character.X ? 1 : -1;
+                state.FallKey = state.FallDir;
+            }
+
+            Span<int> order = [state.FallKey, state.FallDir, 0, -state.FallDir];
+
+            foreach (var key in order)
+            {
+                if (FlightPredictor.Land(world, in character, key, false, out var x, out var y, out _)
+                    && _graph.NodeFromWorld(x, y) == next)
+                {
+                    state.FallKey = key;
+                    state.HeldFallTicks++;
+                    steer.Hold = true;
+                    steer.HoldDir = key;
+                    state.FlyingEdge = true;
+                    return;
+                }
+            }
+
+            state.FallTracked = true;
+            state.HeldFallFallbacks++;
+        }
 
         steer.TrackX = NavGraph.ColumnWorldX(takeoff);
         steer.Tracking = true;

@@ -598,6 +598,24 @@ public sealed class BotPathState
     /// <summary>Face hops that launched from the face.</summary>
     public int FaceLaunches { get; set; }
 
+    /// <summary>
+    /// A held fall's walking direction, 0 on the ground, and the key it pressed
+    /// last (N12).
+    /// </summary>
+    public int FallDir { get; set; }
+
+    /// <inheritdoc cref="FallDir"/>
+    public int FallKey { get; set; }
+
+    /// <summary>Whether this fall has been handed to the tracker for the rest of it.</summary>
+    public bool FallTracked { get; set; }
+
+    /// <summary>Air ticks of falls flown held, and falls handed to the tracker.</summary>
+    public int HeldFallTicks { get; set; }
+
+    /// <inheritdoc cref="HeldFallTicks"/>
+    public int HeldFallFallbacks { get; set; }
+
     /// <summary>Whether the bot is in the air on a running hop (N8).</summary>
     public bool RunHopAir { get; set; }
 
