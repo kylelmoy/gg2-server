@@ -558,6 +558,37 @@ public sealed class BotPathState
     /// <summary>Held flights whose second jump was re-timed, found or dropped in the air to keep them landing.</summary>
     public int HeldRescues { get; set; }
 
+    /// <summary>
+    /// Whether this attempt at the edge is a <b>face hop</b> (N5): run into the
+    /// step, stand, then hop from standing. Drawn once per attempt, keyed by
+    /// <see cref="FaceFrom"/>, <see cref="FaceTo"/> and <see cref="FaceLaunch"/>.
+    /// </summary>
+    public bool FacePlan { get; set; }
+
+    /// <summary>The edge and launch count <see cref="FacePlan"/> was drawn for.</summary>
+    public int FaceFrom { get; set; } = -1;
+
+    /// <inheritdoc cref="FaceFrom"/>
+    public int FaceTo { get; set; } = -1;
+
+    /// <inheritdoc cref="FaceFrom"/>
+    public int FaceLaunch { get; set; } = -1;
+
+    /// <summary>Ticks a face hop has been under way.</summary>
+    public int FaceTicks { get; set; }
+
+    /// <summary>Ticks stood at the face.</summary>
+    public int FaceStill { get; set; }
+
+    /// <summary>The drawn ticks to stand at the face before hopping.</summary>
+    public int FaceWait { get; set; }
+
+    /// <summary>Face hops drawn and found valid.</summary>
+    public int FaceHops { get; set; }
+
+    /// <summary>Face hops that launched from the face.</summary>
+    public int FaceLaunches { get; set; }
+
     /// <inheritdoc cref="Launches"/>
     public int LaunchesUnderspeed { get; set; }
 

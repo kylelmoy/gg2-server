@@ -341,6 +341,10 @@ public sealed partial class PathFollower
             Span<int> options = stackalloc int[MaxLaunchOptions];
             options = options[..LaunchOptions(state, HeldDoubles && query.CanDoubleJump, current, next, options)];
 
+            // N5: or walk up to the step and hop from standing, as people do.
+            if (FaceHops && FaceHop(state, ground, in character, jumpDir, current, next, takeoff, landPlan, overshoot, options, ref steer))
+                return;
+
             if (CanLaunchHeld(ground, in character, jumpDir, next, landPlan, overshoot, options, out var rejump, out var early, out var switchAt))
             {
                 // N2: a held jump would land, but a person would not take it yet
@@ -1155,6 +1159,156 @@ public sealed partial class PathFollower
 
     /// <summary>A tick's speed gain below this is running flat out, in px/tick.</summary>
     private const double AtSpeed = 0.15;
+
+    /// <summary>
+    /// A face hop (N5): run into the step, stand, then hop from standing. Returns
+    /// whether it steered this tick; false hands the tick to the running launch.
+    /// </summary>
+    /// <remarks>
+    /// A third of people's out-of-combat step jumps start within a pixel of the
+    /// step's face and from a standstill, after a median of 9 still ticks
+    /// (<c>gg2-rl</c> <c>docs/PLAN.md</c>, N5). Drawn once per attempt at an edge
+    /// with <see cref="FaceShare"/>, and kept only if the predictor finds the
+    /// face (running toward the landing stops against a wall, on the ground and
+    /// in the take-off node) and a held plan that lands from standing there.
+    /// <para>
+    /// ⚠️ <b>The wait is with no keys.</b> Held toward the wall, the stuck test
+    /// counts a pressed key that does not move the bot and blacklists the edge
+    /// after <see cref="BotConstants.StuckTicks"/>, shorter than many waits.
+    /// </para>
+    /// </remarks>
+    private bool FaceHop(
+        BotPathState state, CollisionWorld world, in CharacterState character, int jumpDir, int current, int next,
+        int takeoff, double landPlan, double overshoot, ReadOnlySpan<int> options, ref Steering steer)
+    {
+        if (state.FaceFrom != current || state.FaceTo != next || state.FaceLaunch != state.Launches)
+        {
+            state.FaceFrom = current;
+            state.FaceTo = next;
+            state.FaceLaunch = state.Launches;
+            state.FaceTicks = 0;
+            state.FaceStill = 0;
+
+            var h = Mix((uint)state.ReplanStagger ^ FaceSalt, (uint)next, (uint)current, (uint)state.Launches);
+            state.FaceWait = FaceWaits[(int)(h % (uint)FaceWaits.Length)];
+            state.FacePlan = ((h >> 16) & 0xFFFF) < FaceShare * 65536
+                && FaceReachable(world, in character, jumpDir, current, next, takeoff, landPlan, overshoot, options);
+
+            if (state.FacePlan)
+                state.FaceHops++;
+        }
+
+        if (!state.FacePlan)
+            return false;
+
+        if (++state.FaceTicks > FacePatience)
+        {
+            state.FacePlan = false;
+            return false;
+        }
+
+        // At the face: a tick pressed toward it would not move the bot.
+        var ahead = character;
+        var moves = !FlightPredictor.Run(world, ref ahead, jumpDir) || Math.Abs(ahead.X - character.X) >= FaceStillPx;
+
+        if (moves || !character.OnGround || Math.Abs(character.HSpeed) >= FaceStillPx)
+        {
+            if (!ahead.OnGround || _graph.NodeFromWorld(ahead.X, ahead.Y) != current)
+            {
+                state.FacePlan = false;
+                return false;
+            }
+
+            state.FaceStill = 0;
+            steer.Hold = true;
+            steer.HoldDir = moves ? jumpDir : 0;
+            return true;
+        }
+
+        if (++state.FaceStill <= state.FaceWait)
+        {
+            steer.Hold = true;
+            steer.HoldDir = 0;
+            return true;
+        }
+
+        state.FacePlan = false;
+
+        if (!CanLaunchHeld(world, in character, jumpDir, next, landPlan, overshoot, options, out var rejump, out var early, out var switchAt))
+            return false;
+
+        Launch(state, ref steer, rocket: false);
+        state.HeldDir = jumpDir;
+        state.HeldKey = jumpDir;
+        state.HeldRejump = rejump;
+        state.HeldEarly = early;
+        state.HeldSwitchAt = switchAt;
+        state.HeldLaunches++;
+        state.FaceLaunches++;
+        state.Launches++;
+
+        if (rejump >= 0)
+            state.HeldDoubles++;
+
+        steer.Hold = true;
+        steer.HoldDir = jumpDir;
+        return true;
+    }
+
+    /// <summary>
+    /// Whether running toward the landing from here stops against a face, on the
+    /// ground in <paramref name="current"/> and near the take-off, and a held plan
+    /// lands from standing there.
+    /// </summary>
+    private bool FaceReachable(
+        CollisionWorld world, in CharacterState character, int jumpDir, int current, int next, int takeoff,
+        double landPlan, double overshoot, ReadOnlySpan<int> options)
+    {
+        var c = character;
+
+        for (var t = 0; t < FaceReach; t++)
+        {
+            var before = c.X;
+
+            if (!FlightPredictor.Run(world, ref c, jumpDir) || !c.OnGround || _graph.NodeFromWorld(c.X, c.Y) != current)
+                return false;
+
+            if (Math.Abs(c.X - before) < FaceStillPx && Math.Abs(c.HSpeed) < FaceStillPx)
+            {
+                if (Math.Abs(NavGraph.AnchorColumn(c.X) - takeoff) > BotConstants.RunupCells)
+                    return false;
+
+                // Stood there with no keys, as the bot will.
+                for (var s = 0; s < 2; s++)
+                {
+                    if (!FlightPredictor.Run(world, ref c, 0))
+                        return false;
+                }
+
+                return CanLaunchHeld(world, in c, jumpDir, next, landPlan, overshoot, options, out _, out _, out _);
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>The share of step attempts drawn as face hops, a little above people's third.</summary>
+    private const double FaceShare = 0.35;
+
+    /// <summary>Ticks stood at the face, at about people's quantiles (median 9; a quarter past 15).</summary>
+    private static readonly int[] FaceWaits = [2, 3, 4, 6, 8, 10, 13, 16, 19, 24];
+
+    /// <summary>Ticks of running the face must be found within, and a face hop launched within.</summary>
+    private const int FaceReach = 40;
+
+    /// <inheritdoc cref="FaceReach"/>
+    private const int FacePatience = 60;
+
+    /// <summary>Movement below this, in px or px/tick, is standing.</summary>
+    private const double FaceStillPx = 0.5;
+
+    /// <summary>Keeps the face draw apart from <see cref="LaunchOptions"/>' on the same edge.</summary>
+    private const uint FaceSalt = 0x5A17F00Du;
 
     /// <summary>
     /// Whether a held plan comes down in the landing window and, where the route

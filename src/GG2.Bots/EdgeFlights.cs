@@ -439,7 +439,8 @@ public static class EdgeFlights
         Action<int, ScenarioWorld, BotPathState>? onTick = null,
         PlayerClass? flyAs = null,
         bool heldDoubles = true,
-        bool heldSwitchPlans = true)
+        bool heldSwitchPlans = true,
+        bool faceHops = false)
     {
         ArgumentNullException.ThrowIfNull(world);
 
@@ -450,7 +451,7 @@ public static class EdgeFlights
         var follower = new PathFollower(graph)
         {
             Distances = distances, Collision = world.Collision, HeldFlight = heldFlight, HeldDoubles = heldDoubles,
-            HeldSwitchPlans = heldSwitchPlans,
+            HeldSwitchPlans = heldSwitchPlans, FaceHops = faceHops,
         };
         var cls = flyAs ?? ClassFor(edge.Type);
         var state = new BotPathState();
@@ -688,7 +689,8 @@ public static class EdgeFlights
         bool heldFlight = true,
         PlayerClass? flyAs = null,
         bool heldDoubles = true,
-        bool heldSwitchPlans = true)
+        bool heldSwitchPlans = true,
+        bool faceHops = false)
     {
         ArgumentNullException.ThrowIfNull(mapDirectory);
         ArgumentNullException.ThrowIfNull(navDirectory);
@@ -749,7 +751,7 @@ public static class EdgeFlights
             var graph = graphs[graphIndex];
             flights[i] = Fly(
                 graph.World(), edgeIndex, team, budget, graph.Distances, warmWeapon, heldFlight,
-                flyAs: flyAs, heldDoubles: heldDoubles, heldSwitchPlans: heldSwitchPlans);
+                flyAs: flyAs, heldDoubles: heldDoubles, heldSwitchPlans: heldSwitchPlans, faceHops: faceHops);
         });
 
         if (onGraph is not null)

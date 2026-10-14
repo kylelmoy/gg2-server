@@ -291,6 +291,51 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     }
 
     /// <summary>
+    /// The shipping arm with face hops on (<see cref="PathFollower.FaceHops"/>),
+    /// as tiers 1-4 fly out of combat.
+    /// </summary>
+    /// <remarks>
+    /// <c>gg2-rl</c> <c>docs/PLAN.md</c>, N5: a drawn share of step attempts run
+    /// into the step's face, stand, and hop from standing. Recorded 2026-10-13
+    /// against the shipping arm's 445 stranded and 1,367,620 ticks: per edge 713
+    /// flights changed, 22 that stranded now arrive and 10 that arrived now
+    /// strand (<c>HeldFlightCensus.FaceHops</c>).
+    /// </remarks>
+    [Fact]
+    public void EveryEdgeIsFlownWithFaceHops()
+    {
+        ReferenceTree.RequireNavCache();
+
+        var tally = EdgeFlightTally.Of(EdgeFlights.SweepAll(
+            ReferenceTree.MapsDirectory,
+            ReferenceTree.NavCacheDirectory,
+            distances: true,
+            threads: SweepThreads,
+            faceHops: true));
+
+        output.WriteLine($"face-hop arm: {tally}");
+
+        Assert.Equal(
+            new EdgeFlightTally(
+                Candidates: 116_316,
+                Measured: 32_055,
+                Arrived: 31_622,
+                Flown: 3_620,
+                Stranded: 433,
+                RoutedAround: 72_926,
+                Shadowed: 10_869,
+                NoRoute: 466,
+                StartUnresolved: 0,
+                GoalUnresolved: 0,
+                Ticks: 1_375_827,
+                Blacklists: 7_370,
+                StartBlocked: 0,
+                TeamSwapped: 178,
+                Diverted: 33),
+            tally);
+    }
+
+    /// <summary>
     /// Every plain and double-jump edge, flown by a scout.
     /// </summary>
     /// <remarks>

@@ -72,6 +72,57 @@ public sealed class HeldFlightCensus(Xunit.Abstractions.ITestOutputHelper output
             output.WriteLine(line);
     }
 
+    /// <summary>The shipping arm with and without face hops (N5), diffed edge by edge.</summary>
+    [Fact]
+    public void FaceHops()
+    {
+        ReferenceTree.RequireNavCache();
+
+        var threads = Math.Max(1, Environment.ProcessorCount - 2);
+        var off = new Dictionary<(string, int), IReadOnlyList<EdgeFlight>>();
+        var on = new Dictionary<(string, int), IReadOnlyList<EdgeFlight>>();
+
+        EdgeFlights.SweepAll(ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory, distances: true, threads: threads,
+            onGraph: (map, area, flights) => off[(map, area)] = flights.ToArray());
+        EdgeFlights.SweepAll(ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory, distances: true, threads: threads,
+            onGraph: (map, area, flights) => on[(map, area)] = flights.ToArray(), faceHops: true);
+
+        var lost = new List<string>();
+        var won = 0;
+        var changed = 0;
+        var extra = new List<int>();
+
+        foreach (var (key, a) in off)
+        {
+            var b = on[key];
+
+            for (var i = 0; i < a.Count; i++)
+            {
+                var x = a[i];
+                var y = b[i];
+
+                if (x.Ticks != y.Ticks)
+                {
+                    changed++;
+                    if (x.Measured && y.Measured)
+                        extra.Add(y.Ticks - x.Ticks);
+                }
+
+                if (x.Outcome == EdgeFlightOutcome.Arrived && y.Outcome == EdgeFlightOutcome.Stranded)
+                    lost.Add($"{key.Item1}/{key.Item2} e{x.Edge} {x.Type} {x.From}->{x.To} ticks {x.Ticks} vs {y.Ticks} miss {y.MissX:0.#}");
+                else if (x.Outcome == EdgeFlightOutcome.Stranded && y.Outcome == EdgeFlightOutcome.Arrived)
+                    won++;
+            }
+        }
+
+        extra.Sort();
+        output.WriteLine($"changed {changed}, lost {lost.Count}, won {won}");
+        if (extra.Count > 0)
+            output.WriteLine($"extra ticks on changed edges: p10 {extra[extra.Count / 10]} median {extra[extra.Count / 2]} p90 {extra[extra.Count * 9 / 10]}");
+        foreach (var line in lost.Take(40))
+            output.WriteLine(line);
+    }
+
     /// <summary>The shipping arm and the scout arm with and without two-phase plans (N4), diffed edge by edge.</summary>
     [Fact(Skip = "a census: run by hand")]
     public void SwitchPlans()

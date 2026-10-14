@@ -257,6 +257,14 @@ public sealed partial class PathFollower
     public bool HeldSwitchPlans { get; set; } = true;
 
     /// <summary>
+    /// Whether some held step jumps are face hops (N5): run into the step, stand
+    /// a moment, and hop from standing, as people take a third of theirs. Off by
+    /// default; <see cref="ScriptedBot"/> sets it each tick for tiers 1-4 with no
+    /// combat target, so tier 5 and a fight never stand still for it.
+    /// </summary>
+    public bool FaceHops { get; set; }
+
+    /// <summary>
     /// Advances one bot's route by a tick and returns the movement keys.
     /// </summary>
     /// <param name="state">The bot's navigation state, updated in place.</param>
