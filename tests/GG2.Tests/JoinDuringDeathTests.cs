@@ -116,17 +116,13 @@ public sealed class JoinDuringDeathTests
         var bots = harness.Server.BotSlots.ToArray();
         Assert.True(bots.Length > 4, $"only {bots.Length} bots, so there is no firefight to join into");
 
-        double px = 0, py = 0;
-
-        foreach (var slot in bots)
-        {
-            if (harness.Server.TryGetExactPosition(slot, out var x, out var y, out _))
-            {
-                px = x;
-                py = y;
-                break;
-            }
-        }
+        // ⚠️ A FIXED point on ctf_truefort, where the two piles have a line of
+        // fire. It used to be wherever the first bot stood at tick 300, which made
+        // this test a measurement of bot navigation: a path-follower change
+        // (gg2-rl docs/PLAN.md, N6) moved that bot to (3187, 684.5) and the piles
+        // there killed nobody on a join tick in 400 attempts. This is where it
+        // stood before, a standing y taken from the simulation.
+        const double px = 3140, py = 627.4998919123824;
 
         bool[] Alive()
         {

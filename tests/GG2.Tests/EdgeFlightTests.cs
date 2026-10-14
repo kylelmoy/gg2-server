@@ -255,7 +255,9 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// no-tables 467 → 444. Then N4 (two-phase plans, and a landing must come to
     /// rest in the window where the route turns back or a standing take-off
     /// follows): stranded 470 → 445, arrived 31,585 → 31,610, ticks 1,402,544 →
-    /// 1,367,620; no-tables 444 → 409.
+    /// 1,367,620; no-tables 444 → 409. Then N6 (a held take-off needs ground under
+    /// the body, not a start-of-tick OnGround): stranded 445 → 443, ticks 1,367,620 →
+    /// 1,371,771. No-tables 409 → 412.
     /// </para>
     [Fact]
     public void EveryEdgeOfEveryShippedGraphIsFlownOnTheShippingArm()
@@ -274,16 +276,16 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
             new EdgeFlightTally(
                 Candidates: 116_316,
                 Measured: 32_055,
-                Arrived: 31_610,
-                Flown: 3_624,
-                Stranded: 445,
+                Arrived: 31_612,
+                Flown: 3_630,
+                Stranded: 443,
                 RoutedAround: 72_926,
                 Shadowed: 10_869,
                 NoRoute: 466,
                 StartUnresolved: 0,
                 GoalUnresolved: 0,
-                Ticks: 1_367_620,
-                Blacklists: 7_333,
+                Ticks: 1_371_771,
+                Blacklists: 7_339,
                 StartBlocked: 0,
                 TeamSwapped: 178,
                 Diverted: 33),
@@ -301,6 +303,7 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// flights changed, 22 that stranded now arrive and 10 that arrived now
     /// strand (<c>HeldFlightCensus.FaceHops</c>). N5b, a face hop wherever one is
     /// valid (share 0.35 → 1.0): stranded 433 → 440, ticks 1,375,827 → 1,398,087.
+    /// N6: 440 → 436, ticks 1,398,087 → 1,403,067.
     /// </remarks>
     [Fact]
     public void EveryEdgeIsFlownWithFaceHops()
@@ -320,16 +323,16 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
             new EdgeFlightTally(
                 Candidates: 116_316,
                 Measured: 32_055,
-                Arrived: 31_615,
-                Flown: 3_621,
-                Stranded: 440,
+                Arrived: 31_619,
+                Flown: 3_629,
+                Stranded: 436,
                 RoutedAround: 72_926,
                 Shadowed: 10_869,
                 NoRoute: 466,
                 StartUnresolved: 0,
                 GoalUnresolved: 0,
-                Ticks: 1_398_087,
-                Blacklists: 7_446,
+                Ticks: 1_403_067,
+                Blacklists: 7_448,
                 StartBlocked: 0,
                 TeamSwapped: 178,
                 Diverted: 33),
@@ -347,7 +350,7 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// second-jump plans off (<see cref="PathFollower.HeldDoubles"/>) that sweep
     /// stranded 216 and took 509,023 ticks, and per edge 63 flights were won and
     /// 11 lost (<c>HeldFlightCensus.ScoutSecondJumps</c>). N4: 164 → 162, ticks
-    /// 491,677 → 480,304.
+    /// 491,677 → 480,304. N6: 162 → 159, ticks 480,304 → 481,866.
     /// </remarks>
     [Fact]
     public void EveryJumpIsFlownByAScoutToo()
@@ -368,16 +371,16 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
             new EdgeFlightTally(
                 Candidates: 69_691,
                 Measured: 7_543,
-                Arrived: 7_381,
-                Flown: 607,
-                Stranded: 162,
+                Arrived: 7_384,
+                Flown: 613,
+                Stranded: 159,
                 RoutedAround: 60_308,
                 Shadowed: 1_540,
                 NoRoute: 300,
                 StartUnresolved: 0,
                 GoalUnresolved: 0,
-                Ticks: 480_304,
-                Blacklists: 500,
+                Ticks: 481_866,
+                Blacklists: 498,
                 StartBlocked: 0,
                 TeamSwapped: 40,
                 Diverted: 0),
@@ -427,16 +430,16 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
             new EdgeFlightTally(
                 Candidates: 116_316,
                 Measured: 37_787,
-                Arrived: 37_378,
-                Flown: 5_545,
-                Stranded: 409,
+                Arrived: 37_375,
+                Flown: 5_546,
+                Stranded: 412,
                 RoutedAround: 67_194,
                 Shadowed: 10_869,
                 NoRoute: 466,
                 StartUnresolved: 0,
                 GoalUnresolved: 0,
-                Ticks: 1_787_821,
-                Blacklists: 9_439,
+                Ticks: 1_793_885,
+                Blacklists: 9_454,
                 StartBlocked: 0,
                 TeamSwapped: 206,
                 Diverted: 16),

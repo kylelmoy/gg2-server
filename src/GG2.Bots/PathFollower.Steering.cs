@@ -336,6 +336,7 @@ public sealed partial class PathFollower
             && (edge.Type == NavEdgeType.Jump || (HeldDoubles && edge.Type == NavEdgeType.DoubleJump))
             && Collision is { } ground
             && !state.JumpHeld
+            && GroundUnder(ground, in character)
             && Math.Abs(column - takeoff) <= BotConstants.RunupCells)
         {
             Span<int> options = stackalloc int[MaxLaunchOptions];
@@ -1145,7 +1146,7 @@ public sealed partial class PathFollower
     {
         var ahead = character;
 
-        if (!FlightPredictor.Run(world, ref ahead, jumpDir) || !ahead.OnGround
+        if (!FlightPredictor.Run(world, ref ahead, jumpDir) || !GroundUnder(world, in ahead)
             || _graph.NodeFromWorld(ahead.X, ahead.Y) != current)
         {
             return true;
@@ -1159,6 +1160,20 @@ public sealed partial class PathFollower
 
     /// <summary>A tick's speed gain below this is running flat out, in px/tick.</summary>
     private const double AtSpeed = 0.15;
+
+    /// <summary>
+    /// Whether a jump pressed now leaves the ground (N6): solid one pixel under the
+    /// body, which is the physics' own start-of-tick test.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Not <see cref="CharacterState.OnGround"/>, which is set at the start of
+    /// a tick, before its move.</b> After the run past a lip it still reads true,
+    /// and a press there is a scout's mid-air jump: the predictor lands it, so N2
+    /// deferred onto it, and 52% of scouts' gap second jumps came on the take-off
+    /// tick, spent before the planned one (<c>gg2-rl</c> <c>docs/PLAN.md</c>, N6).
+    /// </remarks>
+    private static bool GroundUnder(CollisionWorld world, in CharacterState c) =>
+        !world.PlaceFree(c.Box, c.X, c.Y + 1, c.Filter);
 
     /// <summary>
     /// A face hop (N5): run into the step, stand, then hop from standing. Returns
