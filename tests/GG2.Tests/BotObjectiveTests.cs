@@ -1355,10 +1355,21 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         // objective layer contributed nothing to that re-plan count.
         Assert.Equal(goalX, bot.Path.GoalX);
 
-        // Now move it past BOT_GOAL_RETARGET_DIST and run the same window. Each
-        // of the four objective ticks now reissues, and each reissue forces a plan.
+        // Now move it past BOT_GOAL_RETARGET_DIST and run the same window. An
+        // objective tick that sees the flag moved reissues, and each reissue
+        // forces a plan on that tick.
+        //
+        // ⚠️ Counted per reissue, not as "more re-plans than the still window".
+        // That comparison passed for years on churn: the flag walks off its
+        // platform after two reissues and the goal stops following it, so the
+        // moving window's surplus was off-route re-plans, not the objective. A
+        // follower change that landed the bot more cleanly (gg2-rl docs/PLAN.md,
+        // N9b) took the count from 5 to 2 against the still window's 3, with the
+        // objective doing exactly what it did before.
         replansBefore = bot.Path.Replans;
-        var moved = 0;
+        var reissues = 0;
+        var replannedOnReissue = 0;
+        var lastGoal = goalX;
 
         for (var tick = 200 + (BotConstants.ObjectivePeriod * 4);
              tick < 200 + (BotConstants.ObjectivePeriod * 8);
@@ -1368,22 +1379,30 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
             // sees a destination that has moved further than the throttle allows.
             state.BlueIntel.X -= 8;
 
+            var replans = bot.Path.Replans;
+
             inputs.Clear();
             inputs[slot] = bot.Poll(new WorldView(in state, world), slot, tick);
             MatchSimulation.Tick(world, ref state, inputs[..(slot + 1)], ref events, spawns);
 
-            if (!Gml.Equal(bot.Path.GoalX, goalX))
-                moved++;
+            if (!Gml.Equal(bot.Path.GoalX, lastGoal))
+            {
+                reissues++;
+                lastGoal = bot.Path.GoalX;
+
+                if (bot.Path.Replans > replans)
+                    replannedOnReissue++;
+            }
         }
 
         var chasing = bot.Path.Replans - replansBefore;
 
-        output.WriteLine($"re-plans over four objective periods: {quiet} still, {chasing} chasing");
+        output.WriteLine(
+            $"re-plans over four objective periods: {quiet} still, {chasing} chasing; "
+            + $"{reissues} reissue(s), {replannedOnReissue} re-planned at once");
 
-        Assert.True(moved > 0, "the goal never followed the moving flag");
-        Assert.True(
-            chasing > quiet,
-            $"a moving objective re-planned no more than a still one: {chasing} against {quiet}");
+        Assert.True(reissues >= 2, $"the goal followed the moving flag {reissues} time(s)");
+        Assert.Equal(reissues, replannedOnReissue);
     }
 
     /// <summary>
