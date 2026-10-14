@@ -674,6 +674,19 @@ Now 0 stalls of 2 seconds or more. Sweep ticks −1.5% and blacklists −11%, bu
 shipping stranded 443 → 453. Those are rocket jumps that arrived late before,
 and they came from the throttle half. gg2-rl `docs/PLAN.md`, N10 / N10b.
 
+**N12, falls flown held.** ⚠️ **The fall steering's tracker holds the take-off
+column in the air**, so a bot that walked off a ledge at speed braked back over
+the edge and dropped almost straight down. Falls kept 0.37 of their speed and
+braked hard on 28% of their air ticks; they were the largest source of bots'
+hard braking out of combat. A fall now keeps a key the predictor lands on the
+destination (`PathFollower.HeldFalls`), and the tracker flies the rest of it
+only once none does. 0.74 of the speed; shipping stranded 453 → 416; every
+changed scenario leg faster.
+⚠️ **And a census found it only on the second try.** Naming a flight by the
+first edge `EdgesFrom` returned between its two nodes labelled fall flights as
+jump walk-offs, and a whole change (N11) was built on that and reverted. Name a
+flight by `PathFollower.TryResolveHop`, the edge the follower actually flies.
+
 ⚠️ **`TwelveBotsRunWellUnderTheTickBudget` under the full parallel suite: two
 failures now** (9.4 ms at N4, 9.7 ms at N10b, against the 8.3 ms it asserts).
 Alone it reads 0.6–1.4 ms. The same test, margin and condition each time: a
