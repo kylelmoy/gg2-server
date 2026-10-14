@@ -139,6 +139,15 @@ public sealed class BotPathState
     /// </remarks>
     public int PlanFailUntil { get; set; }
 
+    /// <summary>
+    /// The node the last search started from, or −1 for none: the throttle in
+    /// <see cref="PlanFailUntil"/> holds only while the bot is still there (N10).
+    /// </summary>
+    public int PlanFailStart { get; set; } = -1;
+
+    /// <summary>Routes taken through a banned edge because there was no other (N10b).</summary>
+    public int BannedRoutes { get; set; }
+
     /// <summary>The edge being traversed, or -1.</summary>
     public int EdgeFrom { get; set; } = -1;
 

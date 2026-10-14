@@ -87,7 +87,7 @@ public sealed class ScenarioSuiteTests(ITestOutputHelper output)
         ["truefort-spawn-to-intel"] = 1349,
         ["truefort-blue-spawn-exit-west"] = 42,
         ["avanti-ramp-pocket-to-intel"] = 146,
-        ["gallery-pit-climb"] = 259,
+        ["gallery-pit-climb"] = 248,
         ["soldier-shells-generator"] = 600,
         ["soldier-holds-and-fires"] = 400,
         ["sniper-fires-at-close-range"] = 400,

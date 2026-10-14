@@ -148,7 +148,13 @@ public sealed partial class PathFollower
 
         // ⚠️ Only while a route is installed. A bot with nothing to follow has to
         // keep trying.
-        if (state.HasPath && tick < state.PlanFailUntil)
+        //
+        // ⚠️ And only from where the failed search started (N10). A search that
+        // failed in the air, on no node, says nothing about the node the bot then
+        // lands on, and a bot that landed off its route waited the throttle out
+        // standing still: 94 stalls of 2 seconds or more in 24 matches, 375 of 488
+        // shorter ones with a route right there (gg2-rl docs/PLAN.md, N10).
+        if (state.HasPath && tick < state.PlanFailUntil && _graph.NodeFromWorld(x, y) == state.PlanFailStart)
             return false;
 
         var thrash = Gml.PointDistance(x, y, state.LastReplanX, state.LastReplanY);
@@ -183,6 +189,8 @@ public sealed partial class PathFollower
         occupancy?.Remove(state);
 
         var start = _graph.NodeFromWorld(x, y);
+        state.PlanFailStart = start;
+
         if (start < 0)
         {
             state.PlanFailUntil = tick + BotConstants.ReplanTicks;
@@ -202,8 +210,20 @@ public sealed partial class PathFollower
             start, goal, query, _scratch, state.Blacklist, occupancy?.Counts(query.Team), Lane.Span,
             Distances?.For(in query)))
         {
-            state.PlanFailUntil = tick + BotConstants.ReplanTicks;
-            return false;
+            // N10b: a ban steers the search, it does not strand the bot. Where
+            // the only way on is a banned edge, take it rather than stand still
+            // until the ban runs out: 103 of 106 off-route stalls of 10 ticks or
+            // more were that (gg2-rl docs/PLAN.md, N10).
+            if (state.Blacklist.Count == 0
+                || !_search.Find(
+                    start, goal, query, _scratch, null, occupancy?.Counts(query.Team), Lane.Span,
+                    Distances?.For(in query)))
+            {
+                state.PlanFailUntil = tick + BotConstants.ReplanTicks;
+                return false;
+            }
+
+            state.BannedRoutes++;
         }
 
         // ⚠️ Only NOW is the old route given up. FreePath is what zeroes the
