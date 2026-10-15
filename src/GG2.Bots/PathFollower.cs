@@ -388,6 +388,8 @@ public sealed partial class PathFollower
 
         if (here >= 0)
         {
+            Stood(state, here, tick);
+
             // Forward only. A bot only advances along its own route, and looking
             // backwards would let a long surface the route touches twice pull it
             // into a loop.
@@ -544,6 +546,11 @@ public sealed partial class PathFollower
                 return PlayerKeys.None;
 
             state.BlacklistEdge(state.FailFrom, state.FailTo, tick);
+        }
+        else if (state.EdgeFrom >= 0 && state.EdgeTo >= 0 && CycleRescue(state, tick))
+        {
+            // A cycle of misses no ban sees (NS3b).
+            return PlayerKeys.None;
         }
 
         Plan(state, x, y, tick, query, occupancy);

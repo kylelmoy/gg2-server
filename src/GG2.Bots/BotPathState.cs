@@ -677,6 +677,21 @@ public sealed class BotPathState
     /// <inheritdoc cref="Rescues"/>
     public long RescueStates { get; set; }
 
+    /// <summary>
+    /// Off-route events on real edges in a cycle (NS3b): each within
+    /// <c>PathFollower</c>'s window of the last, with no new node stood on.
+    /// </summary>
+    public int CycleCount { get; set; }
+
+    /// <summary>The tick of the cycle's last off-route event.</summary>
+    public int CycleLast { get; set; }
+
+    /// <summary>The tick each node was last stood on, for what counts as new.</summary>
+    public Dictionary<int, int> StoodAt { get; } = [];
+
+    /// <summary>Rescues started by a cycle rather than at a ban.</summary>
+    public int CycleRescues { get; set; }
+
     /// <summary>Whether a rescue is running.</summary>
     public bool Rescuing => RescueFrom >= 0;
 

@@ -47,6 +47,71 @@ public sealed partial class PathFollower
     /// </summary>
     public bool Rescues { get; set; }
 
+    /// <summary>Off-route events in a cycle that start a rescue (NS3b).</summary>
+    private const int CycleEvents = 3;
+
+    /// <summary>The most ticks between two off-route events of one cycle.</summary>
+    private const int CycleWindow = 150;
+
+    /// <summary>A node not stood on for this many ticks is new.</summary>
+    private const int CycleNewTicks = 300;
+
+    /// <summary>
+    /// Whether a bot cycling off its route is rescued too (NS3b), and not only
+    /// one about to ban an edge. Needs <see cref="Rescues"/>.
+    /// </summary>
+    public bool CycleRescues { get; set; }
+
+    /// <summary>
+    /// Notes the bot standing on <paramref name="node"/>; a node it has not
+    /// stood on lately ends any cycle.
+    /// </summary>
+    private void Stood(BotPathState state, int node, int tick)
+    {
+        if (!CycleRescues)
+            return;
+
+        if (!state.StoodAt.TryGetValue(node, out var last) || tick - last > CycleNewTicks)
+            state.CycleCount = 0;
+
+        state.StoodAt[node] = tick;
+
+        if (state.StoodAt.Count > 256)
+        {
+            foreach (var (old, when) in state.StoodAt)
+            {
+                if (tick - when > CycleNewTicks)
+                    state.StoodAt.Remove(old);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Counts an off-route event on a real edge, and starts a rescue of the edge
+    /// last missed when it completes a cycle.
+    /// </summary>
+    private bool CycleRescue(BotPathState state, int tick)
+    {
+        if (!CycleRescues)
+            return false;
+
+        state.CycleCount = state.CycleCount > 0 && tick - state.CycleLast <= CycleWindow
+            ? state.CycleCount + 1
+            : 1;
+        state.CycleLast = tick;
+
+        if (state.CycleCount < CycleEvents)
+            return false;
+
+        state.CycleCount = 0;
+
+        if (!TryRescue(state, state.FailFrom, state.FailTo, tick))
+            return false;
+
+        state.CycleRescues++;
+        return true;
+    }
+
     /// <summary>
     /// Starts a rescue of <paramref name="from"/> → <paramref name="to"/> in
     /// place of its ban, and says whether it did.
