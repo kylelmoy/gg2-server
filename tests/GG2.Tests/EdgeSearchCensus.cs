@@ -70,7 +70,7 @@ public sealed class EdgeSearchCensus(Xunit.Abstractions.ITestOutputHelper output
             var cls = EdgeFlights.ClassFor(flight.Type);
             var slot = world.Place(cls, flight.Team, Mid(graph, flight.From), EdgeFlights.StandingY(graph, flight.From));
             var start = world.State.Characters[slot];
-            var search = EdgeSearch.Fastest(world.Collision, graph, in start, flight.To, Mid(graph, flight.To));
+            var search = EdgeSearch.Fastest(world.Collision, graph, in start, flight.To, Mid(graph, flight.To), maxTicks: MaxTicks, beam: Beam);
 
             // The plan replayed in the full world, to check the search's physics
             // is the world's: the same placement, the keys, then the arrival test.
@@ -93,6 +93,12 @@ public sealed class EdgeSearchCensus(Xunit.Abstractions.ITestOutputHelper output
 
         var all = results.ToList();
         output.WriteLine($"{all.Count} edges searched in {clock.Elapsed.TotalSeconds:0}s, {all.Sum(r => r.Search.Expanded):N0} states stepped");
+
+        foreach (var g in all.GroupBy(r => r.Flight.Outcome))
+        {
+            var e = g.Select(r => r.Search.Expanded).OrderBy(v => v).ToList();
+            output.WriteLine($"{g.Key}: states stepped median {e[e.Count / 2]:N0} p90 {e[e.Count * 9 / 10]:N0} max {e[^1]:N0}");
+        }
 
         var found = all.Where(r => r.Search.Found).ToList();
         output.WriteLine($"replayed in the full world: {found.Count(r => r.Replayed)} of {found.Count} found plans arrive");
@@ -118,6 +124,10 @@ public sealed class EdgeSearchCensus(Xunit.Abstractions.ITestOutputHelper output
             output.WriteLine(line);
         }
     }
+
+    // EDGE_SEARCH_BEAM and EDGE_SEARCH_TICKS size the search, for its cost.
+    private static readonly int Beam = int.TryParse(Environment.GetEnvironmentVariable("EDGE_SEARCH_BEAM"), out var b) ? b : 2000;
+    private static readonly int MaxTicks = int.TryParse(Environment.GetEnvironmentVariable("EDGE_SEARCH_TICKS"), out var t) ? t : 400;
 
     private static double Mid(NavGraph graph, int node) =>
         NavGraph.ColumnWorldX((graph.Nodes[node].X0 + graph.Nodes[node].X1) / 2);

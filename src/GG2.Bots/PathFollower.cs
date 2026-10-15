@@ -357,6 +357,10 @@ public sealed partial class PathFollower
         state.LastX = x;
         state.LastY = y;
 
+        // A rescue owns the keys while it runs (NS3).
+        if (state.Rescuing && Rescue(state, in character, tick, query, occupancy, out var rescued))
+            return rescued;
+
         // Planning is on the timer even when it FAILS, which is the whole
         // reason this is one condition and not "plan whenever we have no route".
         // A goal that is genuinely unreachable makes every search fail, and
@@ -533,8 +537,13 @@ public sealed partial class PathFollower
         // (-1,-1) at the moment the second real miss lands.
         if (state.FailCount >= 2 && state.FailFrom >= 0 && state.FailTo >= 0)
         {
-            state.BlacklistEdge(state.FailFrom, state.FailTo, tick);
             state.FailCount = 0;
+
+            // Searched before it is banned (NS3).
+            if (TryRescue(state, state.FailFrom, state.FailTo, tick))
+                return PlayerKeys.None;
+
+            state.BlacklistEdge(state.FailFrom, state.FailTo, tick);
         }
 
         Plan(state, x, y, tick, query, occupancy);
@@ -893,6 +902,14 @@ public sealed partial class PathFollower
         if (state.StuckTicks >= BotConstants.StuckTicks)
         {
             state.StuckFires++;
+
+            // Searched before it is banned (NS3).
+            if (TryRescue(state, current, next, tick))
+            {
+                state.StuckTicks = 0;
+                return PlayerKeys.None;
+            }
+
             state.BlacklistEdge(current, next, tick);
 
             // character.Y, not state.GoalY. See the remark on Plan.

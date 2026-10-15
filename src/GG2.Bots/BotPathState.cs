@@ -616,6 +616,82 @@ public sealed class BotPathState
     /// <inheritdoc cref="HeldFallTicks"/>
     public int HeldFallFallbacks { get; set; }
 
+    /// <summary>
+    /// A stranding rescue's edge, or −1 for none running (NS3): the edge the
+    /// follower was about to ban, searched instead.
+    /// </summary>
+    public int RescueFrom { get; set; } = -1;
+
+    /// <inheritdoc cref="RescueFrom"/>
+    public int RescueTo { get; set; } = -1;
+
+    /// <summary>Ticks the rescue has waited to stand still.</summary>
+    public int RescueSettle { get; set; }
+
+    /// <summary>The search, from where the bot stood still, while it runs.</summary>
+    public EdgeSearch.Run? RescueSearch { get; set; }
+
+    /// <summary>Where the bot stood when the search began.</summary>
+    public double RescueX { get; set; }
+
+    /// <inheritdoc cref="RescueX"/>
+    public double RescueY { get; set; }
+
+    /// <summary>The found plan's keys, or null while none is playing.</summary>
+    public PlayerKeys[]? RescuePlan { get; set; }
+
+    /// <summary>The plan's predicted position after each of its ticks.</summary>
+    public (double X, double Y)[]? RescueTrack { get; set; }
+
+    /// <summary>The next key of the plan to play.</summary>
+    public int RescueAt { get; set; }
+
+    /// <summary>The tick each edge was last rescued, by <see cref="NavGraph.EdgeKey"/>.</summary>
+    public Dictionary<long, int> RescuedAt { get; } = [];
+
+    /// <summary>
+    /// Rescues started, found, arrived, abandoned off their track, given up for
+    /// not standing still, and for moving while searching; and the ticks spent
+    /// searching and states stepped.
+    /// </summary>
+    public int Rescues { get; set; }
+
+    /// <inheritdoc cref="Rescues"/>
+    public int RescuesFound { get; set; }
+
+    /// <inheritdoc cref="Rescues"/>
+    public int RescuesArrived { get; set; }
+
+    /// <inheritdoc cref="Rescues"/>
+    public int RescuesAbandoned { get; set; }
+
+    /// <inheritdoc cref="Rescues"/>
+    public int RescuesUnsettled { get; set; }
+
+    /// <inheritdoc cref="Rescues"/>
+    public int RescuesMoved { get; set; }
+
+    /// <inheritdoc cref="Rescues"/>
+    public int RescueSearchTicks { get; set; }
+
+    /// <inheritdoc cref="Rescues"/>
+    public long RescueStates { get; set; }
+
+    /// <summary>Whether a rescue is running.</summary>
+    public bool Rescuing => RescueFrom >= 0;
+
+    /// <summary>Ends a rescue, without a ban.</summary>
+    public void EndRescue()
+    {
+        RescueFrom = -1;
+        RescueTo = -1;
+        RescueSettle = 0;
+        RescueSearch = null;
+        RescuePlan = null;
+        RescueTrack = null;
+        RescueAt = 0;
+    }
+
     /// <summary>Whether the bot is in the air on a running hop (N8).</summary>
     public bool RunHopAir { get; set; }
 
@@ -717,6 +793,9 @@ public sealed class BotPathState
         // to its own edge, so a re-plan that lands on the same arc keeps the
         // count that says the run-up has already been tried.
         RunupAt = -1;
+
+        // A rescue belongs to the route it was rescuing.
+        EndRescue();
     }
 
     /// <summary>
