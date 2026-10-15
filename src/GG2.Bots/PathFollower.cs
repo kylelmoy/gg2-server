@@ -279,6 +279,12 @@ public sealed partial class PathFollower
     public bool HeldFalls { get; set; } = true;
 
     /// <summary>
+    /// Whether the re-plan timer waits for the ground (N13). Off by default:
+    /// paired by flight it fixed 107 sweep strandings and caused 118.
+    /// </summary>
+    public bool GroundedReplans { get; set; }
+
+    /// <summary>
     /// Advances one bot's route by a tick and returns the movement keys.
     /// </summary>
     /// <param name="state">The bot's navigation state, updated in place.</param>
@@ -367,7 +373,13 @@ public sealed partial class PathFollower
         // retrying it every tick is a full A* per bot per frame that can never
         // succeed. Event-driven re-plans set ReplanAt to 0 rather than calling
         // in here.
-        if (tick >= state.ReplanAt)
+        //
+        // N13, off: held for the ground, in the air the position resolves to
+        // whatever surface the arc is passing, so a timer re-plan over a narrow
+        // ledge installs a route of that one node and the bot falls past it
+        // (gg2-rl docs/PLAN.md, NS3b). Holding it fixed as many sweep flights
+        // as it broke.
+        if (tick >= state.ReplanAt && (onGround || !GroundedReplans))
             Plan(state, x, y, tick, query, occupancy);
 
         if (!state.HasPath)
