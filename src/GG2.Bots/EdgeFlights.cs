@@ -463,7 +463,8 @@ public static class EdgeFlights
         bool heldFalls = true,
         bool rescues = false,
         bool cycleRescues = false,
-        bool groundedReplans = false)
+        bool groundedReplans = false,
+        bool goalAirHolds = false)
     {
         ArgumentNullException.ThrowIfNull(world);
 
@@ -475,7 +476,7 @@ public static class EdgeFlights
         {
             Distances = distances, Collision = world.Collision, HeldFlight = heldFlight, HeldDoubles = heldDoubles,
             HeldSwitchPlans = heldSwitchPlans, FaceHops = faceHops, RunHops = faceHops, HeldFalls = heldFalls,
-            Rescues = rescues, CycleRescues = cycleRescues, GroundedReplans = groundedReplans,
+            Rescues = rescues, CycleRescues = cycleRescues, GroundedReplans = groundedReplans, GoalAirHolds = goalAirHolds,
         };
         var cls = flyAs ?? ClassFor(edge.Type);
         var state = new BotPathState();
@@ -732,6 +733,7 @@ public static class EdgeFlights
         bool rescues = false,
         bool cycleRescues = false,
         bool groundedReplans = false,
+        bool goalAirHolds = false,
         Action<int, ScenarioWorld, BotPathState>? onTick = null)
     {
         ArgumentNullException.ThrowIfNull(mapDirectory);
@@ -793,7 +795,7 @@ public static class EdgeFlights
             var graph = graphs[graphIndex];
             flights[i] = Fly(
                 graph.World(), edgeIndex, team, budget, graph.Distances, warmWeapon, heldFlight, onTick,
-                flyAs: flyAs, heldDoubles: heldDoubles, heldSwitchPlans: heldSwitchPlans, faceHops: faceHops, heldFalls: heldFalls, rescues: rescues, cycleRescues: cycleRescues, groundedReplans: groundedReplans);
+                flyAs: flyAs, heldDoubles: heldDoubles, heldSwitchPlans: heldSwitchPlans, faceHops: faceHops, heldFalls: heldFalls, rescues: rescues, cycleRescues: cycleRescues, groundedReplans: groundedReplans, goalAirHolds: goalAirHolds);
         });
 
         if (onGraph is not null)

@@ -20,12 +20,12 @@ public sealed class GroundedReplanCensus(Xunit.Abstractions.ITestOutputHelper ou
     {
         ReferenceTree.RequireNavCache();
 
-        List<EdgeFlight> Sweep(bool grounded) => EdgeFlights.SweepAll(
+        List<EdgeFlight> Sweep(bool grounded, bool goal = false) => EdgeFlights.SweepAll(
             ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory, distances: true,
-            threads: Math.Max(1, Environment.ProcessorCount - 2), groundedReplans: grounded);
+            threads: Math.Max(1, Environment.ProcessorCount - 2), groundedReplans: grounded, goalAirHolds: goal);
 
         var before = Sweep(false);
-        var after = Sweep(true);
+        var after = Environment.GetEnvironmentVariable("N13B") == "1" ? Sweep(false, goal: true) : Sweep(true);
         output.WriteLine("before " + EdgeFlights.Summarise(before));
         output.WriteLine("after  " + EdgeFlights.Summarise(after));
 

@@ -280,9 +280,17 @@ public sealed partial class PathFollower
 
     /// <summary>
     /// Whether the re-plan timer waits for the ground (N13). Off by default:
-    /// paired by flight it fixed 107 sweep strandings and caused 118.
+    /// it stops <c>gallery-pit-climb</c> arriving, where an air re-plan is what
+    /// gives the bot its run-up.
     /// </summary>
     public bool GroundedReplans { get; set; }
+
+    /// <summary>
+    /// Whether the re-plan timer waits for the ground only while the bot is in
+    /// the air over its goal node (N13b), where a re-plan installs a route of
+    /// that one node and nothing steers. Off by default.
+    /// </summary>
+    public bool GoalAirHolds { get; set; }
 
     /// <summary>
     /// Advances one bot's route by a tick and returns the movement keys.
@@ -379,7 +387,7 @@ public sealed partial class PathFollower
         // ledge installs a route of that one node and the bot falls past it
         // (gg2-rl docs/PLAN.md, NS3b). Holding it fixed as many sweep flights
         // as it broke.
-        if (tick >= state.ReplanAt && (onGround || !GroundedReplans))
+        if (tick >= state.ReplanAt && (onGround || !GroundedReplans) && !(GoalAirHolds && !onGround && OverGoal(state, x, y)))
             Plan(state, x, y, tick, query, occupancy);
 
         if (!state.HasPath)
@@ -964,5 +972,12 @@ public sealed partial class PathFollower
 
         state.JumpHeld = true;
         return PlayerKeys.Jump;
+    }
+
+    // N13b: the airborne position resolves to the goal's own node.
+    private bool OverGoal(BotPathState state, double x, double y)
+    {
+        var here = _graph.NodeFromWorld(x, y);
+        return here >= 0 && here == _graph.NodeFromWorld(state.GoalX, state.GoalY);
     }
 }
