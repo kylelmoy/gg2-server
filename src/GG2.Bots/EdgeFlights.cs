@@ -60,6 +60,22 @@ public enum EdgeFlightOutcome
     /// </remarks>
     StartBlocked,
 
+    /// <summary>
+    /// A body dropped on the from-node's midpoint comes to rest on another
+    /// node, or on none.
+    /// </summary>
+    /// <remarks>
+    /// <b>The nav box is 24px wide and a body is 6-9px</b>, so on stairs and
+    /// slopes a one-column node rests the nav box on a step corner the body
+    /// misses: placed there, it falls a cell or more and lands somewhere else.
+    /// About a third of shipped nodes are like this. A flight from one starts
+    /// mid-air and credits an edge whose start no body stands still on, and a
+    /// follower change to when it plans in the air moved the whole reading
+    /// (<c>gg2-rl</c> <c>docs/PLAN.md</c>, N13 and N14). So the flight starts
+    /// at rest, and a start that cannot rest on its node is skipped.
+    /// </remarks>
+    StartUnsupported,
+
     /// <summary>The search found no route at all from the from-node to the to-node.</summary>
     NoRoute,
 
@@ -219,6 +235,7 @@ public readonly record struct EdgeFlight(
 /// <param name="Ticks">Simulated ticks across the measured flights.</param>
 /// <param name="Blacklists">Edges given up on across the measured flights.</param>
 /// <param name="StartBlocked">Starts no team can occupy.</param>
+/// <param name="StartUnsupported">Starts where a body comes to rest on another node.</param>
 /// <param name="Diverted">
 /// Arrivals that never steered the edge they were posed — the bot re-planned
 /// mid-flight and walked to the node another way. <b>These are counted inside
@@ -246,7 +263,8 @@ public readonly record struct EdgeFlightTally(
     long Blacklists,
     int StartBlocked = 0,
     int TeamSwapped = 0,
-    int Diverted = 0)
+    int Diverted = 0,
+    int StartUnsupported = 0)
 {
     /// <summary>Counts one set of flights.</summary>
     public static EdgeFlightTally Of(IEnumerable<EdgeFlight> flights)
@@ -279,6 +297,7 @@ public readonly record struct EdgeFlightTally(
         StartBlocked = StartBlocked + (flight.Outcome == EdgeFlightOutcome.StartBlocked ? 1 : 0),
         TeamSwapped = TeamSwapped + (flight.TeamSwapped ? 1 : 0),
         Diverted = Diverted + (flight.Diverted ? 1 : 0),
+        StartUnsupported = StartUnsupported + (flight.Outcome == EdgeFlightOutcome.StartUnsupported ? 1 : 0),
     };
 
     /// <summary>
@@ -295,7 +314,7 @@ public readonly record struct EdgeFlightTally(
         $"cand={Candidates} measured={Measured} arrived={Arrived} flown={Flown} "
         + $"stranded={Stranded} | routed-around={RoutedAround} shadowed={Shadowed} "
         + $"no-route={NoRoute} unresolved={StartUnresolved + GoalUnresolved} "
-        + $"start-blocked={StartBlocked} team-swapped={TeamSwapped} diverted={Diverted} "
+        + $"start-blocked={StartBlocked} unsupported={StartUnsupported} team-swapped={TeamSwapped} diverted={Diverted} "
         + $"| ticks={Ticks} blacklists={Blacklists}";
 }
 
@@ -491,6 +510,19 @@ public static class EdgeFlights
             flying = other;
             swapped = true;
         }
+
+        // Premise 1d: the start is a place a body stands still. Dropped to rest,
+        // it must still be on the from-node — see EdgeFlightOutcome.StartUnsupported.
+        var filter = FilterFor(flying);
+        var drop = 0;
+
+        while (drop <= RestDrop && world.Collision.PlaceFree(box, startX, startY + drop + 1, filter))
+            drop++;
+
+        if (drop > RestDrop || graph.NodeFromWorld(startX, startY + drop) != edge.From)
+            return Skipped(EdgeFlightOutcome.StartUnsupported);
+
+        startY += drop;
 
         var query = QueryFor(edge.Type, flying) with { CanDoubleJump = BotClassProfile.AirJump(cls) };
 
@@ -805,6 +837,14 @@ public static class EdgeFlights
 
         return $"{flights.Count} candidates, {measured} measured, {arrived} arrived, {flown} flown; skipped: {detail}";
     }
+
+    /// <summary>How far, in pixels, a start may drop to rest and still be one.</summary>
+    /// <remarks>
+    /// A body that falls further than this is not resting on anything near its
+    /// node; it is <see cref="EdgeFlightOutcome.StartUnsupported"/> whichever
+    /// node it would land on.
+    /// </remarks>
+    private const int RestDrop = 400;
 
     /// <summary>
     /// The y a character is PLACED at to start on a node — one pixel above

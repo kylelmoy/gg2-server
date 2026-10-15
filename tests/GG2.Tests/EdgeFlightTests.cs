@@ -265,7 +265,10 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// → 6,495; no-tables 412 → 422. Per edge 30 flights lost and 20 won, 21 and
     /// 12 of them rocket jumps, all late arrivals before (200-350 ticks of 400).
     /// N12 (falls flown held): stranded 453 → 416, ticks 1,326,647; no-tables
-    /// 422 → 392.
+    /// 422 → 392. N14 (a flight starts at rest, and a from-node that does not hold
+    /// a resting body is <see cref="EdgeFlightOutcome.StartUnsupported"/>): 40,308
+    /// candidates unsupported, measured 32,055 → 22,239, stranded 416 → 265;
+    /// no-tables 392 → 250, face hops 402 → 261, scout 150 → 83.
     /// </para>
     [Fact]
     public void EveryEdgeOfEveryShippedGraphIsFlownOnTheShippingArm()
@@ -283,20 +286,21 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(
             new EdgeFlightTally(
                 Candidates: 116_316,
-                Measured: 32_055,
-                Arrived: 31_639,
-                Flown: 3_643,
-                Stranded: 416,
-                RoutedAround: 72_926,
-                Shadowed: 10_869,
-                NoRoute: 466,
+                Measured: 22_239,
+                Arrived: 21_974,
+                Flown: 2_787,
+                Stranded: 265,
+                RoutedAround: 46_248,
+                Shadowed: 7_209,
+                NoRoute: 312,
                 StartUnresolved: 0,
                 GoalUnresolved: 0,
-                Ticks: 1_326_647,
-                Blacklists: 6_414,
+                Ticks: 948_060,
+                Blacklists: 4_327,
                 StartBlocked: 0,
-                TeamSwapped: 178,
-                Diverted: 32),
+                TeamSwapped: 131,
+                Diverted: 23,
+                StartUnsupported: 40_308),
             tally);
     }
 
@@ -334,20 +338,21 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(
             new EdgeFlightTally(
                 Candidates: 116_316,
-                Measured: 32_055,
-                Arrived: 31_653,
-                Flown: 3_650,
-                Stranded: 402,
-                RoutedAround: 72_926,
-                Shadowed: 10_869,
-                NoRoute: 466,
+                Measured: 22_239,
+                Arrived: 21_978,
+                Flown: 2_789,
+                Stranded: 261,
+                RoutedAround: 46_248,
+                Shadowed: 7_209,
+                NoRoute: 312,
                 StartUnresolved: 0,
                 GoalUnresolved: 0,
-                Ticks: 1_357_468,
-                Blacklists: 6_496,
+                Ticks: 970_990,
+                Blacklists: 4_370,
                 StartBlocked: 0,
-                TeamSwapped: 178,
-                Diverted: 32),
+                TeamSwapped: 131,
+                Diverted: 23,
+                StartUnsupported: 40_308),
             tally);
     }
 
@@ -383,20 +388,21 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(
             new EdgeFlightTally(
                 Candidates: 69_691,
-                Measured: 7_543,
-                Arrived: 7_393,
-                Flown: 622,
-                Stranded: 150,
-                RoutedAround: 60_308,
-                Shadowed: 1_540,
-                NoRoute: 300,
+                Measured: 5_921,
+                Arrived: 5_838,
+                Flown: 509,
+                Stranded: 83,
+                RoutedAround: 38_225,
+                Shadowed: 1_175,
+                NoRoute: 184,
                 StartUnresolved: 0,
                 GoalUnresolved: 0,
-                Ticks: 476_906,
-                Blacklists: 333,
+                Ticks: 338_185,
+                Blacklists: 168,
                 StartBlocked: 0,
-                TeamSwapped: 40,
-                Diverted: 0),
+                TeamSwapped: 29,
+                Diverted: 0,
+                StartUnsupported: 24_186),
             tally);
     }
 
@@ -442,20 +448,21 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(
             new EdgeFlightTally(
                 Candidates: 116_316,
-                Measured: 37_787,
-                Arrived: 37_395,
-                Flown: 5_558,
-                Stranded: 392,
-                RoutedAround: 67_194,
-                Shadowed: 10_869,
-                NoRoute: 466,
+                Measured: 26_287,
+                Arrived: 26_037,
+                Flown: 4_125,
+                Stranded: 250,
+                RoutedAround: 42_200,
+                Shadowed: 7_209,
+                NoRoute: 312,
                 StartUnresolved: 0,
                 GoalUnresolved: 0,
-                Ticks: 1_743_279,
-                Blacklists: 8_216,
+                Ticks: 1_242_514,
+                Blacklists: 5_543,
                 StartBlocked: 0,
-                TeamSwapped: 206,
-                Diverted: 15),
+                TeamSwapped: 148,
+                Diverted: 11,
+                StartUnsupported: 40_308),
             plain);
     }
 
@@ -585,8 +592,9 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// <para>
     /// Which is exactly what makes this the control the synthetic tests could
     /// not be. <b>Mutation-checked</b>: rip the ATTACK half out of
-    /// <see cref="PathFollower.ApplyLaunch"/> and this goes <b>20 arrivals / 12
-    /// flights → 16 / 8</b>. Note which half moves. It does <em>not</em> go to
+    /// <see cref="PathFollower.ApplyLaunch"/> and this goes <b>11 arrivals / 11
+    /// flights → 6 / 6</b> (re-checked 2026-10-15 at N14's start at rest; it was
+    /// 20 / 12 → 16 / 8 before). Note which half moves. It does <em>not</em> go to
     /// zero, because <see cref="BotPathState.RocketJumps"/> counts what the
     /// takeoff gate <em>asked</em> for rather than what the weapon fired — so the
     /// arrival count is the honest signal here and the manoeuvre count on its own
@@ -602,9 +610,9 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
         output.WriteLine($"{Map} rocket jumps: {EdgeFlights.Summarise(flights)}");
 
         Assert.Equal(67, flights.Count);
-        Assert.Equal(21, measured);
-        Assert.Equal(21, arrived);
-        Assert.Equal(20, flown);
+        Assert.Equal(11, measured);
+        Assert.Equal(11, arrived);
+        Assert.Equal(11, flown);
 
         // FIFTEEN, and pinning the real number rather than a hoped-for zero is the
         // point. ⚠️ It was TWO until RocketModel.Capable stopped a cold launcher
@@ -634,7 +642,11 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
         // 3,866 routes for the Capable fix, and 3,722 -> 3,729 arrivals.
         // PathFollowerFixtureTests pins zero over a 137-node leg, which is the
         // other end of the same question.
-        Assert.Equal(15, blacklists);
+        //
+        // ✅ Re-recorded 2026-10-15 (gg2-rl N14): the sweep starts a body at rest,
+        // so 26 of these arcs, whose from-node does not hold a resting body, are
+        // StartUnsupported. Measured 21 → 11, all 11 flown, blacklists 15 → 6.
+        Assert.Equal(6, blacklists);
     }
 
     /// <summary>A scout flies real air-jump arcs off the shipped cache.</summary>
@@ -654,15 +666,16 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
         output.WriteLine($"{Map} air jumps: {EdgeFlights.Summarise(flights)}");
 
         Assert.Equal(23, flights.Count);
-        Assert.Equal(11, measured);
-        Assert.Equal(11, arrived);
+        Assert.Equal(10, measured);
+        Assert.Equal(10, arrived);
 
         // SIX, from ten: a held flight takes the second jump only where its plan
         // needs or draws one, and the other five of these arcs land on one held
         // jump. Every one still arrives. Five from 2026-10-11 (gg2-rl N3, N4),
         // six from 2026-10-13 (N7), when a drawn second jump began to be tried
         // in every plan shape before a single jump.
-        Assert.Equal(6, flown);
+        // Five from 2026-10-15 (gg2-rl N14), with one arc's start unsupported.
+        Assert.Equal(5, flown);
 
         // ONE, re-recorded 2026-09-05 from zero when the start moved a pixel out
         // of the floor (EdgeFlights.StandingY). Every other number on this map is
@@ -697,7 +710,9 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
         var flights = EdgeFlights.Sweep(world, NavEdgeType.RocketJump);
 
         var skipped = flights.Where(f => f.Outcome == EdgeFlightOutcome.RoutedAround).ToList();
-        Assert.Equal(46, skipped.Count);
+        // 30, from 46: since N14 an arc whose start cannot hold a resting body is
+        // StartUnsupported first, whatever A* would do.
+        Assert.Equal(30, skipped.Count);
 
         // None of them is counted, in either direction: not as an arrival and not
         // as a refusal.
