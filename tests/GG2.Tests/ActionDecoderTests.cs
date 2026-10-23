@@ -114,6 +114,27 @@ public sealed class ActionDecoderTests
     }
 
     /// <summary>
+    /// <b>Every roster slot has an aim</b>, up to the last one the state holds.
+    /// </summary>
+    /// <remarks>
+    /// The table was once 32 wide against a 64-slot roster, so a policy or
+    /// search bot at slot 32 or above threw on its first handover and failed the
+    /// whole server tick — reached only once the roster passed 32, which no test
+    /// and no fleet config did.
+    /// </remarks>
+    [Fact]
+    public void EveryRosterSlotHasAnAim()
+    {
+        var decoder = new ActionDecoder();
+        var last = GG2.Simulation.WorldState.MaxSlots - 1;
+
+        decoder.SetAim(last, 90);
+        decoder.Decode(last, Action(aim: 14), true);
+
+        Assert.Equal(90 + ActionDecoder.MaxTurnDegreesPerDecision, decoder.Aim(last), 9);
+    }
+
+    /// <summary>
     /// <b>The turn happens once per DECISION, not once per tick.</b>
     /// </summary>
     /// <remarks>

@@ -140,11 +140,10 @@ public sealed class ActionDecoder
     /// </remarks>
     public const double AimDistancePixels = 100;
 
-    private readonly double[] _aim = new double[WorldStateSlots];
-
-    // Kept local rather than referencing GG2.Simulation.WorldState.MaxSlots so
-    // that this file has no reason to know about the simulation's layout.
-    private const int WorldStateSlots = 32;
+    // Indexed by roster slot, so it has to be as wide as the roster. A local
+    // copy of the width once fell behind it (32 against 64), and a policy or
+    // search bot past slot 31 then failed the whole server tick.
+    private readonly double[] _aim = new double[WorldState.MaxSlots];
 
     /// <summary>The angle this slot is currently aiming at, in degrees.</summary>
     /// <remarks>
