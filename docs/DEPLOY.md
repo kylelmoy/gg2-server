@@ -172,6 +172,54 @@ character count realistic. Sending `INPUTSTATE` from every client at 30 Hz adds
 **0.014 ms of tick and 0.01% of a core at 24 clients**, so the receive path is
 not what would change the answer.
 
+### How many players a stock client can keep up with
+
+**The server's own ceiling arrives before the client's on a desktop CPU.** The
+roster holds 64 slots (`WorldState.MaxSlots`) and slot 0 is the server's, so 63
+players is the most this server can carry, and humans alone are capped at 48
+(`ServerOptions` validation of `PlayerLimit`; bots do not count against it). A
+stock GM8 client held 30 fps at all 63.
+
+Measured 2026-10-23 on an i7-13700K (Windows 11), Release build, `ctf_truefort`,
+default `scripted` bots, with one stock client through the live-game bridge on a
+team, alive and in the fight, while the bot fill was raised by the control port.
+GM8's `fps` is capped at `room_speed`, so it only says whether the client has
+fallen behind. The table's client column was read uncapped instead (`gg2_speed`
+to `room_speed` 600, `fps` logged once a second for 20 seconds per step): the
+frames the client could complete, so `1000 / fps` is the cost of one frame.
+
+| Players | Client fps, uncapped | Client ms/frame | Server tick mean / p95 | Out to that one client |
+|---|---|---|---|---|
+| 1 | ~595 (cap 600) | < 1.7 | — | — |
+| 8 | ~370 | 2.7 | 0.35 / 0.59 ms | 13 kbit/s |
+| 16 | ~200 | 5.0 | 0.50 / 0.74 ms | 25 kbit/s |
+| 32 | ~108 | 9.3 | 0.73 / 0.85 ms | 48 kbit/s |
+| 48 | ~74 | 13.5 | 1.10 / 1.40 ms | 70 kbit/s |
+| 63 | ~54 | 18.5 | 1.44 / 1.76 ms | 95 kbit/s |
+
+- **The client's frame cost is linear in players, about 0.29 ms each.** On this
+  CPU that crosses the 33.3 ms frame at roughly 110 players, which is
+  extrapolation, not measurement. GM8 is single-threaded and CPU-bound, so the
+  limit scales with the player's per-core speed: a core half this fast falls
+  below 30 fps near 55 players. **The client's machine, not the server, decides
+  this.**
+- **At normal speed with 63 players** the capped `fps` read 30 in 59 of 60
+  seconds and 29 in one, with ~1.7x frame headroom: an occasional hitch, not
+  throughput.
+- **The server column is from a 13700K core with a client connected, not a
+  pinned single core.** No 1-vCPU host has been measured above 24 bots. If a
+  VPS core is 2-3x slower, 63 players costs 3-6 ms of a 33.3 ms tick; the table
+  in "What a client actually experiences on one shared vCPU" is the method that
+  would replace that estimate.
+- **Bandwidth follows `clients x roster`**: about 1.5 kbit/s per roster entry per
+  client, matching the 24 x 24 figure above. 48 humans on a 63-player roster is
+  about 4.6 Mbit/s out, an estimate from that rate.
+
+What would show this has gone stale: a change to what a client draws or
+simulates per character (a plugin, a new effect on the wire), or a player on
+weaker hardware reporting a drop below 30 fps on a full server. Re-measure
+by repeating the ramp above; capped `fps` alone cannot show headroom.
+
 ### The one setting that changes the answer
 
 **Keep `--bot-mode` at its default, `scripted`.** `docs/BOTS.md` measures a
