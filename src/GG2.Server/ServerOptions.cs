@@ -788,6 +788,19 @@ public sealed class ServerOptions
     public HandoverRule BotHandoverRule { get; set; } = HandoverRule.MacroTask;
 
     /// <summary>
+    /// The one team whose bots the brain drives, or <see cref="Team.Any"/> for
+    /// both — <c>--bot-brain-team</c>.
+    /// </summary>
+    /// <remarks>
+    /// <b>A BEHAVIOUR switch, both teams by default.</b> On the other team a bot is
+    /// the bare scripted bot, which is how every gg2-sim match number is taken
+    /// (policy red against scripted blue). Read every tick, so a bot that changes
+    /// team changes brain with it — <see cref="TeamGatedBot"/>. It does nothing
+    /// under bot mode <c>scripted</c>.
+    /// </remarks>
+    public Team BotBrainTeam { get; set; } = Team.Any;
+
+    /// <summary>
     /// Whether every bot puts up a chat bubble when its brain changes hands.
     /// </summary>
     /// <remarks>

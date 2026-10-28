@@ -623,6 +623,14 @@ public static class ServerSettings
             (o, v) => o.BotHandoverRule = ParseHandoverRule(v),
             "distance"));
 
+        // A BEHAVIOUR switch: ServerOptions.BotBrainTeam.
+        settings.Add(ChoiceRow(
+            "Bots", "BrainTeam", nameof(ServerOptions.BotBrainTeam),
+            ["both", "red", "blue"],
+            o => o.BotBrainTeam is Team.Any ? "both" : o.BotBrainTeam.ToString().ToLowerInvariant(),
+            (o, v) => o.BotBrainTeam = ParseBrainTeam(v),
+            "red"));
+
         // A DEBUGGING aid and the one Bots row that changes nothing a bot
         // decides. Every bubble is a broadcast to every connected client, which
         // is why it is off by default rather than merely quiet.
@@ -1008,6 +1016,14 @@ public static class ServerSettings
         "headsplit" => HandoverRule.HeadSplit,
         _ => throw new FormatException(
             $"Bots.HandoverRule: '{value}' is not a handover rule. macrotask, distance or headsplit."),
+    };
+
+    public static Team ParseBrainTeam(string value) => value.Trim().ToLowerInvariant() switch
+    {
+        "both" => Team.Any,
+        "red" => Team.Red,
+        "blue" => Team.Blue,
+        _ => throw new FormatException($"Bots.BrainTeam: '{value}' is not a brain team. both, red or blue."),
     };
 
     private static BotMode Mode(string value) => value.Trim().ToLowerInvariant() switch

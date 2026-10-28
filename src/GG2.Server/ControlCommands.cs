@@ -993,7 +993,7 @@ public static class ControlCommands
             json.Append(",\"bot\":").Append(bot ? "true" : "false");
 
             if (bot)
-                AppendBrain(json, source, server.ClassOf(slot), server.Options.Bots.Brain);
+                AppendBrain(json, source, server.ClassOf(slot), server.TeamOf(slot), server.Options.Bots.Brain);
             json.Append(",\"connected\":").Append(server.IsConnected(slot) ? "true" : "false");
             json.Append(",\"address\":\"").Append(Escape(server.AddressOf(slot))).Append('"');
             json.Append(",\"alive\":").Append(server.IsAlive(slot) ? "true" : "false");
@@ -1041,9 +1041,12 @@ public static class ControlCommands
         StringBuilder json,
         IInputSource source,
         PlayerClass playerClass,
+        Team team,
         GG2.Bots.BotBrainSpec? brain)
     {
-        if (GG2.Bots.HybridBot.Of(source) is not { } hybrid)
+        // A bot off its brain's team (--bot-brain-team) is a plain scripted bot.
+        if (GG2.Bots.HybridBot.Of(source) is not { } hybrid
+            || (GG2.Bots.TeamGatedBot.Of(source) is { } gated && gated.Team != team))
         {
             json.Append(",\"brain\":\"").Append(ScriptedBrain).Append('"');
             json.Append(",\"driving\":false");

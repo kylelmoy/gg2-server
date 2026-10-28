@@ -629,6 +629,11 @@ internal static class CommandLine
                     options.BotHandoverRule = ServerSettings.ParseHandoverRule(cursor.Take());
                     break;
 
+                // A behaviour switch: ServerOptions.BotBrainTeam.
+                case "--bot-brain-team":
+                    options.BotBrainTeam = ServerSettings.ParseBrainTeam(cursor.Take());
+                    break;
+
                 // A behaviour switch: ServerOptions.BotHumanize.
                 case "--bot-humanize":
                     options.BotHumanize = true;
@@ -1246,6 +1251,10 @@ internal static class CommandLine
                             controller. macrotask by default; distance (an
                             enemy within 150px, kept to 300px) is what gg2-sim
                             policies are evaluated under.
+          --bot-brain-team both|red|blue
+                            the one team whose bots --bot-mode's brain drives;
+                            the other team's bots are plain scripted bots. Both
+                            by default; red is how gg2-sim's matches are played.
           --bot-class-limit <n|class=n,...>
                             how many BOTS of a class one team may hold, like
                             --class-limit but counting bots only. One number

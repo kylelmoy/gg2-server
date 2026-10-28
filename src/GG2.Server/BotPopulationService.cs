@@ -694,7 +694,9 @@ public sealed class BotPopulationService
         // ONE field, so there is nothing to rank and nothing to refuse.
         // BotBrainSpec carries an ORDERED LIST instead, and IMicroArbiter is what
         // picks between its tiers per decision.
-        IInputSource source = options.Brain is { } brain ? brain.Wrap(bot) : bot;
+        IInputSource source = options.Brain is not { } brain ? bot
+            : _server.Options.BotBrainTeam is Team.Red or Team.Blue ? new TeamGatedBot(brain.Wrap(bot), _server.Options.BotBrainTeam)
+            : brain.Wrap(bot);
 
         // Outermost, so it sees what the whole brain decided, and seeded from the
         // stagger like the scripted layer's own stream.

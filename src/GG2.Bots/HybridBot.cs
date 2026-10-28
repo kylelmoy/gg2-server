@@ -86,6 +86,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     {
         HybridBot hybrid => hybrid,
         HumanizedBot humanized => Of(humanized.Inner),
+        TeamGatedBot gated => gated.Hybrid,
         _ => null,
     };
 

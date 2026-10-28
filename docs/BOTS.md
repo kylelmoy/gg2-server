@@ -558,9 +558,17 @@ policies) exports `.gg2p` files. `--policy x.gg2p` loads one as a
 
 ```powershell
 gg2-server --bots 8 --bot-mode policy --bot-handover-rule distance --bot-engages-bots `
+  --bot-brain-team red `
   --policy ppo-kill1-6b-s2.gg2p --policy ppo-mixscout-s1.gg2p `
   --bot-class-policy Soldier=ppo-kill1-6b-s2,Scout=ppo-mixscout-s1
 ```
+
+`--bot-brain-team red` gives the brain to red's bots only and leaves blue's as
+plain scripted bots, which is how gg2-sim's match numbers are taken.
+`TeamGatedBot` wraps the hybrid and reads the team every tick, so a bot moved by
+autobalance or the `team` verb changes brain with it; `HybridBot` itself is
+unchanged. It relies on a team change killing the character, which releases the
+wheel on the way across (the class remarks say what breaks if that stops).
 
 | | gg2-rl `.npz` | gg2-sim `.gg2p` |
 |---|---|---|

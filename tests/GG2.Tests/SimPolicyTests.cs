@@ -134,6 +134,76 @@ public sealed class SimPolicyTests : IDisposable
         Assert.Equal(HandoverRule.MacroTask, options.Bots.Brain!.Rule);
     }
 
+    /// <summary>
+    /// <c>--bot-brain-team red</c>: only red's bots ever drive, and a bot that
+    /// changes team changes brain with it, in both directions.
+    /// </summary>
+    /// <remarks>
+    /// "Blue never drove" alone passes on a brain nobody wired up, so red has to
+    /// drive too, before and after the swap. The swap is what a gate built at
+    /// creation would fail: every bot is moved across, so after it the drivers
+    /// must be exactly the bots that started blue.
+    /// </remarks>
+    [Fact]
+    public void ABrainGatedToRedDrivesOnlyRedAndFollowsATeamChange()
+    {
+        ReferenceTree.RequireNavCache();
+
+        var options = new ServerOptions
+        {
+            Port = 0,
+            MapDirectory = MapDirectory.Resolve(),
+            NavCacheDirectory = MapDirectory.ResolveNav(),
+            Map = "ctf_truefort",
+            BotMode = BotMode.Policy,
+            PolicyPaths = [Write("kill.gg2p", SimPolicyObservation.TeamSize, SimPolicyController.TeamAimActions)],
+            BotClassPolicies = [.. Enum.GetValues<PlayerClass>().Where(c => c != PlayerClass.Quote).Select(c => c + "=kill")],
+            BotHandoverRule = HandoverRule.Distance,
+            BotEngagesBotsToo = true,
+            BotBrainTeam = Team.Red,
+            Bots = BotPopulationOptions.Default with { Enabled = true, FillToPlayers = 8, MaxBots = 8, MinHumans = 0 },
+        };
+        BotBrain.Build(options);
+
+        using var server = new GameServer(options, new RecordingLog());
+        server.Start();
+
+        var before = Drivers(server, 1800);
+        var startedBlue = server.BotSlots.Where(slot => server.TeamOf(slot) == Team.Blue).ToHashSet();
+
+        Assert.All(server.BotSlots, slot => Assert.NotNull(TeamGatedBot.Of(server.SourceOf(slot))));
+        Assert.NotEmpty(before);
+        Assert.All(before, d => Assert.Equal(Team.Red, d.Team));
+
+        foreach (var slot in server.BotSlots.ToArray())
+            server.ForceTeam(slot, server.TeamOf(slot) == Team.Red ? Team.Blue : Team.Red);
+
+        var after = Drivers(server, 2700);
+
+        Assert.NotEmpty(after);
+        Assert.All(after, d => Assert.Equal(Team.Red, d.Team));
+        Assert.All(after, d => Assert.Contains(d.Slot, startedBlue));
+    }
+
+    // Every (slot, team) that had a controller driving it on some tick.
+    private static HashSet<(int Slot, Team Team)> Drivers(GameServer server, int ticks)
+    {
+        var drivers = new HashSet<(int, Team)>();
+
+        for (var i = 0; i < ticks; i++)
+        {
+            server.Tick();
+
+            foreach (var slot in server.BotSlots)
+            {
+                if (HybridBot.Of(server.SourceOf(slot)) is { MicroDrove: true })
+                    drivers.Add((slot, server.TeamOf(slot)));
+            }
+        }
+
+        return drivers;
+    }
+
     private static (MatchResult Result, long[] Driven) Play(BotBrainSpec brain)
     {
         var options = HeadlessMatchOptions.Default with
