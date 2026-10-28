@@ -558,8 +558,8 @@ policies) exports `.gg2p` files. `--policy x.gg2p` loads one as a
 
 ```powershell
 gg2-server --bots 8 --bot-mode policy --bot-handover-rule distance --bot-engages-bots `
-  --policy ppo-kill1-s1.gg2p --policy ppo-mixscout-s1.gg2p `
-  --bot-class-policy Soldier=ppo-kill1-s1,Scout=ppo-mixscout-s1
+  --policy ppo-kill1-6b-s2.gg2p --policy ppo-mixscout-s1.gg2p `
+  --bot-class-policy Soldier=ppo-kill1-6b-s2,Scout=ppo-mixscout-s1
 ```
 
 | | gg2-rl `.npz` | gg2-sim `.gg2p` |
