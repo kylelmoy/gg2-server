@@ -74,8 +74,12 @@ public static class HandoverBubble
         if (taking is null)
             return LeftAController;
 
-        if (taking.Name.StartsWith("policy", StringComparison.Ordinal))
+        // A gg2-sim policy is a policy to anyone watching the bubble.
+        if (taking.Name.StartsWith("policy", StringComparison.Ordinal)
+            || taking.Name.StartsWith("gg2-sim", StringComparison.Ordinal))
+        {
             return TookPolicy;
+        }
 
         if (taking.Name.StartsWith("search", StringComparison.Ordinal))
             return TookSearch;

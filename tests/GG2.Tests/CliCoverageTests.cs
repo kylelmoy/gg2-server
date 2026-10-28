@@ -102,6 +102,7 @@ public sealed class CliCoverageTests
         ("AimCheck", ["--aim-check", "kick"], o => o.AimCheck),
         ("AimAnalysis", ["--no-aim-analysis"], o => o.AimAnalysis),
         ("BotEngagesBotsToo", ["--bot-engages-bots"], o => o.BotEngagesBotsToo),
+        ("BotHandoverRule", ["--bot-handover-rule", "distance"], o => o.BotHandoverRule),
         ("BotHumanize", ["--bot-humanize"], o => o.BotHumanize),
         ("BotSpreadTurn", ["--bot-spread-turn"], o => o.BotSpreadTurn),
         ("BotHumanAim", ["--no-bot-human-aim"], o => o.BotHumanAim),

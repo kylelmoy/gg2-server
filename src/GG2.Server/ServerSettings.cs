@@ -615,6 +615,14 @@ public static class ServerSettings
             "Bots", "EngageBots", nameof(ServerOptions.BotEngagesBotsToo),
             o => o.BotEngagesBotsToo, (o, v) => o.BotEngagesBotsToo = v));
 
+        // A BEHAVIOUR switch: ServerOptions.BotHandoverRule.
+        settings.Add(ChoiceRow(
+            "Bots", "HandoverRule", nameof(ServerOptions.BotHandoverRule),
+            ["macrotask", "distance", "headsplit"],
+            o => o.BotHandoverRule.ToString().ToLowerInvariant(),
+            (o, v) => o.BotHandoverRule = ParseHandoverRule(v),
+            "distance"));
+
         // A DEBUGGING aid and the one Bots row that changes nothing a bot
         // decides. Every bubble is a broadcast to every connected client, which
         // is why it is off by default rather than merely quiet.
@@ -992,6 +1000,15 @@ public static class ServerSettings
     /// must not be renumbered.
     /// </summary>
     internal static BotMode ParseBotMode(string value) => Mode(value);
+
+    public static HandoverRule ParseHandoverRule(string value) => value.Trim().ToLowerInvariant() switch
+    {
+        "macrotask" => HandoverRule.MacroTask,
+        "distance" => HandoverRule.Distance,
+        "headsplit" => HandoverRule.HeadSplit,
+        _ => throw new FormatException(
+            $"Bots.HandoverRule: '{value}' is not a handover rule. macrotask, distance or headsplit."),
+    };
 
     private static BotMode Mode(string value) => value.Trim().ToLowerInvariant() switch
     {

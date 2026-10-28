@@ -624,6 +624,11 @@ internal static class CommandLine
                     options.BotEngagesBotsToo = true;
                     break;
 
+                // A behaviour switch: ServerOptions.BotHandoverRule.
+                case "--bot-handover-rule":
+                    options.BotHandoverRule = ServerSettings.ParseHandoverRule(cursor.Take());
+                    break;
+
                 // A behaviour switch: ServerOptions.BotHumanize.
                 case "--bot-humanize":
                     options.BotHumanize = true;
@@ -1165,8 +1170,10 @@ internal static class CommandLine
                             threads the search splits its candidates across
                             (default: cores/3, capped at 8). Changes cost only,
                             never a decision.
-          --policy <path>   the trained checkpoint (.npz) --bot-mode policy and
-                            --bot-mode tiered run - docs/BOTS.md arm 2. Given on
+          --policy <path>   the trained checkpoint --bot-mode policy and
+                            --bot-mode tiered run - docs/BOTS.md arm 2: a gg2-rl
+                            .npz, or a gg2-sim .gg2p, which drives only the
+                            classes --bot-class-policy names. Given on
                             its own it selects policy mode. Given to a mode that
                             cannot consult it, it is REFUSED rather than ignored.
           --bot-arbiter <us>
@@ -1234,6 +1241,11 @@ internal static class CommandLine
                             a bot-vs-bot fight stays scripted, which is a COST
                             saving and not a skill one. Every recorded arm
                             measurement was taken with this behaviour.
+          --bot-handover-rule macrotask|distance|headsplit
+                            when a bot hands the wheel to --bot-mode's
+                            controller. macrotask by default; distance (an
+                            enemy within 150px, kept to 300px) is what gg2-sim
+                            policies are evaluated under.
           --bot-class-limit <n|class=n,...>
                             how many BOTS of a class one team may hold, like
                             --class-limit but counting bots only. One number

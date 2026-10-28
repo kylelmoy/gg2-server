@@ -776,6 +776,18 @@ public sealed class ServerOptions
     public bool BotEngagesBotsToo { get; set; }
 
     /// <summary>
+    /// When a bot hands the wheel to its controller — <c>--bot-handover-rule</c>.
+    /// </summary>
+    /// <remarks>
+    /// <b>A BEHAVIOUR switch, <see cref="HandoverRule.MacroTask"/> by default</b>,
+    /// which is <see cref="BotBrainSpec.Rule"/>'s default and what every shipped
+    /// arm was measured under. <see cref="HandoverRule.Distance"/> is what gg2-sim's
+    /// <c>.gg2p</c> policies are evaluated under. Each rule's measured cost is on
+    /// the enum. It does nothing under bot mode <c>scripted</c>.
+    /// </remarks>
+    public HandoverRule BotHandoverRule { get; set; } = HandoverRule.MacroTask;
+
+    /// <summary>
     /// Whether every bot puts up a chat bubble when its brain changes hands.
     /// </summary>
     /// <remarks>

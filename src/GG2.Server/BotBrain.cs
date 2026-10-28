@@ -101,10 +101,17 @@ public static class BotBrain
 
             foreach (var policyPath in policyPaths)
             {
-                var policy = PolicyNetwork.Load(policyPath, options.PolicyIgnoreStamp);
                 var label = Path.GetFileNameWithoutExtension(policyPath);
 
                 labels.Add(label);
+
+                if (IsSimPolicy(policyPath))
+                {
+                    tiers.Add(SimTier(policyPath, label, assigned, report));
+                    continue;
+                }
+
+                var policy = PolicyNetwork.Load(policyPath, options.PolicyIgnoreStamp);
 
                 // ⛔ THE RESOLUTION, and the ORDER of the two halves is the whole
                 // design. An explicit assignment wins outright — including the
@@ -312,6 +319,7 @@ public static class BotBrain
                 : new BotBrainSpec
                 {
                     Tiers = tiers,
+                    Rule = options.BotHandoverRule,
 
                     // ⛔ The server's default is the OPPOSITE of BotBrainSpec's,
                     // deliberately — see ServerOptions.BotEngagesBotsToo.
@@ -329,6 +337,53 @@ public static class BotBrain
                     Arbiter = arbiterUnits is { } units ? new DecisionQuotaArbiter(units) : null,
                 },
         };
+    }
+
+    /// <summary>Whether a checkpoint is gg2-sim's <c>.gg2p</c> rather than gg2-rl's <c>.npz</c>.</summary>
+    private static bool IsSimPolicy(string path) =>
+        path.EndsWith(".gg2p", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A gg2-sim checkpoint's tier: <see cref="SimPolicyMicroSpec"/>, driving exactly
+    /// the classes <c>[Bots] ClassPolicy</c> assigns to its label.
+    /// </summary>
+    /// <remarks>
+    /// <b>A <c>.gg2p</c> names no classes and carries no stamp</b>, so unlike a
+    /// <c>.npz</c> there is no file set to fill in from and nothing to compare
+    /// against <see cref="SimulationStamp.Uuid"/>. The stamp line says both rather
+    /// than printing a match, and a tier nobody assigned a class is warned about —
+    /// it is the one way to load one that drives nothing by accident. Every class
+    /// it drives is an explicit assignment, which no <c>.npz</c> file set and no
+    /// search tier can then also claim, so it cannot overlap another tier.
+    /// </remarks>
+    private static SimPolicyMicroSpec SimTier(
+        string policyPath,
+        string label,
+        Dictionary<PlayerClass, string> assigned,
+        Action<string>? report)
+    {
+        var network = SimPolicyNetwork.Load(policyPath);
+
+        var drives = assigned
+            .Where(entry => string.Equals(entry.Value, label, StringComparison.OrdinalIgnoreCase))
+            .Select(entry => entry.Key)
+            .Order()
+            .ToArray();
+
+        report?.Invoke(
+            $"policy {Path.GetFileName(policyPath)}: a gg2-sim {(network.IsTeam ? "team" : "duel")} net "
+            + $"({network.InputSize} inputs) with no simulation stamp - gg2-sim records the commit it "
+            + $"trained against - this build is {SimulationStamp.Uuid}, drives {Classes(drives)}");
+
+        if (drives.Length == 0)
+        {
+            report?.Invoke(
+                $"WARNING: {label} drives no classes at all, so it is loaded and never consulted. "
+                + $"A .gg2p names none of its own; assign them with Bots.ClassPolicy, e.g. "
+                + $"--bot-class-policy Soldier={label}.");
+        }
+
+        return new SimPolicyMicroSpec(network, drives, label);
     }
 
     /// <summary>

@@ -325,7 +325,7 @@ where it was standing" — the question a screenshot has to answer.
 
 | Bubble | Index | When |
 |---|---|---|
-| `z1` | 20 | a policy tier took the wheel |
+| `z1` | 20 | a policy tier took the wheel (gg2-rl or gg2-sim) |
 | `z2` | 21 | the scripted layer took it back |
 | `z3` | 22 | the rollout search took the wheel |
 
@@ -549,6 +549,40 @@ that method goes red with no semantic change**.
 `SIM_UUID` covers the constants, the action encoding, the observation layout
 and the simulation behaviour version — **not `GG2.Bots`**. So a bot change does
 not invalidate a checkpoint, and a change to what an observation *means* does.
+
+### gg2-sim policies (`.gg2p`)
+
+gg2-sim (a sibling checkout, a CUDA port of `GG2.Simulation` that trains bot
+policies) exports `.gg2p` files. `--policy x.gg2p` loads one as a
+`SimPolicyMicroSpec` tier beside or instead of a gg2-rl `.npz`:
+
+```powershell
+gg2-server --bots 8 --bot-mode policy --bot-handover-rule distance --bot-engages-bots `
+  --policy ppo-kill1-s1.gg2p --policy ppo-mixscout-s1.gg2p `
+  --bot-class-policy Soldier=ppo-kill1-s1,Scout=ppo-mixscout-s1
+```
+
+| | gg2-rl `.npz` | gg2-sim `.gg2p` |
+|---|---|---|
+| Observation | `ObservationWriter` | `SimPolicyObservation`: team (253 floats) or duel (169) |
+| Actions | `ActionDecoder` | `SimPolicyController`: 24 absolute aim bins, then 25 relative to the k-th listed enemy (team) or to the nearest enemy (duel) |
+| Classes it drives | the file's set, overridable | **only** what `ClassPolicy` assigns; none is warned about |
+| Stamp | `SIM_UUID`, refused on mismatch | none; gg2-sim records the gg2-server commit it trained at |
+| Decision cost | ~7 µs | 72 µs team, 57 µs duel |
+
+**The observation, the forward pass and the decode are gg2-sim's
+`ref/PolicyDriver.cs` and `ref/Matches.cs` (`SimPolicyController`), expression
+for expression**, and are checked against them, not against anything in this
+repo. On 2026-10-27, compiling those two files next to this build
+(gg2-sim at `b62d6b3`, its pin `8535530`) over headless matches on five maps:
+286,869 team observations bitwise equal, 1,244,765 greedy actions (team and duel
+nets) equal, and 40 eight-bot matches (both rules, red hybrid) equal in result,
+digest, driven ticks and every character's position on every tick. **Nothing in
+this suite can show that** — `SimPolicyTests` uses synthetic weights — so a
+change to either side is re-checked by re-running that comparison, and gg2-sim's
+`scripts/obs-check.sh` holds the observation to its GPU environment. Changing
+`GG2.Simulation`, `ScriptedBot`, `HybridBot` or `Handover` breaks gg2-sim's
+parity: tell that lane the SHA.
 
 ---
 
