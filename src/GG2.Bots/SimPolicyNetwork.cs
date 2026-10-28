@@ -3,7 +3,8 @@ namespace GG2.Bots;
 /// <summary>
 /// A <c>gg2-sim</c> actor network, as that repo's <c>python/export_policy.py</c>
 /// writes it (<c>.gg2p</c> version 1): fully connected layers, tanh between them,
-/// raw logits out, split into four action heads (move, jump, fire, aim).
+/// raw logits out, split into four action heads (move, jump, fire, aim), or
+/// five in a zoom net (the sniper's scope level).
 /// </summary>
 /// <remarks>
 /// <b>Not a <see cref="PolicyNetwork"/>, and not convertible into one.</b> The
@@ -46,7 +47,7 @@ public sealed class SimPolicyNetwork
     /// <summary>The observation width the first layer reads.</summary>
     public int InputSize => _layers[0].Inputs;
 
-    /// <summary>Each head's action count: move, jump, fire, aim.</summary>
+    /// <summary>Each head's action count: move, jump, fire, aim, and a zoom net's scope.</summary>
     public ReadOnlySpan<int> Heads => _heads;
 
     /// <summary>
@@ -54,7 +55,17 @@ public sealed class SimPolicyNetwork
     /// own enemies and team-mates; anything else is a duel net, which observes one
     /// opponent the controller picks.
     /// </summary>
-    public bool IsTeam => InputSize == SimPolicyObservation.TeamSize;
+    public bool IsTeam => InputSize is SimPolicyObservation.TeamSize or SimPolicyObservation.ZoomSize;
+
+    /// <summary>
+    /// A sniper net in gg2-sim's zoom layout: a team net with
+    /// <see cref="SimPolicyObservation.ZoomSize"/> inputs and a fifth head, the
+    /// scope level. Detected by both, as gg2-sim's <c>PolicyDriver.Zoom</c> is.
+    /// </summary>
+    public bool IsZoom => InputSize == SimPolicyObservation.ZoomSize && _heads.Length == ZoomHeads;
+
+    /// <summary>A zoom net's head count; every other net has four.</summary>
+    public const int ZoomHeads = 5;
 
     /// <summary>The widest layer edge, for a caller's scratch buffers.</summary>
     public int Widest { get; }
@@ -83,8 +94,8 @@ public sealed class SimPolicyNetwork
         var layerCount = reader.ReadInt32();
         var headCount = reader.ReadInt32();
 
-        if (layerCount < 1 || headCount != 4)
-            throw new InvalidDataException($"{layerCount} layers and {headCount} heads; expected at least one layer and four heads");
+        if (layerCount < 1 || headCount is not (4 or ZoomHeads))
+            throw new InvalidDataException($"{layerCount} layers and {headCount} heads; expected at least one layer and four or five heads");
 
         var heads = new int[headCount];
 
@@ -138,12 +149,22 @@ public sealed class SimPolicyNetwork
 
         var aim = IsTeam ? SimPolicyController.TeamAimActions : SimPolicyController.DuelAimActions;
 
-        if (InputSize is not (SimPolicyObservation.TeamSize or SimPolicyObservation.DuelSize or SimPolicyObservation.DuelSizeNoClasses))
+        if (InputSize is not (SimPolicyObservation.TeamSize or SimPolicyObservation.ZoomSize
+                or SimPolicyObservation.DuelSize or SimPolicyObservation.DuelSizeNoClasses))
         {
             throw new InvalidDataException(
-                $"{InputSize} inputs; expected {SimPolicyObservation.TeamSize} (team) or "
+                $"{InputSize} inputs; expected {SimPolicyObservation.TeamSize} (team), {SimPolicyObservation.ZoomSize} (zoom) or "
                 + $"{SimPolicyObservation.DuelSize}/{SimPolicyObservation.DuelSizeNoClasses} (duel)");
         }
+
+        // Both or neither: a fifth head on a net that does not observe the scope,
+        // or a zoom-width observation with no head to act on it, is not a layout
+        // gg2-sim exports.
+        if ((InputSize == SimPolicyObservation.ZoomSize) != (_heads.Length == ZoomHeads))
+            throw new InvalidDataException($"{InputSize} inputs and {_heads.Length} heads; a zoom net has {SimPolicyObservation.ZoomSize} and {ZoomHeads}");
+
+        if (IsZoom && _heads[4] != 2)
+            throw new InvalidDataException($"zoom head is {_heads[4]} wide, expected 2");
 
         if (_heads[3] != aim)
             throw new InvalidDataException($"aim head is {_heads[3]} wide, a {(IsTeam ? "team" : "duel")} net's is {aim}");

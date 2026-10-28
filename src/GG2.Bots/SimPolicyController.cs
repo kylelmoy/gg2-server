@@ -26,8 +26,14 @@ namespace GG2.Bots;
 /// net</b> observes the nearest live enemy at each decision, aims relative to it,
 /// and holds still for the rest of the decision if it dies.
 /// </para>
+/// <para>
+/// <b>A zoom net</b> (<see cref="SimPolicyNetwork.IsZoom"/>) is a team net whose
+/// fifth head is the scope as a LEVEL. <see cref="WantsZoomToggle"/> is asked
+/// before the tick's keys, decides early at a boundary, and <see cref="Poll"/>
+/// reuses that decision — gg2-sim's <c>SimPolicyController.WantsZoomToggle</c>.
+/// </para>
 /// </remarks>
-public sealed class SimPolicyController : IMicroController
+public sealed class SimPolicyController : IMicroController, IScopeController
 {
     /// <summary>Ticks a decision is held for: the cadence every gg2-sim policy trained at.</summary>
     public const int ActionRepeat = 3;
@@ -47,12 +53,15 @@ public sealed class SimPolicyController : IMicroController
     private readonly float[] _observation;
     private readonly float[] _scratchA;
     private readonly float[] _scratchB;
-    private readonly int[] _action = new int[4];
+    private readonly int[] _action;
     private readonly int[] _listed = [-1, -1, -1];
 
     private int _ticksLeft;
     private int _slot = -1;
     private int _op = -1;
+
+    // A decision WantsZoomToggle made this tick, before the keys, for Poll to use.
+    private bool _decidedEarly;
 
     /// <param name="network">The weights, shared read-only by every bot playing them.</param>
     /// <param name="drives">
@@ -70,6 +79,7 @@ public sealed class SimPolicyController : IMicroController
         _observation = new float[network.InputSize];
         _scratchA = new float[network.Widest];
         _scratchB = new float[network.Widest];
+        _action = new int[network.Heads.Length];
         Name = label is null ? "gg2-sim" : "gg2-sim:" + label;
     }
 
@@ -98,25 +108,42 @@ public sealed class SimPolicyController : IMicroController
     {
     }
 
-    public void OnHandoverOut() => _ticksLeft = 0;
+    // ⚠️ Clears an early decision too, which gg2-sim's ref does not: there the
+    // controller is never released between WantsZoomToggle and Poll, and here
+    // the hybrid can release it in that same tick's Poll. Kept, it would hand a
+    // stale decision to the next engagement's first poll.
+    public void OnHandoverOut()
+    {
+        _ticksLeft = 0;
+        _decidedEarly = false;
+    }
+
+    public bool OwnsScope => _network.IsZoom;
+
+    public bool WantsZoomToggle(in WorldView world, int slot, int tick)
+    {
+        if (!_network.IsZoom || !world.IsAlive(slot))
+            return false;
+
+        if (AtDecisionBoundary(slot) && !_decidedEarly)
+        {
+            Begin(in world, slot);
+            _decidedEarly = true;
+        }
+
+        ref readonly var self = ref world.Character(slot);
+        return self.Class == PlayerClass.Sniper && (_action[4] != 0) != self.Zoomed;
+    }
 
     public PlayerInput Poll(in WorldView world, int slot, int tick)
     {
-        var first = AtDecisionBoundary(slot);
+        var first = _decidedEarly || AtDecisionBoundary(slot);
         DecidedThisPoll = first;
 
-        if (first)
-        {
-            _slot = slot;
-            _ticksLeft = ActionRepeat;
-            _op = NearestEnemy(in world, slot);
+        if (first && !_decidedEarly)
+            Begin(in world, slot);
 
-            if (_op < 0)
-                Array.Clear(_action);
-            else
-                Decide(in world, slot, _op);
-        }
-
+        _decidedEarly = false;
         _ticksLeft--;
 
         // A duel net's opponent that died mid-decision: hold still rather than aim
@@ -129,10 +156,22 @@ public sealed class SimPolicyController : IMicroController
             : DuelInput(in world, _action, slot, _op);
     }
 
+    private void Begin(in WorldView world, int slot)
+    {
+        _slot = slot;
+        _ticksLeft = ActionRepeat;
+        _op = NearestEnemy(in world, slot);
+
+        if (_op < 0)
+            Array.Clear(_action);
+        else
+            Decide(in world, slot, _op);
+    }
+
     private void Decide(in WorldView world, int me, int op)
     {
         if (_network.IsTeam)
-            SimPolicyObservation.Team(in world, me, _observation, _listed);
+            SimPolicyObservation.Team(in world, me, _observation, _listed, _network.IsZoom);
         else
             SimPolicyObservation.Duel(in world, me, op, _observation, _network.InputSize);
 

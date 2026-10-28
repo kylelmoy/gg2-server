@@ -134,6 +134,78 @@ public sealed class SimPolicyTests : IDisposable
         Assert.Equal(HandoverRule.MacroTask, options.Bots.Brain!.Rule);
     }
 
+    [Fact]
+    public void LoadsAZoomNetAndRefusesAHalfZoomLayout()
+    {
+        var zoom = SimPolicyNetwork.Load(WriteZoom("zoom.gg2p", scoped: true));
+
+        Assert.True(zoom.IsZoom);
+        Assert.True(zoom.IsTeam);
+        Assert.Equal([3, 2, 2, 99, 2], zoom.Heads.ToArray());
+
+        // A fifth head on a 253-wide net, and a 255-wide net with four heads.
+        Assert.Throws<InvalidDataException>(() => SimPolicyNetwork.Load(
+            Write("five.gg2p", SimPolicyObservation.TeamSize, SimPolicyController.TeamAimActions, zoomHead: true)));
+        Assert.Throws<InvalidDataException>(() => SimPolicyNetwork.Load(
+            Write("four.gg2p", SimPolicyObservation.ZoomSize, SimPolicyController.TeamAimActions)));
+    }
+
+    /// <summary>
+    /// A zoom net driving a sniper holds the scope at its head's level, whatever
+    /// the scripted layer wants.
+    /// </summary>
+    /// <remarks>
+    /// The nets are pinned: the scope head's bias outweighs anything the hidden
+    /// layer can sum to, so it always says the same level. From the second
+    /// consecutive driven tick the scope must equal it, because the first tick's
+    /// commands were polled before the hybrid took the wheel (IScopeController's
+    /// one-tick lag). Scoped exercises the controller's toggle. Unscoped exercises
+    /// the HybridBot dropping the scripted layer's own toggle, which would
+    /// otherwise scope a sniper the policy is driving. Tested by removing that
+    /// filter: it fails.
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AZoomNetHoldsTheScopeWhileItDrives(bool scoped)
+    {
+        var net = SimPolicyNetwork.Load(WriteZoom(scoped ? "on.gg2p" : "off.gg2p", scoped));
+        var brain = BotBrainSpec.Of(new SimPolicyMicroSpec(net, [PlayerClass.Sniper], "zoom")) with { Rule = HandoverRule.Distance };
+        var options = HeadlessMatchOptions.Default with
+        {
+            Map = "ctf_truefort",
+            Bots = 8,
+            Seed = 7123,
+            MaxTicks = 3600,
+            AllowedClasses = [PlayerClass.Sniper],
+            Brain = brain,
+            HybridTeam = Team.Red,
+        };
+        var match = HeadlessMatch.Load(options, MapDirectory.Resolve(), MapDirectory.ResolveNav());
+        var drove = new bool[WorldState.MaxSlots];
+        var held = 0;
+
+        while (match.Outcome == MatchOutcome.Running)
+        {
+            match.Step();
+
+            for (var slot = 1; slot < WorldState.MaxSlots; slot++)
+            {
+                var driving = match.HybridBotFor(slot)?.Driving is SimPolicyController;
+
+                if (driving && drove[slot] && match.State.IsAlive(slot))
+                {
+                    Assert.Equal(scoped, match.State.Characters[slot].Zoomed);
+                    held++;
+                }
+
+                drove[slot] = driving;
+            }
+        }
+
+        Assert.True(held > 0, "the zoom net never drove two ticks running");
+    }
+
     /// <summary>
     /// <c>--bot-brain-team red</c>: only red's bots ever drive, and a bot that
     /// changes team changes brain with it, in both directions.
@@ -235,11 +307,11 @@ public sealed class SimPolicyTests : IDisposable
 
     // A net of the given widths with seeded random weights: 16 hidden units, the
     // four heads gg2-sim exports.
-    private string Write(string name, int inputs, int aim)
+    private string Write(string name, int inputs, int aim, bool zoomHead = false, int? zoomLevel = null)
     {
         var path = Path.Combine(_directory, name);
         var random = new Random(inputs + aim);
-        int[] heads = [3, 2, 2, aim];
+        int[] heads = zoomHead ? [3, 2, 2, aim, 2] : [3, 2, 2, aim];
         (int Out, int In)[] layers = [(16, inputs), (heads.Sum(), 16)];
 
         using var writer = new BinaryWriter(File.Create(path));
@@ -257,9 +329,19 @@ public sealed class SimPolicyTests : IDisposable
             writer.Write(ins);
 
             for (var i = 0; i < (outputs * ins) + outputs; i++)
-                writer.Write((float)((random.NextDouble() * 2) - 1));
+            {
+                // The last layer's biases come after its weights; the zoom head's
+                // are its last two outputs. 1000 outweighs 16 tanh units at |w| <= 1.
+                var zoomBias = i - (outputs * ins) - (outputs - 2);
+                var pinned = zoomLevel is not null && ins == 16 && zoomBias is 0 or 1;
+                writer.Write(pinned ? (zoomBias == zoomLevel ? 1000f : 0f) : (float)((random.NextDouble() * 2) - 1));
+            }
         }
 
         return path;
     }
+
+    // A zoom-layout net whose scope head always says scoped, or always unscoped.
+    private string WriteZoom(string name, bool scoped) =>
+        Write(name, SimPolicyObservation.ZoomSize, SimPolicyController.TeamAimActions, zoomHead: true, zoomLevel: scoped ? 1 : 0);
 }

@@ -21,6 +21,8 @@ namespace GG2.Bots;
 /// shots, an 11x9 wall grid and own class. Duel (<see cref="DuelSize"/>): self,
 /// one named opponent, the six nearest rockets and shots, the grid, then both
 /// classes; <see cref="DuelSizeNoClasses"/> is the same without the classes.
+/// A zoom net's (<see cref="ZoomSize"/>) is the team layout plus the sniper's own
+/// scope and rifle charge after the class one-hots.
 /// </para>
 /// </remarks>
 public static class SimPolicyObservation
@@ -38,23 +40,30 @@ public static class SimPolicyObservation
 
     public const int DuelSize = DuelSizeNoClasses + (2 * ClassCount);
 
+    /// <summary>gg2-sim's <c>ZoomObs</c>: own scope, then rifle charge.</summary>
+    public const int ZoomColumns = 2;
+
+    public const int ZoomSize = TeamSize + ZoomColumns;
+
     /// <summary>
     /// The team observation for <paramref name="meSlot"/>, and the enemies it
     /// listed (nearest first, -1 past them) into <paramref name="listed"/>.
+    /// <paramref name="zoom"/> appends the zoom layout's two columns.
     /// </summary>
-    public static void Team(in WorldView world, int meSlot, Span<float> o, Span<int> listed)
+    public static void Team(in WorldView world, int meSlot, Span<float> o, Span<int> listed, bool zoom = false)
     {
         ref readonly var me = ref world.Character(meSlot);
         ref readonly var gun = ref world.Weapon(meSlot);
         var map = world.Collision;
-        o[..TeamSize].Clear();
+        o[..(zoom ? ZoomSize : TeamSize)].Clear();
         var k = 0;
         o[k++] = (float)(me.X / map.Width);
         o[k++] = (float)(me.Y / map.Height);
         o[k++] = Clip(me.HSpeed / 15, 2);
         o[k++] = Clip(me.VSpeed / 15, 2);
         o[k++] = (float)(me.Hp / ClassStats.For(me.Class).MaxHp);
-        o[k++] = (float)(gun.AmmoCount / WeaponStats.For(me.Class).MaxAmmo);
+        // The rifle has no magazine (MaxAmmo 0), so unguarded this is NaN for a sniper.
+        o[k++] = WeaponStats.For(me.Class).MaxAmmo > 0 ? (float)(gun.AmmoCount / WeaponStats.For(me.Class).MaxAmmo) : 0;
         o[k++] = gun.ReadyToShoot ? 1 : 0;
         o[k++] = me.OnGround ? 1 : 0;
 
@@ -104,6 +113,13 @@ public static class SimPolicyObservation
 
         WriteGrid(map, in me, o, ref k);
         o[k + (int)me.Class] = 1;
+
+        if (zoom)
+        {
+            k += ClassCount;
+            o[k++] = me.Zoomed ? 1 : 0;
+            o[k++] = (float)(gun.Charge / Weapons.RifleChargeTime);
+        }
     }
 
     /// <summary>
@@ -124,7 +140,8 @@ public static class SimPolicyObservation
         o[k++] = Clip(me.HSpeed / 15, 2);
         o[k++] = Clip(me.VSpeed / 15, 2);
         o[k++] = (float)(me.Hp / ClassStats.For(me.Class).MaxHp);
-        o[k++] = (float)(gun.AmmoCount / WeaponStats.For(me.Class).MaxAmmo);
+        // The rifle has no magazine (MaxAmmo 0), so unguarded this is NaN for a sniper.
+        o[k++] = WeaponStats.For(me.Class).MaxAmmo > 0 ? (float)(gun.AmmoCount / WeaponStats.For(me.Class).MaxAmmo) : 0;
         o[k++] = gun.ReadyToShoot ? 1 : 0;
         o[k++] = me.OnGround ? 1 : 0;
         o[k++] = Clip((op.X - me.X) / 500, 4);

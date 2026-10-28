@@ -368,10 +368,20 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// one.</b> <c>gg2-rl</c>'s reward is damage dealt minus taken with no
     /// objective term, by its user's decision — a bot that runs past you to tap the
     /// intel is optimal and unpleasant. The macro layer owns objectives entirely.
+    /// <para>
+    /// <b>The one exception is the sniper's scope</b>: while the driving tier is an
+    /// <see cref="IScopeController"/> that owns it, the scripted layer's
+    /// <c>ToggleZoom</c> is dropped and the tier's is sent instead. A scope level is
+    /// part of a sniper policy's action, not an objective.
+    /// </para>
     /// </remarks>
     public void PollCommands(in WorldView world, int slot, int tick, ref PlayerCommandBuffer commands)
     {
-        _scripted.PollCommands(in world, slot, tick, ref commands);
+        if (_driving >= 0 && slot == _slot && _tiers[_driving] is IScopeController { OwnsScope: true } scope)
+            PollCommandsOwningScope(in world, slot, tick, scope, ref commands);
+        else
+            _scripted.PollCommands(in world, slot, tick, ref commands);
+
         _commandPolls++;
 
         if (_bubble is not { } image)
@@ -400,6 +410,24 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
             _bubbleShown = image;
             _bubbleSentAt = _commandPolls;
         }
+    }
+
+    // The scripted layer still runs its PollCommands every tick — its state must
+    // not depend on who holds the wheel — and only its toggle is withheld.
+    private void PollCommandsOwningScope(
+        in WorldView world, int slot, int tick, IScopeController scope, ref PlayerCommandBuffer commands)
+    {
+        var scripted = default(PlayerCommandBuffer);
+        _scripted.PollCommands(in world, slot, tick, ref scripted);
+
+        for (var i = 0; i < scripted.Count; i++)
+        {
+            if (scripted[i].Kind != PlayerCommandKind.ToggleZoom)
+                commands.Push(scripted[i]);
+        }
+
+        if (scope.WantsZoomToggle(in world, slot, tick))
+            commands.Push(PlayerCommand.ToggleZoom());
     }
 
     public PlayerInput Poll(in WorldView world, int slot, int tick)

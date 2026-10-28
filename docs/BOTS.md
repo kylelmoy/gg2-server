@@ -572,8 +572,9 @@ wheel on the way across (the class remarks say what breaks if that stops).
 
 | | gg2-rl `.npz` | gg2-sim `.gg2p` |
 |---|---|---|
-| Observation | `ObservationWriter` | `SimPolicyObservation`: team (253 floats) or duel (169) |
-| Actions | `ActionDecoder` | `SimPolicyController`: 24 absolute aim bins, then 25 relative to the k-th listed enemy (team) or to the nearest enemy (duel) |
+| Observation | `ObservationWriter` | `SimPolicyObservation`: team (253 floats), duel (169), or zoom (255: team plus own scope and rifle charge) |
+| Actions | `ActionDecoder` | `SimPolicyController`: 24 absolute aim bins, then 25 relative to the k-th listed enemy (team) or to the nearest enemy (duel); a zoom net adds a fifth head, the scope level |
+| Sniper scope | `Zoom` head decoded, applied nowhere | a zoom net's own, while it drives (`IScopeController`); otherwise the scripted layer's |
 | Classes it drives | the file's set, overridable | **only** what `ClassPolicy` assigns; none is warned about |
 | Stamp | `SIM_UUID`, refused on mismatch | none; gg2-sim records the gg2-server commit it trained at |
 | Decision cost | ~7 µs | 72 µs team, 57 µs duel |
@@ -585,12 +586,23 @@ repo. On 2026-10-27, compiling those two files next to this build
 (gg2-sim at `b62d6b3`, its pin `8535530`) over headless matches on five maps:
 286,869 team observations bitwise equal, 1,244,765 greedy actions (team and duel
 nets) equal, and 40 eight-bot matches (both rules, red hybrid) equal in result,
-digest, driven ticks and every character's position on every tick. **Nothing in
+digest, driven ticks and every character's position on every tick. The zoom
+layout was checked against gg2-sim's working tree on 2026-10-28 (after
+`9b0e54f`): 548,432 team observations in both layouts with snipers present
+bitwise equal, 109,887 sniper controller polls equal in toggle, input and
+decision, and 20 matches with the existing nets still equal. **Nothing in
 this suite can show that** — `SimPolicyTests` uses synthetic weights — so a
 change to either side is re-checked by re-running that comparison, and gg2-sim's
 `scripts/obs-check.sh` holds the observation to its GPU environment. Changing
 `GG2.Simulation`, `ScriptedBot`, `HybridBot` or `Handover` breaks gg2-sim's
 parity: tell that lane the SHA.
+
+**The scope is the one command a controller sends.** While an
+`IScopeController` that owns the scope drives, `HybridBot.PollCommands` drops
+the scripted layer's `ToggleZoom` and sends the controller's. At a decision
+boundary the controller decides in that call, because commands are polled
+before inputs, and its `Poll` reuses the decision. Driving is settled in
+`Poll`, so the scope follows a handover one tick late, as the bubbles do.
 
 ---
 
