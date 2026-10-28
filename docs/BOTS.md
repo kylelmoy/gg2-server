@@ -587,8 +587,7 @@ repo. On 2026-10-27, compiling those two files next to this build
 286,869 team observations bitwise equal, 1,244,765 greedy actions (team and duel
 nets) equal, and 40 eight-bot matches (both rules, red hybrid) equal in result,
 digest, driven ticks and every character's position on every tick. The zoom
-layout was checked against gg2-sim's working tree on 2026-10-28 (after
-`9b0e54f`): 548,432 team observations in both layouts with snipers present
+layout was checked against gg2-sim `cdb70e0` on 2026-10-28: 548,432 team observations in both layouts with snipers present
 bitwise equal, 109,887 sniper controller polls equal in toggle, input and
 decision, and 20 matches with the existing nets still equal. **Nothing in
 this suite can show that** — `SimPolicyTests` uses synthetic weights — so a
