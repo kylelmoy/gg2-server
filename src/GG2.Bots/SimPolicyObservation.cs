@@ -22,7 +22,15 @@ namespace GG2.Bots;
 /// one named opponent, the six nearest rockets and shots, the grid, then both
 /// classes; <see cref="DuelSizeNoClasses"/> is the same without the classes.
 /// A zoom net's (<see cref="ZoomSize"/>) is the team layout plus the sniper's own
-/// scope and rifle charge after the class one-hots.
+/// scope and rifle charge after the class one-hots; a demo net's
+/// (<see cref="DemoSize"/>) is the team layout plus the demoman's eight nearest
+/// own mines and lobbed/8 there instead.
+/// </para>
+/// <para>
+/// <b>The team layout's projectile list includes ENEMY mines</b> (gg2-sim
+/// <c>31f42ef</c>), in every team width: a mine whose team is not the viewer's,
+/// beside rockets and shots. A team-mate's or one's own mine is not listed. The
+/// duel layout's list is rockets and shots only, unchanged.
 /// </para>
 /// </remarks>
 public static class SimPolicyObservation
@@ -45,17 +53,25 @@ public static class SimPolicyObservation
 
     public const int ZoomSize = TeamSize + ZoomColumns;
 
+    private const int NearMines = 8, MineObs = 4, MaxMines = 8;
+
+    /// <summary>gg2-sim's <c>DemoObs</c>: the eight nearest own mines, four columns each, then lobbed/8.</summary>
+    public const int DemoColumns = (NearMines * MineObs) + 1;
+
+    public const int DemoSize = TeamSize + DemoColumns;
+
     /// <summary>
     /// The team observation for <paramref name="meSlot"/>, and the enemies it
     /// listed (nearest first, -1 past them) into <paramref name="listed"/>.
-    /// <paramref name="zoom"/> appends the zoom layout's two columns.
+    /// <paramref name="zoom"/> appends the zoom layout's two columns,
+    /// <paramref name="demo"/> the demo layout's thirty-three.
     /// </summary>
-    public static void Team(in WorldView world, int meSlot, Span<float> o, Span<int> listed, bool zoom = false)
+    public static void Team(in WorldView world, int meSlot, Span<float> o, Span<int> listed, bool zoom = false, bool demo = false)
     {
         ref readonly var me = ref world.Character(meSlot);
         ref readonly var gun = ref world.Weapon(meSlot);
         var map = world.Collision;
-        o[..(zoom ? ZoomSize : TeamSize)].Clear();
+        o[..(zoom ? ZoomSize : demo ? DemoSize : TeamSize)].Clear();
         var k = 0;
         o[k++] = (float)(me.X / map.Width);
         o[k++] = (float)(me.Y / map.Height);
@@ -90,7 +106,7 @@ public static class SimPolicyObservation
         }
 
         Span<int> picked = stackalloc int[NearShots];
-        var count = PickShots(in world, in me, picked);
+        var count = PickShots(in world, in me, picked, enemyMines: true);
 
         for (var n = 0; n < NearShots; n++)
         {
@@ -119,6 +135,31 @@ public static class SimPolicyObservation
             k += ClassCount;
             o[k++] = me.Zoomed ? 1 : 0;
             o[k++] = (float)(gun.Charge / Weapons.RifleChargeTime);
+        }
+        else if (demo)
+        {
+            // The body's own nearest mines (ties to the earlier created), then lobbed/8.
+            k += ClassCount;
+            Span<int> mines = stackalloc int[NearMines];
+            var found = PickOwnMines(in world, meSlot, in me, mines);
+
+            for (var n = 0; n < NearMines; n++)
+            {
+                if (n < found)
+                {
+                    ref readonly var m = ref world.State.Projectiles[mines[n]];
+                    o[k++] = Clip((m.X - me.X) / 500, 4);
+                    o[k++] = Clip((m.Y - me.Y) / 500, 4);
+                    o[k++] = m.Stickied ? 1 : 0;
+                    o[k++] = 1;
+                }
+                else
+                {
+                    k += MineObs;
+                }
+            }
+
+            o[k++] = (float)((double)gun.Lobbed / MaxMines);
         }
     }
 
@@ -152,7 +193,7 @@ public static class SimPolicyObservation
         o[k++] = world.IsAlive(opSlot) ? 1 : 0;
 
         Span<int> picked = stackalloc int[NearRockets];
-        var count = PickShots(in world, in me, picked);
+        var count = PickShots(in world, in me, picked, enemyMines: false);
 
         for (var n = 0; n < NearRockets; n++)
         {
@@ -231,10 +272,10 @@ public static class SimPolicyObservation
         return found;
     }
 
-    // The nearest rockets and shots, nearest first, by repeated selection over the
-    // live list in its own order — so an exact tie goes to the earlier live entry,
-    // as gg2-sim's picks it.
-    private static int PickShots(in WorldView world, in CharacterState me, Span<int> picked)
+    // The nearest rockets and shots (and, for the team layout, enemy mines),
+    // nearest first, by repeated selection over the live list in its own order —
+    // so an exact tie goes to the earlier live entry, as gg2-sim's picks it.
+    private static int PickShots(in WorldView world, in CharacterState me, Span<int> picked, bool enemyMines)
     {
         var count = 0;
 
@@ -248,7 +289,46 @@ public static class SimPolicyObservation
                 var p = world.State.LiveProjectileHandle(i).Index;
                 ref readonly var pr = ref world.State.Projectiles[p];
 
-                if (pr.Kind is not (ProjectileKind.Rocket or ProjectileKind.Shot) || picked[..count].Contains(p))
+                var shot = pr.Kind is ProjectileKind.Rocket or ProjectileKind.Shot
+                    || (enemyMines && pr.Kind == ProjectileKind.Mine && pr.Team != me.Team);
+
+                if (!shot || picked[..count].Contains(p))
+                    continue;
+
+                double dx = pr.X - me.X, dy = pr.Y - me.Y, d = (dx * dx) + (dy * dy);
+
+                if (best < 0 || d < bestDistance)
+                {
+                    best = p;
+                    bestDistance = d;
+                }
+            }
+
+            if (best < 0)
+                break;
+
+            picked[count++] = best;
+        }
+
+        return count;
+    }
+
+    // The viewer's own mines, nearest first, the same repeated selection.
+    private static int PickOwnMines(in WorldView world, int meSlot, in CharacterState me, Span<int> picked)
+    {
+        var count = 0;
+
+        for (var n = 0; n < picked.Length; n++)
+        {
+            var best = -1;
+            var bestDistance = 0.0;
+
+            for (var i = 0; i < world.State.LiveProjectileCount; i++)
+            {
+                var p = world.State.LiveProjectileHandle(i).Index;
+                ref readonly var pr = ref world.State.Projectiles[p];
+
+                if (pr.Kind != ProjectileKind.Mine || pr.OwnerSlot != meSlot || picked[..count].Contains(p))
                     continue;
 
                 double dx = pr.X - me.X, dy = pr.Y - me.Y, d = (dx * dx) + (dy * dy);

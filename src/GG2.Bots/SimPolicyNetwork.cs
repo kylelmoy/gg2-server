@@ -4,7 +4,8 @@ namespace GG2.Bots;
 /// A <c>gg2-sim</c> actor network, as that repo's <c>python/export_policy.py</c>
 /// writes it (<c>.gg2p</c> version 1): fully connected layers, tanh between them,
 /// raw logits out, split into four action heads (move, jump, fire, aim), or
-/// five in a zoom net (the sniper's scope level).
+/// five in a zoom net (the sniper's scope level) or a demo net (the demoman's
+/// Special, the detonate).
 /// </summary>
 /// <remarks>
 /// <b>Not a <see cref="PolicyNetwork"/>, and not convertible into one.</b> The
@@ -55,7 +56,7 @@ public sealed class SimPolicyNetwork
     /// own enemies and team-mates; anything else is a duel net, which observes one
     /// opponent the controller picks.
     /// </summary>
-    public bool IsTeam => InputSize is SimPolicyObservation.TeamSize or SimPolicyObservation.ZoomSize;
+    public bool IsTeam => InputSize is SimPolicyObservation.TeamSize or SimPolicyObservation.ZoomSize or SimPolicyObservation.DemoSize;
 
     /// <summary>
     /// A sniper net in gg2-sim's zoom layout: a team net with
@@ -64,7 +65,15 @@ public sealed class SimPolicyNetwork
     /// </summary>
     public bool IsZoom => InputSize == SimPolicyObservation.ZoomSize && _heads.Length == ZoomHeads;
 
-    /// <summary>A zoom net's head count; every other net has four.</summary>
+    /// <summary>
+    /// A demoman net in gg2-sim's demo layout (<c>31f42ef</c>): a team net with
+    /// <see cref="SimPolicyObservation.DemoSize"/> inputs and a fifth head,
+    /// Special — the detonate, a key held like Attack. Detected by both, as
+    /// gg2-sim's <c>PolicyDriver.Demo</c> is.
+    /// </summary>
+    public bool IsDemo => InputSize == SimPolicyObservation.DemoSize && _heads.Length == ZoomHeads;
+
+    /// <summary>A zoom or demo net's head count; every other net has four.</summary>
     public const int ZoomHeads = 5;
 
     /// <summary>The widest layer edge, for a caller's scratch buffers.</summary>
@@ -149,22 +158,28 @@ public sealed class SimPolicyNetwork
 
         var aim = IsTeam ? SimPolicyController.TeamAimActions : SimPolicyController.DuelAimActions;
 
-        if (InputSize is not (SimPolicyObservation.TeamSize or SimPolicyObservation.ZoomSize
+        if (InputSize is not (SimPolicyObservation.TeamSize or SimPolicyObservation.ZoomSize or SimPolicyObservation.DemoSize
                 or SimPolicyObservation.DuelSize or SimPolicyObservation.DuelSizeNoClasses))
         {
             throw new InvalidDataException(
-                $"{InputSize} inputs; expected {SimPolicyObservation.TeamSize} (team), {SimPolicyObservation.ZoomSize} (zoom) or "
+                $"{InputSize} inputs; expected {SimPolicyObservation.TeamSize} (team), {SimPolicyObservation.ZoomSize} (zoom), "
+                + $"{SimPolicyObservation.DemoSize} (demo) or "
                 + $"{SimPolicyObservation.DuelSize}/{SimPolicyObservation.DuelSizeNoClasses} (duel)");
         }
 
-        // Both or neither: a fifth head on a net that does not observe the scope,
-        // or a zoom-width observation with no head to act on it, is not a layout
-        // gg2-sim exports.
-        if ((InputSize == SimPolicyObservation.ZoomSize) != (_heads.Length == ZoomHeads))
-            throw new InvalidDataException($"{InputSize} inputs and {_heads.Length} heads; a zoom net has {SimPolicyObservation.ZoomSize} and {ZoomHeads}");
+        // Both or neither: a fifth head on a net that does not observe what it
+        // acts on, or a zoom- or demo-width observation with no head to act on it,
+        // is not a layout gg2-sim exports.
+        var fifth = InputSize is SimPolicyObservation.ZoomSize or SimPolicyObservation.DemoSize;
+        if (fifth != (_heads.Length == ZoomHeads))
+        {
+            throw new InvalidDataException(
+                $"{InputSize} inputs and {_heads.Length} heads; a zoom net has {SimPolicyObservation.ZoomSize} and a demo net "
+                + $"{SimPolicyObservation.DemoSize}, each with {ZoomHeads}");
+        }
 
-        if (IsZoom && _heads[4] != 2)
-            throw new InvalidDataException($"zoom head is {_heads[4]} wide, expected 2");
+        if ((IsZoom || IsDemo) && _heads[4] != 2)
+            throw new InvalidDataException($"fifth head is {_heads[4]} wide, expected 2");
 
         if (_heads[3] != aim)
             throw new InvalidDataException($"aim head is {_heads[3]} wide, a {(IsTeam ? "team" : "duel")} net's is {aim}");

@@ -151,6 +151,66 @@ public sealed class SimPolicyTests : IDisposable
     }
 
     /// <summary>
+    /// gg2-sim 31f42ef's demo layout: 286 inputs and a fifth head, Special. Both
+    /// or neither, as for the zoom net.
+    /// </summary>
+    [Fact]
+    public void LoadsADemoNetAndRefusesAHalfDemoLayout()
+    {
+        var demo = SimPolicyNetwork.Load(WriteDemo("demo.gg2p", detonate: true));
+
+        Assert.True(demo.IsDemo);
+        Assert.True(demo.IsTeam);
+        Assert.False(demo.IsZoom);
+        Assert.Equal(286, demo.InputSize);
+        Assert.Equal([3, 2, 2, 99, 2], demo.Heads.ToArray());
+
+        Assert.Throws<InvalidDataException>(() => SimPolicyNetwork.Load(
+            Write("demo4.gg2p", SimPolicyObservation.DemoSize, SimPolicyController.TeamAimActions)));
+    }
+
+    /// <summary>
+    /// The demo net's fifth head is the Special key, pressed with every tick of
+    /// the decision when the head says so and never otherwise; a zoom net's fifth
+    /// head never presses it. Its observation is bit-exact against gg2-sim's ref
+    /// by a cross-check outside this suite (docs/BOTS.md); this pins the decode.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ADemoNetsFifthHeadIsTheSpecialKey(bool detonate)
+    {
+        var options = HeadlessMatchOptions.Default with
+        {
+            Map = "ctf_truefort",
+            Bots = 4,
+            Seed = 7123,
+            MaxTicks = 600,
+            AllowedClasses = [PlayerClass.Demoman],
+        };
+        var match = HeadlessMatch.Load(options, MapDirectory.Resolve(), MapDirectory.ResolveNav());
+        var demo = new SimPolicyController(SimPolicyNetwork.Load(WriteDemo(detonate ? "det.gg2p" : "hold.gg2p", detonate)), [PlayerClass.Demoman]);
+        var zoom = new SimPolicyController(SimPolicyNetwork.Load(WriteZoom("z.gg2p", scoped: true)), [PlayerClass.Demoman]);
+        var polled = 0;
+        Span<int> nearest = stackalloc int[1];
+
+        while (match.Outcome == MatchOutcome.Running && polled < 60)
+        {
+            match.Step();
+            var view = new WorldView(in match.State, match.Collision);
+
+            if (!view.IsAlive(1) || view.NearestEnemies(1, nearest) == 0)
+                continue;
+
+            Assert.Equal(detonate, (demo.Poll(in view, 1, match.Tick).Keys & PlayerKeys.Special) != 0);
+            Assert.Equal(PlayerKeys.None, zoom.Poll(in view, 1, match.Tick).Keys & PlayerKeys.Special);
+            polled++;
+        }
+
+        Assert.Equal(60, polled);
+    }
+
+    /// <summary>
     /// A zoom net driving a sniper holds the scope at its head's level, whatever
     /// the scripted layer wants.
     /// </summary>
@@ -340,6 +400,10 @@ public sealed class SimPolicyTests : IDisposable
 
         return path;
     }
+
+    // A demo-layout net whose Special head always says press, or always release.
+    private string WriteDemo(string name, bool detonate) =>
+        Write(name, SimPolicyObservation.DemoSize, SimPolicyController.TeamAimActions, zoomHead: true, zoomLevel: detonate ? 1 : 0);
 
     // A zoom-layout net whose scope head always says scoped, or always unscoped.
     private string WriteZoom(string name, bool scoped) =>

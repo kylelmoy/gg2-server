@@ -32,6 +32,12 @@ namespace GG2.Bots;
 /// before the tick's keys, decides early at a boundary, and <see cref="Poll"/>
 /// reuses that decision — gg2-sim's <c>SimPolicyController.WantsZoomToggle</c>.
 /// </para>
+/// <para>
+/// <b>A demo net</b> (<see cref="SimPolicyNetwork.IsDemo"/>) is a team net whose
+/// fifth head is Special, the detonate: a key pressed with the decision's other
+/// keys and held for its <see cref="ActionRepeat"/> ticks, with no edge logic —
+/// gg2-sim's <c>PolicyDriver.TeamInput</c>.
+/// </para>
 /// </remarks>
 public sealed class SimPolicyController : IMicroController, IScopeController
 {
@@ -152,7 +158,7 @@ public sealed class SimPolicyController : IMicroController, IScopeController
             return new PlayerInput(PlayerKeys.None, world.Character(slot).NetAimDirection, 128);
 
         return _network.IsTeam
-            ? TeamInput(in world, _action, slot, _listed)
+            ? TeamInput(in world, _action, slot, _listed, _network.IsDemo)
             : DuelInput(in world, _action, slot, _op);
     }
 
@@ -171,7 +177,7 @@ public sealed class SimPolicyController : IMicroController, IScopeController
     private void Decide(in WorldView world, int me, int op)
     {
         if (_network.IsTeam)
-            SimPolicyObservation.Team(in world, me, _observation, _listed, _network.IsZoom);
+            SimPolicyObservation.Team(in world, me, _observation, _listed, _network.IsZoom, _network.IsDemo);
         else
             SimPolicyObservation.Duel(in world, me, op, _observation, _network.InputSize);
 
@@ -211,10 +217,13 @@ public sealed class SimPolicyController : IMicroController, IScopeController
         return new PlayerInput(keys, (ushort)((uint)(deg * 65536.0 / 360.0) & 0xFFFF), 128);
     }
 
-    // gg2-sim's PolicyDriver.TeamInput.
-    private static PlayerInput TeamInput(in WorldView world, int[] a, int meSlot, int[] listed)
+    // gg2-sim's PolicyDriver.TeamInput. In the demo layout the fifth head is Special.
+    private static PlayerInput TeamInput(in WorldView world, int[] a, int meSlot, int[] listed, bool demo)
     {
         var keys = Keys(a);
+
+        if (demo && a[4] != 0)
+            keys |= PlayerKeys.Special;
         var bin = Math.Clamp(a[3], 0, TeamAimActions - 1);
 
         if (bin < AbsoluteAimBins)

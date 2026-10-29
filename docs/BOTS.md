@@ -572,8 +572,8 @@ wheel on the way across (the class remarks say what breaks if that stops).
 
 | | gg2-rl `.npz` | gg2-sim `.gg2p` |
 |---|---|---|
-| Observation | `ObservationWriter` | `SimPolicyObservation`: team (253 floats), duel (169), or zoom (255: team plus own scope and rifle charge) |
-| Actions | `ActionDecoder` | `SimPolicyController`: 24 absolute aim bins, then 25 relative to the k-th listed enemy (team) or to the nearest enemy (duel); a zoom net adds a fifth head, the scope level |
+| Observation | `ObservationWriter` | `SimPolicyObservation`: team (253 floats), duel (169), zoom (255: team plus own scope and rifle charge), or demo (286: team plus the eight nearest own mines and lobbed/8). Every team width lists enemy mines beside rockets and shots; the duel width does not |
+| Actions | `ActionDecoder` | `SimPolicyController`: 24 absolute aim bins, then 25 relative to the k-th listed enemy (team) or to the nearest enemy (duel); a zoom net adds a fifth head, the scope level; a demo net's fifth head is the Special key (the detonate), held for the decision like Attack |
 | Sniper scope | `Zoom` head decoded, applied nowhere | a zoom net's own, while it drives (`IScopeController`); otherwise the scripted layer's |
 | Classes it drives | the file's set, overridable | **only** what `ClassPolicy` assigns; none is warned about |
 | Stamp | `SIM_UUID`, refused on mismatch | none; gg2-sim records the gg2-server commit it trained at |
@@ -592,7 +592,13 @@ nets) equal, and 40 eight-bot matches (both rules, red hybrid) equal in result,
 digest, driven ticks and every character's position on every tick. The zoom
 layout was checked against gg2-sim `cdb70e0` on 2026-10-28: 548,432 team observations in both layouts with snipers present
 bitwise equal, 109,887 sniper controller polls equal in toggle, input and
-decision, and 20 matches with the existing nets still equal. **Nothing in
+decision, and 20 matches with the existing nets still equal. The demo layout
+and the enemy mines were checked against gg2-sim `31f42ef` on 2026-10-29, its
+`ref/PolicyDriver.cs` compiled next to this build over 80 headless demoman and
+soldier matches on five maps: 1,304,956 observations (base and demo team
+widths, both duel widths) and 328,018 decoded team inputs with random actions
+bitwise equal, with enemy mines in view in 86,541 of them and own mines in
+17,615; leaving the enemy mines out made it fail at the first one. **Nothing in
 this suite can show that** — `SimPolicyTests` uses synthetic weights — so a
 change to either side is re-checked by re-running that comparison, and gg2-sim's
 `scripts/obs-check.sh` holds the observation to its GPU environment. Changing
