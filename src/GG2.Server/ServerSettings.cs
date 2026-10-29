@@ -590,6 +590,11 @@ public static class ServerSettings
             "Bots", "Occupancy", nameof(ServerOptions.BotOccupancy),
             o => o.BotOccupancy, (o, v) => o.BotOccupancy = v));
 
+        // A BEHAVIOUR switch that replaces the fill. ServerOptions.Duel, docs/DUEL.md.
+        settings.Add(BoolRow(
+            "Bots", "Duel", nameof(ServerOptions.Duel),
+            o => o.Duel, (o, v) => o.Duel = v));
+
         // A BEHAVIOUR switch: it changes what a bot does, not what it costs.
         settings.Add(BoolRow(
             "Bots", "Humanize", nameof(ServerOptions.BotHumanize),

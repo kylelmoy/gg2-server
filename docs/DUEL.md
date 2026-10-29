@@ -11,13 +11,37 @@ always red and bots always blue, so the team score reads as humans against bots.
 |---|---|
 | Cell maps: generator, an 8-map pool, nav graphs | **Built.** `gg2-server cellgen`, `maps/duel/`, `nav/duel/`, `CellMapTests` |
 | A stock client on a cell map | **Measured**: loads, runs at 30 fps, about 10 MB over `cp_egypt`. See "What a stock client showed" |
-| Pinning a player's spawn to a cell | **Built in the simulation**: `PlayerState.SpawnPin` (null = unpinned; stored as id + 1 so a zeroed player is unpinned) replaces `Timers.PlayerSpawn`'s random draw, gated by `SpawnPinTests`. Nothing sets it yet, so a server on a cell map still puts everyone in random cells |
-| Pairing: one bot per human, opposite team, same class, same cell | **Not built.** `BotPopulation` still fills to a count |
-| A human's death kills their bot, and both respawn in a new cell | **Not built** |
+| Pinning a player's spawn to a cell | **Built**: `PlayerState.SpawnPin` (null = unpinned; stored as id + 1 so a zeroed player is unpinned) replaces `Timers.PlayerSpawn`'s random draw, gated by `SpawnPinTests` |
+| Pairing: one bot per human, opposite team, same class, same cell | **Built**: `--duel` / `[Bots] Duel`, `BotPopulationService.Duel.cs`, gated by `DuelServerTests`. A human who picks blue is moved to red; autobalance is held off |
+| A human's death kills their bot, and both respawn in a new cell | **Built**: the bot dies by an ordinary class change with its damage credit cleared (`GameServer.RespawnBotUncredited`), so a human's death never scores for red |
 | A bot targets only its partner | **Not built.** Bots in a cell map today target whoever their layer picks; walls keep them apart, but a bot whose partner is dead can route toward an unreachable human |
 
-Until the last four exist, `gg2-server --maps maps/duel --botnav nav/duel --map duel_01`
-is an ordinary Team Deathmatch on a map of disconnected rooms.
+Run it with `gg2-server --duel --maps maps/duel --botnav nav/duel --map duel_01`.
+Until partner-only targeting exists, a bot targets whoever its layer picks;
+the walls keep everyone else out of reach, but a bot whose human is dead can
+plan a route toward an unreachable human.
+
+## The pairing
+
+`BotPopulationService.ServiceDuel` runs every tick in place of the fill.
+
+| Event | What happens |
+|---|---|
+| A human is on red | They get a free cell (a spawn index nobody else holds) and one blue bot of their class; both are pinned to the cell |
+| A human picks blue | Moved to red (`ForceTeam`), since the balance guard would refuse red while a pair waits on its bot |
+| The human dies (any death: their death count rose) | A new free cell, never the one just left while another is free; the bot is re-classed to the human's class with no credit, which kills it and arms its respawn there |
+| The bot dies | Nothing moves; the bot respawns in the same cell |
+| The human changes class while dead | The bot follows by the ordinary class change |
+| The human spectates or leaves | The bot is removed |
+
+A death is detected by the human's scoreboard death count, not by "was alive":
+a class change is processed before the population tick, so a human can die
+before that tick has ever seen them alive. That relies on every death scoring,
+which `ChangeDeathScoringTests` gates for the class and team change.
+
+A freshly spawned character is under Team Deathmatch's spawn protection, and a
+protected death respawns on the next tick (`Destroy.xml:37`): a human who dies
+within moments of spawning finds their bot already waiting in the new cell.
 
 ## The cell maps
 

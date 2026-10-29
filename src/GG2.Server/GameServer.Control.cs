@@ -156,6 +156,12 @@ public sealed partial class GameServer
     /// <summary><c>global.redCaps</c>. ⚠️ Also the team's kill count in deathmatch.</summary>
     public int RedCaps => _world.RedCaps;
 
+    /// <summary>
+    /// The live world, by reference. Test hook, internal so nothing outside the
+    /// tests can reach past the command methods into the state.
+    /// </summary>
+    internal ref WorldState WorldForTests => ref _world;
+
     /// <inheritdoc cref="RedCaps"/>
     public int BlueCaps => _world.BlueCaps;
 
@@ -507,6 +513,47 @@ public sealed partial class GameServer
 
         ExecuteChangeClass(_roster[slot], playerClass);
     }
+
+    /// <summary>
+    /// A duel bot's death when its human dies: a class change to
+    /// <paramref name="playerClass"/> with nobody credited.
+    /// </summary>
+    /// <remarks>
+    /// <b>The class change is the ordinary one</b> — a stock client can kill its
+    /// own character the same way by picking any class, its current one included
+    /// — so clients see a <c>BID_FAREWELL</c> they already handle. What is this
+    /// port's own is clearing the damage credit first: otherwise the dealer is
+    /// usually the human who just died, <c>BidFarewell</c> would make it
+    /// <c>FINISHED_OFF</c> for them, and every human death would score a Team
+    /// Deathmatch point for red. <c>docs/DUEL.md</c>.
+    /// </remarks>
+    public void RespawnBotUncredited(int slot, PlayerClass playerClass)
+    {
+        if (slot <= 0 || slot >= _roster.Count || !_roster[slot].IsBot)
+            throw new ArgumentOutOfRangeException(nameof(slot), slot, "not a bot slot");
+
+        _world.Characters[slot].LastDamageDealer = CharacterState.Nobody;
+        _world.Characters[slot].SecondToLastDamageDealer = CharacterState.Nobody;
+        ExecuteChangeClass(_roster[slot], playerClass);
+    }
+
+    /// <summary>
+    /// Pins a player's respawn to one spawn point, or unpins it with null —
+    /// <see cref="PlayerState.SpawnPin"/>.
+    /// </summary>
+    public void PinSpawn(int slot, int? spawnPoint)
+    {
+        if (slot <= 0 || slot >= _roster.Count)
+            throw new ArgumentOutOfRangeException(nameof(slot), slot, "not a player slot");
+
+        _world.Players[slot].SpawnPin = spawnPoint;
+    }
+
+    /// <summary>The scoreboard's death count for <paramref name="slot"/> this map.</summary>
+    public double DeathsOf(int slot) => Scoring.Get(in _world, slot, StatIndex.Deaths);
+
+    /// <summary>The roster slot <paramref name="entry"/> is in now, or -1 if it has left.</summary>
+    public int SlotOf(RosterEntry entry) => _roster.IndexOf(entry);
 
     /// <summary>Renames a bot, with the broadcast a rename is.</summary>
     /// <remarks>

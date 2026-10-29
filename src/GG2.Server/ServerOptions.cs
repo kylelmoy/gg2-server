@@ -801,6 +801,20 @@ public sealed class ServerOptions
     public Team BotBrainTeam { get; set; } = Team.Any;
 
     /// <summary>
+    /// The duel server: every human on red is paired with one blue bot of their
+    /// class, and the two are pinned to a cell of a cell map. <c>docs/DUEL.md</c>.
+    /// </summary>
+    /// <remarks>
+    /// <b>A BEHAVIOUR switch that replaces the population manager's fill</b>:
+    /// with it on, <c>[Bots] Enabled</c> and the fill target are not read, a human
+    /// who picks blue is moved to red, and the autobalance is held off whatever
+    /// <see cref="Autobalance"/> says, because it would move a human onto the bots'
+    /// team. Serve it on <c>maps/duel</c>; on any other map the pairs share that
+    /// map's spawn points as cells. Read every tick.
+    /// </remarks>
+    public bool Duel { get; set; }
+
+    /// <summary>
     /// Whether every bot puts up a chat bubble when its brain changes hands.
     /// </summary>
     /// <remarks>

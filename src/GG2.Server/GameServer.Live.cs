@@ -140,7 +140,7 @@ public sealed partial class GameServer
     public void SetAutobalance(bool enabled)
     {
         _options.Autobalance = enabled;
-        _world.Autobalance = enabled;
+        _world.Autobalance = enabled && !_options.Duel;
         _log.Info($"control: autobalance {(enabled ? "on" : "off")}");
     }
 

@@ -127,6 +127,7 @@ public sealed class CliCoverageTests
         // an alias for the default never will.
         ("NavDistances", ["--no-nav-distances"], o => o.NavDistances),
         ("BotOccupancy", ["--no-bot-occupancy"], o => o.BotOccupancy),
+        ("Duel", ["--duel"], o => o.Duel),
         ("SpeedMultiplier", ["--speed", "max"], o => o.SpeedMultiplier),
         ("RecordingDirectory", ["--record", "some/traces"], o => o.RecordingDirectory),
         ("ControlPort", ["--control-port", "9001"], o => o.ControlPort),

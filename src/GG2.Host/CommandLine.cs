@@ -577,6 +577,12 @@ internal static class CommandLine
                     options.BotOccupancy = false;
                     break;
 
+                // The duel server: a blue bot of each red human's class, in the
+                // human's cell. ServerOptions.Duel, docs/DUEL.md.
+                case "--duel":
+                    options.Duel = true;
+                    break;
+
                 // The [Bots] section. `--bots N` is the fill target, which is what
                 // the reference calls FillToPlayers — ⚠️ a total including humans,
                 // not a bot count, so a server filling to 8 drops a bot every time
@@ -1284,6 +1290,11 @@ internal static class CommandLine
                             bunches up (dispersion 0.785 -> 0.634) and nothing
                             replaces it. What it buys is a live server that
                             routes exactly as eval and the training rollouts do.
+          --duel            the duel server: each human on red fights one blue
+                            bot of their own class, both pinned to one cell.
+                            Replaces the --bots fill and holds autobalance off.
+                            Serve --maps maps/duel --botnav nav/duel.
+                            docs/DUEL.md
           --no-nav-distances
                             do not give A* the exact precomputed distances. Bots
                             fall back to the weighted straight-line heuristic,

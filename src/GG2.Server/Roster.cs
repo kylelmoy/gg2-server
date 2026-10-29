@@ -50,6 +50,20 @@ public sealed class RosterEntry
     /// </remarks>
     internal bool BotWasAlive { get; set; }
 
+    /// <summary>A duel human's bot, on the entry for <see cref="BotWasAlive"/>'s reason.</summary>
+    internal RosterEntry? DuelPartner { get; set; }
+
+    /// <summary>A duel human's cell — its pinned spawn index — or -1 for none.</summary>
+    internal int DuelCell { get; set; } = -1;
+
+    /// <summary>
+    /// A duel human's death count when last looked at, or -1 before pairing.
+    /// A count rather than an alive flag: a death by command (a class change) is
+    /// processed before the population tick, so a human can die before that tick
+    /// has ever seen them alive.
+    /// </summary>
+    internal double DuelDeaths { get; set; } = -1;
+
     /// <summary>
     /// Where this player's per-tick input comes from.
     /// </summary>

@@ -95,7 +95,11 @@ public sealed class ServerHarness : IDisposable
         Assert.Equal(GG2.Protocol.MessageType.Hello, client.TakeMessageType());
         Assert.Equal(Options.ServerName, client.TakeString1());
         Assert.Equal(Options.Map, client.TakeString1());
-        Assert.Equal(string.Empty, client.TakeString1()); // built-in map: no MD5
+        var md5 = client.TakeString1();
+        if (GG2.Maps.InternalMaps.IsInternal(Options.Map))
+            Assert.Equal(string.Empty, md5); // built-in map: no MD5
+        else
+            Assert.Equal(32, md5.Length); // a custom map advertises its own
         // Read from the server rather than hardcoded to "no plugins". These
         // two fields sit between the map hash and everything after it, so a
         // harness that assumed them would mis-frame every later assertion the

@@ -85,7 +85,7 @@ public sealed partial class GameServer
         // protection" here, so there is nothing to escape.
         _world.TdmInvulnerabilityTicks = (int)(_options.TdmInvulnerabilitySeconds * 30 * 0.2);
 
-        _world.Autobalance = _options.Autobalance;
+        _world.Autobalance = _options.Autobalance && !_options.Duel; // a duel server pins humans to red; docs/DUEL.md
 
         // game_init.gml:105 and the [Classlimits] section, ten independent
         // values. ⚠️ A zeroed ClassLimits would mean every class is full, so

@@ -36,7 +36,7 @@ namespace GG2.Server;
 /// </para>
 /// </para>
 /// </remarks>
-public sealed class BotPopulationService
+public sealed partial class BotPopulationService
 {
     private readonly GameServer _server;
     private readonly IServerLog _log;
@@ -420,6 +420,14 @@ public sealed class BotPopulationService
     {
         var options = _server.Options.Bots;
 
+        // Above the Enabled check: a duel server's bots are one per human, not a
+        // fill, and the [Bots] fill settings are not read. docs/DUEL.md.
+        if (_server.Options.Duel)
+        {
+            ServiceDuel(in options);
+            return;
+        }
+
         // `if(!global.botsEnabled) exit;` means DO NOTHING, not "target zero",
         // and the difference is not academic: a bot added by hand on a server with
         // the population manager switched off must survive. Reading it as a target
@@ -644,6 +652,19 @@ public sealed class BotPopulationService
         if (BotPopulation.PickClass(ref _random, options.EffectiveClassLimits, botsOfClass) is not { } playerClass)
             return false;
 
+        return AddConfiguredBot(team, playerClass, in options) >= 0;
+    }
+
+    /// <summary>
+    /// Builds a bot of <paramref name="team"/> and <paramref name="playerClass"/>
+    /// with this server's brain, skill and nav, and adds it.
+    /// </summary>
+    /// <returns>Its slot, or -1 when the roster is full.</returns>
+    private int AddConfiguredBot(Team team, PlayerClass playerClass, in BotPopulationOptions options)
+    {
+        if (_server.RosterCount >= WorldState.MaxSlots)
+            return -1;
+
         // Named for the class, not numbered: a counter that only ever grows reads
         // as "[BOT] 147" an hour in. Reclass renames a bot whenever it changes
         // class after this; a team change under a binding [Classlimits]
@@ -718,7 +739,7 @@ public sealed class BotPopulationService
         if (_server.ClassOf(slot) != playerClass)
             _server.RenameBot(slot, options.NamePrefix + _server.ClassOf(slot).ToString());
 
-        return true;
+        return slot;
     }
 
     private void RemoveOne()
