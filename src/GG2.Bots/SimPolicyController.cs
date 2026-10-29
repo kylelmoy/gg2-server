@@ -45,7 +45,7 @@ namespace GG2.Bots;
 /// beam's mouse-point preference picks that patient.
 /// </para>
 /// </remarks>
-public sealed class SimPolicyController : IMicroController, IScopeController
+public sealed class SimPolicyController : IMicroController, IScopeController, IBeamController
 {
     /// <summary>Ticks a decision is held for: the cadence every gg2-sim policy trained at.</summary>
     public const int ActionRepeat = 3;
@@ -134,6 +134,9 @@ public sealed class SimPolicyController : IMicroController, IScopeController
     }
 
     public bool OwnsScope => _network.IsZoom;
+
+    /// <summary>A medic net heals and picks its patient itself, so it may take a beaming medic.</summary>
+    public bool OwnsBeam => _network.IsMedic;
 
     public bool WantsZoomToggle(in WorldView world, int slot, int tick)
     {

@@ -37,7 +37,7 @@ public sealed class HybridBotSeamTests
     /// by counting ticks. The two real controllers have cadences; that is their
     /// tests' subject, not this file's.
     /// </remarks>
-    private sealed class Stub : IMicroController
+    private sealed class Stub : IMicroController, IBeamController
     {
         private readonly PlayerKeys _keys;
 
@@ -69,6 +69,9 @@ public sealed class HybridBotSeamTests
         internal int HandoversOut { get; private set; }
 
         public bool Drives(PlayerClass playerClass) => Refuses != playerClass;
+
+        /// <summary>Whether this stub claims to heal, so a beaming medic may be handed to it.</summary>
+        public bool OwnsBeam { get; init; }
 
         public bool AtDecisionBoundary(int slot) => true;
 
@@ -709,5 +712,45 @@ public sealed class HybridBotSeamTests
 
         Assert.True(otherTermsSaidFight, "the hold's other terms never said fight, so this gates nothing");
         Assert.Equal(nearGoal, micro.Polls > 0);
+    }
+
+    /// <summary>
+    /// A beaming medic is handed only to a controller that owns the beam
+    /// (<see cref="IBeamController"/>, gg2-sim's medic layout); any other
+    /// controller leaves it with the scripted layer.
+    /// </summary>
+    /// <remarks>
+    /// The premise is that the scripted medic really had a patient on the ticks
+    /// it was asked, or the refusal would be the range's and not the beam's.
+    /// </remarks>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ABeamingMedicIsHandedOnlyToAControllerThatOwnsTheBeam(bool ownsBeam)
+    {
+        var world = World();
+        var micro = new Stub("policy", cost: 1, PlayerKeys.None) { OwnsBeam = ownsBeam };
+        var scripted = Scripted(world);
+        var bot = new HybridBot(micro, scripted) { Rule = HandoverRule.Distance };
+        var medic = world.Place(PlayerClass.Medic, Team.Red, 600, 850);
+        var patient = world.Place(PlayerClass.Soldier, Team.Red, 620, 850);
+        world.Place(PlayerClass.Soldier, Team.Blue, 680, 850);
+        world.Step(20);
+        var beaming = 0;
+
+        for (var tick = 0; tick < 40; tick++)
+        {
+            world.State.Characters[patient].Hp = 40;
+            var view = new WorldView(in world.State, world.Collision);
+            bot.Poll(in view, medic, tick);
+
+            if (scripted.Combat.Ally == patient)
+                beaming++;
+
+            world.Step();
+        }
+
+        Assert.True(beaming > 30, $"the scripted medic had a patient on only {beaming} ticks, so this gates nothing");
+        Assert.Equal(ownsBeam, micro.Polls > 0);
     }
 }

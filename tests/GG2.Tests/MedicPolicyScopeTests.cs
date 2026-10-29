@@ -7,7 +7,10 @@ namespace GG2.Tests;
 
 /// <summary>
 /// The medic is trained on needle combat only: a beaming medic is never handed
-/// to a policy, and the policy is never shown a charge it cannot spend.
+/// to a policy, and the policy is never shown a charge it cannot spend. A
+/// controller that heals itself (<see cref="IBeamController"/>, gg2-sim's medic
+/// layout) is the exception, made in <see cref="HybridBot"/> rather than here;
+/// <c>HybridBotSeamTests</c> covers it.
 /// </summary>
 /// <remarks>
 /// <para>

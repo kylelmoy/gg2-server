@@ -608,9 +608,12 @@ The medic layout was checked against gg2-sim `4a8d9ca` the same way, over 80
 medic, pyro, demoman and soldier matches: 2,038,526 observations and 1,022,805
 decoded inputs bitwise equal, with a beam in 59,795, an uber running in 3,653 and
 172,008 ally-aim decodes; fixing the ally aim distance at 128 failed it on the
-first. **A medic on the beam is never handed over** (`Handover.ShouldEngage`), so
-on a live server a medic net drives only off the beam, and its beam columns and
-ally aim matter there only for the decisions it takes as the beam ends.
+first. **A medic on the beam is handed over only to a controller that heals
+itself**: `Handover.ShouldEngage` keeps a beaming medic scripted, and
+`HybridBot` drops that term when every eligible tier is an `IBeamController`
+owning the beam, which a medic-layout net is (the user's call, 2026-10-29). Any
+other medic controller keeps the gate
+(`HybridBotSeamTests.ABeamingMedicIsHandedOnlyToAControllerThatOwnsTheBeam`).
 **Nothing in
 this suite can show that** — `SimPolicyTests` uses synthetic weights — so a
 change to either side is re-checked by re-running that comparison, and gg2-sim's

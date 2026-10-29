@@ -494,8 +494,12 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
         var range = _driving >= 0 && !double.IsNaN(ReleaseRange) ? Math.Max(Range, ReleaseRange) : Range;
         var wants = EngageNearOwnGoal ? _scripted.WantsToEngageNearGoal : _scripted.WantsToEngage;
 
+        // A beaming medic stays scripted unless every tier that could take it
+        // heals itself (IBeamController); BotAlly.None drops that term.
+        var ally = AllOwnBeam(eligible) ? BotAlly.None : _scripted.Combat.Ally;
+
         if (!Handover.ShouldEngage(
-                in world, slot, range, Rule, wants, Engage, _scripted.Combat.Ally))
+                in world, slot, range, Rule, wants, Engage, ally))
             return Scripted(scripted);
 
         var chosen = Choose(in world, tick, slot, eligible);
@@ -562,6 +566,17 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     }
 
     /// <summary>Which tiers will drive this class, as a bitmask.</summary>
+    private bool AllOwnBeam(uint eligible)
+    {
+        for (var i = 0; i < _tiers.Length; i++)
+        {
+            if ((eligible & (1u << i)) != 0 && _tiers[i] is not IBeamController { OwnsBeam: true })
+                return false;
+        }
+
+        return true;
+    }
+
     private uint EligibleTiers(PlayerClass playerClass)
     {
         var mask = 0u;
