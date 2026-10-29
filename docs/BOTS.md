@@ -581,7 +581,10 @@ wheel on the way across (the class remarks say what breaks if that stops).
 
 **The observation, the forward pass and the decode are gg2-sim's
 `ref/PolicyDriver.cs` and `ref/Matches.cs` (`SimPolicyController`), expression
-for expression**, and are checked against them, not against anything in this
+for expression**, except one line each in `SimPolicyObservation.Nearest` and
+`SimPolicyController.NearestEnemy` that skip an enemy `WorldView.MayOppose`
+refuses. That is a no-op unless the view carries an opponents table, which only
+the duel server builds (`docs/DUEL.md`), so the cross-check below is unaffected; and are checked against them, not against anything in this
 repo. On 2026-10-27, compiling those two files next to this build
 (gg2-sim at `b62d6b3`, its pin `8535530`) over headless matches on five maps:
 286,869 team observations bitwise equal, 1,244,765 greedy actions (team and duel

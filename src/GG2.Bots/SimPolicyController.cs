@@ -254,6 +254,11 @@ public sealed class SimPolicyController : IMicroController, IScopeController
             if (other == slot || !world.IsAlive(other) || world.Player(other).Team == team)
                 continue;
 
+            // Not in gg2-sim's ref: a no-op unless the view carries an opponents
+            // table, which only the duel server builds.
+            if (!world.MayOppose(slot, other))
+                continue;
+
             ref readonly var c = ref world.Character(other);
             var d = Gml.PointDistance(self.X, self.Y, c.X, c.Y);
 

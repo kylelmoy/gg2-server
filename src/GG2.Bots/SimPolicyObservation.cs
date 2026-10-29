@@ -200,6 +200,11 @@ public static class SimPolicyObservation
             if (s == slot || !world.IsAlive(s) || (world.Character(s).Team == me.Team) != mates)
                 continue;
 
+            // Not in gg2-sim's ref: a no-op unless the view carries an opponents
+            // table, which only the duel server builds.
+            if (!mates && !world.MayOppose(slot, s))
+                continue;
+
             ref readonly var c = ref world.Character(s);
             double dx = c.X - me.X, dy = c.Y - me.Y, d = (dx * dx) + (dy * dy);
             var at = Math.Min(found, count);

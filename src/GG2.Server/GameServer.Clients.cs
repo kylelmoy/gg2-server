@@ -181,7 +181,7 @@ public sealed partial class GameServer
             // of the bot layer is a bug to go and read the trace of.
             try
             {
-                source.PollCommands(new WorldView(in _world, _collision), slot, (int)_frame, ref _commands);
+                source.PollCommands(new WorldView(in _world, _collision, _opponents), slot, (int)_frame, ref _commands);
             }
             catch (Exception e)
             {

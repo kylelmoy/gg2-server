@@ -200,6 +200,17 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     // TryGetCharacter, so the clients act on the same press the server did.
     private readonly PlayerKeys[] _relayedPresses = new PlayerKeys[WorldState.MaxSlots];
 
+    // Who each bot may treat as an opponent, WorldView.AnyOpponent for anyone.
+    // Only the duel server writes it (docs/DUEL.md); every bot view carries it.
+    private readonly byte[] _opponents = NewOpponents();
+
+    private static byte[] NewOpponents()
+    {
+        var table = new byte[WorldState.MaxSlots];
+        Array.Fill(table, WorldView.AnyOpponent);
+        return table;
+    }
+
     // botPopulationUpdate's half that needs a roster and a socket. Created in
     // Start, because it needs a `this` and the constructor does not have one to
     // hand out safely.

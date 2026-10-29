@@ -1,5 +1,6 @@
 using GG2.Bots;
 using GG2.Protocol;
+using GG2.Simulation;
 
 namespace GG2.Server;
 
@@ -109,6 +110,21 @@ public sealed partial class BotPopulationService
         }
 
         RemoveUnpairedBots();
+
+        // Last, after the removals have compacted the roster: each bot may fight
+        // its own human and nobody else. The bot layer picks targets by distance,
+        // and a human in the next cell can be nearer than a partner across a big
+        // one; walls do not stop that choice, only the shot.
+        Span<byte> opponents = stackalloc byte[WorldState.MaxSlots];
+        opponents.Fill(WorldView.AnyOpponent);
+
+        for (var slot = 1; slot < _server.RosterCount; slot++)
+        {
+            if (_server.EntryOf(slot).DuelPartner is { } partner && _server.SlotOf(partner) is var bot and > 0)
+                opponents[bot] = (byte)slot;
+        }
+
+        _server.SetOpponents(opponents);
     }
 
     /// <summary>

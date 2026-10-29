@@ -143,6 +143,42 @@ public sealed class DuelServerTests
         Assert.Equal(redX, server.WorldForTests.Characters[human].X);
     }
 
+    /// <summary>
+    /// With two humans, each bot's only opponent is its own human — the table
+    /// every bot view carries (<see cref="WorldView.MayOppose"/>).
+    /// </summary>
+    [Fact]
+    public void EachBotMayOpposeOnlyItsOwnHuman()
+    {
+        using var harness = Duel();
+        var first = harness.JoinClient("first");
+        first.SendChangeTeam(Team.Red);
+        first.SendChangeClass(PlayerClass.Soldier);
+        var second = harness.JoinClient("second");
+        second.SendChangeTeam(Team.Red);
+        second.SendChangeClass(PlayerClass.Scout);
+
+        var server = harness.Server;
+        harness.TickUntil(() => server.BotSlots.Count == 2, "two bots", maxTicks: 300);
+        harness.Tick(2);
+
+        var view = new WorldView(in server.WorldForTests, new CollisionWorld(
+            LevelMap.FromPng(harness.Options.Map, File.ReadAllBytes(Path.Combine(harness.Options.MapDirectory, harness.Options.Map + ".png")))),
+            server.OpponentsForTests);
+
+        var humans = Enumerable.Range(1, server.RosterCount - 1).Where(s => !server.EntryOf(s).IsBot).ToArray();
+        Assert.Equal(2, humans.Length);
+
+        foreach (var bot in server.BotSlots)
+        {
+            var mine = humans.Single(h => server.ClassOf(h) == server.ClassOf(bot));
+            var theirs = humans.Single(h => h != mine);
+
+            Assert.True(view.MayOppose(bot, mine));
+            Assert.False(view.MayOppose(bot, theirs));
+        }
+    }
+
     [Fact]
     public void TheBotGoesWhenItsHumanGoes()
     {

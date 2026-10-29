@@ -266,7 +266,7 @@ public static class BotCombat
         ref readonly var self = ref world.Character(slot);
         var team = world.Player(slot).Team;
 
-        if (!StillWorthShootingAt(state, in world, in self, team, out var x, out var y))
+        if (!StillWorthShootingAt(state, in world, slot, in self, team, out var x, out var y))
         {
             state.DropTarget();
             return;
@@ -322,6 +322,7 @@ public static class BotCombat
     private static bool StillWorthShootingAt(
         BotCombatState state,
         in WorldView world,
+        int slot,
         in CharacterState self,
         Team team,
         out double x,
@@ -343,7 +344,8 @@ public static class BotCombat
 
                 if (candidate.Hp <= 0
                     || !BotVisibility.CanSee(in self, in candidate)
-                    || world.Player(other).Team == team)
+                    || world.Player(other).Team == team
+                    || !world.MayOppose(slot, other))
                     return false;
 
                 x = candidate.X;
@@ -360,7 +362,7 @@ public static class BotCombat
 
                 ref readonly var sentry = ref world.State.Sentries[owner];
 
-                if (sentry.Hp <= 0 || sentry.Team == team)
+                if (sentry.Hp <= 0 || sentry.Team == team || !world.MayOppose(slot, owner))
                     return false;
 
                 var box = Sentries.BodyBox(sentry);

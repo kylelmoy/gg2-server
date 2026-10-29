@@ -162,6 +162,9 @@ public sealed partial class GameServer
     /// </summary>
     internal ref WorldState WorldForTests => ref _world;
 
+    /// <summary>The bot opponents table every bot view carries. Test hook.</summary>
+    internal ReadOnlySpan<byte> OpponentsForTests => _opponents;
+
     /// <inheritdoc cref="RedCaps"/>
     public int BlueCaps => _world.BlueCaps;
 
@@ -547,6 +550,19 @@ public sealed partial class GameServer
             throw new ArgumentOutOfRangeException(nameof(slot), slot, "not a player slot");
 
         _world.Players[slot].SpawnPin = spawnPoint;
+    }
+
+    /// <summary>
+    /// Restricts every bot to one opponent each — <paramref name="opponents"/>
+    /// indexed by bot slot, <see cref="WorldView.AnyOpponent"/> for no
+    /// restriction — from the next poll on. <c>docs/DUEL.md</c>.
+    /// </summary>
+    public void SetOpponents(ReadOnlySpan<byte> opponents)
+    {
+        if (opponents.Length != _opponents.Length)
+            throw new ArgumentException($"expected {_opponents.Length} entries", nameof(opponents));
+
+        opponents.CopyTo(_opponents);
     }
 
     /// <summary>The scoreboard's death count for <paramref name="slot"/> this map.</summary>

@@ -163,7 +163,7 @@ public sealed partial class GameServer
 
             if (source is not IBatchInputSource batch)
             {
-                _inputs[i] = source.Poll(new WorldView(in _world, _collision), i, (int)_frame);
+                _inputs[i] = source.Poll(new WorldView(in _world, _collision, _opponents), i, (int)_frame);
                 polled[i] = true;
                 continue;
             }
@@ -182,7 +182,7 @@ public sealed partial class GameServer
             }
 
             batch.PollMany(
-                new WorldView(in _world, _collision), group[..size], outputs[..size], (int)_frame);
+                new WorldView(in _world, _collision, _opponents), group[..size], outputs[..size], (int)_frame);
 
             for (var k = 0; k < size; k++)
                 _inputs[group[k]] = outputs[k];

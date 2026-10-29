@@ -204,6 +204,7 @@ public static class BotTargeting
             ref readonly var candidate = ref world.Character(other);
 
             if (world.Player(other).Team == team
+                || !world.MayOppose(slot, other)
                 || !BotVisibility.CanSee(in self, in candidate)
                 || candidate.Hp <= 0)
                 continue;
@@ -290,6 +291,7 @@ public static class BotTargeting
 
             if (!BotVisibility.CanSee(in self, in candidate)
                 || world.Player(other).Team == team
+                || !world.MayOppose(slot, other)
                 || candidate.Hp <= 0)
                 continue;
 
@@ -357,7 +359,7 @@ public static class BotTargeting
 
             ref readonly var sentry = ref world.State.Sentries[owner];
 
-            if (sentry.Team == team || sentry.Hp <= 0)
+            if (sentry.Team == team || sentry.Hp <= 0 || !world.MayOppose(slot, owner))
                 continue;
 
             var distance = Gml.PointDistance(sentry.X, sentry.Y, self.X, self.Y);

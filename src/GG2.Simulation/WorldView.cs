@@ -38,6 +38,8 @@ public readonly ref struct WorldView
 {
     private readonly ref readonly WorldState _state;
 
+    private readonly ReadOnlySpan<byte> _opponents;
+
     public WorldView(in WorldState state, CollisionWorld collision)
     {
         ArgumentNullException.ThrowIfNull(collision);
@@ -45,6 +47,37 @@ public readonly ref struct WorldView
         _state = ref state;
         Collision = collision;
     }
+
+    /// <summary>
+    /// A view in which each viewer may treat only one roster slot as an
+    /// opponent: <paramref name="opponents"/>[viewer], or
+    /// <see cref="AnyOpponent"/> for the ordinary rule.
+    /// </summary>
+    /// <remarks>
+    /// The duel server's (<c>docs/DUEL.md</c>): a bot fights its own human and
+    /// nobody else, because cells are sealed by walls and the bot layer picks
+    /// targets by distance, which walls do not stop. One table for every viewer,
+    /// so a batch of bots polled through one view each see their own partner.
+    /// It narrows what a bot may choose, never the team rule.
+    /// </remarks>
+    public WorldView(in WorldState state, CollisionWorld collision, ReadOnlySpan<byte> opponents)
+        : this(in state, collision)
+    {
+        _opponents = opponents;
+    }
+
+    /// <summary>An <c>opponents</c> entry meaning "any enemy, as usual".</summary>
+    public const byte AnyOpponent = 255;
+
+    /// <summary>
+    /// Whether <paramref name="viewer"/> may treat <paramref name="other"/> as an
+    /// opponent at all — always, unless the view was built with an opponents table
+    /// that names someone else. Team is the caller's test, as before.
+    /// </summary>
+    public bool MayOppose(int viewer, int other) =>
+        (uint)viewer >= (uint)_opponents.Length
+        || _opponents[viewer] == AnyOpponent
+        || _opponents[viewer] == other;
 
     /// <summary>The match state. Read-only: there is no mutable path out of here.</summary>
     public ref readonly WorldState State => ref _state;
@@ -133,6 +166,9 @@ public readonly ref struct WorldView
                 continue;
 
             if ((_state.Players[other].Team == team) != allies)
+                continue;
+
+            if (!allies && !MayOppose(slot, other))
                 continue;
 
             var dx = _state.Characters[other].X - self.X;
