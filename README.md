@@ -84,6 +84,13 @@ gg2-server --bots 12 --bot-mode policy `
 | `--analytics <path>` | Tracks unique players, playtime and peak concurrency across restarts. Addresses are stored only as salted hashes. Add `--geoip <path>` with a database you download yourself to show locations. See [`docs/ANALYTICS.md`](docs/ANALYTICS.md). |
 | `--tick-stats` | Logs a tick-timing histogram every 30 seconds. |
 
+### Duel maps
+
+`maps/duel/` holds generated maps of 24 small sealed arenas, each cut from a
+shipped map, for a server where every player fights a bot alone. Serve them with
+`--maps maps/duel --botnav nav/duel`; `gg2-server cellgen` regenerates them.
+The pairing of players with bots is not built yet. See [`docs/DUEL.md`](docs/DUEL.md).
+
 ## Deploying
 
 A release archive is ready to copy to a host as it is. To build one yourself:

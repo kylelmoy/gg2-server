@@ -35,6 +35,12 @@
   -->
   <ItemGroup>
     <Content Include="..\..\maps\*.png" Link="maps\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!--
+      The duel map pool (docs/DUEL.md), in its own directory so a plain server's
+      maps/ and every census over it are unchanged. A duel server points its
+      maps and botnav options at maps/duel and nav/duel.
+    -->
+    <Content Include="..\..\maps\duel\*.png" Link="maps\duel\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- MPL-2.0 requires the license to travel with the covered files, and the maps are Gang Garrison 2's. -->
     <Content Include="..\..\LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
@@ -59,6 +65,10 @@
   <ItemGroup>
     <Content Include="..\..\nav\*"
              Link="nav\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\nav\duel\*"
+             Link="nav\duel\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>

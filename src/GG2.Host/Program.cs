@@ -106,6 +106,31 @@ internal static class Program
             }
         }
 
+        // `gg2-server cellgen ...` writes duel maps (docs/DUEL.md), for the same
+        // reason navgen is a subcommand: it serves no game.
+        if (args.Length > 0 && args[0] == "cellgen")
+        {
+            var rest = args[1..];
+
+            if (rest.Contains("--help") || rest.Contains("-h"))
+            {
+                CellGen.PrintUsage();
+                return 0;
+            }
+
+            try
+            {
+                return CellGen.Run(rest);
+            }
+            catch (Exception e) when (e is ArgumentException or FormatException or IOException or InvalidOperationException)
+            {
+                Console.Error.WriteLine(e.Message);
+                Console.Error.WriteLine();
+                CellGen.PrintUsage();
+                return 2;
+            }
+        }
+
         // `gg2-server config ...` edits and renders the configuration that
         // scripts/deploy.sh --config pushes to several servers. It serves no game.
         if (args.Length > 0 && args[0] == "config")
