@@ -186,7 +186,8 @@ public sealed class CellMapTests
 
     /// <summary>
     /// On the SHIPPED graph, each cell's two spawns reach each other both ways
-    /// over edges every class can take — the generator proved it on the cell
+    /// over edges every class can take, every surface the red spawn reaches leads
+    /// back, and there are at least eight — the generator proved it on the cell
     /// alone, and this proves the packed map did not change the answer.
     /// </summary>
     [Theory]
@@ -204,6 +205,12 @@ public sealed class CellMapTests
 
             Assert.True(red >= 0 && blue >= 0, $"{name} cell {i}: a spawn has no node under it");
             Assert.True(Reaches(graph, red, blue) && Reaches(graph, blue, red), $"{name} cell {i}: partners cannot reach each other");
+
+            // And no pocket you can fall into and not leave, and room to move.
+            var reachable = Enumerable.Range(0, graph.NodeCount).Where(n => Reaches(graph, red, n)).ToArray();
+            Assert.True(reachable.Length >= 8, $"{name} cell {i}: only {reachable.Length} surfaces");
+            foreach (var node in reachable)
+                Assert.True(Reaches(graph, node, red), $"{name} cell {i}: node {node} is reachable and has no way back");
         }
     }
 

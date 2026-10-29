@@ -110,10 +110,13 @@ internal sealed record CellMap(int Width, int Height, string LevelData, int[] Rg
 /// </para>
 /// <para>
 /// <b>Every cell is proven playable by the nav generator, not by a heuristic.</b>
-/// The cell is built as a map of its own and its two spawns must reach each other
-/// both ways over edges every class can take (walk, fall, jump, drop-through).
-/// A cell inside the finished map is the same graph shifted, because nothing a
-/// nav arc can reach lies outside the solid round it.
+/// The cell is built as a map of its own; over edges every class can take (walk,
+/// fall, jump, drop-through) its two spawns must reach each other, everywhere the
+/// first can reach must lead back to it, and that has to be at least
+/// <see cref="MinSurfaces"/> surfaces.
+/// The cell is validated inside a solid border so that its graph is the one it
+/// has in the finished map, shifted; <c>CellMapTests</c> re-checks the same
+/// properties on the shipped graphs.
 /// </para>
 /// <para>
 /// <b>Entities:</b> spawns are the generator's. Dropdown platforms and the
@@ -141,6 +144,12 @@ internal static class CellMapGenerator
     private const int Rim = 2;
 
     private const int AttemptsPerCell = 5000;
+
+    /// <summary>
+    /// The fewest nav surfaces a cell's spawns may reach. Below it a cell is a
+    /// box with a floor — measured: the first pool had cells of three and four.
+    /// </summary>
+    private const int MinSurfaces = 8;
 
     /// <summary>
     /// The maps cells are cut from: every built-in map FILE but <c>gg_debug</c>,
@@ -447,48 +456,111 @@ internal static class CellMapGenerator
         bool[] open, int cw, int ch, IReadOnlyList<LevelEntity> kept,
         (int X, int Y) a, int aRow, (int X, int Y) b, int bRow)
     {
-        var solid = new bool[cw * ch];
-        for (var i = 0; i < solid.Length; i++)
-            solid[i] = !open[i];
+        // ⚠️ Inside a solid border, as the cell sits in the packed map. Off the
+        // edge of a mask is OPEN (Walkmask.IsSolid), so a bare window lets arcs
+        // leave through its edge and come back — routes, and ways out of pits,
+        // that the walled-in cell does not have. Measured: without the border 13
+        // of 192 cells passed here and had a one-way pocket in the shipped graph.
+        const int Border = 4;
+        var w = cw + (2 * Border);
+        var h = ch + (2 * Border);
+        var solid = new bool[w * h];
+        Array.Fill(solid, true);
+        for (var y = 0; y < ch; y++)
+        {
+            for (var x = 0; x < cw; x++)
+                solid[((y + Border) * w) + x + Border] = !open[(y * cw) + x];
+        }
 
-        var entities = $"[{{type:redspawn,x:{a.X},y:{a.Y}}},{{type:bluespawn,x:{b.X},y:{b.Y}}}"
-            + string.Concat(kept.Select(e => "," + Ggon(e, e.X, e.Y))) + "]";
+        var shift = Border * Cell;
+        var entities = $"[{{type:redspawn,x:{a.X + shift},y:{a.Y + shift}}},{{type:bluespawn,x:{b.X + shift},y:{b.Y + shift}}}"
+            + string.Concat(kept.Select(e => "," + Ggon(e, e.X + shift, e.Y + shift))) + "]";
 
-        var map = LevelMap.FromLevelData("cell", LevelText(entities, solid, cw, ch));
+        var map = LevelMap.FromLevelData("cell", LevelText(entities, solid, w, h));
         var graph = NavCache.Parse(NavGenerator.Build(map, 1).Text, "cell", 1);
 
-        var from = graph.NodeFromWorld(a.X, (aRow * Cell) - NavGraph.FeetOffset);
-        var to = graph.NodeFromWorld(b.X, (bRow * Cell) - NavGraph.FeetOffset);
+        var from = graph.NodeFromWorld(a.X + shift, ((aRow + Border) * Cell) - NavGraph.FeetOffset);
+        var to = graph.NodeFromWorld(b.X + shift, ((bRow + Border) * Cell) - NavGraph.FeetOffset);
 
-        return from >= 0 && to >= 0 && Reaches(graph, from, to) && Reaches(graph, to, from);
+        if (from < 0 || to < 0)
+            return false;
+
+        // Everywhere the first spawn can get to, it must also be able to get back
+        // from: a pit with no way out strands whoever falls in for the rest of
+        // their life. With the second spawn inside that set, this is also "the
+        // two reach each other both ways".
+        var forward = Flood(graph, from, reverse: false);
+        if (!forward[to] || forward.Count(f => f) < MinSurfaces)
+            return false;
+
+        var back = Flood(graph, from, reverse: true);
+        for (var node = 0; node < forward.Length; node++)
+        {
+            if (forward[node] && !back[node])
+                return false;
+        }
+
+        return true;
     }
 
-    private static bool Reaches(NavGraph graph, int from, int to)
+    private static bool Universal(NavEdgeType type) =>
+        type is NavEdgeType.Walk or NavEdgeType.Fall or NavEdgeType.Jump or NavEdgeType.DropThrough;
+
+    /// <summary>
+    /// The nodes reachable from <paramref name="start"/> over <see cref="Universal"/>
+    /// edges, or with <paramref name="reverse"/> the nodes that can reach it.
+    /// </summary>
+    private static bool[] Flood(NavGraph graph, int start, bool reverse)
     {
-        var seen = new bool[graph.NodeCount];
-        var queue = new Queue<int>();
-        seen[from] = true;
-        queue.Enqueue(from);
-
-        while (queue.TryDequeue(out var node))
+        List<int>[]? into = null;
+        if (reverse)
         {
-            if (node == to)
-                return true;
+            into = new List<int>[graph.NodeCount];
+            for (var node = 0; node < into.Length; node++)
+                into[node] = [];
 
-            foreach (var edge in graph.EdgesFrom(node))
+            for (var node = 0; node < graph.NodeCount; node++)
             {
-                if (edge.Type is not (NavEdgeType.Walk or NavEdgeType.Fall or NavEdgeType.Jump or NavEdgeType.DropThrough)
-                    || seen[edge.To])
+                foreach (var edge in graph.EdgesFrom(node))
                 {
-                    continue;
+                    if (Universal(edge.Type))
+                        into[edge.To].Add(node);
                 }
-
-                seen[edge.To] = true;
-                queue.Enqueue(edge.To);
             }
         }
 
-        return false;
+        var seen = new bool[graph.NodeCount];
+        var queue = new Queue<int>();
+        seen[start] = true;
+        queue.Enqueue(start);
+
+        while (queue.TryDequeue(out var node))
+        {
+            if (into is not null)
+            {
+                foreach (var next in into[node])
+                    Visit(next);
+            }
+            else
+            {
+                foreach (var edge in graph.EdgesFrom(node))
+                {
+                    if (Universal(edge.Type))
+                        Visit(edge.To);
+                }
+            }
+        }
+
+        return seen;
+
+        void Visit(int node)
+        {
+            if (!seen[node])
+            {
+                seen[node] = true;
+                queue.Enqueue(node);
+            }
+        }
     }
 
     private static bool[] Dilate(bool[] cells, int w, int h, int times)

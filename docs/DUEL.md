@@ -62,6 +62,7 @@ gg2-server cellgen --check                           # exit 1 if a pool map is s
 | 30-80% of the window must be open | Less is a corridor, more is open sky with nothing to fight round |
 | Two spawns, one in each outer 40% of the window, each with a 36x54 px clear column over two floor cells | A spawn has to land; `CellMapGenerator.CanStand` |
 | The spawns reach each other both ways over walk, fall, jump and drop-through edges, on the nav graph of the cell built as a map of its own | Every class can reach its opponent; rocket and double jumps are extra routes, never the only one |
+| Every surface reachable from a spawn leads back to it, over the same edges, and there are at least 8 | No pit strands whoever falls in, and no cell is a box with a floor. Measured on the first pool: 34 of 192 cells had a one-way pocket and some reached only 3-4 surfaces |
 | A window touching a `pitfall` (or kill/frag box) is refused | Its art promises a death the cut map would not deliver |
 | Dropdown platforms and invisible player/bullet walls wholly inside the window are kept; every other entity is dropped | The art draws the first and the geometry relies on the second; gates, objectives, spawn rooms, cabinets, doors and move boxes would each change the duel |
 | Spawns sit 42 px above their floor | The commonest offset among the 227 shipped spawn points (range 26-66) |
@@ -89,6 +90,21 @@ from the server on join (`docs/DEBUG-MAPS.md`, "A stock client can join it").
 File size is not a constraint at any cell count the player limit allows: a
 48-cell map with 780x480 cells and the same gap is 104 KB as truecolour.
 
+### Known issue: in some cells the bot cannot finish a cornered opponent
+
+Measured 2026-10-28 on `duel_01` with `--duel`, a stationary human and a 60 s
+cap per life, about 70 lives a class. Most kills take 7-15 s, spawn protection
+included. In a few cells the bot never kills: soldier cells 4, 16 and 20, and
+scout cell 0. A trace of one such cell (on the pool before its regeneration):
+once protection ends the bot's rocket knocks the human into a hollow a ledge
+below, and the bot then stands on that ledge, sees its target, never fires,
+and fails the same two-node path down for the rest of the life. The cell has no
+one-way pocket, so this is the bot layer, not the geometry. A moving human is
+not caught like this as easily, which is why it is written down rather than
+chased; a stationary dummy is the worst case. Re-measure by pinning a human to
+each cell through `DuelServerTests`' harness and counting ticks to the first
+death.
+
 ### What `CellMapTests` gates
 
 - each checked-in map equals its pool entry's output, by level data and art (not
@@ -98,7 +114,8 @@ File size is not a constraint at any cell count the player limit allows: a
 - nothing outside the cells is open, and the gap is over twice the rocket radius;
 - all ten classes, spawned at all 48 spawns at once, are alive and on the ground
   inside their own cell after 60 ticks of the real simulation;
-- on the shipped graph, each cell's partners reach each other both ways;
+- on the shipped graph, each cell's partners reach each other both ways, every
+  surface the red spawn reaches leads back to it, and there are at least eight;
 - the shipped graphs are what the nav generator builds, character for character.
 
 Two were checked by breaking them: spawning blue into the next cell fails the
