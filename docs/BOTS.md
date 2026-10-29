@@ -572,8 +572,8 @@ wheel on the way across (the class remarks say what breaks if that stops).
 
 | | gg2-rl `.npz` | gg2-sim `.gg2p` |
 |---|---|---|
-| Observation | `ObservationWriter` | `SimPolicyObservation`: team (253 floats), duel (169), zoom (255: team plus own scope and rifle charge), demo (286: team plus the eight nearest own mines and lobbed/8), or pyro (256: team plus ReadyToBlast, ReadyToFlare and own burn/210). Every team width lists enemy mines and flares beside rockets and shots; the duel width does not |
-| Actions | `ActionDecoder` | `SimPolicyController`: 24 absolute aim bins, then 25 relative to the k-th listed enemy (team) or to the nearest enemy (duel); a zoom net adds a fifth head, the scope level; a demo or pyro net's fifth head is the Special key (the detonate, or the airblast and with Attack the flare), held for the decision like Attack |
+| Observation | `ObservationWriter` | `SimPolicyObservation`: team (253 floats), duel (169), zoom (255: team plus own scope and rifle charge), demo (286: team plus the eight nearest own mines and lobbed/8), pyro (256: team plus ReadyToBlast, ReadyToFlare and own burn/210), or medic (259: team plus uber/2000, uber ready, ubering, beaming, patient hp share and the patient's index among the listed team-mates). Every team width lists enemy mines and flares beside rockets and shots; the duel width does not |
+| Actions | `ActionDecoder` | `SimPolicyController`: 24 absolute aim bins, then 25 relative to the k-th listed enemy (team) or to the nearest enemy (duel); a zoom net adds a fifth head, the scope level; a demo, pyro or medic net's fifth head is the Special key (the detonate; the airblast, and with Attack the flare; the needles, and with Attack the uber when ready), held for the decision like Attack. A medic net's relative groups 1 and 2 aim at the two listed team-mates, with the aim distance on them (capped at 255) so the beam picks that patient |
 | Sniper scope | `Zoom` head decoded, applied nowhere | a zoom net's own, while it drives (`IScopeController`); otherwise the scripted layer's |
 | Classes it drives | the file's set, overridable | **only** what `ClassPolicy` assigns; none is warned about |
 | Stamp | `SIM_UUID`, refused on mismatch | none; gg2-sim records the gg2-server commit it trained at |
@@ -604,6 +604,13 @@ layout and enemy flares were checked against gg2-sim `e2afef1`'s
 demoman and soldier matches on five maps: 1,591,444 observations (base, demo,
 pyro and both duel widths) and 638,012 decoded inputs bitwise equal, enemy
 flares in view in 4,021; leaving the flares out made it fail at the first one.
+The medic layout was checked against gg2-sim `4a8d9ca` the same way, over 80
+medic, pyro, demoman and soldier matches: 2,038,526 observations and 1,022,805
+decoded inputs bitwise equal, with a beam in 59,795, an uber running in 3,653 and
+172,008 ally-aim decodes; fixing the ally aim distance at 128 failed it on the
+first. **A medic on the beam is never handed over** (`Handover.ShouldEngage`), so
+on a live server a medic net drives only off the beam, and its beam columns and
+ally aim matter there only for the decisions it takes as the beam ends.
 **Nothing in
 this suite can show that** — `SimPolicyTests` uses synthetic weights — so a
 change to either side is re-checked by re-running that comparison, and gg2-sim's

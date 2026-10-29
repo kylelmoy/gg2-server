@@ -38,7 +38,11 @@ namespace GG2.Bots;
 /// keys and held for its <see cref="ActionRepeat"/> ticks, with no edge logic —
 /// gg2-sim's <c>PolicyDriver.TeamInput</c>. <b>A pyro net</b>
 /// (<see cref="SimPolicyNetwork.IsPyro"/>) uses the fifth head the same way:
-/// Special is the airblast, and with Attack also held, the flare.
+/// Special is the airblast, and with Attack also held, the flare. <b>A medic
+/// net</b> (<see cref="SimPolicyNetwork.IsMedic"/>) too (needles, or the uber
+/// when ready with Attack held), and its relative aim groups 1 and 2 aim at the
+/// team-mates its last observation listed, with the aim distance on them so the
+/// beam's mouse-point preference picks that patient.
 /// </para>
 /// </remarks>
 public sealed class SimPolicyController : IMicroController, IScopeController
@@ -63,6 +67,9 @@ public sealed class SimPolicyController : IMicroController, IScopeController
     private readonly float[] _scratchB;
     private readonly int[] _action;
     private readonly int[] _listed = [-1, -1, -1];
+
+    // The team-mates the last team observation listed: a medic net's ally aim.
+    private readonly int[] _listedAllies = [-1, -1];
 
     private int _ticksLeft;
     private int _slot = -1;
@@ -160,7 +167,7 @@ public sealed class SimPolicyController : IMicroController, IScopeController
             return new PlayerInput(PlayerKeys.None, world.Character(slot).NetAimDirection, 128);
 
         return _network.IsTeam
-            ? TeamInput(in world, _action, slot, _listed, _network.IsDemo || _network.IsPyro)
+            ? TeamInput(in world, _action, slot, _listed, _network.IsDemo || _network.IsPyro || _network.IsMedic, _network.IsMedic ? _listedAllies : null)
             : DuelInput(in world, _action, slot, _op);
     }
 
@@ -179,7 +186,8 @@ public sealed class SimPolicyController : IMicroController, IScopeController
     private void Decide(in WorldView world, int me, int op)
     {
         if (_network.IsTeam)
-            SimPolicyObservation.Team(in world, me, _observation, _listed, _network.IsZoom, _network.IsDemo, _network.IsPyro);
+            SimPolicyObservation.Team(
+                in world, me, _observation, _listed, _network.IsZoom, _network.IsDemo, _network.IsPyro, _network.IsMedic, _listedAllies);
         else
             SimPolicyObservation.Duel(in world, me, op, _observation, _network.InputSize);
 
@@ -219,8 +227,11 @@ public sealed class SimPolicyController : IMicroController, IScopeController
         return new PlayerInput(keys, (ushort)((uint)(deg * 65536.0 / 360.0) & 0xFFFF), 128);
     }
 
-    // gg2-sim's PolicyDriver.TeamInput. In the demo and pyro layouts the fifth head is Special.
-    private static PlayerInput TeamInput(in WorldView world, int[] a, int meSlot, int[] listed, bool special)
+    // gg2-sim's PolicyDriver.TeamInput. In the demo, pyro and medic layouts the
+    // fifth head is Special. With listedAllies (the medic layout) groups 1 and 2
+    // aim at the listed team-mates 0 and 1, or the nearest live one, with the
+    // aim distance on them, truncated and capped at 255.
+    private static PlayerInput TeamInput(in WorldView world, int[] a, int meSlot, int[] listed, bool special, int[]? listedAllies)
     {
         var keys = Keys(a);
 
@@ -232,12 +243,13 @@ public sealed class SimPolicyController : IMicroController, IScopeController
             return new PlayerInput(keys, (ushort)(bin * 65536 / AbsoluteAimBins), 128);
 
         int group = (bin - AbsoluteAimBins) / RelativeAimBins, offset = (bin - AbsoluteAimBins) % RelativeAimBins;
-        var target = listed[group];
+        var ally = listedAllies is not null && group > 0;
+        var target = ally ? listedAllies![group - 1] : listed[group];
 
         if (target < 0 || !world.IsAlive(target))
         {
             Span<int> one = stackalloc int[1];
-            target = SimPolicyObservation.Nearest(in world, meSlot, mates: false, one) > 0 ? one[0] : -1;
+            target = SimPolicyObservation.Nearest(in world, meSlot, mates: ally, one) > 0 ? one[0] : -1;
         }
 
         if (target < 0)
@@ -247,7 +259,8 @@ public sealed class SimPolicyController : IMicroController, IScopeController
         ref readonly var op = ref world.Character(target);
         var deg = Gml.PointDirection(me.X, me.Y, op.X, op.Y) + ((offset - (RelativeAimBins / 2)) * RelativeStep);
         deg = ((deg % 360) + 360) % 360;
-        return new PlayerInput(keys, (ushort)((uint)(deg * 65536.0 / 360.0) & 0xFFFF), 128);
+        var distance = ally ? (byte)(int)Math.Min(255.0, Gml.PointDistance(me.X, me.Y, op.X, op.Y)) : (byte)128;
+        return new PlayerInput(keys, (ushort)((uint)(deg * 65536.0 / 360.0) & 0xFFFF), distance);
     }
 
     // gg2-sim's SimPolicyController.NearestEnemy: the roster's teams and

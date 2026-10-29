@@ -313,6 +313,79 @@ public sealed class SimPolicyTests : IDisposable
     }
 
     /// <summary>
+    /// gg2-sim 4a8d9ca's medic layout: 259 inputs and a fifth head, Special.
+    /// Both or neither, as for the other five-head nets.
+    /// </summary>
+    [Fact]
+    public void LoadsAMedicNetAndRefusesAHalfMedicLayout()
+    {
+        var medic = SimPolicyNetwork.Load(WriteMedic("medic.gg2p", needles: true));
+
+        Assert.True(medic.IsMedic);
+        Assert.True(medic.IsTeam);
+        Assert.False(medic.IsPyro);
+        Assert.Equal(259, medic.InputSize);
+        Assert.Equal([3, 2, 2, 99, 2], medic.Heads.ToArray());
+
+        Assert.Throws<InvalidDataException>(() => SimPolicyNetwork.Load(
+            Write("medic4.gg2p", SimPolicyObservation.MedicSize, SimPolicyController.TeamAimActions)));
+    }
+
+    /// <summary>
+    /// The medic layout's six columns: uber/2000, ready, ubering, beaming, the
+    /// patient's hp share, and the patient's index among the listed team-mates.
+    /// The ally aim's decode is bit-exact against gg2-sim's ref by the
+    /// cross-check outside this suite (docs/BOTS.md).
+    /// </summary>
+    [Fact]
+    public void TheMedicLayoutSeesItsUberAndItsPatient()
+    {
+        var options = HeadlessMatchOptions.Default with
+        {
+            Map = "ctf_truefort",
+            Bots = 4,
+            Seed = 7123,
+            MaxTicks = 600,
+            AllowedClasses = [PlayerClass.Medic],
+        };
+        var match = HeadlessMatch.Load(options, MapDirectory.Resolve(), MapDirectory.ResolveNav());
+        var o = new float[SimPolicyObservation.MedicSize];
+        var listed = new int[SimPolicyObservation.ListedEnemies];
+        var allies = new int[SimPolicyObservation.ListedAllies];
+
+        while (match.Outcome == MatchOutcome.Running)
+        {
+            match.Step();
+            var view = new WorldView(in match.State, match.Collision);
+
+            if (view.IsAlive(1))
+            {
+                SimPolicyObservation.Team(in view, 1, o, listed, medic: true, listedAllies: allies);
+
+                if (allies[0] >= 0)
+                    break;
+            }
+        }
+
+        ref var state = ref match.State;
+        var patient = allies[0];
+        state.Weapons[1].HealTarget = (byte)patient;
+        state.Weapons[1].UberCharge = 500;
+        state.Weapons[1].UberReady = false;
+        state.Weapons[1].Ubering = true;
+        state.Characters[patient].Hp = ClassStats.For(state.Characters[patient].Class).MaxHp / 2;
+
+        var beamed = new WorldView(in state, match.Collision);
+        SimPolicyObservation.Team(in beamed, 1, o, listed, medic: true, listedAllies: allies);
+        Assert.Equal([0.25f, 0f, 1f, 1f, 0.5f, 0f], o[253..259]);
+
+        state.Weapons[1].HealTarget = WeaponState.NoTarget;
+        var idle = new WorldView(in state, match.Collision);
+        SimPolicyObservation.Team(in idle, 1, o, listed, medic: true, listedAllies: allies);
+        Assert.Equal([0f, 0f, -1f], o[256..259]);
+    }
+
+    /// <summary>
     /// A zoom net driving a sniper holds the scope at its head's level, whatever
     /// the scripted layer wants.
     /// </summary>
@@ -510,6 +583,10 @@ public sealed class SimPolicyTests : IDisposable
     // A pyro-layout net whose Special head always says press, or always release.
     private string WritePyro(string name, bool blast) =>
         Write(name, SimPolicyObservation.PyroSize, SimPolicyController.TeamAimActions, zoomHead: true, zoomLevel: blast ? 1 : 0);
+
+    // A medic-layout net whose Special head always says press, or always release.
+    private string WriteMedic(string name, bool needles) =>
+        Write(name, SimPolicyObservation.MedicSize, SimPolicyController.TeamAimActions, zoomHead: true, zoomLevel: needles ? 1 : 0);
 
     // A zoom-layout net whose scope head always says scoped, or always unscoped.
     private string WriteZoom(string name, bool scoped) =>

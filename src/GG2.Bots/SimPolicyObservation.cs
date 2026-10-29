@@ -26,7 +26,10 @@ namespace GG2.Bots;
 /// (<see cref="DemoSize"/>) is the team layout plus the demoman's eight nearest
 /// own mines and lobbed/8 there instead; a pyro net's (<see cref="PyroSize"/>)
 /// is the team layout plus the pyro's ReadyToBlast, ReadyToFlare and own
-/// burn/210.
+/// burn/210; a medic net's (<see cref="MedicSize"/>) is the team layout plus
+/// its uber charge/2000, uber ready, ubering, beaming, the patient's hp share and
+/// the patient's index among the listed team-mates (-1 when not one of them or
+/// not beaming).
 /// </para>
 /// <para>
 /// <b>The team layout's projectile list includes ENEMY mines and flares</b>
@@ -68,20 +71,31 @@ public static class SimPolicyObservation
 
     public const int PyroSize = TeamSize + PyroColumns;
 
+    /// <summary>gg2-sim's <c>MedicObs</c>: uber/2000, ready, ubering, beaming, patient hp, patient index.</summary>
+    public const int MedicColumns = 6;
+
+    public const int MedicSize = TeamSize + MedicColumns;
+
+    /// <summary>How many team-mates a team observation lists: a medic net's ally aim groups.</summary>
+    public const int ListedAllies = NearAllies;
+
     /// <summary>
     /// The team observation for <paramref name="meSlot"/>, and the enemies it
     /// listed (nearest first, -1 past them) into <paramref name="listed"/>.
     /// <paramref name="zoom"/> appends the zoom layout's two columns,
     /// <paramref name="demo"/> the demo layout's thirty-three, <paramref name="pyro"/>
-    /// the pyro layout's three.
+    /// the pyro layout's three, <paramref name="medic"/> the medic layout's six.
+    /// The team-mates it listed go into <paramref name="listedAllies"/> when that
+    /// is not empty.
     /// </summary>
     public static void Team(
-        in WorldView world, int meSlot, Span<float> o, Span<int> listed, bool zoom = false, bool demo = false, bool pyro = false)
+        in WorldView world, int meSlot, Span<float> o, Span<int> listed, bool zoom = false, bool demo = false, bool pyro = false,
+        bool medic = false, Span<int> listedAllies = default)
     {
         ref readonly var me = ref world.Character(meSlot);
         ref readonly var gun = ref world.Weapon(meSlot);
         var map = world.Collision;
-        o[..(zoom ? ZoomSize : demo ? DemoSize : pyro ? PyroSize : TeamSize)].Clear();
+        o[..(zoom ? ZoomSize : demo ? DemoSize : pyro ? PyroSize : medic ? MedicSize : TeamSize)].Clear();
         var k = 0;
         o[k++] = (float)(me.X / map.Width);
         o[k++] = (float)(me.Y / map.Height);
@@ -109,6 +123,9 @@ public static class SimPolicyObservation
 
         for (var n = 0; n < NearAllies; n++)
         {
+            if (!listedAllies.IsEmpty)
+                listedAllies[n] = n < na ? allies[n] : -1;
+
             if (n < na)
                 WriteCharacter(in me, in world.Character(allies[n]), o, ref k);
             else
@@ -177,6 +194,26 @@ public static class SimPolicyObservation
             o[k++] = gun.ReadyToBlast ? 1 : 0;
             o[k++] = gun.ReadyToFlare ? 1 : 0;
             o[k++] = (float)(me.BurnDuration / CharacterState.MaxBurnDuration);
+        }
+        else if (medic)
+        {
+            k += ClassCount;
+            var patient = gun.HealTarget;
+            var beaming = patient != WeaponState.NoTarget && world.IsAlive(patient);
+            o[k++] = (float)(gun.UberCharge / WeaponState.MaxUberCharge);
+            o[k++] = gun.UberReady ? 1 : 0;
+            o[k++] = gun.Ubering ? 1 : 0;
+            o[k++] = beaming ? 1 : 0;
+            o[k++] = beaming ? (float)(world.Character(patient).Hp / ClassStats.For(world.Character(patient).Class).MaxHp) : 0;
+
+            var index = -1f;
+            for (var n = 0; n < na; n++)
+            {
+                if (beaming && allies[n] == patient)
+                    index = n;
+            }
+
+            o[k++] = index;
         }
     }
 
