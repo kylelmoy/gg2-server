@@ -629,7 +629,13 @@ public static class Timers
             return;
         }
 
-        var point = (int)state.Random.Next(available);
+        // A pinned player takes its pin and the draw is not made at all. Free:
+        // the id goes on the wire, so no client tracks this stream position
+        // (docs/SIMULATION.md, "Server-side RNG is mostly free"). Unpinned —
+        // every replay, every ordinary server — draws exactly as before.
+        var point = player.SpawnPin is { } pin && pin < available
+            ? pin
+            : (int)state.Random.Next(available);
 
         if (!state.Spawn(spawnPoints, slot, player.Class, player.Team, point, Group))
             return;

@@ -2546,6 +2546,9 @@ reference's own `PLAYER_SPAWN`s.
   `selectSpawnGroup(team)` — **0 for every mode without control points** — and
   `spawnpointID = floor(random(n))` off the global stream: free, because
   `sendEventSpawn` broadcasts the id and every client follows the message.
+  This port adds `PlayerState.SpawnPin`: a pinned player takes that id and
+  the draw is skipped, so the stream position differs from an unpinned run.
+  Nothing pins except a duel server (`docs/DUEL.md`); every replay draws.
   Players are older instances than any character or weapon, so within alarm
   index 5 every respawn fires before any weapon's reload; a character born in
   the alarm stage runs its Step — and is seen by `move_all_bullets` — in the

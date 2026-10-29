@@ -101,6 +101,35 @@ public struct PlayerState
     public bool IsBot;
 
     /// <summary>
+    /// The spawn point this player always respawns at, as an index into its team's
+    /// group-0 list, or null for the reference's random pick.
+    /// </summary>
+    /// <remarks>
+    /// <b>This port's own, like <see cref="IsBot"/>, and free under the rule:</b>
+    /// <c>PLAYER_SPAWN</c> carries the chosen id and every client follows it, so
+    /// which id is chosen is invisible to a client (<c>docs/SIMULATION.md</c>,
+    /// "Server-side RNG is mostly free"). It is what puts a duel server's human
+    /// and bot in the same cell (<c>docs/DUEL.md</c>).
+    /// <para>
+    /// <b>Stored as id + 1 so that ZERO is unpinned</b>, unlike the 255-is-nobody
+    /// roster fields: the parity replayer and a dozen tests build players with
+    /// <c>new PlayerState { ... }</c>, and with 255 as "none" every one of them
+    /// was silently pinned to spawn 0 — 63 fixtures landed on the wrong marker.
+    /// A pin past the end of the list (a map change to fewer spawns) falls back
+    /// to the random pick rather than failing the spawn.
+    /// </para>
+    /// </remarks>
+    public int? SpawnPin
+    {
+        readonly get => _spawnPinPlusOne == 0 ? null : _spawnPinPlusOne - 1;
+        set => _spawnPinPlusOne = value is { } id
+            ? (byte)(Math.Clamp(id, 0, byte.MaxValue - 1) + 1)
+            : (byte)0;
+    }
+
+    private byte _spawnPinPlusOne;
+
+    /// <summary>
     /// <c>player.alarm[5]</c>: ticks until <c>PlayerSpawn()</c>. Rests at
     /// <see cref="Timers.Inactive"/>.
     /// </summary>

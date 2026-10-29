@@ -11,7 +11,7 @@ always red and bots always blue, so the team score reads as humans against bots.
 |---|---|
 | Cell maps: generator, an 8-map pool, nav graphs | **Built.** `gg2-server cellgen`, `maps/duel/`, `nav/duel/`, `CellMapTests` |
 | A stock client on a cell map | **Measured**: loads, runs at 30 fps, about 10 MB over `cp_egypt`. See "What a stock client showed" |
-| Pinning a player's spawn to a cell | **Not built.** Spawns are still `Timers.PlayerSpawn`'s random draw, so a server on a cell map today puts everyone in random cells |
+| Pinning a player's spawn to a cell | **Built in the simulation**: `PlayerState.SpawnPin` (null = unpinned; stored as id + 1 so a zeroed player is unpinned) replaces `Timers.PlayerSpawn`'s random draw, gated by `SpawnPinTests`. Nothing sets it yet, so a server on a cell map still puts everyone in random cells |
 | Pairing: one bot per human, opposite team, same class, same cell | **Not built.** `BotPopulation` still fills to a count |
 | A human's death kills their bot, and both respawn in a new cell | **Not built** |
 | A bot targets only its partner | **Not built.** Bots in a cell map today target whoever their layer picks; walls keep them apart, but a bot whose partner is dead can route toward an unreachable human |
