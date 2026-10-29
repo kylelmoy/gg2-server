@@ -572,8 +572,8 @@ wheel on the way across (the class remarks say what breaks if that stops).
 
 | | gg2-rl `.npz` | gg2-sim `.gg2p` |
 |---|---|---|
-| Observation | `ObservationWriter` | `SimPolicyObservation`: team (253 floats), duel (169), zoom (255: team plus own scope and rifle charge), or demo (286: team plus the eight nearest own mines and lobbed/8). Every team width lists enemy mines beside rockets and shots; the duel width does not |
-| Actions | `ActionDecoder` | `SimPolicyController`: 24 absolute aim bins, then 25 relative to the k-th listed enemy (team) or to the nearest enemy (duel); a zoom net adds a fifth head, the scope level; a demo net's fifth head is the Special key (the detonate), held for the decision like Attack |
+| Observation | `ObservationWriter` | `SimPolicyObservation`: team (253 floats), duel (169), zoom (255: team plus own scope and rifle charge), demo (286: team plus the eight nearest own mines and lobbed/8), or pyro (256: team plus ReadyToBlast, ReadyToFlare and own burn/210). Every team width lists enemy mines and flares beside rockets and shots; the duel width does not |
+| Actions | `ActionDecoder` | `SimPolicyController`: 24 absolute aim bins, then 25 relative to the k-th listed enemy (team) or to the nearest enemy (duel); a zoom net adds a fifth head, the scope level; a demo or pyro net's fifth head is the Special key (the detonate, or the airblast and with Attack the flare), held for the decision like Attack |
 | Sniper scope | `Zoom` head decoded, applied nowhere | a zoom net's own, while it drives (`IScopeController`); otherwise the scripted layer's |
 | Classes it drives | the file's set, overridable | **only** what `ClassPolicy` assigns; none is warned about |
 | Stamp | `SIM_UUID`, refused on mismatch | none; gg2-sim records the gg2-server commit it trained at |
@@ -598,7 +598,13 @@ and the enemy mines were checked against gg2-sim `31f42ef` on 2026-10-29, its
 soldier matches on five maps: 1,304,956 observations (base and demo team
 widths, both duel widths) and 328,018 decoded team inputs with random actions
 bitwise equal, with enemy mines in view in 86,541 of them and own mines in
-17,615; leaving the enemy mines out made it fail at the first one. **Nothing in
+17,615; leaving the enemy mines out made it fail at the first one. The pyro
+layout and enemy flares were checked against gg2-sim's working-tree
+`ref/PolicyDriver.cs` (on `0f2c818`, pin `8535530`) on 2026-10-29 over 80 pyro,
+demoman and soldier matches on five maps: 1,591,444 observations (base, demo,
+pyro and both duel widths) and 638,012 decoded inputs bitwise equal, enemy
+flares in view in 4,021; leaving the flares out made it fail at the first one.
+**Nothing in
 this suite can show that** — `SimPolicyTests` uses synthetic weights — so a
 change to either side is re-checked by re-running that comparison, and gg2-sim's
 `scripts/obs-check.sh` holds the observation to its GPU environment. Changing

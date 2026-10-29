@@ -211,6 +211,108 @@ public sealed class SimPolicyTests : IDisposable
     }
 
     /// <summary>
+    /// gg2-sim's pyro layout: 256 inputs and a fifth head, Special. Both or
+    /// neither, as for the zoom and demo nets.
+    /// </summary>
+    [Fact]
+    public void LoadsAPyroNetAndRefusesAHalfPyroLayout()
+    {
+        var pyro = SimPolicyNetwork.Load(WritePyro("pyro.gg2p", blast: true));
+
+        Assert.True(pyro.IsPyro);
+        Assert.True(pyro.IsTeam);
+        Assert.False(pyro.IsDemo);
+        Assert.False(pyro.IsZoom);
+        Assert.Equal(256, pyro.InputSize);
+        Assert.Equal([3, 2, 2, 99, 2], pyro.Heads.ToArray());
+
+        Assert.Throws<InvalidDataException>(() => SimPolicyNetwork.Load(
+            Write("pyro4.gg2p", SimPolicyObservation.PyroSize, SimPolicyController.TeamAimActions)));
+    }
+
+    /// <summary>The pyro net's fifth head is the Special key, as the demo net's is.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void APyroNetsFifthHeadIsTheSpecialKey(bool blast)
+    {
+        var options = HeadlessMatchOptions.Default with
+        {
+            Map = "ctf_truefort",
+            Bots = 4,
+            Seed = 7123,
+            MaxTicks = 600,
+            AllowedClasses = [PlayerClass.Pyro],
+        };
+        var match = HeadlessMatch.Load(options, MapDirectory.Resolve(), MapDirectory.ResolveNav());
+        var pyro = new SimPolicyController(SimPolicyNetwork.Load(WritePyro(blast ? "blast.gg2p" : "calm.gg2p", blast)), [PlayerClass.Pyro]);
+        var polled = 0;
+        Span<int> nearest = stackalloc int[1];
+
+        while (match.Outcome == MatchOutcome.Running && polled < 60)
+        {
+            match.Step();
+            var view = new WorldView(in match.State, match.Collision);
+
+            if (!view.IsAlive(1) || view.NearestEnemies(1, nearest) == 0)
+                continue;
+
+            Assert.Equal(blast, (pyro.Poll(in view, 1, match.Tick).Keys & PlayerKeys.Special) != 0);
+            polled++;
+        }
+
+        Assert.Equal(60, polled);
+    }
+
+    /// <summary>
+    /// The team projectile list takes an enemy's flare and not one's own; the
+    /// pyro layout's three columns are ReadyToBlast, ReadyToFlare and burn/210.
+    /// </summary>
+    [Fact]
+    public void TheTeamLayoutListsEnemyFlaresAndThePyroLayoutItsOwnState()
+    {
+        var options = HeadlessMatchOptions.Default with
+        {
+            Map = "ctf_truefort",
+            Bots = 2,
+            Seed = 7123,
+            MaxTicks = 600,
+            AllowedClasses = [PlayerClass.Pyro],
+        };
+        var match = HeadlessMatch.Load(options, MapDirectory.Resolve(), MapDirectory.ResolveNav());
+
+        while (match.Outcome == MatchOutcome.Running && !(match.State.Alive[1] && match.State.Alive[2]))
+            match.Step();
+
+        ref var state = ref match.State;
+        ref var me = ref state.Characters[1];
+        state.Characters[2].Team = me.Team == Team.Red ? Team.Blue : Team.Red;
+        me.BurnDuration = 105;
+        state.Weapons[1].ReadyToBlast = true;
+        state.Weapons[1].ReadyToFlare = false;
+
+        var own = new ProjectileState { Kind = ProjectileKind.Flare, Team = me.Team, OwnerSlot = 1, Reflector = ProjectileState.NoOwner, X = me.X + 10, Y = me.Y };
+        var theirs = own with { Team = state.Characters[2].Team, OwnerSlot = 2, X = me.X + 20 };
+        state.SpawnProjectile(own);
+        state.SpawnProjectile(theirs);
+
+        var o = new float[SimPolicyObservation.PyroSize];
+        var listed = new int[SimPolicyObservation.ListedEnemies];
+        var view = new WorldView(in state, match.Collision);
+        SimPolicyObservation.Team(in view, 1, o, listed, pyro: true);
+
+        // The first projectile row (cols 88-94): the enemy flare, 20 px right,
+        // not ours, an enemy's, present; the second row is empty.
+        Assert.Equal(20f / 500, o[88]);
+        Assert.Equal(0f, o[92]);
+        Assert.Equal(1f, o[93]);
+        Assert.Equal(1f, o[94]);
+        Assert.Equal(0f, o[95 + 6]);
+
+        Assert.Equal([1f, 0f, 0.5f], o[253..256]);
+    }
+
+    /// <summary>
     /// A zoom net driving a sniper holds the scope at its head's level, whatever
     /// the scripted layer wants.
     /// </summary>
@@ -404,6 +506,10 @@ public sealed class SimPolicyTests : IDisposable
     // A demo-layout net whose Special head always says press, or always release.
     private string WriteDemo(string name, bool detonate) =>
         Write(name, SimPolicyObservation.DemoSize, SimPolicyController.TeamAimActions, zoomHead: true, zoomLevel: detonate ? 1 : 0);
+
+    // A pyro-layout net whose Special head always says press, or always release.
+    private string WritePyro(string name, bool blast) =>
+        Write(name, SimPolicyObservation.PyroSize, SimPolicyController.TeamAimActions, zoomHead: true, zoomLevel: blast ? 1 : 0);
 
     // A zoom-layout net whose scope head always says scoped, or always unscoped.
     private string WriteZoom(string name, bool scoped) =>

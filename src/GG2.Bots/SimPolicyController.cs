@@ -36,7 +36,9 @@ namespace GG2.Bots;
 /// <b>A demo net</b> (<see cref="SimPolicyNetwork.IsDemo"/>) is a team net whose
 /// fifth head is Special, the detonate: a key pressed with the decision's other
 /// keys and held for its <see cref="ActionRepeat"/> ticks, with no edge logic —
-/// gg2-sim's <c>PolicyDriver.TeamInput</c>.
+/// gg2-sim's <c>PolicyDriver.TeamInput</c>. <b>A pyro net</b>
+/// (<see cref="SimPolicyNetwork.IsPyro"/>) uses the fifth head the same way:
+/// Special is the airblast, and with Attack also held, the flare.
 /// </para>
 /// </remarks>
 public sealed class SimPolicyController : IMicroController, IScopeController
@@ -158,7 +160,7 @@ public sealed class SimPolicyController : IMicroController, IScopeController
             return new PlayerInput(PlayerKeys.None, world.Character(slot).NetAimDirection, 128);
 
         return _network.IsTeam
-            ? TeamInput(in world, _action, slot, _listed, _network.IsDemo)
+            ? TeamInput(in world, _action, slot, _listed, _network.IsDemo || _network.IsPyro)
             : DuelInput(in world, _action, slot, _op);
     }
 
@@ -177,7 +179,7 @@ public sealed class SimPolicyController : IMicroController, IScopeController
     private void Decide(in WorldView world, int me, int op)
     {
         if (_network.IsTeam)
-            SimPolicyObservation.Team(in world, me, _observation, _listed, _network.IsZoom, _network.IsDemo);
+            SimPolicyObservation.Team(in world, me, _observation, _listed, _network.IsZoom, _network.IsDemo, _network.IsPyro);
         else
             SimPolicyObservation.Duel(in world, me, op, _observation, _network.InputSize);
 
@@ -217,12 +219,12 @@ public sealed class SimPolicyController : IMicroController, IScopeController
         return new PlayerInput(keys, (ushort)((uint)(deg * 65536.0 / 360.0) & 0xFFFF), 128);
     }
 
-    // gg2-sim's PolicyDriver.TeamInput. In the demo layout the fifth head is Special.
-    private static PlayerInput TeamInput(in WorldView world, int[] a, int meSlot, int[] listed, bool demo)
+    // gg2-sim's PolicyDriver.TeamInput. In the demo and pyro layouts the fifth head is Special.
+    private static PlayerInput TeamInput(in WorldView world, int[] a, int meSlot, int[] listed, bool special)
     {
         var keys = Keys(a);
 
-        if (demo && a[4] != 0)
+        if (special && a[4] != 0)
             keys |= PlayerKeys.Special;
         var bin = Math.Clamp(a[3], 0, TeamAimActions - 1);
 

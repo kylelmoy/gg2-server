@@ -24,13 +24,16 @@ namespace GG2.Bots;
 /// A zoom net's (<see cref="ZoomSize"/>) is the team layout plus the sniper's own
 /// scope and rifle charge after the class one-hots; a demo net's
 /// (<see cref="DemoSize"/>) is the team layout plus the demoman's eight nearest
-/// own mines and lobbed/8 there instead.
+/// own mines and lobbed/8 there instead; a pyro net's (<see cref="PyroSize"/>)
+/// is the team layout plus the pyro's ReadyToBlast, ReadyToFlare and own
+/// burn/210.
 /// </para>
 /// <para>
-/// <b>The team layout's projectile list includes ENEMY mines</b> (gg2-sim
-/// <c>31f42ef</c>), in every team width: a mine whose team is not the viewer's,
-/// beside rockets and shots. A team-mate's or one's own mine is not listed. The
-/// duel layout's list is rockets and shots only, unchanged.
+/// <b>The team layout's projectile list includes ENEMY mines and flares</b>
+/// (gg2-sim <c>31f42ef</c> and the pyro commit after it), in every team width: a
+/// mine or flare whose team is not the viewer's, beside rockets and shots. A
+/// team-mate's or one's own is not listed, and flames never are. The duel
+/// layout's list is rockets and shots only, unchanged.
 /// </para>
 /// </remarks>
 public static class SimPolicyObservation
@@ -60,18 +63,25 @@ public static class SimPolicyObservation
 
     public const int DemoSize = TeamSize + DemoColumns;
 
+    /// <summary>gg2-sim's <c>PyroObs</c>: ReadyToBlast, ReadyToFlare, then own burn/210.</summary>
+    public const int PyroColumns = 3;
+
+    public const int PyroSize = TeamSize + PyroColumns;
+
     /// <summary>
     /// The team observation for <paramref name="meSlot"/>, and the enemies it
     /// listed (nearest first, -1 past them) into <paramref name="listed"/>.
     /// <paramref name="zoom"/> appends the zoom layout's two columns,
-    /// <paramref name="demo"/> the demo layout's thirty-three.
+    /// <paramref name="demo"/> the demo layout's thirty-three, <paramref name="pyro"/>
+    /// the pyro layout's three.
     /// </summary>
-    public static void Team(in WorldView world, int meSlot, Span<float> o, Span<int> listed, bool zoom = false, bool demo = false)
+    public static void Team(
+        in WorldView world, int meSlot, Span<float> o, Span<int> listed, bool zoom = false, bool demo = false, bool pyro = false)
     {
         ref readonly var me = ref world.Character(meSlot);
         ref readonly var gun = ref world.Weapon(meSlot);
         var map = world.Collision;
-        o[..(zoom ? ZoomSize : demo ? DemoSize : TeamSize)].Clear();
+        o[..(zoom ? ZoomSize : demo ? DemoSize : pyro ? PyroSize : TeamSize)].Clear();
         var k = 0;
         o[k++] = (float)(me.X / map.Width);
         o[k++] = (float)(me.Y / map.Height);
@@ -106,7 +116,7 @@ public static class SimPolicyObservation
         }
 
         Span<int> picked = stackalloc int[NearShots];
-        var count = PickShots(in world, in me, picked, enemyMines: true);
+        var count = PickShots(in world, in me, picked, enemyHazards: true);
 
         for (var n = 0; n < NearShots; n++)
         {
@@ -161,6 +171,13 @@ public static class SimPolicyObservation
 
             o[k++] = (float)((double)gun.Lobbed / MaxMines);
         }
+        else if (pyro)
+        {
+            k += ClassCount;
+            o[k++] = gun.ReadyToBlast ? 1 : 0;
+            o[k++] = gun.ReadyToFlare ? 1 : 0;
+            o[k++] = (float)(me.BurnDuration / CharacterState.MaxBurnDuration);
+        }
     }
 
     /// <summary>
@@ -193,7 +210,7 @@ public static class SimPolicyObservation
         o[k++] = world.IsAlive(opSlot) ? 1 : 0;
 
         Span<int> picked = stackalloc int[NearRockets];
-        var count = PickShots(in world, in me, picked, enemyMines: false);
+        var count = PickShots(in world, in me, picked, enemyHazards: false);
 
         for (var n = 0; n < NearRockets; n++)
         {
@@ -272,10 +289,10 @@ public static class SimPolicyObservation
         return found;
     }
 
-    // The nearest rockets and shots (and, for the team layout, enemy mines),
+    // The nearest rockets and shots (and, for the team layout, enemy mines and flares),
     // nearest first, by repeated selection over the live list in its own order —
     // so an exact tie goes to the earlier live entry, as gg2-sim's picks it.
-    private static int PickShots(in WorldView world, in CharacterState me, Span<int> picked, bool enemyMines)
+    private static int PickShots(in WorldView world, in CharacterState me, Span<int> picked, bool enemyHazards)
     {
         var count = 0;
 
@@ -290,7 +307,7 @@ public static class SimPolicyObservation
                 ref readonly var pr = ref world.State.Projectiles[p];
 
                 var shot = pr.Kind is ProjectileKind.Rocket or ProjectileKind.Shot
-                    || (enemyMines && pr.Kind == ProjectileKind.Mine && pr.Team != me.Team);
+                    || (enemyHazards && pr.Kind is (ProjectileKind.Mine or ProjectileKind.Flare) && pr.Team != me.Team);
 
                 if (!shot || picked[..count].Contains(p))
                     continue;

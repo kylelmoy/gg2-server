@@ -56,7 +56,8 @@ public sealed class SimPolicyNetwork
     /// own enemies and team-mates; anything else is a duel net, which observes one
     /// opponent the controller picks.
     /// </summary>
-    public bool IsTeam => InputSize is SimPolicyObservation.TeamSize or SimPolicyObservation.ZoomSize or SimPolicyObservation.DemoSize;
+    public bool IsTeam => InputSize is SimPolicyObservation.TeamSize or SimPolicyObservation.ZoomSize or SimPolicyObservation.DemoSize
+        or SimPolicyObservation.PyroSize;
 
     /// <summary>
     /// A sniper net in gg2-sim's zoom layout: a team net with
@@ -73,7 +74,15 @@ public sealed class SimPolicyNetwork
     /// </summary>
     public bool IsDemo => InputSize == SimPolicyObservation.DemoSize && _heads.Length == ZoomHeads;
 
-    /// <summary>A zoom or demo net's head count; every other net has four.</summary>
+    /// <summary>
+    /// A pyro net in gg2-sim's pyro layout: a team net with
+    /// <see cref="SimPolicyObservation.PyroSize"/> inputs and a fifth head,
+    /// Special — the airblast, held like the demo net's detonate. Detected by
+    /// both, as gg2-sim's <c>PolicyDriver.Pyro</c> is.
+    /// </summary>
+    public bool IsPyro => InputSize == SimPolicyObservation.PyroSize && _heads.Length == ZoomHeads;
+
+    /// <summary>A zoom, demo or pyro net's head count; every other net has four.</summary>
     public const int ZoomHeads = 5;
 
     /// <summary>The widest layer edge, for a caller's scratch buffers.</summary>
@@ -159,26 +168,26 @@ public sealed class SimPolicyNetwork
         var aim = IsTeam ? SimPolicyController.TeamAimActions : SimPolicyController.DuelAimActions;
 
         if (InputSize is not (SimPolicyObservation.TeamSize or SimPolicyObservation.ZoomSize or SimPolicyObservation.DemoSize
-                or SimPolicyObservation.DuelSize or SimPolicyObservation.DuelSizeNoClasses))
+                or SimPolicyObservation.PyroSize or SimPolicyObservation.DuelSize or SimPolicyObservation.DuelSizeNoClasses))
         {
             throw new InvalidDataException(
                 $"{InputSize} inputs; expected {SimPolicyObservation.TeamSize} (team), {SimPolicyObservation.ZoomSize} (zoom), "
-                + $"{SimPolicyObservation.DemoSize} (demo) or "
+                + $"{SimPolicyObservation.DemoSize} (demo), {SimPolicyObservation.PyroSize} (pyro) or "
                 + $"{SimPolicyObservation.DuelSize}/{SimPolicyObservation.DuelSizeNoClasses} (duel)");
         }
 
         // Both or neither: a fifth head on a net that does not observe what it
         // acts on, or a zoom- or demo-width observation with no head to act on it,
         // is not a layout gg2-sim exports.
-        var fifth = InputSize is SimPolicyObservation.ZoomSize or SimPolicyObservation.DemoSize;
+        var fifth = InputSize is SimPolicyObservation.ZoomSize or SimPolicyObservation.DemoSize or SimPolicyObservation.PyroSize;
         if (fifth != (_heads.Length == ZoomHeads))
         {
             throw new InvalidDataException(
-                $"{InputSize} inputs and {_heads.Length} heads; a zoom net has {SimPolicyObservation.ZoomSize} and a demo net "
-                + $"{SimPolicyObservation.DemoSize}, each with {ZoomHeads}");
+                $"{InputSize} inputs and {_heads.Length} heads; a zoom net has {SimPolicyObservation.ZoomSize}, a demo net "
+                + $"{SimPolicyObservation.DemoSize} and a pyro net {SimPolicyObservation.PyroSize}, each with {ZoomHeads}");
         }
 
-        if ((IsZoom || IsDemo) && _heads[4] != 2)
+        if ((IsZoom || IsDemo || IsPyro) && _heads[4] != 2)
             throw new InvalidDataException($"fifth head is {_heads[4]} wide, expected 2");
 
         if (_heads[3] != aim)
