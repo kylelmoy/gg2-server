@@ -599,8 +599,8 @@ soldier matches on five maps: 1,304,956 observations (base and demo team
 widths, both duel widths) and 328,018 decoded team inputs with random actions
 bitwise equal, with enemy mines in view in 86,541 of them and own mines in
 17,615; leaving the enemy mines out made it fail at the first one. The pyro
-layout and enemy flares were checked against gg2-sim's working-tree
-`ref/PolicyDriver.cs` (on `0f2c818`, pin `8535530`) on 2026-10-29 over 80 pyro,
+layout and enemy flares were checked against gg2-sim `e2afef1`'s
+`ref/PolicyDriver.cs` (pin `8535530`) on 2026-10-29 over 80 pyro,
 demoman and soldier matches on five maps: 1,591,444 observations (base, demo,
 pyro and both duel widths) and 638,012 decoded inputs bitwise equal, enemy
 flares in view in 4,021; leaving the flares out made it fail at the first one.
