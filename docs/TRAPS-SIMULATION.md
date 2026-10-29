@@ -498,6 +498,14 @@ rocket", has the comparison table; these are the traps.
 - ⚠️ **Mines die with their owner, silently.** The one exception to "a projectile
   outlives its owner" — they belong to the weapon, and the weapon dies with the
   character.
+- **A chain re-queues a mine that an earlier blast already queued, and the newer
+  copy is the one that counts.** It pops first, so the mine goes off inside the
+  nearer subtree, as nested `event_user(2)` calls do. Skipping the re-queue moves
+  that explosion later and changes the knockback order. `DetonateMine` instead
+  drops the older copy, which would only have popped once the mine was gone.
+  That keeps the stack within one entry per live mine, where keeping every copy
+  grows it as the square of the cluster and overflowed 512 with 48 mines from
+  both teams (`MinegunTests.ADenseClusterOfBothTeamsMinesChainsWithoutOverflowing`).
 - ⚠️ **`lobbed < maxMines` is checked before the seed is drawn**, so a demoman at
   eight mines does not advance the shared RNG stream.
 - **A mine substeps** (six pixels a hop), **falls at 0.2 capped at 8**, **sticks

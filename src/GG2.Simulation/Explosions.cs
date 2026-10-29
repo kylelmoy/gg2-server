@@ -675,6 +675,24 @@ public static class Explosions
                 if (Gml.LessOrEqual(1 - (gap / radius), 0.25) && mine.SplashThreshold)
                     continue;
 
+                // A mine an earlier blast already queued is queued again here,
+                // and this copy pops first: the mine goes off inside this
+                // subtree, as the reference's nested event_user(2) does. The
+                // older copy lower down would only pop after that and be
+                // skipped, so it is dropped now — the order is unchanged and
+                // the stack never holds a mine twice, which is what keeps it
+                // within MaxProjectiles for a dense cluster of both teams'.
+                for (var j = 0; j < first; j++)
+                {
+                    if (pending[j] != other)
+                        continue;
+
+                    pending[(j + 1)..depth].CopyTo(pending[j..]);
+                    depth--;
+                    first--;
+                    break;
+                }
+
                 pending[depth++] = other;
             }
 

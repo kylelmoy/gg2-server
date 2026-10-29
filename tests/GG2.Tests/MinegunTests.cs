@@ -430,6 +430,33 @@ public sealed class MinegunTests
     }
 
     /// <summary>
+    /// A dense cluster of both teams' mines chains through every one of them.
+    /// </summary>
+    /// <remarks>
+    /// Every mine a blast reaches is queued, including ones an earlier blast
+    /// already queued, so 48 mutually reachable mines queue about 48²/2 times
+    /// — past the pool's 512 when stale entries were kept.
+    /// </remarks>
+    [Fact]
+    public void ADenseClusterOfBothTeamsMinesChainsWithoutOverflowing()
+    {
+        var state = default(WorldState);
+        var first = ProjectileHandle.None;
+
+        for (var i = 0; i < 48; i++)
+        {
+            var team = i % 2 == 0 ? Team.Red : Team.Blue;
+            var handle = state.SpawnProjectile(Mine(OpenX + (i % 8), AirY, ownerSlot: 1 + (i % 6), team, stuck: true));
+            if (i == 0)
+                first = handle;
+        }
+
+        Explosions.DetonateMine(World, ref state, first, ref DiscardedEvents.Events);
+
+        Assert.Equal(0, state.LiveProjectileCount);
+    }
+
+    /// <summary>
     /// A team-mate's mine is left where it is.
     /// </summary>
     /// <remarks>
