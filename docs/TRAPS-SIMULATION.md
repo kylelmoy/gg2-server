@@ -749,6 +749,12 @@ of class or team", has the full rules; these are the traps:
   change message. A characterless change arms `alarm[5] = 1`: a spawn in this
   same tick's alarm stage. A tick's spawn goes out on the *next* flush, like a
   `WEAPON_FIRE` — the old `TrySpawn` was one flush early.
+  **It is scored like any death**: `processClientCommands.gml:89/99/162/172`
+  call `doEventPlayerDeath`, so the victim's death, the finisher's kill and
+  points, the assist, domination and Team Deathmatch's kill all count
+  (`PlayerCommands.BidFarewell` → `Scoring.RecordDeath`,
+  `Deaths.CountTeamDeathmatchKill`). No parity fixture moved when that was
+  added, so `ChangeDeathScoringTests` is the only gate.
 - ⚠️ **The team balance guard refuses the bigger team and the team you are
   already on — including an "any" whose `choose(RED, BLUE)` coin lands on your
   own team.** That refusal is the reference's, not an accident of the port.

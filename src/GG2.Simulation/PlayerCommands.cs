@@ -319,6 +319,15 @@ public static class PlayerCommands
             death = new PlayerDeathEvent(slot, dealer, assistant, DamageSource.FinishedOff);
         }
 
+        // processClientCommands.gml:89/99 (and :162/172 for a team change) follow
+        // the send with doEventPlayerDeath, which scores before it destroys:
+        // the victim's death, the killer's kill and points, the assist, the
+        // domination table (all Scoring.RecordDeath) and Team Deathmatch's kill
+        // count (doEventPlayerDeath.gml:308). Deaths.Kill's order, and before
+        // Vanish because the medic bonus reads the body's weapon.
+        Scoring.RecordDeath(ref state, slot, in death);
+        Deaths.CountTeamDeathmatchKill(ref state, slot, in death);
+
         Vanish(ref state, slot, world);
         return death;
     }

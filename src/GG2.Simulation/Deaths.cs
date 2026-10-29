@@ -248,7 +248,7 @@ public static class Deaths
     /// trade in which both die still credits the one who struck first.
     /// </para>
     /// </remarks>
-    private static void CountTeamDeathmatchKill(ref WorldState state, int victimSlot, in PlayerDeathEvent death)
+    internal static void CountTeamDeathmatchKill(ref WorldState state, int victimSlot, in PlayerDeathEvent death)
     {
         if (state.GameMode != GameMode.TeamDeathmatch)
             return;
