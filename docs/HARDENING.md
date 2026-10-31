@@ -331,13 +331,18 @@ absorbed at all.
   this process an accept, an allocation and a roster walk.
 
 What the fleet runs: `ufw` with `DEFAULT_INPUT_POLICY=DROP` and three inbound
-rules on each VPS member, `22/tcp`, `8190/tcp`, and `8191/tcp` from the fleet
-hub's public address only. The panel there is a fleet member (TLS, `AllowFrom`
-naming the same address), so it is locked twice. A connect to 8191 from another
-VPS times out, which is the check that the rule is live rather than assumed. The
-hub, on the home LAN, admits `192.168.x.0/24` and has no forwarded port. If the
-hub's public address changes, every member refuses it until both `AllowFrom`
-and the `ufw` rule are updated; an ssh tunnel to loopback still reaches each
+rules on each VPS member, `22/tcp`, `8190/tcp`, and `8191/tcp` for the fleet
+hub. The hub reaches each member's panel over Tailscale, from its tailnet
+address `100.64.0.1`, and the panel there is a fleet member (TLS,
+`AllowFrom` naming that address alone). The tailnet policy (`tag:gg2`: the
+tagged VPS hosts cannot start connections, and only the owner's devices can
+reach them) and `ufw` are what keep 8191 off the public internet; `AllowFrom` is
+the lock behind them. `Bind` stays `0.0.0.0`: binding to the 100.x address
+fails whenever the server starts before `tailscaled`. A connect to 8191 from
+outside the tailnet times out, which is the check that the rule is live rather
+than assumed. The hub, on the home LAN, admits `192.168.x.0/24` and has no
+forwarded port. If the hub's tailnet address changes, every member refuses it
+until `AllowFrom` is updated; an ssh tunnel to loopback still reaches each
 member's panel.
 
 **`systemctl is-active ufw` does not answer whether the firewall is up.** The
