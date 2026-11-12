@@ -103,7 +103,8 @@ public sealed class CellMapTests
     }
 
     /// <summary>
-    /// Nothing outside the cells is open, and the solid between two cells is
+    /// Nothing outside the cells is open but the bottom-left mask cell, and the
+    /// solid between two cells is
     /// wider than any blast reaches — rocket and sentry 65 px, mine 40, and
     /// <c>Explosions</c> asks no wall whether it is in the way. The generator
     /// blast (400) cannot occur: a cell map has no generator.
@@ -132,10 +133,61 @@ public sealed class CellMapTests
         {
             for (var x = 0; x < map.Width; x++)
             {
-                if (!inside[(y * map.Width) + x])
+                if (!inside[(y * map.Width) + x] && (x, y) != (0, map.Height - 1))
                     Assert.True(level.Walkmask.IsSolid(x, y), $"{name}: ({x}, {y}) is open outside every cell");
             }
         }
+    }
+
+    /// <summary>
+    /// The bottom-left walkmask cell of every checked-in duel map is open, or the
+    /// stock client inverts the whole mask.
+    /// </summary>
+    /// <remarks>
+    /// The client writes the walkmask out one pixel per cell and loads it with
+    /// GM8's <c>sprite_add(file, 1, removeback = true, ...)</c>
+    /// (<c>Scripts/Maps/CustomMaps/CustomMapProcessLevelData.gml:22</c>), and
+    /// removeback makes the bottom-left pixel's colour transparent. With that
+    /// cell solid, solid reads as air and open as wall on the client, which then
+    /// cannot predict its own character at all: it moves only when a server
+    /// correction lands. Measured 2026-11-12 with a stock client on
+    /// <c>duel_04</c>: the client's mask around its character was the exact
+    /// complement of the server's. Nothing in the server's own simulation can
+    /// show this, so the rule is gated on the files, against the shipped maps it
+    /// was read from.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(PoolNames))]
+    public void TheBottomLeftMaskCellIsOpen(string name)
+    {
+        var level = LevelMap.FromPng(name, File.ReadAllBytes(Path.Combine(DuelMaps, name + ".png")));
+
+        Assert.False(level.Walkmask.IsSolid(0, level.Walkmask.Height - 1), $"{name}: the stock client would load this mask inverted");
+    }
+
+    /// <summary>
+    /// The rule above is the shipped maps' own: every one has its bottom-left
+    /// walkmask cell open. If one did not, the rule would be wrong rather than
+    /// this map.
+    /// </summary>
+    [Fact]
+    public void EveryShippedMapHasAnOpenBottomLeftMaskCell()
+    {
+        var checkedMaps = 0;
+
+        foreach (var file in Directory.GetFiles(ReferenceTree.MapsDirectory, "*.png"))
+        {
+            var name = Path.GetFileNameWithoutExtension(file);
+
+            if (ReferenceTree.PortAuthoredMaps.Contains(name))
+                continue;
+
+            var level = LevelMap.FromPng(name, File.ReadAllBytes(file));
+            Assert.False(level.Walkmask.IsSolid(0, level.Walkmask.Height - 1), $"{name}: bottom-left mask cell is solid");
+            checkedMaps++;
+        }
+
+        Assert.Equal(22, checkedMaps);
     }
 
     /// <summary>

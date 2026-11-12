@@ -232,6 +232,18 @@ internal static class CellMapGenerator
             placed.Add(new PlacedCell(source.Name, cut.SourceX, cut.SourceY, maskX, maskY, red, blue, cut.OpenCells));
         }
 
+        // ⛔ The bottom-left mask cell is OPEN, deliberately. The stock client
+        // writes the walkmask out one pixel per cell and loads it with
+        // sprite_add(file, 1, removeback = true, ...)
+        // (CustomMapProcessLevelData.gml:22), and removeback makes the colour of
+        // the image's bottom-left pixel transparent. A solid corner therefore
+        // turns every solid cell into air and every open cell into wall on the
+        // client: its own character is embedded everywhere it stands, cannot
+        // predict a step, and moves only on the server's corrections. Every
+        // shipped map has this corner open. It sits Gap cells from the nearest
+        // cell, so nothing can reach it. CellMapTests gates it for the pool.
+        solid[(height - 1) * width] = false;
+
         var background = WallColour.ToString("x6", CultureInfo.InvariantCulture);
         var entityBlock = $"[{{background:{background},type:meta}}{spawns}{string.Concat(extras.Select(e => "," + e))}]";
 

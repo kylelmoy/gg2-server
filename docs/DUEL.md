@@ -62,6 +62,7 @@ gg2-server cellgen --check                           # exit 1 if a pool map is s
 | The spawns reach each other both ways over walk, fall, jump and drop-through edges, on the nav graph of the cell built as a map of its own | Every class can reach its opponent; rocket and double jumps are extra routes, never the only one |
 | Every surface reachable from a spawn leads back to it, over the same edges, and there are at least 8 | No pit strands whoever falls in, and no cell is a box with a floor. Measured on the first pool: 34 of 192 cells had a one-way pocket and some reached only 3-4 surfaces |
 | A window touching a `pitfall` (or kill/frag box) is refused | Its art promises a death the cut map would not deliver |
+| The bottom-left mask cell is open, alone in the solid field | The stock client writes the walkmask out one pixel per cell and loads it with `sprite_add(..., removeback = true, ...)` (`CustomMapProcessLevelData.gml:22`), which makes the bottom-left pixel's colour transparent. With that cell solid the client inverts the whole mask: its character is embedded in wall everywhere, cannot predict a step, and moves only when a server correction lands, so play looks laggy and wrong while the server is healthy. Every shipped map has the cell open; the cell is `Gap` cells from any cell, so nothing reaches it. Gated by `CellMapTests.TheBottomLeftMaskCellIsOpen` and, for the shipped maps the rule was read from, `EveryShippedMapHasAnOpenBottomLeftMaskCell` |
 | Dropdown platforms and invisible player/bullet walls wholly inside the window are kept; every other entity is dropped | The art draws the first and the geometry relies on the second; gates, objectives, spawn rooms, cabinets, doors and move boxes would each change the duel |
 | Spawns sit 42 px above their floor | The commonest offset among the 227 shipped spawn points (range 26-66) |
 | Cell `i` holds red spawn `i` and blue spawn `i` | The index a pinned spawn will be sent with in `PLAYER_SPAWN` |
@@ -127,7 +128,9 @@ bots on this machine):
 
 | Question | Result |
 |---|---|
-| Does it download, load and run the map? | Yes: downloaded on join, `CustomMapRoom`, 30 fps, joined red and spawned on the floor of its cell |
+| Does it download, load and run the map? | Yes: downloaded on join, `CustomMapRoom`, 30 fps |
+| Does it predict its own character? | Yes, with the bottom-left mask cell open (measured on `duel_04`, 2026-11-12: holding left, hspeed ramps -1.07 to -6.08 and x advances by it every frame, stopping at a wall where the server's x agrees to 0.001 px). With that cell solid it did not: the client's mask round its character was the exact complement of the server's, and x moved only on corrections, about four times a second |
+| A player who downloaded an older copy | The client compares MD5s on join and asks "The server's copy of the map (duel_04) differs from ours. Would you like to download this server's version of the map?"; yes downloads it. Regenerating the pool puts that prompt in front of every returning player |
 | What does the bigger map cost the client? | 287 MB working set and 656 MB private, against 284 and 647 MB on `cp_egypt` in the same session shape: about 10 MB, so map size is not what limits the cell count |
 | What is on screen from inside a cell? | The cell, its edge, and the flat field; no other cell, from the one spawn looked at |
 

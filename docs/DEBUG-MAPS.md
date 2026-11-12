@@ -41,6 +41,15 @@ it ships with the game and is covered by the ordinary map gates.)
   **Nothing is published for that to work**: the map is served off this
   server over the same socket, to whoever connects. `--lobby` is a different
   switch and still defaults off.
+  **Known gap: a stock client loads `gg_debug2`'s collision inverted.** Its
+  bottom-left walkmask cell is solid, and the client loads the mask with
+  removeback, which makes that corner's colour transparent
+  (`docs/DUEL.md`, "The cell maps", has the mechanism; `CellMapTests` gates the
+  rule for the duel pool and the 22 shipped maps). A joined client's own
+  character then cannot predict movement and follows server corrections only.
+  The server-side simulation is unaffected. Fixing it means opening that cell
+  in `tools/gen-gg-debug2.js`, which breaks the mirror symmetry
+  `GgDebug2MapTests` pins unless the bottom-right cell opens with it.
 
 ## Regenerating
 
