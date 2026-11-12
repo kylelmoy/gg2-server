@@ -369,16 +369,22 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// objective term, by its user's decision — a bot that runs past you to tap the
     /// intel is optimal and unpleasant. The macro layer owns objectives entirely.
     /// <para>
-    /// <b>The one exception is the sniper's scope</b>: while the driving tier is an
-    /// <see cref="IScopeController"/> that owns it, the scripted layer's
-    /// <c>ToggleZoom</c> is dropped and the tier's is sent instead. A scope level is
-    /// part of a sniper policy's action, not an objective.
+    /// <b>The exceptions are the sniper's scope and the engineer's build</b>: while
+    /// the driving tier is an <see cref="IScopeController"/> that owns the scope,
+    /// the scripted layer's <c>ToggleZoom</c> is dropped and the tier's is sent
+    /// instead, and while it is an <see cref="IBuildController"/> that owns the
+    /// build, the same for <c>BuildSentry</c>. A scope level or a sentry is part of
+    /// a class policy's action, not an objective.
     /// </para>
     /// </remarks>
     public void PollCommands(in WorldView world, int slot, int tick, ref PlayerCommandBuffer commands)
     {
-        if (_driving >= 0 && slot == _slot && _tiers[_driving] is IScopeController { OwnsScope: true } scope)
-            PollCommandsOwningScope(in world, slot, tick, scope, ref commands);
+        var tier = _driving >= 0 && slot == _slot ? _tiers[_driving] : null;
+        var scope = tier is IScopeController { OwnsScope: true } owningScope ? owningScope : null;
+        var build = tier is IBuildController { OwnsBuild: true } owningBuild ? owningBuild : null;
+
+        if (scope is not null || build is not null)
+            PollCommandsOwning(in world, slot, tick, scope, build, ref commands);
         else
             _scripted.PollCommands(in world, slot, tick, ref commands);
 
@@ -413,25 +419,43 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     }
 
     // The scripted layer still runs its PollCommands every tick — its state must
-    // not depend on who holds the wheel — and only its toggle is withheld.
-    private void PollCommandsOwningScope(
-        in WorldView world, int slot, int tick, IScopeController scope, ref PlayerCommandBuffer commands)
+    // not depend on who holds the wheel — and only the commands the tier owns are
+    // withheld.
+    private void PollCommandsOwning(
+        in WorldView world, int slot, int tick, IScopeController? scope, IBuildController? build, ref PlayerCommandBuffer commands)
     {
         var scripted = default(PlayerCommandBuffer);
         _scripted.PollCommands(in world, slot, tick, ref scripted);
 
         for (var i = 0; i < scripted.Count; i++)
         {
-            if (scripted[i].Kind != PlayerCommandKind.ToggleZoom)
+            var kind = scripted[i].Kind;
+
+            if (!(scope is not null && kind == PlayerCommandKind.ToggleZoom) && !(build is not null && kind == PlayerCommandKind.BuildSentry))
                 commands.Push(scripted[i]);
         }
 
-        if (scope.WantsZoomToggle(in world, slot, tick))
+        if (scope is not null && scope.WantsZoomToggle(in world, slot, tick))
             commands.Push(PlayerCommand.ToggleZoom());
+
+        if (build is not null && build.WantsBuild(in world, slot, tick))
+            commands.Push(PlayerCommand.BuildSentry());
     }
 
     public PlayerInput Poll(in WorldView world, int slot, int tick)
     {
+        // A tier that remembers what its body has seen learns it while the
+        // scripted layer drives, before anything this tick can change who does
+        // (ISightingController; gg2-sim's ref/Matches.cs calls it at this point).
+        if (_driving < 0)
+        {
+            foreach (var tier in _tiers)
+            {
+                if (tier is ISightingController sighting)
+                    sighting.Sight(in world, slot, tick);
+            }
+        }
+
         if (slot != _slot)
         {
             _slot = slot;

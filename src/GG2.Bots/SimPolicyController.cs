@@ -42,10 +42,22 @@ namespace GG2.Bots;
 /// net</b> (<see cref="SimPolicyNetwork.IsMedic"/>) too (needles, or the uber
 /// when ready with Attack held), and its relative aim groups 1 and 2 aim at the
 /// team-mates its last observation listed, with the aim distance on them so the
-/// beam's mouse-point preference picks that patient.
+/// beam's mouse-point preference picks that patient. <b>A spy net</b>
+/// (<see cref="SimPolicyNetwork.IsSpy"/>) presses Special too: the cloak toggle.
+/// <b>An engineer net</b> (<see cref="SimPolicyNetwork.IsEngineer"/>) sends its
+/// fifth head as the build command on every tick of the decision
+/// (<see cref="WantsBuild"/>, asked before the keys like the scope).
+/// </para>
+/// <para>
+/// <b>A base layout v2 net</b> (<see cref="SimPolicyNetwork.IsV2"/>) keeps one
+/// <see cref="SimPolicyMemory"/> for its body: learned at each observation, and on
+/// every third tick while the scripted layer drives (<see cref="Sight"/>, gg2-sim's
+/// <c>SimPolicyController.Sight</c>). A listed enemy the body cannot see now is
+/// aimed at where the observation listed it, and the fallback when a listed one has
+/// died is the nearest enemy it can see.
 /// </para>
 /// </remarks>
-public sealed class SimPolicyController : IMicroController, IScopeController, IBeamController
+public sealed class SimPolicyController : IMicroController, IScopeController, IBeamController, IBuildController, ISightingController
 {
     /// <summary>Ticks a decision is held for: the cadence every gg2-sim policy trained at.</summary>
     public const int ActionRepeat = 3;
@@ -71,6 +83,10 @@ public sealed class SimPolicyController : IMicroController, IScopeController, IB
     // The team-mates the last team observation listed: a medic net's ally aim.
     private readonly int[] _listedAllies = [-1, -1];
 
+    // A v2 net's sightings (null on v1), and the roster slot they were learned in.
+    private readonly SimPolicyMemory? _memory;
+    private int _memorySlot = -1;
+
     private int _ticksLeft;
     private int _slot = -1;
     private int _op = -1;
@@ -95,6 +111,7 @@ public sealed class SimPolicyController : IMicroController, IScopeController, IB
         _scratchA = new float[network.Widest];
         _scratchB = new float[network.Widest];
         _action = new int[network.Heads.Length];
+        _memory = network.IsV2 ? new SimPolicyMemory() : null;
         Name = label is null ? "gg2-sim" : "gg2-sim:" + label;
     }
 
@@ -143,14 +160,59 @@ public sealed class SimPolicyController : IMicroController, IScopeController, IB
         if (!_network.IsZoom || !world.IsAlive(slot))
             return false;
 
-        if (AtDecisionBoundary(slot) && !_decidedEarly)
-        {
-            Begin(in world, slot);
-            _decidedEarly = true;
-        }
-
+        DecideEarly(in world, slot, tick);
         ref readonly var self = ref world.Character(slot);
         return self.Class == PlayerClass.Sniper && (_action[4] != 0) != self.Zoomed;
+    }
+
+    public bool OwnsBuild => _network.IsEngineer;
+
+    /// <summary>
+    /// gg2-sim's <c>SimPolicyController.WantsBuild</c>: the held decision's build
+    /// head, on every tick it holds, deciding early at a boundary.
+    /// </summary>
+    public bool WantsBuild(in WorldView world, int slot, int tick)
+    {
+        if (!_network.IsEngineer || !world.IsAlive(slot))
+            return false;
+
+        DecideEarly(in world, slot, tick);
+        return world.Character(slot).Class == PlayerClass.Engineer && _action[4] != 0;
+    }
+
+    /// <summary>
+    /// gg2-sim's <c>SimPolicyController.Sight</c>: a v2 net's sightings on the
+    /// environment's step cadence, every <see cref="ActionRepeat"/> ticks, so the
+    /// memory a handover inherits is the one gg2-sim's environment would hold.
+    /// </summary>
+    public void Sight(in WorldView world, int slot, int tick)
+    {
+        if (_memory is null || tick % ActionRepeat != 0)
+            return;
+
+        SimPolicyObservation.Sight(in world, slot, Memory(slot), tick);
+    }
+
+    private void DecideEarly(in WorldView world, int slot, int tick)
+    {
+        if (AtDecisionBoundary(slot) && !_decidedEarly)
+        {
+            Begin(in world, slot, tick);
+            _decidedEarly = true;
+        }
+    }
+
+    // Not in gg2-sim's ref, where a body never changes slot: sightings are by
+    // roster slot, and a body renumbered by a departure starts over.
+    private SimPolicyMemory Memory(int slot)
+    {
+        if (slot != _memorySlot)
+        {
+            _memory!.Clear();
+            _memorySlot = slot;
+        }
+
+        return _memory!;
     }
 
     public PlayerInput Poll(in WorldView world, int slot, int tick)
@@ -159,7 +221,7 @@ public sealed class SimPolicyController : IMicroController, IScopeController, IB
         DecidedThisPoll = first;
 
         if (first && !_decidedEarly)
-            Begin(in world, slot);
+            Begin(in world, slot, tick);
 
         _decidedEarly = false;
         _ticksLeft--;
@@ -170,11 +232,11 @@ public sealed class SimPolicyController : IMicroController, IScopeController, IB
             return new PlayerInput(PlayerKeys.None, world.Character(slot).NetAimDirection, 128);
 
         return _network.IsTeam
-            ? TeamInput(in world, _action, slot, _listed, _network.IsDemo || _network.IsPyro || _network.IsMedic, _network.IsMedic ? _listedAllies : null)
+            ? TeamInput(in world, _action, slot, _listed, _network.FifthIsSpecial, _network.IsMedic ? _listedAllies : null, _memory)
             : DuelInput(in world, _action, slot, _op);
     }
 
-    private void Begin(in WorldView world, int slot)
+    private void Begin(in WorldView world, int slot, int tick)
     {
         _slot = slot;
         _ticksLeft = ActionRepeat;
@@ -183,14 +245,15 @@ public sealed class SimPolicyController : IMicroController, IScopeController, IB
         if (_op < 0)
             Array.Clear(_action);
         else
-            Decide(in world, slot, _op);
+            Decide(in world, slot, _op, tick);
     }
 
-    private void Decide(in WorldView world, int me, int op)
+    private void Decide(in WorldView world, int me, int op, int tick)
     {
         if (_network.IsTeam)
             SimPolicyObservation.Team(
-                in world, me, _observation, _listed, _network.IsZoom, _network.IsDemo, _network.IsPyro, _network.IsMedic, _listedAllies);
+                in world, me, _observation, _listed, _network.IsZoom, _network.IsDemo, _network.IsPyro, _network.IsMedic, _listedAllies,
+                _network.IsEngineer, _network.IsSpy, _memory is null ? null : Memory(me), tick);
         else
             SimPolicyObservation.Duel(in world, me, op, _observation, _network.InputSize);
 
@@ -230,11 +293,14 @@ public sealed class SimPolicyController : IMicroController, IScopeController, IB
         return new PlayerInput(keys, (ushort)((uint)(deg * 65536.0 / 360.0) & 0xFFFF), 128);
     }
 
-    // gg2-sim's PolicyDriver.TeamInput. In the demo, pyro and medic layouts the
-    // fifth head is Special. With listedAllies (the medic layout) groups 1 and 2
-    // aim at the listed team-mates 0 and 1, or the nearest live one, with the
-    // aim distance on them, truncated and capped at 255.
-    private static PlayerInput TeamInput(in WorldView world, int[] a, int meSlot, int[] listed, bool special, int[]? listedAllies)
+    // gg2-sim's PolicyDriver.TeamInput. In the demo, pyro, medic and spy layouts
+    // the fifth head is Special. With listedAllies (the medic layout) groups 1 and
+    // 2 aim at the listed team-mates 0 and 1, or the nearest live one, with the
+    // aim distance on them, truncated and capped at 255. With a v2 memory a listed
+    // enemy the body cannot see now is aimed at where it was listed, and the
+    // fallback is the nearest enemy it can see.
+    internal static PlayerInput TeamInput(
+        in WorldView world, int[] a, int meSlot, int[] listed, bool special, int[]? listedAllies, SimPolicyMemory? memory)
     {
         var keys = Keys(a);
 
@@ -249,10 +315,12 @@ public sealed class SimPolicyController : IMicroController, IScopeController, IB
         var ally = listedAllies is not null && group > 0;
         var target = ally ? listedAllies![group - 1] : listed[group];
 
-        if (target < 0 || !world.IsAlive(target))
+        var isListed = target >= 0 && world.IsAlive(target);
+
+        if (!isListed)
         {
             Span<int> one = stackalloc int[1];
-            target = SimPolicyObservation.Nearest(in world, meSlot, mates: ally, one) > 0 ? one[0] : -1;
+            target = SimPolicyObservation.Nearest(in world, meSlot, mates: ally, one, seen: memory is not null && !ally) > 0 ? one[0] : -1;
         }
 
         if (target < 0)
@@ -260,7 +328,15 @@ public sealed class SimPolicyController : IMicroController, IScopeController, IB
 
         ref readonly var me = ref world.Character(meSlot);
         ref readonly var op = ref world.Character(target);
-        var deg = Gml.PointDirection(me.X, me.Y, op.X, op.Y) + ((offset - (RelativeAimBins / 2)) * RelativeStep);
+        double tx = op.X, ty = op.Y;
+
+        if (memory is not null && !ally && isListed && !BotVisibility.CanSee(in me, in op))
+        {
+            tx = memory.ListedX[group];
+            ty = memory.ListedY[group];
+        }
+
+        var deg = Gml.PointDirection(me.X, me.Y, tx, ty) + ((offset - (RelativeAimBins / 2)) * RelativeStep);
         deg = ((deg % 360) + 360) % 360;
         var distance = ally ? (byte)(int)Math.Min(255.0, Gml.PointDistance(me.X, me.Y, op.X, op.Y)) : (byte)128;
         return new PlayerInput(keys, (ushort)((uint)(deg * 65536.0 / 360.0) & 0xFFFF), distance);

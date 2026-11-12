@@ -753,4 +753,122 @@ public sealed class HybridBotSeamTests
         Assert.True(beaming > 30, $"the scripted medic had a patient on only {beaming} ticks, so this gates nothing");
         Assert.Equal(ownsBeam, micro.Polls > 0);
     }
+
+    /// <summary>A <see cref="Stub"/> that also counts sightings and wants to build on every tick.</summary>
+    private sealed class SightingBuilder : IMicroController, ISightingController, IBuildController
+    {
+        private readonly Stub _inner = new("sighting", cost: 1);
+
+        internal int Sightings { get; private set; }
+
+        internal int SightingsWhileDriving { get; private set; }
+
+        internal bool IsDriving { get; set; }
+
+        public string Name => _inner.Name;
+
+        public bool DecidedThisPoll => true;
+
+        public int DecisionCostFor(int liveCharacters) => 1;
+
+        public bool Drives(PlayerClass playerClass) => true;
+
+        public bool AtDecisionBoundary(int slot) => true;
+
+        public void OnHandoverIn(in WorldView world, int slot) => IsDriving = true;
+
+        public void OnHandoverOut() => IsDriving = false;
+
+        public PlayerInput Poll(in WorldView world, int slot, int tick) => _inner.Poll(in world, slot, tick);
+
+        public void Sight(in WorldView world, int slot, int tick)
+        {
+            Sightings++;
+
+            if (IsDriving)
+                SightingsWhileDriving++;
+        }
+
+        public bool OwnsBuild { get; init; } = true;
+
+        public bool WantsBuild(in WorldView world, int slot, int tick) => true;
+    }
+
+    /// <summary>
+    /// An <see cref="ISightingController"/> tier is told what its body sees on
+    /// every tick the scripted layer drives, and never while it drives itself.
+    /// </summary>
+    /// <remarks>
+    /// gg2-sim's base layout v2 net keeps a sighting memory its environment fills
+    /// on every step, scripted or not; <c>ref/Matches.cs</c> sights an idle hybrid
+    /// before each step. The control is the out-of-range half: with nobody near,
+    /// the tier never drives, so every tick is a sighting.
+    /// </remarks>
+    [Fact]
+    public void ASightingTierLearnsWhileTheScriptedLayerDrives()
+    {
+        var world = World();
+        var far = world.Place(PlayerClass.Soldier, Team.Red, 600, 850);
+        world.Place(PlayerClass.Soldier, Team.Blue, 1600, 850);
+        world.Step(20);
+        var idle = new SightingBuilder();
+        Run(new HybridBot(idle, Scripted(world)) { Rule = HandoverRule.Distance }, world, far, 12);
+        Assert.Equal(12, idle.Sightings);
+
+        var near = World();
+        var driver = new SightingBuilder();
+        var bot = new HybridBot(driver, Scripted(near)) { Rule = HandoverRule.Distance };
+        Run(bot, near, Duel(near), 12);
+
+        Assert.Same(driver, bot.Driving);
+        Assert.Equal(0, driver.SightingsWhileDriving);
+        Assert.True(driver.Sightings < 12, "it drove from the first tick on, so it should not have been sighted on all twelve");
+    }
+
+    /// <summary>
+    /// While an <see cref="IBuildController"/> that owns the build drives, its
+    /// <c>BuildSentry</c> goes out; when it does not own it, or does not drive,
+    /// none does (the scripted layer never builds).
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ABuildControllerSendsTheBuildCommandWhileItDrives(bool ownsBuild)
+    {
+        var world = World();
+        var red = world.Place(PlayerClass.Engineer, Team.Red, 600, 850);
+        world.Place(PlayerClass.Soldier, Team.Blue, 680, 850);
+        world.Step(20);
+        var tier = new SightingBuilder { OwnsBuild = ownsBuild };
+        var bot = new HybridBot(tier, Scripted(world)) { Rule = HandoverRule.Distance };
+        int driven = 0, built = 0, idleBuilt = 0;
+
+        for (var tick = 0; tick < 12; tick++)
+        {
+            var view = new WorldView(in world.State, world.Collision);
+            var commands = default(PlayerCommandBuffer);
+            bot.PollCommands(in view, red, tick, ref commands);
+            var sent = false;
+
+            for (var i = 0; i < commands.Count; i++)
+                sent |= commands[i].Kind == PlayerCommandKind.BuildSentry;
+
+            if (bot.Driving is not null)
+                driven++;
+
+            if (sent && bot.Driving is not null)
+                built++;
+            else if (sent)
+                idleBuilt++;
+
+            bot.Poll(in view, red, tick);
+            world.Step();
+        }
+
+        // Driving is counted at command time, so it is the wheel the previous
+        // tick's Poll settled: every such tick is one the tier answers for.
+        Assert.True(driven > 0, "the tier never drove, so this gates nothing");
+        Assert.Equal(0, idleBuilt);
+        Assert.Equal(ownsBuild ? driven : 0, built);
+    }
 }

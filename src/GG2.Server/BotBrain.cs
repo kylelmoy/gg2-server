@@ -371,7 +371,7 @@ public static class BotBrain
             .ToArray();
 
         report?.Invoke(
-            $"policy {Path.GetFileName(policyPath)}: a gg2-sim {(network.IsTeam ? "team" : "duel")} net "
+            $"policy {Path.GetFileName(policyPath)}: a gg2-sim {(network.IsTeam ? network.IsV2 ? "team (layout v2)" : "team" : "duel")} net "
             + $"({network.InputSize} inputs) with no simulation stamp - gg2-sim records the commit it "
             + $"trained against - this build is {SimulationStamp.Uuid}, drives {Classes(drives)}");
 

@@ -572,12 +572,33 @@ wheel on the way across (the class remarks say what breaks if that stops).
 
 | | gg2-rl `.npz` | gg2-sim `.gg2p` |
 |---|---|---|
-| Observation | `ObservationWriter` | `SimPolicyObservation`: team (253 floats), duel (169), zoom (255: team plus own scope and rifle charge), demo (286: team plus the eight nearest own mines and lobbed/8), pyro (256: team plus ReadyToBlast, ReadyToFlare and own burn/210), or medic (259: team plus uber/2000, uber ready, ubering, beaming, patient hp share and the patient's index among the listed team-mates). Every team width lists enemy mines and flares beside rockets and shots; the duel width does not |
-| Actions | `ActionDecoder` | `SimPolicyController`: 24 absolute aim bins, then 25 relative to the k-th listed enemy (team) or to the nearest enemy (duel); a zoom net adds a fifth head, the scope level; a demo, pyro or medic net's fifth head is the Special key (the detonate; the airblast, and with Attack the flare; the needles, and with Attack the uber when ready), held for the decision like Attack. A medic net's relative groups 1 and 2 aim at the two listed team-mates, with the aim distance on them (capped at 255) so the beam picks that patient |
-| Sniper scope | `Zoom` head decoded, applied nowhere | a zoom net's own, while it drives (`IScopeController`); otherwise the scripted layer's |
+| Observation | `ObservationWriter` | `SimPolicyObservation`: team (253 floats), duel (169), zoom (255: team plus own scope and rifle charge), demo (286: team plus the eight nearest own mines and lobbed/8), pyro (256: team plus ReadyToBlast, ReadyToFlare and own burn/210), medic (259: team plus uber/2000, uber ready, ubering, beaming, patient hp share and the patient's index among the listed team-mates), engineer (258: team plus nuts'n'bolts/100 and its own sentry's present, hp/100, dx/500, dy/500) or spy (257: team plus cloak, cloak alpha, ready to stab and stab freeze left). Every team width lists enemy mines and flares beside rockets and shots; the duel width does not. **Base layout v2** is any team width plus 10 (263 to 296): the two nearest sentries after the layout's columns, and hidden enemies listed from the body's memory (below) |
+| Actions | `ActionDecoder` | `SimPolicyController`: 24 absolute aim bins, then 25 relative to the k-th listed enemy (team) or to the nearest enemy (duel); a zoom net adds a fifth head, the scope level; a demo, pyro, medic or spy net's fifth head is the Special key (the detonate; the airblast, and with Attack the flare; the needles, and with Attack the uber when ready; the cloak toggle), held for the decision like Attack; an engineer net's is the build command (`IBuildController`), sent on every tick of the decision. A medic net's relative groups 1 and 2 aim at the two listed team-mates, with the aim distance on them (capped at 255) so the beam picks that patient |
+| Sniper scope, sentry build | `Zoom` head decoded, applied nowhere | a zoom net's scope and an engineer net's build, while it drives (`IScopeController`, `IBuildController`); otherwise the scripted layer's (which never builds) |
 | Classes it drives | the file's set, overridable | **only** what `ClassPolicy` assigns; none is warned about |
 | Stamp | `SIM_UUID`, refused on mismatch | none; gg2-sim records the gg2-server commit it trained at |
 | Decision cost | ~7 µs | 72 µs team, 57 µs duel |
+
+**Base layout v2** (gg2-sim `env/env.h`, `SentryBlockObs` and `SpyMemoryTicks`)
+is told apart by width alone (`SimPolicyNetwork.IsV2`); v1 nets load and run
+unchanged. Every row ends in the two nearest sentries of either team (dx/500,
+dy/500, hp/100, enemy, present; nearest first, ties to the lower owner slot).
+An enemy `BotVisibility.CanSee` refuses, which is a cloaked spy not stabbing in
+front of the body, is listed from the body's last sighting: that position, zero
+velocity, that hp, present `1 - age/60`, until 60 ticks have passed. A relative
+aim at such a listed enemy points at that remembered spot, and the fallback for
+a dead listed enemy is the nearest one the body can see. Each controller keeps
+one `SimPolicyMemory`. It learns at every observation and, through
+`ISightingController`, on every third tick while the scripted layer drives:
+`HybridBot.Poll` calls it on every tier at the top of the poll whenever no tier
+holds the wheel, which is where gg2-sim's `ref/Matches.cs` calls it.
+
+**Known issue: the memory is indexed by roster slot and a departure renumbers
+the roster.** The controller clears its memory when its own body's slot changes,
+but for up to 60 ticks after somebody else leaves, an entry can describe
+whoever moved into a remembered slot. It is read only for an enemy the body
+cannot see, so the cost is one stale remembered row. gg2-sim's environment has
+no departures, so nothing there can show it.
 
 **The observation, the forward pass and the decode are gg2-sim's
 `ref/PolicyDriver.cs` and `ref/Matches.cs` (`SimPolicyController`), expression
@@ -608,7 +629,24 @@ The medic layout was checked against gg2-sim `4a8d9ca` the same way, over 80
 medic, pyro, demoman and soldier matches: 2,038,526 observations and 1,022,805
 decoded inputs bitwise equal, with a beam in 59,795, an uber running in 3,653 and
 172,008 ally-aim decodes; fixing the ally aim distance at 128 failed it on the
-first. **A medic on the beam is handed over only to a controller that heals
+first. Base layout v2 and the engineer and spy layouts were checked against
+gg2-sim `acd9a7a`'s `ref/PolicyDriver.cs` and `ref/Matches.cs` on 2026-11-11,
+with gg2-sim's nine round-two v2 nets (`ppo-warm-soldier-s1`,
+`ppo-finetune-scout-s1`, `ppo-finetune2-{heavy,sniper,pyro}-s1`,
+`ppo-freeze-{demoman,engineer,medic,spy}-s1`). Over 15 headless matches on five
+maps with all nine classes, every live body observed through all nine layouts
+every third tick with its own memory: 3,498,192 observations bitwise equal
+(3,124,278 with a sentry in view, sentries planted where an engineer could
+build because the scripted layer never does; 380,232 remembered rows),
+3,498,192 greedy actions equal and 10,498,086 decoded random actions equal
+(271,742 aimed at a hidden listed enemy). Then 20 hybrid matches (distance
+rule, red driven by all nine nets) with the ref's controller in one world and
+this one in another, stepped in lockstep: equal in every character's position,
+hp, cloak, scope and sentry on every one of 106,714 ticks, with 181,904
+policy-driven bot-ticks and 30 sentries built by the engineer net. Removing the
+`HybridBot` sighting call made the lockstep run diverge (tick 4,725 on
+`arena_montane`); holding a remembered row's present column at 1 failed the
+observation check at tick 18. **A medic on the beam is handed over only to a controller that heals
 itself**: `Handover.ShouldEngage` keeps a beaming medic scripted, and
 `HybridBot` drops that term when every eligible tier is an `IBeamController`
 owning the beam, which a medic-layout net is (the user's call, 2026-10-29). Any
@@ -621,12 +659,14 @@ change to either side is re-checked by re-running that comparison, and gg2-sim's
 `GG2.Simulation`, `ScriptedBot`, `HybridBot` or `Handover` breaks gg2-sim's
 parity: tell that lane the SHA.
 
-**The scope is the one command a controller sends.** While an
-`IScopeController` that owns the scope drives, `HybridBot.PollCommands` drops
-the scripted layer's `ToggleZoom` and sends the controller's. At a decision
-boundary the controller decides in that call, because commands are polled
-before inputs, and its `Poll` reuses the decision. Driving is settled in
-`Poll`, so the scope follows a handover one tick late, as the bubbles do.
+**The scope and the sentry build are the only commands a controller sends.**
+While an `IScopeController` that owns the scope drives, `HybridBot.PollCommands`
+drops the scripted layer's `ToggleZoom` and sends the controller's; an
+`IBuildController` that owns the build does the same for `BuildSentry`. At a
+decision boundary the controller decides in that call, because commands are
+polled before inputs, and its `Poll` reuses the decision. Driving is settled in
+`Poll`, so either follows a handover one tick late, as the bubbles do. Nothing
+a controller sends destroys a sentry.
 
 ---
 

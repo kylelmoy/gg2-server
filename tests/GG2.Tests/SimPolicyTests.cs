@@ -386,6 +386,200 @@ public sealed class SimPolicyTests : IDisposable
     }
 
     /// <summary>
+    /// gg2-sim's base layout v2: every team layout ten wider, told apart by width
+    /// alone, and each still the same layout. A v2 width with the wrong head count
+    /// is refused as its v1 width is.
+    /// </summary>
+    [Theory]
+    [InlineData(SimPolicyObservation.TeamSize, false)]
+    [InlineData(SimPolicyObservation.ZoomSize, true)]
+    [InlineData(SimPolicyObservation.DemoSize, true)]
+    [InlineData(SimPolicyObservation.PyroSize, true)]
+    [InlineData(SimPolicyObservation.MedicSize, true)]
+    [InlineData(SimPolicyObservation.EngineerSize, true)]
+    [InlineData(SimPolicyObservation.SpySize, true)]
+    public void LoadsAV2NetOfEveryLayout(int v1Width, bool fiveHeads)
+    {
+        var v1 = SimPolicyNetwork.Load(Write("v1.gg2p", v1Width, SimPolicyController.TeamAimActions, zoomHead: fiveHeads));
+        var v2 = SimPolicyNetwork.Load(
+            Write("v2.gg2p", v1Width + SimPolicyObservation.SentryColumns, SimPolicyController.TeamAimActions, zoomHead: fiveHeads));
+
+        Assert.False(v1.IsV2);
+        Assert.True(v2.IsV2);
+        Assert.True(v2.IsTeam);
+        Assert.Equal(
+            (v1.IsZoom, v1.IsDemo, v1.IsPyro, v1.IsMedic, v1.IsEngineer, v1.IsSpy),
+            (v2.IsZoom, v2.IsDemo, v2.IsPyro, v2.IsMedic, v2.IsEngineer, v2.IsSpy));
+        Assert.Throws<InvalidDataException>(() => SimPolicyNetwork.Load(Write(
+            "half.gg2p", v1Width + SimPolicyObservation.SentryColumns, SimPolicyController.TeamAimActions, zoomHead: !fiveHeads)));
+    }
+
+    /// <summary>
+    /// With no hidden enemy and no sentry a v2 row is its v1 row plus ten zeros,
+    /// on every tick of a soldier match, which is what gg2-sim's env.h promises.
+    /// </summary>
+    [Fact]
+    public void AV2RowIsTheV1RowPlusTenZerosWithNoSpyOrSentry()
+    {
+        var options = HeadlessMatchOptions.Default with
+        {
+            Map = "ctf_truefort",
+            Bots = 8,
+            Seed = 7123,
+            MaxTicks = 900,
+            AllowedClasses = [PlayerClass.Soldier],
+        };
+        var match = HeadlessMatch.Load(options, MapDirectory.Resolve(), MapDirectory.ResolveNav());
+        var memory = new SimPolicyMemory();
+        var v1 = new float[SimPolicyObservation.TeamSize];
+        var v2 = new float[SimPolicyObservation.TeamSize + SimPolicyObservation.SentryColumns];
+        int[] listed1 = new int[3], listed2 = new int[3];
+        var compared = 0;
+
+        while (match.Outcome == MatchOutcome.Running)
+        {
+            match.Step();
+            var view = new WorldView(in match.State, match.Collision);
+
+            if (!view.IsAlive(1))
+                continue;
+
+            SimPolicyObservation.Team(in view, 1, v1, listed1);
+            SimPolicyObservation.Team(in view, 1, v2, listed2, memory: memory, tick: match.Tick);
+            Assert.Equal(v1, v2[..SimPolicyObservation.TeamSize]);
+            Assert.All(v2[SimPolicyObservation.TeamSize..], c => Assert.Equal(0f, c));
+            Assert.Equal(listed1, listed2);
+
+            if (listed1[0] >= 0)
+                compared++;
+        }
+
+        Assert.True(compared > 100, $"an enemy was listed on only {compared} ticks, so this gates little");
+    }
+
+    /// <summary>
+    /// The sentry block: the two nearest sentries of either team, nearest first,
+    /// dx/500, dy/500, hp/100, enemy, present; a third further one is not listed.
+    /// </summary>
+    [Fact]
+    public void TheSentryBlockListsTheTwoNearestSentries()
+    {
+        var match = SoldiersInView(out var me, out var enemy);
+        ref var state = ref match.State;
+        var mate = -1;
+
+        for (var s = 1; s < WorldState.MaxSlots && mate < 0; s++)
+        {
+            if (s != me && state.Alive[s] && state.Characters[s].Team == state.Characters[me].Team)
+                mate = s;
+        }
+
+        Assert.True(mate > 0, "no team-mate to own the second sentry");
+        double x = state.Characters[me].X, y = state.Characters[me].Y;
+        Sentries.Build(ref state, enemy, x + 50, y, 1);
+        Sentries.Build(ref state, mate, x - 100, y + 25, 1);
+        Sentries.Build(ref state, me, x + 400, y, 1);
+        state.Sentries[mate].Hp = 50;
+
+        var o = new float[SimPolicyObservation.TeamSize + SimPolicyObservation.SentryColumns];
+        var view = new WorldView(in state, match.Collision);
+        SimPolicyObservation.Team(in view, me, o, new int[3], memory: new SimPolicyMemory(), tick: match.Tick);
+
+        var block = o[SimPolicyObservation.TeamSize..];
+        Assert.Equal([0.1f, 0f, (float)(state.Sentries[enemy].Hp / SentryState.MaxHp), 1f, 1f], block[..5]);
+        Assert.Equal([-0.2f, 0.05f, 0.5f, 0f, 1f], block[5..]);
+    }
+
+    /// <summary>
+    /// A cloaked enemy is listed from the body's last sighting: there, still, at
+    /// its hp then, present fading as 1 - age/60, and gone at 60 ticks. The
+    /// relative aim at it points at the remembered spot.
+    /// </summary>
+    [Fact]
+    public void ACloakedEnemyIsListedFromItsLastSighting()
+    {
+        var match = SoldiersInView(out var me, out var enemy);
+        ref var state = ref match.State;
+        var memory = new SimPolicyMemory();
+        var o = new float[SimPolicyObservation.TeamSize + SimPolicyObservation.SentryColumns];
+        var listed = new int[3];
+        var tick = 300;
+
+        var seen = new WorldView(in state, match.Collision);
+        SimPolicyObservation.Team(in seen, me, o, listed, memory: memory, tick: tick);
+        var row = 8 + (16 * Array.IndexOf(listed, enemy));
+        Assert.True(row >= 8, "the enemy was not listed while visible");
+        double sightedX = state.Characters[enemy].X, sightedY = state.Characters[enemy].Y, sightedHp = state.Characters[enemy].Hp;
+
+        state.Characters[enemy].Cloak = true;
+        state.Characters[enemy].X += 30;
+        state.Characters[enemy].HSpeed = 5;
+        state.Characters[enemy].Hp = sightedHp / 2;
+        var hidden = new WorldView(in state, match.Collision);
+        SimPolicyObservation.Team(in hidden, me, o, listed, memory: memory, tick: tick + 30);
+
+        var at = Array.IndexOf(listed, enemy);
+        Assert.True(at >= 0, "a cloaked enemy seen 30 ticks ago is listed");
+        row = 8 + (16 * at);
+        Assert.Equal((float)((sightedX - state.Characters[me].X) / 500), o[row]);
+        Assert.Equal(0f, o[row + 2]);
+        Assert.Equal((float)(sightedHp / ClassStats.For(state.Characters[enemy].Class).MaxHp), o[row + 4]);
+        Assert.Equal(0.5f, o[row + 5]);
+
+        // The relative aim's centre bin at that group points at the sighting, not the spy.
+        int[] action = [0, 0, 0, SimPolicyController.AbsoluteAimBins + (at * SimPolicyController.RelativeAimBins) + 12, 0];
+        var aim = SimPolicyController.TeamInput(in hidden, action, me, listed, special: false, listedAllies: null, memory);
+        ref readonly var self = ref state.Characters[me];
+        var expected = (ushort)((uint)(Gml.PointDirection(self.X, self.Y, sightedX, sightedY) * 65536.0 / 360.0) & 0xFFFF);
+        Assert.Equal(expected, aim.NetAimDirection);
+
+        SimPolicyObservation.Team(in hidden, me, o, listed, memory: memory, tick: tick + SimPolicyMemory.Ticks);
+        Assert.DoesNotContain(enemy, listed);
+    }
+
+    // A soldier match stepped until slot `me` has a live enemy within 300 px.
+    private static HeadlessMatch SoldiersInView(out int me, out int enemy)
+    {
+        var options = HeadlessMatchOptions.Default with
+        {
+            Map = "ctf_truefort",
+            Bots = 8,
+            Seed = 7123,
+            MaxTicks = 9000,
+            AllowedClasses = [PlayerClass.Soldier],
+        };
+        var match = HeadlessMatch.Load(options, MapDirectory.Resolve(), MapDirectory.ResolveNav());
+        Span<int> one = stackalloc int[1];
+
+        while (match.Outcome == MatchOutcome.Running)
+        {
+            match.Step();
+            var view = new WorldView(in match.State, match.Collision);
+
+            for (var s = 1; s < match.SlotCount; s++)
+            {
+                if (!view.IsAlive(s))
+                    continue;
+
+                if (SimPolicyObservation.Nearest(in view, s, mates: false, one) == 0)
+                    continue;
+
+                ref readonly var a = ref view.Character(s);
+                ref readonly var b = ref view.Character(one[0]);
+
+                if (Gml.PointDistance(a.X, a.Y, b.X, b.Y) < 300)
+                {
+                    me = s;
+                    enemy = one[0];
+                    return match;
+                }
+            }
+        }
+
+        throw new InvalidOperationException("no two soldiers met");
+    }
+
+    /// <summary>
     /// A zoom net driving a sniper holds the scope at its head's level, whatever
     /// the scripted layer wants.
     /// </summary>
