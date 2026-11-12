@@ -630,6 +630,27 @@ alerting story and needs no parser. `--log-file` exists for a copy that survives
 independently of the journal — see "a log file, if you want one" below — and is
 not needed under systemd.
 
+### A second instance on the same host
+
+A second server from the same release is a sibling unit, `<service>-<name>`,
+with its own config file in `shared/` and its own ports. barbara runs one:
+`gg2-duel.service`, the duel server (`docs/DUEL.md`), "V's | 1v1 Bot".
+
+| | `gg2` | `gg2-duel` |
+|---|---|---|
+| Config | `shared/gg2.ini`, rendered by `deploy.sh --config` | `shared/duel.ini`, hand-written on the host; `deploy.sh --config` never touches it |
+| Game port / panel | 8190 / 8191 | 8192 / 8193, panel on loopback |
+| Maps and nav | the shipped rotation | `maps/duel` and `nav/duel`, `duel_01` to `duel_08` |
+| Recording, analytics | `shared/recordings`, `shared/analytics.tsv` | the same recordings directory (segment names carry the map), `shared/analytics-duel.tsv` |
+
+The unit is `gg2.service` with its description and `--config` changed. A build
+deploy restarts every enabled sibling unit after the main one, so both run the
+same release; a sibling that will not restart is reported and does not fail the
+deploy. Installing a unit and its sudoers line (`systemctl
+start|stop|restart|is-active gg2-duel`) needs root, so that step is the
+operator's. The duel server is on the public lobby only if the router forwards
+its game port as well.
+
 ---
 
 ## How a deployment differs from a checkout
