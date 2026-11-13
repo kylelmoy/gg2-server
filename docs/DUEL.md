@@ -28,7 +28,7 @@ Run it with `gg2-server --duel --maps maps/duel --botnav nav/duel --map duel_01`
 | A human is on red | They get a free cell (a spawn index nobody else holds) and one blue bot of their class; both are pinned to the cell |
 | A human picks blue | Moved to red (`ForceTeam`), since the balance guard would refuse red while a pair waits on its bot |
 | The human dies (any death: their death count rose) | A new free cell, never the one just left while another is free, and the human's sentry is destroyed. The bot stays alive for `KillCamTicks` (90, three seconds), or until the human is one tick from respawning, then is re-classed to the human's class with no credit, which kills it, and its respawn countdown is set to the human's so both appear in the new cell on the same tick |
-| The bot dies while its human is alive | The human won: a new free cell, and the human's live character is healed to full, moved to that cell's red spawn at rest, and loses its sentry. The bot respawns there after the ordinary respawn time |
+| The bot dies while its human is alive | The human won: a new free cell is picked and pinned at once. After `WinMoveTicks` (45, a second and a half) the human's live character is healed to full, moved to that cell's red spawn at rest, and loses its sentry; the bot's respawn countdown is set so it appears there on the same tick. A death during the wait cancels the move, and the death's own rules apply |
 | The bot dies while its human is dead | No win; nothing moves beyond the human's death above |
 | Every tick | Each bot's only allowed opponent is its own human (`GameServer.SetOpponents`). The bot layer picks targets by distance and walls do not stop that choice, so without it a bot could pick a human in the next cell, 420 px of wall away. While the human waits to respawn the bot has nobody to fight and stands still |
 | The human changes class while dead | The bot follows by the ordinary class change |
@@ -49,6 +49,15 @@ killer 60 frames after the death (`DeathCam.events/Create.xml`, `alarm[0]`;
 late" at its last known spot, so a bot killed with its human leaves the kill cam
 pointing at nothing. Three seconds is that snapshot plus a second for lag; the
 server's respawn time is 5 s by default, so the human never waits on the bot.
+
+**A duel bot spawns ready.** An ordinary bot holds still for a random 0-90
+ticks after spawning until a team-mate is near (`BotConstants.RegroupTicks`),
+and picks its first objective at the next 30-tick `ObjectivePeriod`; in a duel
+there is no team-mate, so that was up to four seconds stood in front of its
+human. `ScriptedBot.SpawnsReady`, set only on a duel server, skips the hold and
+decides on the life's first tick: measured on `duel_01`, a soldier, scout and
+heavy each press a direction within 3 ticks of spawning (it was 20 for the
+first soldier). Gated by `DuelServerTests.ADuelBotMovesOffItsSpawnAtOnce`.
 
 **What the client sees of a win.** The move, the heal and the stop all ride
 every `QUICK_UPDATE` (position, velocity, `ceil(hp)`, move status;

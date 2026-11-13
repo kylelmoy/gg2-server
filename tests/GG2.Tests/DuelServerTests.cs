@@ -235,13 +235,14 @@ public sealed class DuelServerTests
     }
 
     /// <summary>
-    /// The bot's death is the human's win: they are healed to full and moved, at
-    /// rest, to a different cell's red spawn, and the bot respawns there.
+    /// The bot's death is the human's win: after a beat they are healed to full
+    /// and moved, at rest, to a different cell's red spawn, and the bot appears
+    /// there with them rather than a respawn time later.
     /// </summary>
     [Fact]
-    public void TheBotsDeathHealsAndMovesTheHuman()
+    public void TheBotsDeathHealsAndMovesTheHumanWithTheBot()
     {
-        using var harness = Duel();
+        using var harness = Duel(respawnSeconds: 5);
         JoinAndPlay(harness, Team.Red, PlayerClass.Soldier);
 
         var server = harness.Server;
@@ -251,20 +252,58 @@ public sealed class DuelServerTests
         server.WorldForTests.Characters[human].Hp = 12;
 
         server.RequestBotClass(bot, PlayerClass.Soldier);
-        harness.TickUntil(() => server.WorldForTests.Players[human].SpawnPin != cell, "the human to be moved", maxTicks: 3);
+        harness.TickUntil(() => server.WorldForTests.Players[human].SpawnPin != cell, "the new cell to be picked", maxTicks: 3);
 
+        // The beat: still here, still hurt.
         var moved = server.WorldForTests.Players[human].SpawnPin!.Value;
-        ref readonly var character = ref server.WorldForTests.Characters[human];
-        Assert.True(server.IsAlive(human));
-        Assert.Equal(ClassStats.For(PlayerClass.Soldier).MaxHp, character.Hp);
         Assert.True(Spawns(harness).TryGet(Team.Red, 0, moved, out var redX, out _));
-        Assert.Equal(redX, character.X);
+        harness.Tick(BotPopulationService.WinMoveTicks - 5);
+        Assert.NotEqual(redX, server.WorldForTests.Characters[human].X);
+        Assert.Equal(12, server.WorldForTests.Characters[human].Hp);
+        Assert.False(server.IsAlive(bot));
+
+        harness.TickUntil(() => server.WorldForTests.Characters[human].X == redX, "the human to be moved", maxTicks: 10);
+
+        Assert.True(server.IsAlive(human));
+        Assert.Equal(ClassStats.For(PlayerClass.Soldier).MaxHp, server.WorldForTests.Characters[human].Hp);
         Assert.Equal(moved, server.WorldForTests.Players[bot].SpawnPin);
 
-        harness.TickUntil(() => server.IsAlive(bot), "the bot to respawn", maxTicks: 120);
+        // Within a tick of the move, not after the five-second respawn.
+        if (!server.IsAlive(bot))
+            harness.Tick();
+        Assert.True(server.IsAlive(bot));
         Assert.True(Spawns(harness).TryGet(Team.Blue, 0, moved, out var blueX, out _));
         Assert.Equal(blueX, server.WorldForTests.Characters[bot].X);
-        Assert.Equal(moved, server.WorldForTests.Players[human].SpawnPin);
+    }
+
+    /// <summary>
+    /// A duel bot moves off its spawn at once: no regroup hold, which waits for a
+    /// team-mate a duel never has, and no wait for the next objective period.
+    /// </summary>
+    [Theory]
+    [InlineData(PlayerClass.Soldier)]
+    [InlineData(PlayerClass.Scout)]
+    [InlineData(PlayerClass.Heavy)]
+    public void ADuelBotMovesOffItsSpawnAtOnce(PlayerClass playerClass)
+    {
+        using var harness = Duel();
+        var client = harness.JoinClient("duellist");
+        client.SendChangeTeam(Team.Red);
+        client.SendChangeClass(playerClass);
+
+        var server = harness.Server;
+        harness.TickUntil(() => server.BotSlots.Count == 1 && server.IsAlive(BotSlot(server)), "the bot to spawn", maxTicks: 300);
+
+        var bot = BotSlot(server);
+        var still = 0;
+        while ((server.WorldForTests.Characters[bot].KeyState & (PlayerKeys.Left | PlayerKeys.Right)) == 0 && still < 60)
+        {
+            harness.Tick();
+            still++;
+        }
+
+        // Measured 3 ticks for each; the hold alone used to be up to 90.
+        Assert.InRange(still, 0, 10);
     }
 
     /// <summary>A bot that dies while its human is dead is no win, and moves nobody.</summary>

@@ -27,9 +27,10 @@ namespace GG2.Server;
 /// <see cref="KillCamTicks"/> for the client's kill cam, then is re-classed to
 /// the human's class with no kill credit
 /// (<see cref="GameServer.RespawnBotUncredited"/>) and its respawn lined up with
-/// the human's. <b>When the bot dies the human has won</b>: they are healed to
-/// full and moved to a new cell (<see cref="GameServer.RelocateDuelist"/>), and
-/// the bot respawns there. Everything here goes through the commands a client
+/// the human's. <b>When the bot dies the human has won</b>: after
+/// <see cref="WinMoveTicks"/> they are healed to full and moved to a new cell
+/// (<see cref="GameServer.RelocateDuelist"/>), and the bot respawns there on the
+/// same tick. Everything here goes through the commands a client
 /// could send, except the credit, the pin, the respawn countdown and the move.
 /// </para>
 /// </remarks>
@@ -41,6 +42,13 @@ public sealed partial class BotPopulationService
     /// <c>alarm[0] = 60</c>), so a round trip's lag does not catch it dead.
     /// </summary>
     internal const int KillCamTicks = 3 * GameConstants.TickRate;
+
+    /// <summary>
+    /// How long a human who killed their bot stays in the cell before the move:
+    /// a beat to see the kill land. The bot respawns in the new cell on the tick
+    /// the human arrives.
+    /// </summary>
+    internal const int WinMoveTicks = 45;
 
     private void ServiceDuel(in BotPopulationOptions options)
     {
@@ -70,6 +78,7 @@ public sealed partial class BotPopulationService
                 human.DuelDeaths = -1;
                 human.DuelBotDeaths = -1;
                 human.DuelBotKillIn = 0;
+                human.DuelMoveIn = 0;
                 _server.PinSpawn(slot, null);
                 continue;
             }
@@ -88,6 +97,7 @@ public sealed partial class BotPopulationService
                 human.DuelPartner = _server.EntryOf(bot);
                 human.DuelBotDeaths = -1;
                 human.DuelBotKillIn = 0;
+                human.DuelMoveIn = 0;
                 Retarget();
             }
 
@@ -103,6 +113,7 @@ public sealed partial class BotPopulationService
             var botDeaths = _server.DeathsOf(bot);
             var won = !died
                 && human.DuelBotKillIn == 0
+                && human.DuelMoveIn == 0
                 && human.DuelBotDeaths >= 0
                 && botDeaths > human.DuelBotDeaths
                 && _server.IsAlive(slot);
@@ -120,6 +131,9 @@ public sealed partial class BotPopulationService
 
             if (died)
             {
+                // A win's move still pending is void: the death moves them anyway.
+                human.DuelMoveIn = 0;
+
                 // The bot lives on for the kill cam; a sentry left behind would
                 // fight it meanwhile and sit in a cell another pair may draw.
                 _server.ExecuteFor(slot, new PlayerCommand(PlayerCommandKind.DestroySentry, 0));
@@ -154,9 +168,19 @@ public sealed partial class BotPopulationService
             }
             else if (won)
             {
-                // The bot respawns into the new cell by its pin after the
-                // ordinary respawn time; the human waits there at full health.
-                _server.RelocateDuelist(slot, Spawns!, human.DuelCell);
+                // The new cell is pinned now, so the bot's respawn lands there; its
+                // countdown is set so it appears as the human arrives, not a whole
+                // respawn time after. One tick longer than the move's own count:
+                // the simulation's alarm stage runs this tick, after the
+                // population, and spends one tick of it before the move's first.
+                human.DuelMoveIn = WinMoveTicks;
+                _server.ArmBotRespawn(bot, WinMoveTicks + 1);
+            }
+            else if (human.DuelMoveIn > 0)
+            {
+                human.DuelMoveIn--;
+                if (human.DuelMoveIn == 0)
+                    _server.RelocateDuelist(slot, Spawns!, human.DuelCell);
             }
             else if (_server.ClassOf(bot) != human.Class)
             {

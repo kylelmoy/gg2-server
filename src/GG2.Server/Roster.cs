@@ -78,6 +78,12 @@ public sealed class RosterEntry
     internal int DuelBotKillIn { get; set; }
 
     /// <summary>
+    /// Ticks until a duel human who killed their bot is moved to their new cell,
+    /// or 0 for none pending.
+    /// </summary>
+    internal int DuelMoveIn { get; set; }
+
+    /// <summary>
     /// Where this player's per-tick input comes from.
     /// </summary>
     /// <remarks>

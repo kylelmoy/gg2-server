@@ -696,6 +696,9 @@ public sealed partial class BotPopulationService
             // silently route on the straight-line heuristic while its team-mates
             // used the exact one — a mixed configuration nothing would report.
             Distances = Distances,
+
+            // A duel bot has nobody to regroup with; ScriptedBot.SpawnsReady.
+            SpawnsReady = _server.Options.Duel,
         };
 
         // Null where the map has no cache, which leaves the bot fighting whatever

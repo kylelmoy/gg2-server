@@ -151,6 +151,23 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     /// </remarks>
     public int RegroupUntil { get; set; }
 
+    /// <summary>
+    /// Whether a fresh life starts ready: no regroup hold, and the objective is
+    /// decided on the life's first tick rather than at the next
+    /// <c>BOT_OBJECTIVE_PERIOD</c>. Off by default; the duel server sets it.
+    /// </summary>
+    /// <remarks>
+    /// <b>A duel bot has no team to wait for.</b> The hold only ends early with a
+    /// mate nearby, so a duel bot always sat out a random 0-90 ticks, plus up to
+    /// 30 more for its first objective, standing in front of its human: a free
+    /// hit (measured on <c>duel_01</c>, a soldier still for 20 ticks after
+    /// landing). <c>docs/DUEL.md</c>.
+    /// </remarks>
+    public bool SpawnsReady { get; set; }
+
+    /// <summary>Set on a life's first tick and spent by the objective; see <see cref="SpawnsReady"/>.</summary>
+    private bool _freshLife;
+
     /// <summary>Whether the bot was alive last tick, so a respawn starts a new hold.</summary>
     public bool AliveLast { get; set; }
 
@@ -677,8 +694,13 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
 
         // A fresh life starts a fresh regroup hold, randomised so a whole team
         // does not leave on one frame.
+        // A ready spawn draws nothing, so the bot's stream is unchanged wherever
+        // SpawnsReady is off.
         if (!AliveLast)
-            RegroupUntil = tick + (int)Random.Next(BotConstants.RegroupTicks);
+        {
+            RegroupUntil = SpawnsReady ? 0 : tick + (int)Random.Next(BotConstants.RegroupTicks);
+            _freshLife = SpawnsReady;
+        }
 
         AliveLast = true;
 
@@ -887,7 +909,8 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         // the one ending cheap enough to retry at once — see the cadence check
         // below for why waiting would be worse than the per-tick advance this
         // replaced.
-        var decideNow = false;
+        var decideNow = _freshLife;
+        _freshLife = false;
 
         if (_goalWasRepost && !_repostJudged
             && (!Path.HasPath || !Path.HasGoal || tick >= _repostUntil))
