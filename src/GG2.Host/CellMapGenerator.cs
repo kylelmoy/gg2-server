@@ -17,7 +17,7 @@ namespace GG2.Host;
 /// it decides how much of the next cell is on screen, because the client draws
 /// every character whatever is in between.
 /// </param>
-internal readonly record struct CellMapOptions(int Seed, int Cells = 24, int CellWidth = 100, int CellHeight = 67, int Gap = 70);
+internal readonly record struct CellMapOptions(int Seed, int Cells = 24, int CellWidth = 150, int CellHeight = 67, int Gap = 70);
 
 /// <summary>One shipped map, decoded once, that cells are cut from.</summary>
 internal sealed class CellSource

@@ -13,7 +13,8 @@ always red and bots always blue, so the team score reads as humans against bots.
 | A stock client on a cell map | **Measured**: loads, runs at 30 fps, about 10 MB over `cp_egypt`. See "What a stock client showed" |
 | Pinning a player's spawn to a cell | **Built**: `PlayerState.SpawnPin` (null = unpinned; stored as id + 1 so a zeroed player is unpinned) replaces `Timers.PlayerSpawn`'s random draw, gated by `SpawnPinTests` |
 | Pairing: one bot per human, opposite team, same class, same cell | **Built**: `--duel` / `[Bots] Duel`, `BotPopulationService.Duel.cs`, gated by `DuelServerTests`. A human who picks blue is moved to red; autobalance is held off |
-| A human's death kills their bot, and both respawn in a new cell | **Built**: the bot dies by an ordinary class change with its damage credit cleared (`GameServer.RespawnBotUncredited`), so a human's death never scores for red |
+| A human's death kills their bot, after the kill cam, and both respawn in a new cell on the same tick | **Built**: the bot dies by an ordinary class change with its damage credit cleared (`GameServer.RespawnBotUncredited`), so a human's death never scores for red; its respawn countdown is then set to the human's (`GameServer.ArmBotRespawn`) |
+| A bot's death heals its human and moves them to a new cell | **Built**: `GameServer.RelocateDuelist`, gated by `DuelServerTests.TheBotsDeathHealsAndMovesTheHuman` |
 | A bot targets only its partner | **Built**: every bot view carries an opponents table (`WorldView.MayOppose`) that the duel service fills each tick, and every place the bot layer picks an enemy asks it. Gated by `OpponentFilterTests` and `DuelServerTests` |
 
 Run it with `gg2-server --duel --maps maps/duel --botnav nav/duel --map duel_01`.
@@ -26,8 +27,9 @@ Run it with `gg2-server --duel --maps maps/duel --botnav nav/duel --map duel_01`
 |---|---|
 | A human is on red | They get a free cell (a spawn index nobody else holds) and one blue bot of their class; both are pinned to the cell |
 | A human picks blue | Moved to red (`ForceTeam`), since the balance guard would refuse red while a pair waits on its bot |
-| The human dies (any death: their death count rose) | A new free cell, never the one just left while another is free; the bot is re-classed to the human's class with no credit, which kills it and arms its respawn there |
-| The bot dies | Nothing moves; the bot respawns in the same cell |
+| The human dies (any death: their death count rose) | A new free cell, never the one just left while another is free, and the human's sentry is destroyed. The bot stays alive for `KillCamTicks` (90, three seconds), or until the human is one tick from respawning, then is re-classed to the human's class with no credit, which kills it, and its respawn countdown is set to the human's so both appear in the new cell on the same tick |
+| The bot dies while its human is alive | The human won: a new free cell, and the human's live character is healed to full, moved to that cell's red spawn at rest, and loses its sentry. The bot respawns there after the ordinary respawn time |
+| The bot dies while its human is dead | No win; nothing moves beyond the human's death above |
 | Every tick | Each bot's only allowed opponent is its own human (`GameServer.SetOpponents`). The bot layer picks targets by distance and walls do not stop that choice, so without it a bot could pick a human in the next cell, 420 px of wall away. While the human waits to respawn the bot has nobody to fight and stands still |
 | The human changes class while dead | The bot follows by the ordinary class change |
 | The human spectates or leaves | The bot is removed |
@@ -38,8 +40,22 @@ before that tick has ever seen them alive. That relies on every death scoring,
 which `ChangeDeathScoringTests` gates for the class and team change.
 
 A freshly spawned character is under Team Deathmatch's spawn protection, and a
-protected death respawns on the next tick (`Destroy.xml:37`): a human who dies
-within moments of spawning finds their bot already waiting in the new cell.
+protected death respawns on the next tick (`Destroy.xml:37`), so the bot is
+killed at once and there is no kill cam to wait for.
+
+**Why the bot outlives its human.** The stock client's `DeathCam` frames the
+killer 60 frames after the death (`DeathCam.events/Create.xml`, `alarm[0]`;
+`Alarm 0.xml`). A killer with no character by then is drawn as "killed by the
+late" at its last known spot, so a bot killed with its human leaves the kill cam
+pointing at nothing. Three seconds is that snapshot plus a second for lag; the
+server's respawn time is 5 s by default, so the human never waits on the bot.
+
+**What the client sees of a win.** The move, the heal and the stop all ride
+every `QUICK_UPDATE` (position, velocity, `ceil(hp)`, move status;
+`docs/PROTOCOL.md`), so the client snaps to the new cell within seven ticks;
+the sentry goes by `DESTROY_SENTRY`'s body, seen through the subobject bit.
+Burning is left alone, because nothing on the wire would put out the client's
+own flames. Mines and projectiles already in flight stay in the old cell.
 
 ## The cell maps
 
@@ -76,12 +92,13 @@ from the server on join (`docs/DEBUG-MAPS.md`, "A stock client can join it").
 ### The pool
 
 `CellMapGenerator.Pool`: `duel_01` to `duel_08`, seeds 1-8, each 24 cells of
-100x67 mask cells (600x402 px) with a 70-cell (420 px) gap. Every map is
-1090x618 mask cells, 6540x3708 px, 35-46 KB; the pool is 336 KB of maps and
-1.4 MB of graphs and next-hop tables.
+150x67 mask cells (900x402 px) with a 70-cell (420 px) gap, five columns by
+five rows. Every map is 1170x755 mask cells, 7020x4530 px, 54-61 KB; the pool
+is 473 KB of maps and 2.8 MB of graphs and next-hop tables.
 
 | Choice | Reason |
 |---|---|
+| 900 px wide | Wider than the 800 px view, so a duel has room to back off and flank |
 | 24 cells | `PlayerLimit` is at most 48 (`ServerOptions.Validate`, the reference's own clamp), so at most 24 humans with a bot each. A server expecting fewer humans still gains variety from spare cells |
 | 420 px gap | Blasts ignore walls (`Explosions`: rocket and sentry 65 px, mine 40), so anything over 130 px is safe; the rest is about the screen, because the client draws every character whatever is between. Half an 800 px view keeps a neighbour's fight off screen while you are inside your cell; "What a stock client showed" has what was seen |
 | A separate directory | The default `maps/` and `nav/` feed every shipped-map census, the whole-cache pins and `eval`; a duel server names the duel directories instead. `GG2.Host.csproj` ships both |
