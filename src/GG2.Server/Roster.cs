@@ -65,6 +65,19 @@ public sealed class RosterEntry
     internal double DuelDeaths { get; set; } = -1;
 
     /// <summary>
+    /// A duel human's bot's death count when last looked at, or -1 before
+    /// pairing; a rise while the human is alive is the human's win.
+    /// </summary>
+    internal double DuelBotDeaths { get; set; } = -1;
+
+    /// <summary>
+    /// Ticks until a dead duel human's bot is killed and sent to the new cell,
+    /// or 0 for none pending. The bot outlives its human for the stock client's
+    /// kill cam, which looks at the killer two seconds after the death.
+    /// </summary>
+    internal int DuelBotKillIn { get; set; }
+
+    /// <summary>
     /// Where this player's per-tick input comes from.
     /// </summary>
     /// <remarks>

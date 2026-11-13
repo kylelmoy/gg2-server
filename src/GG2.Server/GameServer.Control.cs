@@ -1,4 +1,5 @@
 ﻿using System.Net;
+using GG2.Maps;
 using GG2.Protocol;
 using GG2.Server.Plugins;
 using GG2.Simulation;
@@ -538,6 +539,68 @@ public sealed partial class GameServer
         _world.Characters[slot].LastDamageDealer = CharacterState.Nobody;
         _world.Characters[slot].SecondToLastDamageDealer = CharacterState.Nobody;
         ExecuteChangeClass(_roster[slot], playerClass);
+    }
+
+    /// <summary>
+    /// Sets a characterless bot's respawn countdown, so a duel bot killed late
+    /// for its human's kill cam still spawns on the same tick as its human.
+    /// </summary>
+    /// <remarks>
+    /// Free: the countdown is the server's own (<c>player.alarm[5]</c>) and is
+    /// never sent; a client learns of the spawn from the spawn message.
+    /// </remarks>
+    public void ArmBotRespawn(int slot, int ticks)
+    {
+        if (slot <= 0 || slot >= _roster.Count || !_roster[slot].IsBot)
+            throw new ArgumentOutOfRangeException(nameof(slot), slot, "not a bot slot");
+
+        if (!_world.IsAlive(slot) && ticks > 0)
+            _world.Players[slot].RespawnTimer = ticks;
+    }
+
+    /// <summary>
+    /// A player's respawn countdown in ticks, or a non-positive value when none
+    /// is running (alive, or never armed).
+    /// </summary>
+    public int RespawnTicksLeft(int slot) => _world.Players[slot].RespawnTimer;
+
+    /// <summary>
+    /// A duel human's win: their live character is healed to full and moved to
+    /// <paramref name="spawnPoint"/> of its team, at rest, and its sentry is
+    /// destroyed. <c>docs/DUEL.md</c>.
+    /// </summary>
+    /// <remarks>
+    /// <b>Every part reaches a stock client through a message it already
+    /// reads.</b> Position, velocity, <c>ceil(hp)</c> and the move status all ride
+    /// every <c>QUICK_UPDATE</c> (every seventh tick), so the client snaps to the
+    /// new cell and the new hp within a quarter of a second; the sentry goes by
+    /// the <c>DESTROY_SENTRY</c> command's own body, which clients notice through
+    /// the subobject bit. Burning is left alone: the client simulates its own
+    /// flames, and nothing on the wire would put them out.
+    /// </remarks>
+    public bool RelocateDuelist(int slot, SpawnPoints spawns, int spawnPoint)
+    {
+        ArgumentNullException.ThrowIfNull(spawns);
+
+        if (slot <= 0 || slot >= _roster.Count || !_world.IsAlive(slot))
+            return false;
+
+        ref var character = ref _world.Characters[slot];
+        if (!spawns.TryGet(_world.Players[slot].Team, 0, spawnPoint, out var x, out var y))
+            return false;
+
+        ExecuteDestroySentry(slot);
+
+        character.X = x;
+        character.Y = y;
+        character.HSpeed = 0;
+        character.VSpeed = 0;
+        character.MoveStatus = 0;
+        character.Hp = ClassStats.For(_world.Players[slot].Class).MaxHp;
+        _world.Weapons[slot].X = x;
+        _world.Weapons[slot].Y = y;
+
+        return true;
     }
 
     /// <summary>

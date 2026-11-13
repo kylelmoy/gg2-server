@@ -8,8 +8,9 @@ namespace GG2.Tests;
 
 /// <summary>
 /// <c>--duel</c>: one blue bot per red human, of the human's class, pinned to
-/// the human's cell, moved and killed (uncredited) when the human dies, removed
-/// when the human goes. <c>docs/DUEL.md</c>.
+/// the human's cell, killed (uncredited) after the kill cam when the human dies,
+/// the human healed and moved when the bot dies, the bot removed when the human
+/// goes. <c>docs/DUEL.md</c>.
 /// </summary>
 /// <remarks>
 /// Through a real <see cref="GameServer"/> and a loopback client, on the shipped
@@ -17,14 +18,14 @@ namespace GG2.Tests;
 /// </remarks>
 public sealed class DuelServerTests
 {
-    private static ServerHarness Duel() =>
+    private static ServerHarness Duel(byte respawnSeconds = 1) =>
         new(o =>
         {
             o.Map = "duel_01";
             o.MapDirectory = Path.Combine(ReferenceTree.MapsDirectory, "duel");
             o.NavCacheDirectory = Path.Combine(ReferenceTree.RepositoryRoot, "nav", "duel");
             o.Duel = true;
-            o.RespawnTimeSeconds = 1;
+            o.RespawnTimeSeconds = respawnSeconds;
         });
 
     private static int HumanSlot(GameServer server)
@@ -189,8 +190,56 @@ public sealed class DuelServerTests
         harness.TickUntil(() => harness.Server.BotSlots.Count == 0, "the bot to be removed", maxTicks: 300);
     }
 
+    /// <summary>
+    /// An unprotected human death holds the bot alive for the stock client's kill
+    /// cam (<c>DeathCam</c> frames the killer 60 frames after the death), then
+    /// kills it uncredited and spawns it on the same tick as its human.
+    /// </summary>
     [Fact]
-    public void TheBotsDeathMovesNothing()
+    public void TheBotOutlivesItsHumanForTheKillCamThenSpawnsWithThem()
+    {
+        using var harness = Duel(respawnSeconds: 5);
+        var client = JoinAndPlay(harness, Team.Red, PlayerClass.Soldier);
+
+        var server = harness.Server;
+        var human = HumanSlot(server);
+        var bot = BotSlot(server);
+
+        // Past spawn protection, or the death respawns next tick and the bot dies
+        // at once (the case above).
+        harness.TickUntil(
+            () => Gml.Equal(server.WorldForTests.Characters[human].DeathmatchInvulnerable, 0),
+            "spawn protection to end",
+            maxTicks: 300);
+
+        server.WorldForTests.Characters[bot].LastDamageDealer = (byte)human;
+        client.SendChangeClass(PlayerClass.Heavy);
+        harness.TickUntil(() => server.DeathsOf(human) > 0, "the human to die", maxTicks: 5);
+
+        var held = 0;
+        while (server.IsAlive(bot) && held < 200)
+        {
+            harness.Tick();
+            held++;
+        }
+
+        // Past the 60-frame snapshot with a margin, and no later than the hold.
+        Assert.InRange(held, 70, BotPopulationService.KillCamTicks + 1);
+        Assert.Equal(0, server.RedCaps);
+        Assert.Equal(PlayerClass.Heavy, server.ClassOf(bot));
+        Assert.Equal(server.WorldForTests.Players[human].SpawnPin, server.WorldForTests.Players[bot].SpawnPin);
+
+        harness.TickUntil(() => server.IsAlive(human) || server.IsAlive(bot), "a respawn", maxTicks: 200);
+        Assert.True(server.IsAlive(human));
+        Assert.True(server.IsAlive(bot));
+    }
+
+    /// <summary>
+    /// The bot's death is the human's win: they are healed to full and moved, at
+    /// rest, to a different cell's red spawn, and the bot respawns there.
+    /// </summary>
+    [Fact]
+    public void TheBotsDeathHealsAndMovesTheHuman()
     {
         using var harness = Duel();
         JoinAndPlay(harness, Team.Red, PlayerClass.Soldier);
@@ -199,12 +248,51 @@ public sealed class DuelServerTests
         var human = HumanSlot(server);
         var bot = BotSlot(server);
         var cell = server.WorldForTests.Players[human].SpawnPin;
+        server.WorldForTests.Characters[human].Hp = 12;
 
         server.RequestBotClass(bot, PlayerClass.Soldier);
-        harness.TickUntil(() => server.IsAlive(bot), "the bot to respawn", maxTicks: 120);
+        harness.TickUntil(() => server.WorldForTests.Players[human].SpawnPin != cell, "the human to be moved", maxTicks: 3);
 
+        var moved = server.WorldForTests.Players[human].SpawnPin!.Value;
+        ref readonly var character = ref server.WorldForTests.Characters[human];
         Assert.True(server.IsAlive(human));
+        Assert.Equal(ClassStats.For(PlayerClass.Soldier).MaxHp, character.Hp);
+        Assert.True(Spawns(harness).TryGet(Team.Red, 0, moved, out var redX, out _));
+        Assert.Equal(redX, character.X);
+        Assert.Equal(moved, server.WorldForTests.Players[bot].SpawnPin);
+
+        harness.TickUntil(() => server.IsAlive(bot), "the bot to respawn", maxTicks: 120);
+        Assert.True(Spawns(harness).TryGet(Team.Blue, 0, moved, out var blueX, out _));
+        Assert.Equal(blueX, server.WorldForTests.Characters[bot].X);
+        Assert.Equal(moved, server.WorldForTests.Players[human].SpawnPin);
+    }
+
+    /// <summary>A bot that dies while its human is dead is no win, and moves nobody.</summary>
+    [Fact]
+    public void ABotDeathWhileItsHumanIsDeadMovesNobody()
+    {
+        using var harness = Duel(respawnSeconds: 5);
+        var client = JoinAndPlay(harness, Team.Red, PlayerClass.Soldier);
+
+        var server = harness.Server;
+        var human = HumanSlot(server);
+        var bot = BotSlot(server);
+        harness.TickUntil(
+            () => Gml.Equal(server.WorldForTests.Characters[human].DeathmatchInvulnerable, 0),
+            "spawn protection to end",
+            maxTicks: 300);
+
+        client.SendChangeClass(PlayerClass.Soldier);
+        harness.TickUntil(() => server.DeathsOf(human) > 0, "the human to die", maxTicks: 5);
+        var cell = server.WorldForTests.Players[human].SpawnPin;
+
+        server.RequestBotClass(bot, PlayerClass.Soldier);
+        harness.Tick(5);
+
         Assert.Equal(cell, server.WorldForTests.Players[human].SpawnPin);
         Assert.Equal(cell, server.WorldForTests.Players[bot].SpawnPin);
+
+        harness.TickUntil(() => server.IsAlive(human), "the human to respawn", maxTicks: 200);
+        Assert.True(server.IsAlive(bot));
     }
 }

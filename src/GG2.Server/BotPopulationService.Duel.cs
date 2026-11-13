@@ -23,15 +23,25 @@ namespace GG2.Server;
 /// </para>
 /// <para>
 /// <b>When the human dies, the bot dies and both move.</b> The human gets a new
-/// random cell nobody else holds and the bot is re-classed to the human's class
-/// with no kill credit (<see cref="GameServer.RespawnBotUncredited"/>), which also
-/// arms its respawn. When the bot dies the human has won the exchange and nothing
-/// moves: the bot respawns in the same cell. Everything here goes through the
-/// commands a client could send, except the credit and the pin.
+/// random cell nobody else holds; the bot outlives them by
+/// <see cref="KillCamTicks"/> for the client's kill cam, then is re-classed to
+/// the human's class with no kill credit
+/// (<see cref="GameServer.RespawnBotUncredited"/>) and its respawn lined up with
+/// the human's. <b>When the bot dies the human has won</b>: they are healed to
+/// full and moved to a new cell (<see cref="GameServer.RelocateDuelist"/>), and
+/// the bot respawns there. Everything here goes through the commands a client
+/// could send, except the credit, the pin, the respawn countdown and the move.
 /// </para>
 /// </remarks>
 public sealed partial class BotPopulationService
 {
+    /// <summary>
+    /// How long a duel bot outlives its human: three seconds, a second past the
+    /// stock client's kill-cam snapshot (<c>DeathCam.events/Create.xml</c>,
+    /// <c>alarm[0] = 60</c>), so a round trip's lag does not catch it dead.
+    /// </summary>
+    internal const int KillCamTicks = 3 * GameConstants.TickRate;
+
     private void ServiceDuel(in BotPopulationOptions options)
     {
         var cells = Spawns is null ? 0 : Math.Min(Spawns.Count(Team.Red, 0), Spawns.Count(Team.Blue, 0));
@@ -58,6 +68,8 @@ public sealed partial class BotPopulationService
                 human.DuelPartner = null;
                 human.DuelCell = -1;
                 human.DuelDeaths = -1;
+                human.DuelBotDeaths = -1;
+                human.DuelBotKillIn = 0;
                 _server.PinSpawn(slot, null);
                 continue;
             }
@@ -74,6 +86,8 @@ public sealed partial class BotPopulationService
                     continue;
 
                 human.DuelPartner = _server.EntryOf(bot);
+                human.DuelBotDeaths = -1;
+                human.DuelBotKillIn = 0;
                 Retarget();
             }
 
@@ -83,7 +97,17 @@ public sealed partial class BotPopulationService
             var died = human.DuelDeaths >= 0 && deaths > human.DuelDeaths;
             human.DuelDeaths = deaths;
 
-            if (died)
+            // The bot's count the same way: a rise while its human is alive, with
+            // no kill of ours pending, is the human's win. Our own kills are
+            // absorbed by the re-read at the bottom.
+            var botDeaths = _server.DeathsOf(bot);
+            var won = !died
+                && human.DuelBotKillIn == 0
+                && human.DuelBotDeaths >= 0
+                && botDeaths > human.DuelBotDeaths
+                && _server.IsAlive(slot);
+
+            if (died || won)
                 human.DuelCell = PickFreeCell(cells, human);
 
             _server.PinSpawn(slot, human.DuelCell);
@@ -96,17 +120,54 @@ public sealed partial class BotPopulationService
 
             if (died)
             {
-                _server.RespawnBotUncredited(bot, human.Class);
-                _server.RenameBot(bot, options.NamePrefix + human.Class.ToString());
+                // The bot lives on for the kill cam; a sentry left behind would
+                // fight it meanwhile and sit in a cell another pair may draw.
+                _server.ExecuteFor(slot, new PlayerCommand(PlayerCommandKind.DestroySentry, 0));
+                human.DuelBotKillIn = KillCamTicks;
+            }
+
+            if (human.DuelBotKillIn > 0)
+            {
+                // Held until the kill cam has looked (DeathCam's alarm[0], 60
+                // frames after the death, frames the killer's character, and a
+                // dead killer reads "killed by the late"), or until the human is
+                // about to respawn or has, whichever is first. A protected death
+                // respawns on the next tick, so that one kills at once.
+                human.DuelBotKillIn--;
+                var respawn = _server.RespawnTicksLeft(slot);
+                var alive = _server.IsAlive(slot);
+
+                if (human.DuelBotKillIn == 0 || alive || respawn <= 1)
+                {
+                    human.DuelBotKillIn = 0;
+
+                    if (_server.IsAlive(bot))
+                        _server.RespawnBotUncredited(bot, human.Class);
+                    else if (_server.ClassOf(bot) != human.Class)
+                        _server.RequestBotClass(bot, human.Class);
+
+                    // Spawn on the human's tick, not a whole respawn time after
+                    // this late kill.
+                    _server.ArmBotRespawn(bot, alive ? 1 : Math.Max(1, respawn));
+                    _server.RenameBot(bot, options.NamePrefix + human.Class.ToString());
+                }
+            }
+            else if (won)
+            {
+                // The bot respawns into the new cell by its pin after the
+                // ordinary respawn time; the human waits there at full health.
+                _server.RelocateDuelist(slot, Spawns!, human.DuelCell);
             }
             else if (_server.ClassOf(bot) != human.Class)
             {
-                // A class picked while dead, or [Classlimits] refusing the add's
-                // class. The ordinary command: it kills a live bot, which is the
-                // point — the duel restarts as the matching class.
+                // [Classlimits] refusing the add's class. The ordinary command:
+                // it kills a live bot, which is the point — the duel restarts as
+                // the matching class.
                 _server.RequestBotClass(bot, human.Class);
                 _server.RenameBot(bot, options.NamePrefix + human.Class.ToString());
             }
+
+            human.DuelBotDeaths = _server.DeathsOf(bot);
         }
 
         RemoveUnpairedBots();
