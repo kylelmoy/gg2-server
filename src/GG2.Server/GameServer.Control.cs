@@ -565,18 +565,22 @@ public sealed partial class GameServer
     public int RespawnTicksLeft(int slot) => _world.Players[slot].RespawnTimer;
 
     /// <summary>
-    /// A duel human's win: their live character is healed to full and moved to
-    /// <paramref name="spawnPoint"/> of its team, at rest, and its sentry is
-    /// destroyed. <c>docs/DUEL.md</c>.
+    /// A duel human's win: their live character is respawned, without a death,
+    /// at <paramref name="spawnPoint"/> of its team, and its sentry destroyed — a
+    /// fresh character in every respect (hp, ammo, reload, charge, motion,
+    /// burning, spawn protection). <c>docs/DUEL.md</c>.
     /// </summary>
     /// <remarks>
-    /// <b>Every part reaches a stock client through a message it already
-    /// reads.</b> Position, velocity, <c>ceil(hp)</c> and the move status all ride
-    /// every <c>QUICK_UPDATE</c> (every seventh tick), so the client snaps to the
-    /// new cell and the new hp within a quarter of a second; the sentry goes by
-    /// the <c>DESTROY_SENTRY</c> command's own body, which clients notice through
-    /// the subobject bit. Burning is left alone: the client simulates its own
-    /// flames, and nothing on the wire would put them out.
+    /// <b>A <c>PLAYER_SPAWN</c> the stock client already handles.</b>
+    /// <c>doEventSpawn.gml</c> ("If he already has a character object, destroy it
+    /// and respawn") destroys the client's live character and creates a new one
+    /// at the point, which is exactly what the server does here through the same
+    /// <see cref="WorldState.Spawn"/> a respawn uses. The client's
+    /// <c>Character.events/Destroy.xml</c> runs on the way; its one rule that
+    /// reaches the new character is the TDM protection carry, so that is
+    /// mirrored: protection still running carries across, as it would through a
+    /// death. The sentry goes by <c>DESTROY_SENTRY</c>'s own body, seen through
+    /// the subobject bit.
     /// </remarks>
     public bool RelocateDuelist(int slot, SpawnPoints spawns, int spawnPoint)
     {
@@ -585,21 +589,22 @@ public sealed partial class GameServer
         if (slot <= 0 || slot >= _roster.Count || !_world.IsAlive(slot))
             return false;
 
-        ref var character = ref _world.Characters[slot];
-        if (!spawns.TryGet(_world.Players[slot].Team, 0, spawnPoint, out var x, out var y))
+        ref var player = ref _world.Players[slot];
+        if (!spawns.TryGet(player.Team, 0, spawnPoint, out _, out _))
             return false;
 
         ExecuteDestroySentry(slot);
 
-        character.X = x;
-        character.Y = y;
-        character.HSpeed = 0;
-        character.VSpeed = 0;
-        character.MoveStatus = 0;
-        character.Hp = ClassStats.For(_world.Players[slot].Class).MaxHp;
-        _world.Weapons[slot].X = x;
-        _world.Weapons[slot].Y = y;
+        // Character.events/Destroy.xml: `deathmatch_invulnerable != 0` carries
+        // into deathmatch_respawn_bypass, which the new character's Create reads.
+        // A cell map has no spawn room, the other half of that test.
+        var protection = _world.Characters[slot].DeathmatchInvulnerable;
+        player.DeathmatchRespawnBypass = Gml.Equal(protection, 0) ? 0 : protection;
 
+        if (!_world.Spawn(spawns, slot, player.Class, player.Team, spawnPoint, 0))
+            return false;
+
+        ServerMessages.PlayerSpawn(_broadcast, (byte)slot, (byte)spawnPoint, 0);
         return true;
     }
 

@@ -235,21 +235,24 @@ public sealed class DuelServerTests
     }
 
     /// <summary>
-    /// The bot's death is the human's win: after a beat they are healed to full
-    /// and moved, at rest, to a different cell's red spawn, and the bot appears
-    /// there with them rather than a respawn time later.
+    /// The bot's death is the human's win: after a beat they are respawned, with
+    /// no death, at a different cell's red spawn (full hp and a full clip, told to
+    /// the client by a <c>PLAYER_SPAWN</c>), and the bot appears there with them
+    /// rather than a respawn time later.
     /// </summary>
     [Fact]
     public void TheBotsDeathHealsAndMovesTheHumanWithTheBot()
     {
         using var harness = Duel(respawnSeconds: 5);
-        JoinAndPlay(harness, Team.Red, PlayerClass.Soldier);
+        var client = JoinAndPlay(harness, Team.Red, PlayerClass.Soldier);
 
         var server = harness.Server;
         var human = HumanSlot(server);
         var bot = BotSlot(server);
         var cell = server.WorldForTests.Players[human].SpawnPin;
         server.WorldForTests.Characters[human].Hp = 12;
+        server.WorldForTests.Weapons[human].AmmoCount = 1;
+        var deaths = server.DeathsOf(human);
 
         server.RequestBotClass(bot, PlayerClass.Soldier);
         harness.TickUntil(() => server.WorldForTests.Players[human].SpawnPin != cell, "the new cell to be picked", maxTicks: 3);
@@ -262,10 +265,14 @@ public sealed class DuelServerTests
         Assert.Equal(12, server.WorldForTests.Characters[human].Hp);
         Assert.False(server.IsAlive(bot));
 
+        var heard = client.Received.Count;
         harness.TickUntil(() => server.WorldForTests.Characters[human].X == redX, "the human to be moved", maxTicks: 10);
 
         Assert.True(server.IsAlive(human));
+        Assert.Equal(deaths, server.DeathsOf(human));
         Assert.Equal(ClassStats.For(PlayerClass.Soldier).MaxHp, server.WorldForTests.Characters[human].Hp);
+        Assert.Equal(WeaponState.Spawn(PlayerClass.Soldier).AmmoCount, server.WorldForTests.Weapons[human].AmmoCount);
+
         Assert.Equal(moved, server.WorldForTests.Players[bot].SpawnPin);
 
         // Within a tick of the move, not after the five-second respawn.
@@ -274,6 +281,13 @@ public sealed class DuelServerTests
         Assert.True(server.IsAlive(bot));
         Assert.True(Spawns(harness).TryGet(Team.Blue, 0, moved, out var blueX, out _));
         Assert.Equal(blueX, server.WorldForTests.Characters[bot].X);
+
+        // PLAYER_SPAWN, slot, point, group 0: the client replaces its character.
+        harness.Tick();
+        byte[] spawn = [(byte)MessageType.PlayerSpawn, (byte)human, (byte)moved, 0];
+        Assert.True(
+            client.Received.Skip(heard).ToArray().AsSpan().IndexOf(spawn) >= 0,
+            "the client was not sent the human's spawn");
     }
 
     /// <summary>
