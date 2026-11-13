@@ -17,7 +17,7 @@ namespace GG2.Host;
 /// it decides how much of the next cell is on screen, because the client draws
 /// every character whatever is in between.
 /// </param>
-internal readonly record struct CellMapOptions(int Seed, int Cells = 24, int CellWidth = 150, int CellHeight = 67, int Gap = 70);
+internal readonly record struct CellMapOptions(int Seed, int Cells = 24, int CellWidth = 150, int CellHeight = 100, int Gap = 70);
 
 /// <summary>One shipped map, decoded once, that cells are cut from.</summary>
 internal sealed class CellSource
@@ -150,6 +150,19 @@ internal static class CellMapGenerator
     /// box with a floor — measured: the first pool had cells of three and four.
     /// </summary>
     private const int MinSurfaces = 8;
+
+    /// <summary>
+    /// Clear height, in mask cells, a floor needs over it to count as tall: 240
+    /// px, room for a double jump or a rocket or sticky jump to go somewhere.
+    /// </summary>
+    private const int TallHeadroom = 40;
+
+    /// <summary>
+    /// The least share of a cell's standing places that must be tall, as a
+    /// fraction: below it the cell is a low corridor where the movement classes
+    /// lose the vertical half of their game.
+    /// </summary>
+    private const double MinTallShare = 0.4;
 
     /// <summary>
     /// The maps cells are cut from: every built-in map FILE but <c>gg_debug</c>,
@@ -300,12 +313,18 @@ internal static class CellMapGenerator
 
             var left = new List<(int X, int Row)>();
             var right = new List<(int X, int Row)>();
+            var standing = 0;
+            var tall = 0;
             for (var row = 10; row < ch; row++)
             {
                 for (var x = 4; x < cw - 4; x++)
                 {
                     if (!CanStand(open, cw, x, row))
                         continue;
+
+                    standing++;
+                    if (Headroom(open, cw, x, row) >= TallHeadroom)
+                        tall++;
 
                     if (x < cw * 2 / 5)
                         left.Add((x, row));
@@ -314,7 +333,7 @@ internal static class CellMapGenerator
                 }
             }
 
-            if (left.Count == 0 || right.Count == 0)
+            if (left.Count == 0 || right.Count == 0 || tall < standing * MinTallShare)
                 continue;
 
             var kept = KeptEntities(source, x0, y0, cw, ch);
@@ -403,6 +422,16 @@ internal static class CellMapGenerator
     /// <see cref="SpawnHeight"/> plus a body) six columns wide, and floor under
     /// the two columns at its centre.
     /// </summary>
+    /// <summary>Open cells straight up from the floor at (x, row), to the first solid or the window's top.</summary>
+    private static int Headroom(bool[] open, int cw, int x, int row)
+    {
+        var y = row - 1;
+        while (y >= 0 && open[(y * cw) + x])
+            y--;
+
+        return row - 1 - y;
+    }
+
     private static bool CanStand(bool[] open, int cw, int x, int row)
     {
         if (open[(row * cw) + x] || open[(row * cw) + x - 1])

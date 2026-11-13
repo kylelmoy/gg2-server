@@ -23,7 +23,7 @@ internal static class CellGen
         List<(string Name, CellMapOptions Options)> maps;
         if (Flag(args, "--name") is { } name)
         {
-            var size = (Flag(args, "--cell") ?? "150x67").Split('x');
+            var size = (Flag(args, "--cell") ?? "150x100").Split('x');
             maps =
             [
                 (name, new CellMapOptions(
@@ -143,7 +143,7 @@ internal static class CellGen
           --name <map>       write one map with the options below instead
           --seed <n>         drives every choice; same options, same map   (1)
           --cells <n>        duel cells; cell i holds red and blue spawn i (24)
-          --cell <w>x<h>     the window cut per cell, in 6 px mask cells   (150x67)
+          --cell <w>x<h>     the window cut per cell, in 6 px mask cells   (150x100)
           --gap <n>          solid between cells, in mask cells; must beat
                              the 65 px blast radius, which ignores walls   (70)
           --maps <path>      where the shipped source maps live  [GG2_MAPS, or maps/]

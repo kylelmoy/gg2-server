@@ -4,11 +4,11 @@
 # Written by: dotnet run --project src/GG2.Host -- navgen
 # Re-recorded by: GG2_UPDATE_NAV_MANIFEST=1 dotnet test --filter NavManifestTests
 # A graph with no line here is not checked. See NavManifest.
-duel_01_a1	9cbb3599ad46e079fd33d6c616e0278a
-duel_02_a1	3f4d9fdd1009a1f709b49b6b471550c8
-duel_03_a1	1ac42f8d50cf29ea657ce4c48865f34e
-duel_04_a1	73e87ba11043cccf1ffae2314711cdff
-duel_05_a1	f56920fe923abd1bbe10d3dfcb9f028f
-duel_06_a1	d97b3219894dd37cbf58cb7870b50e8d
-duel_07_a1	d847a7877f98972a44648983256f3a6c
-duel_08_a1	d67a4eb4f258a282a4725e62ec9fc5e0
+duel_01_a1	d8d845a8e642d9ec4467757d185c8a93
+duel_02_a1	40e7fe9cc051a29aab81a876da124a47
+duel_03_a1	df04039dd474cfc96a66f506983ca797
+duel_04_a1	43d7dfbe68a30c1d1cd81fdde2d8ebcb
+duel_05_a1	d624b49ad66f89e9b1ad4074b3d644e3
+duel_06_a1	f2544d7221998cdd859670c23bf0a417
+duel_07_a1	0e9916eeaecd4cb47aa024ec49d4deab
+duel_08_a1	162425c097e9bb203f2f7b28fa7531af
