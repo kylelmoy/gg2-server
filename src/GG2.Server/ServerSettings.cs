@@ -492,10 +492,10 @@ public static class ServerSettings
             o => o.Limits.ChatBubbleIntervalMs,
             (o, v) => o.Limits = o.Limits with { ChatBubbleIntervalMs = v }, "500"));
 
-        // ⚠️ Off is a REGRESSION, not a tuning choice: without keepalives a client
-        // whose machine loses power holds a roster slot until TCP's own retransmit
-        // gives up, which is around fifteen minutes on Linux. A SPECTATOR SENDS
-        // NOTHING, so a receive-idle timeout is not the alternative.
+        // ⚠️ Off is a REGRESSION, not a tuning choice: an idle connection whose
+        // peer vanished would never be noticed. A SPECTATOR SENDS NOTHING, so a
+        // receive-idle timeout is not the alternative. A connected client is
+        // UnacknowledgedTimeoutSeconds' case, not this one.
         settings.Add(BoolRow(
             "Limits", "TcpKeepAlive", nameof(ServerOptions.Limits),
             o => o.Limits.TcpKeepAlive,
@@ -515,6 +515,14 @@ public static class ServerSettings
             "Limits", "KeepAliveProbeCount", nameof(ServerOptions.Limits),
             o => o.Limits.KeepAliveProbeCount,
             (o, v) => o.Limits = o.Limits with { KeepAliveProbeCount = v }, "5"));
+
+        // ⚠️ Not a keepalive tuning: keepalive never probes a client the server
+        // is broadcasting to, so this is what frees a vanished player's seat.
+        // ConnectionLimits.UnacknowledgedTimeoutSeconds.
+        settings.Add(IntRow(
+            "Limits", "UnacknowledgedTimeoutSeconds", nameof(ServerOptions.Limits),
+            o => o.Limits.UnacknowledgedTimeoutSeconds,
+            (o, v) => o.Limits = o.Limits with { UnacknowledgedTimeoutSeconds = v }, "90"));
 
         // --- [Nav] ------------------------------------------------------------
         settings.Add(PathRow(

@@ -93,12 +93,30 @@ writing down: a **spectator legitimately sends nothing at all**. Only
 branch of that event entirely (`PlayerControl.events/Begin Step.xml`). Any
 heartbeat-based timeout kicks spectators.
 
-TCP keepalive is the right layer — the kernel is the only thing that can tell a
-quiet peer from an absent one. Without it the server keeps writing to the dead
-peer and TCP's own retransmit eventually gives up, which is `tcp_retries2`,
-about fifteen minutes on Linux, of a ghost holding a roster slot. The probes
-settle it in about a minute. `--no-tcp-keepalive` turns it off and is a
-regression, not a tuning choice.
+The kernel is the right layer, since it is the only thing that can tell a quiet
+peer from an absent one, and it takes two options because a peer can vanish in
+two states:
+
+| Peer vanished while | What the server's socket has | What frees the seat |
+|---|---|---|
+| nothing was in flight (a joining connection between commands) | an idle connection | TCP keepalive, 30 s + 3 x 10 s. `--no-tcp-keepalive` turns it off and is a regression, not a tuning choice |
+| the server was writing to it (every connected client: the broadcast is per tick) | unacknowledged data, so **keepalive never sends a probe** | `UnacknowledgedTimeoutSeconds` (60 s): Linux `TCP_USER_TIMEOUT`, Windows `TCP_MAXRT` |
+
+Without the second, a connected client that vanishes holds its roster slot until
+TCP's retransmit gives up (`tcp_retries2`, about 15.5 minutes on Linux). The
+stock client makes that routine: it drops its socket and reconnects at every
+map change to a custom map it lacks (`ClientBeginStep.gml`, `CHANGE_MAP`), and
+when that close is lost the old seat stays. On the duel server, whose rotation
+is all custom maps, one player accumulated three seats, each freed about 16
+minutes later, until `MultiClientLimit` refused the fourth connection. A WSL2
+repro (two network namespaces; the peer's address flushed so nothing answers)
+measured the server's socket erroring 23 s after silence with a 20 s user
+timeout, and not until TCP's own retry limit with keepalive alone.
+
+A minute is deliberate: a GM8 client stops reading while its window is dragged
+or a modal dialog is open, and the zero-window probes that follow are bounded by
+the same timeout. **What would show this stale:** a `left (TimedOut)` line more
+than about two minutes after that player's last activity, on Linux or Windows.
 
 ### One fault must not end the game for everybody
 

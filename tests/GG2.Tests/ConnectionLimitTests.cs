@@ -280,6 +280,52 @@ public sealed class ConnectionLimitTests
                 MaxHandshakeDuration = TimeSpan.FromSeconds(5),
             }).Validate());
     }
+
+    /// <summary>
+    /// A connected client that vanishes is dropped in about a minute, not when
+    /// TCP's retransmit gives up (~15 minutes on Linux).
+    /// </summary>
+    /// <remarks>
+    /// Keepalive cannot do this: it probes only an idle connection, and the
+    /// per-tick broadcast always has data in flight. What this pins is that the
+    /// option is really on the socket, in the unit each platform reads; that it
+    /// then frees the seat is the kernel's half, measured in
+    /// <c>docs/HARDENING.md</c>, "Peers that vanished".
+    /// </remarks>
+    [Fact]
+    public void UnacknowledgedDataTimesOutInAMinute()
+    {
+        Assert.Equal(60, ConnectionLimits.Default.UnacknowledgedTimeoutSeconds);
+
+        using var pair = new Pair(ConnectionLimits.Default);
+        var value = new byte[4];
+        var socket = pair.Server.SocketForTests;
+
+        if (OperatingSystem.IsLinux())
+        {
+            socket.GetRawSocketOption((int)SocketOptionLevel.Tcp, ClientConnection.TcpUserTimeoutLinux, value);
+            Assert.Equal(60_000, BitConverter.ToInt32(value));
+        }
+        else if (OperatingSystem.IsWindows())
+        {
+            socket.GetRawSocketOption((int)SocketOptionLevel.Tcp, ClientConnection.TcpMaxRtWindows, value);
+            Assert.Equal(60, BitConverter.ToInt32(value));
+        }
+    }
+
+    [Fact]
+    public void ZeroUnacknowledgedTimeoutLeavesTheSystemDefault()
+    {
+        using var pair = new Pair(ConnectionLimits.Default with { UnacknowledgedTimeoutSeconds = 0 });
+        var value = new byte[4];
+
+        if (OperatingSystem.IsLinux())
+        {
+            pair.Server.SocketForTests.GetRawSocketOption(
+                (int)SocketOptionLevel.Tcp, ClientConnection.TcpUserTimeoutLinux, value);
+            Assert.Equal(0, BitConverter.ToInt32(value));
+        }
+    }
 }
 
 /// <summary>

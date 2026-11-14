@@ -37,6 +37,7 @@ public sealed class ClientConnection : IDisposable
         RemoteAddress = (socket.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None;
 
         ConfigureKeepAlive();
+        ConfigureUnacknowledgedTimeout();
     }
 
     public IPAddress RemoteAddress { get; }
@@ -305,6 +306,43 @@ public sealed class ClientConnection : IDisposable
                 // The platform keeps its own default. Still better than nothing:
                 // KeepAlive itself is on.
             }
+        }
+    }
+
+    /// <summary>The socket itself, for a test to read back what was set on it.</summary>
+    internal Socket SocketForTests => _socket;
+
+    // IPPROTO_TCP option numbers .NET has no name for.
+    internal const int TcpUserTimeoutLinux = 18;   // TCP_USER_TIMEOUT, milliseconds
+    internal const int TcpMaxRtWindows = 5;        // TCP_MAXRT, seconds
+
+    /// <summary>
+    /// Bounds how long sent data may go unacknowledged before TCP drops the
+    /// connection: <see cref="ConnectionLimits.UnacknowledgedTimeoutSeconds"/>.
+    /// </summary>
+    /// <remarks>
+    /// The case keepalive cannot see: a peer that vanished while the server was
+    /// still writing to it. Best effort, like keepalive — elsewhere the platform
+    /// keeps its own retransmit limit.
+    /// </remarks>
+    private void ConfigureUnacknowledgedTimeout()
+    {
+        var seconds = _limits.UnacknowledgedTimeoutSeconds;
+        if (seconds <= 0)
+            return;
+
+        try
+        {
+            if (OperatingSystem.IsLinux())
+                _socket.SetRawSocketOption((int)SocketOptionLevel.Tcp, TcpUserTimeoutLinux,
+                    BitConverter.GetBytes(seconds * 1000));
+            else if (OperatingSystem.IsWindows())
+                _socket.SetRawSocketOption((int)SocketOptionLevel.Tcp, TcpMaxRtWindows,
+                    BitConverter.GetBytes(seconds));
+        }
+        catch (Exception e)
+            when (e is SocketException or ObjectDisposedException or PlatformNotSupportedException)
+        {
         }
     }
 

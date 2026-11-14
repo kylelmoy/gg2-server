@@ -396,6 +396,7 @@ a way to give an attacker more room.
 | `KeepAliveIdleSeconds` | integer | `30` | Quiet seconds before the first keepalive probe. |
 | `KeepAliveIntervalSeconds` | integer | `10` | Seconds between probes. |
 | `KeepAliveProbeCount` | integer | `3` | Unanswered probes before the peer is declared gone. |
+| `UnacknowledgedTimeoutSeconds` | integer | `60` | Seconds sent data may go unacknowledged before the connection drops (Linux `TCP_USER_TIMEOUT`, Windows `TCP_MAXRT`); 0 keeps the system's ~15 minutes. **This, not keepalive, frees a connected player who vanished**: keepalive never probes while the broadcast has data in flight. `docs/HARDENING.md`, "Peers that vanished". |
 
 ### `[Nav]`
 

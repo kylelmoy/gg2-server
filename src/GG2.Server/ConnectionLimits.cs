@@ -264,13 +264,41 @@ public sealed record ConnectionLimits
     /// the kernel, which is the only layer that can tell a quiet peer from an
     /// absent one.
     /// <para>
-    /// The server does keep writing to a dead peer, so TCP's own retransmit
-    /// eventually gives up — but that is <c>tcp_retries2</c>, around fifteen
-    /// minutes on Linux by default, and for those fifteen minutes a ghost holds
-    /// a roster slot. The probes below settle it in about a minute.
+    /// ⚠️ <b>Keepalive alone does not cover a connected client.</b> The kernel
+    /// sends a probe only while nothing is unacknowledged, and this server
+    /// writes to every client every tick, so a vanished peer always has data in
+    /// flight and the probes never start. That case is
+    /// <see cref="UnacknowledgedTimeoutSeconds"/>; keepalive covers the quiet
+    /// ones (a joining connection between commands).
     /// </para>
     /// </remarks>
     public bool TcpKeepAlive { get; init; } = true;
+
+    /// <summary>
+    /// Seconds sent data may go unacknowledged before the connection is dropped
+    /// (Linux <c>TCP_USER_TIMEOUT</c>, Windows <c>TCP_MAXRT</c>); 0 leaves the
+    /// system default.
+    /// </summary>
+    /// <remarks>
+    /// <b>What breaks without it.</b> A peer that vanishes without a FIN or RST
+    /// holds its roster slot until TCP's retransmit gives up — <c>tcp_retries2</c>,
+    /// about fifteen minutes on Linux — because the per-tick broadcast keeps
+    /// unacknowledged data in flight and so keeps keepalive from probing at all.
+    /// The stock client makes this routine rather than rare: it drops its socket
+    /// and reconnects at every map change to a custom map it does not have
+    /// (<c>ClientBeginStep.gml</c>, <c>CHANGE_MAP</c>), and when that close does
+    /// not reach the server the old seat stays. Measured on the duel server
+    /// (2026-11-13): one player held three seats, each freed ~16 minutes after
+    /// its reconnect, until <c>MultiClientLimit</c> refused the fourth.
+    /// <para>
+    /// <b>A minute, not less.</b> A GM8 client stops reading while its window is
+    /// dragged or a modal dialog is up; its receive buffer fills and the server
+    /// falls back to zero-window probes, which this timeout also bounds. A minute
+    /// rides out a stall like that and still frees a dead seat long before the
+    /// next map change could add another.
+    /// </para>
+    /// </remarks>
+    public int UnacknowledgedTimeoutSeconds { get; init; } = 60;
 
     /// <summary>Quiet seconds before the first keepalive probe.</summary>
     public int KeepAliveIdleSeconds { get; init; } = 30;
@@ -328,6 +356,14 @@ public sealed record ConnectionLimits
         {
             throw new ArgumentOutOfRangeException(
                 nameof(ChatBubbleIntervalMs), ChatBubbleIntervalMs, "must not be negative; zero means no throttle");
+        }
+
+        // The Linux option is milliseconds in an int.
+        if (UnacknowledgedTimeoutSeconds < 0 || UnacknowledgedTimeoutSeconds > int.MaxValue / 1000)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(UnacknowledgedTimeoutSeconds), UnacknowledgedTimeoutSeconds,
+                "must be between 0 (the system default) and 2147483 seconds");
         }
 
         if (MaxInvalidCommandBytes < 1)

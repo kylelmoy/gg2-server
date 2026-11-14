@@ -765,10 +765,11 @@ const STRINGS = {
       "ConnectionBurstPerAddress": "Max connections per address within the burst window. 0 disables rate limiting.",
       "ConnectionBurstWindowSeconds": "Burst window length, seconds.",
       "ChatBubbleIntervalMs": "Min interval between one player's chat bubbles, ms.",
-      "TcpKeepAlive": "Detect vanished peers. Off: a dead client holds its slot ~15 min. Spectators send nothing, so this is the only liveness check.",
+      "TcpKeepAlive": "Detect vanished peers on idle connections (mid-join). A connected player is covered by the unacknowledged timeout instead.",
       "KeepAliveIdleSeconds": "Idle seconds before the first keepalive probe.",
       "KeepAliveIntervalSeconds": "Seconds between keepalive probes.",
-      "KeepAliveProbeCount": "Unanswered probes before the peer is dropped."
+      "KeepAliveProbeCount": "Unanswered probes before the peer is dropped.",
+      "UnacknowledgedTimeoutSeconds": "Seconds sent data may go unacknowledged before a connection drops; frees a vanished player's slot. 0: system default (~15 min)."
     },
     "Nav": {
       "Directory": "Bot nav graph directory.",
