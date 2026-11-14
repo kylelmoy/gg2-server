@@ -788,6 +788,22 @@ public sealed class ServerOptions
     public HandoverRule BotHandoverRule { get; set; } = HandoverRule.MacroTask;
 
     /// <summary>
+    /// How near, in pixels, the nearest opponent must be before a bot hands the
+    /// wheel to its controller — <c>--bot-handover-range</c>.
+    /// </summary>
+    /// <remarks>
+    /// <b>A BEHAVIOUR switch, <see cref="HybridBot.EngagementRange"/> (150) by
+    /// default</b>, the width every shipped arm was measured at. A controller
+    /// already driving keeps the wheel out to the larger of this and
+    /// <see cref="BotBrainSpec.DefaultReleaseRange"/>. Set very large with
+    /// <see cref="HandoverRule.Distance"/> to have the policy drive whenever an
+    /// opponent is alive: the duel server's setting. ⚠️ Past about 400px a
+    /// policy is handed the wheel at a range its observation cannot describe
+    /// (<see cref="HybridBot.EngagementRange"/>'s remarks), and it has no route.
+    /// </remarks>
+    public int BotHandoverRange { get; set; } = (int)HybridBot.EngagementRange;
+
+    /// <summary>
     /// The one team whose bots the brain drives, or <see cref="Team.Any"/> for
     /// both — <c>--bot-brain-team</c>.
     /// </summary>
@@ -1145,6 +1161,9 @@ public sealed class ServerOptions
 
         if (LogKeep is < 0 or > 1000)
             throw new ArgumentOutOfRangeException(nameof(LogKeep), LogKeep, "must be 0..1000");
+
+        if (BotHandoverRange < 1)
+            throw new ArgumentOutOfRangeException(nameof(BotHandoverRange), BotHandoverRange, "must be at least 1 pixel");
 
         // A day is the ceiling because a suspension is a WINDOW: past it the
         // thing a player asked for — "no bots for a while" — is better spelled

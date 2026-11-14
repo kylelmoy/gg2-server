@@ -794,6 +794,7 @@ const STRINGS = {
       "SpreadTurn": "Spread each policy decision's aim turn over the ticks it is held for, instead of turning on the first. Behavioural.",
       "EngageBots": "Run the micro-controller in bot-vs-bot fights too. Costs tick time; does not improve play.",
       "HandoverRule": "When a bot hands the wheel to its controller. macrotask is what the shipped bots were measured under; distance (enemy within 150px, kept to 300px) is what gg2-sim policies use.",
+      "HandoverRange": "Pixels: how near the nearest opponent must be for that handover (150 by default). Very large with distance: the policy drives whenever an opponent is alive.",
       "BrainTeam": "The one team whose bots the brain drives; the other team's bots are plain scripted bots. Both by default; red is how gg2-sim plays its matches.",
       "HandoverBubbles": "Chat bubble on brain handover: z1 policy, z3 search, z2 scripted. Debug only; each bubble is a broadcast.",
       "AdaptiveBudget": "Lower the controller budget when ticks approach their deadline. Arbiter remains the upper bound.",

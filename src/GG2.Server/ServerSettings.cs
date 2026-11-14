@@ -636,6 +636,11 @@ public static class ServerSettings
             (o, v) => o.BotHandoverRule = ParseHandoverRule(v),
             "distance"));
 
+        // A BEHAVIOUR switch: ServerOptions.BotHandoverRange.
+        settings.Add(IntRow(
+            "Bots", "HandoverRange", nameof(ServerOptions.BotHandoverRange),
+            o => o.BotHandoverRange, (o, v) => o.BotHandoverRange = v, "400"));
+
         // A BEHAVIOUR switch: ServerOptions.BotBrainTeam.
         settings.Add(ChoiceRow(
             "Bots", "BrainTeam", nameof(ServerOptions.BotBrainTeam),

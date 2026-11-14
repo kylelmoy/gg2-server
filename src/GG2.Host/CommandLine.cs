@@ -635,6 +635,11 @@ internal static class CommandLine
                     options.BotHandoverRule = ServerSettings.ParseHandoverRule(cursor.Take());
                     break;
 
+                // A behaviour switch: ServerOptions.BotHandoverRange.
+                case "--bot-handover-range":
+                    options.BotHandoverRange = int.Parse(cursor.Take(), CultureInfo.InvariantCulture);
+                    break;
+
                 // A behaviour switch: ServerOptions.BotBrainTeam.
                 case "--bot-brain-team":
                     options.BotBrainTeam = ServerSettings.ParseBrainTeam(cursor.Take());
@@ -1257,6 +1262,11 @@ internal static class CommandLine
                             controller. macrotask by default; distance (an
                             enemy within 150px, kept to 300px) is what gg2-sim
                             policies are evaluated under.
+          --bot-handover-range <px>
+                            how near the nearest opponent must be for that
+                            handover; 150 by default. Very large with
+                            --bot-handover-rule distance: the policy drives
+                            whenever an opponent is alive.
           --bot-brain-team both|red|blue
                             the one team whose bots --bot-mode's brain drives;
                             the other team's bots are plain scripted bots. Both

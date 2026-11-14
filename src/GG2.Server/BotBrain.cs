@@ -320,6 +320,7 @@ public static class BotBrain
                 {
                     Tiers = tiers,
                     Rule = options.BotHandoverRule,
+                    Range = options.BotHandoverRange,
 
                     // ⛔ The server's default is the OPPOSITE of BotBrainSpec's,
                     // deliberately — see ServerOptions.BotEngagesBotsToo.

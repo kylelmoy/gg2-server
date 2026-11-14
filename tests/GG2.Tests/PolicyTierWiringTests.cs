@@ -156,6 +156,35 @@ public sealed class PolicyTierWiringTests
     /// a shipped file may name a should-drive set narrower than what it trained on,
     /// and what the server will DRIVE is the only half either repository can check.
     /// </remarks>
+    /// <summary>
+    /// <c>[Bots] HandoverRange</c> reaches the brain, and leaving it out keeps the
+    /// measured 150px every shipped arm ran at.
+    /// </summary>
+    [Fact]
+    public void TheHandoverRangeReachesTheBrain()
+    {
+        var config = CliCoverageTests.WriteConfig(
+            $"""
+             [Bots]
+             Mode=policy
+             Policy={PolicyFixture.Checkpoint}
+             HandoverRule=distance
+             HandoverRange=100000
+             """);
+
+        var wide = CommandLine.Parse(["--config", config]);
+        Assert.Equal(100000, wide.Bots.Brain!.Range);
+
+        var plain = new ServerOptions
+        {
+            MapDirectory = "maps",
+            BotMode = BotMode.Policy,
+            PolicyPaths = [PolicyFixture.Checkpoint],
+        };
+        BotBrain.Build(plain, _ => { });
+        Assert.Equal(HybridBot.EngagementRange, plain.Bots.Brain!.Range);
+    }
+
     [Fact]
     public void EveryCheckpointReportsItsOwnStampAndClassSet()
     {
