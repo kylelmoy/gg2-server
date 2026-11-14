@@ -109,9 +109,10 @@ map change to a custom map it lacks (`ClientBeginStep.gml`, `CHANGE_MAP`), and
 when that close is lost the old seat stays. On the duel server, whose rotation
 is all custom maps, one player accumulated three seats, each freed about 16
 minutes later, until `MultiClientLimit` refused the fourth connection. A WSL2
-repro (two network namespaces; the peer's address flushed so nothing answers)
-measured the server's socket erroring 23 s after silence with a 20 s user
-timeout, and not until TCP's own retry limit with keepalive alone.
+repro (two network namespaces, a joined loadprobe spectator, then the peer's
+address flushed so nothing answers) freed the seat 67 s after silence with the
+60 s default and 1,078 s (`left (HostUnreachable)`) with
+`UnacknowledgedTimeoutSeconds=0`.
 
 A minute is deliberate: a GM8 client stops reading while its window is dragged
 or a modal dialog is open, and the zero-window probes that follow are bounded by
