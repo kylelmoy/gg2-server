@@ -3691,8 +3691,7 @@ failures before, 25 after, identical sets.** Not "weakly covered": zero.
 
 ⚠️ **Re-measured on a GREEN suite**, because the original reading was taken
 while 25 tests were red for an unrelated reason and "the same 25" is a weaker
-statement than it looks. With the stamp red cleaned up (`PolicyFixture`)
-the suite is **2,572 passing, and 2,572 still pass with the carry neutralised.**
+statement than it looks. With the stamp red cleaned up the suite is **2,572 passing, and 2,572 still pass with the carry neutralised.**
 The gap is unchanged and is now stated against a baseline of zero.
 ⚠️ **The mutation has to be opaque to the compiler** — a bare `return` at the top
 is `error CS0162` under warnings-as-errors, so the probe returns on a condition
@@ -3725,8 +3724,8 @@ moving platforms**, five of them, and even 40 bot matches there are byte-identic
 either side of the carry, because no bot ever stood on one.
 
 ✅ **So the carry cannot fire on any map the server rotates through**, which is
-what makes `--policy-ignore-stamp` honest for a shipped map rather than merely
-convenient. ⚠️ **Re-check this before repeating it**: it is a fact about the map
+what made the stamp bypass (since removed with the gg2-rl nets) honest for a
+shipped map rather than merely convenient. ⚠️ **Re-check this before repeating it**: it is a fact about the map
 set, and a new map with a `moving_platform` entity falsifies it silently.
 
 ### Moving platforms: the motion is ported, the carry cannot be
@@ -3800,8 +3799,8 @@ definitions.Length)`, both come from the map's entities, and **all 22 shipped ma
 place none** — so the loop body cannot execute and the tick is bit-identical.
 **`MovingPlatformTests.NoShippedMapPlacesAMovingPlatform` is the gate: if it goes
 red, bump `SimulationBehaviourVersion` and do not reason about it.** The
-alternative was invalidating `gg2-rl`'s trained checkpoint, which
-`PolicyNetwork.Load` hard-refuses on a stamp mismatch. Note the exemption is about
+alternative was invalidating `gg2-rl`'s trained checkpoint, which the server
+refused on a stamp mismatch while it still loaded those. Note the exemption is about
 what a *checkpoint* was trained against; a match on a custom map is outside the
 stamp's claim either way.
 

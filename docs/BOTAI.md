@@ -503,10 +503,10 @@ expert iteration, and it arrives as weights behind a seam that already exists.
 ## Not asking for
 
 - **No ML runtime, tensor library, or ONNX dependency required in this repo.**
-  What shipped stayed inside that rule: `PolicyNetwork` runs a `gg2-rl`
-  checkpoint in-process, loaded by `NpyFile` from their own `.npz`, as weights
-  behind an `IInputSource` (`HybridBot` driving a `PolicyController`) — a
-  `Dense` loop and an argmax per head, no tensor library and no dependency.
+  What ships stays inside that rule: `SimPolicyNetwork` runs a gg2-sim `.gg2p`
+  net in-process, as weights behind an `IInputSource` (`HybridBot` driving a
+  `SimPolicyController`) — a dense loop and an argmax per head, no tensor
+  library and no dependency.
 - **No training loop, replay buffer, or environment API. Those live outside the
   server.** `gg2-rl/env/GG2.Env/` is a *seam* — a socket and an observation writer —
   not a trainer; the loop is `gg2-rl`'s.

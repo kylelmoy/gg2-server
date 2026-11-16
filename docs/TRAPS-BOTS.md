@@ -1551,7 +1551,7 @@ argument alone would be widening an authorisation past its evidence. Open."
 | question | answer |
 |---|---|
 | does any of `src/GG2.Simulation` read a `BOT_*` constant? | **no** — so none can change what an action does |
-| does the inference path? (`ObservationWriter`, `ActionDecoder`, `PolicyNetwork`, `PolicyController`, `HybridBot`, `Handover`) | **no** |
+| does the inference path? (`SimPolicyObservation`, `ActionDecoder`, `SimPolicyNetwork`, `SimPolicyController`, `HybridBot`, `Handover`) | **no** |
 | who does, then? | `src/GG2.Bots`, `src/GG2.Nav`, `HandoverRule` — 27 files |
 
 That is verbatim the routing surface's own description: which states the policy
@@ -5416,366 +5416,12 @@ at tick 35,238; the other reached `MaxTicks` (36,000) with clocks at 2,531 and
 after the pregame, or with bots of one team on a locked hill.
 
 
-## ⚠️ The observation encoder lied twice, and neither lie could go red
-
-Found 2026-09-03 by the `gg2-rl` lane auditing what the policy actually sees,
-against `src/GG2.Bots/ObservationWriter.cs`. Both bugs were silent by
-construction, both had been shipping for the whole of phase 9, and **no test in
-either repo could have caught either one** — which is the reason they are written
-down here rather than left to the fixtures.
-
-### `Stab` was encoded off the end of the vector
-
-`ProjectileKindCount` was 9 and `ProjectileKind` has **ten** members, because
-`None = 0` is one of them. Encoding the raw enum value therefore spent a column on
-a kind that never occurs and put `Stab = 9` past the end of the field.
-
-⚠️ **`OneHot` bound-checks, so the failure was a well-formed row of zeros.** A
-spy's stab — genuinely spawned, `Weapons.Melee.cs:75` — reached the policy as
-presence `1.0` with an all-zero kind one-hot. That is indistinguishable from an
-encoder failure and unrecoverable downstream: nothing later in the network can
-tell "a projectile of no kind" from "a kind whose column is missing".
-
-✅ Fixed by dropping `None` from the one-hot and shifting the rest up
-(`(int)shot.Kind - 1`), so all nine spawnable kinds own a column.
-`ObservationWriterTests.EverySpawnableProjectileKindGetsExactlyOneColumn` pins it
-as a **theory over every kind**, asserting exactly one set column — presence
-without a kind is the shape worth asserting on.
-
-⚠️ **The `Stab` fix by itself left the vector 209 wide, and that is the trap.**
-(The commit that carried it also added the two refire columns below, taking the
-vector to **211** — but that was a *separate* decision, and had it not been made
-this fix would have shipped at an unchanged length.) A
-same-length change to what columns *mean* is invisible to every length check and
-to the observation length recorded in a checkpoint's own metadata. Only
-`ObservationLayoutVersion` separates a v1 checkpoint from these columns, which is
-why the bump was taken even though nothing about the size moved. **Ask of any
-future encoder edit: would this be caught if the length did not change?**
-
-### "nearest first" was creation order, and truncating
-
-`ObservationWriter`'s comment said the four projectile slots were "nearest
-first". `WorldView.ProjectilesWithin` walked the live list in creation order and
-**stopped when the caller's span filled**, so with five or more in radius the
-agent saw the four *oldest* live projectiles.
-
-⚠️ **Truncation was the larger half, not the ordering.** A rocket fired a tick
-ago could be absent from the answer entirely, and absence reads downstream as a
-quiet situation — the encoder cannot say "and four more". The 400 px radius with a
-four-wide span made that the common case in a firefight rather than a corner.
-
-✅ Fixed in `ProjectilesWithin` itself: it now **picks** the nearest, ties keeping
-creation order. `WorldViewTests` pins the ordering, the tie-break, and the
-short-span case separately, because a test that only checks ordering passes on an
-implementation that still truncates.
-
-⚠️ **`SimulationBehaviourVersion` was bumped for this even though the pins did not
-move.** Both `BotReflex` uses are *existential* — the first projectile satisfying
-the predicate returns `true` — so their answers cannot depend on walk order, and
-the set is identical while the span (32) is at least the number in radius. But
-`MaxProjectiles` is 512, above 32 the set genuinely differs, and **nobody has
-measured how often a firefight passes 32.** The stamp's rule is demonstration, not
-argument, so it bumped. The 26 pinned bot tests passing is *consistent with* the
-argument and is not the same as establishing it.
-
-### What the pair have in common
-
-Both were **claims in comments that no test could contradict** — the file said
-"all nine of `ProjectileKind`" and "nearest first", and both sentences were false
-where they sat. The encoder is exactly the seam CLAUDE.md's "a claim the repo
-makes about itself" warns about: it is consumed by a *different repo*, so the only
-reader positioned to notice was the one that acted on the description. It took an
-audit from the `gg2-rl` lane, not a test run here.
-
-### The two columns added in the same breath, and why that is on the record
-
-The same 2026-09-03 change added **`ReadyToShoot` and a `RefireTimer` fraction**
-to the self block, taking the observation from 209 to **211**. Ammo and reload
-were already observed and refire was not, so a policy could not tell whether the
-trigger it was pulling would do anything — and it is a stateless MLP, so it
-cannot infer readiness from its own firing history either.
-
-⚠️ **This was NOT measured, and it is written down that way on purpose.** No
-result says refire visibility helps. It was added because the `Stab` fix was
-already paying a full invalidation that week, which made it the cheapest possible
-moment to close a known gap — a *cost* argument, not an evidence one. It is the
-same mechanism-without-a-direction shape that the **sniper's charge was declined
-on**, and the asymmetry is only that this touches every class in the trained set
-rather than one. If a later measurement shows it buys nothing, that is not a
-surprise and not a reason to keep it.
-
-⚠️ **Both, because neither implies the other.** `Weapon.events/Create.xml` starts
-`ReadyToShoot` false with `RefireTimer` already running, so a zero timer is not a
-weapon that can fire; and a flag alone throws away "how soon".
-
-### ⚠️ The trained class set moved and no stamp can say so
-
-Sniper was dropped and demoman added the same day:
-`PolicyController.TrainedClasses` is now `[Scout, Soldier, Demoman, Heavy]`, so
-the untrained class columns are **2, 4, 5, 7 and 8** — still interleaved, and
-still not a prefix.
-
-⛔ **The class set is not on the stamp surface, so a checkpoint cannot tell you
-which classes it learned.** A checkpoint from before this date learned a sniper
-and never saw a demoman; `SimulationStamp.Require` will happily accept it once
-the stamps line up. **A stamp match is not evidence that a checkpoint knows the
-classes you are about to drive with it.**
-
-⚠️ The two tests that would confirm the switch end to end —
-`PolicyMatchTests.ARestrictedMatchContainsOnlyTrainedClasses` and
-`AnUntrainedClassIsNeverDrivenByThePolicy` — both load the fixture checkpoint, so
-they were **red for an unrelated reason when the change landed** and did not
-validate it. Re-check them deliberately once a v2 fixture exists rather than
-assuming a green suite covered it.
-
-### ⚠️ The fixture became VALID, and that broke tests built on it being stale
-
-2026-09-03, immediately after the layout v2 bump. `gg2-rl` minted a fixture
-against this build, and it was **the first checkpoint ever genuinely valid
-here**. Three tests went red, all correctly, because they were quietly built on
-the shipped file being refused:
-
-- `TheCheckedInCheckpointIsRefusedWithoutTheOverride` asserted the shipped file
-  **is** refused. ⛔ **Premise gone, not merely changed** — retired rather than
-  adjusted, and replaced by `TheCheckedInCheckpointIsAcceptedWithNoOverride`.
-  **Retiring a refusal test whose premise has ceased to exist is not weakening
-  coverage**; leaving it green by re-staling the fixture would have been.
-- `AForeignStampIsRefused` and `ACheckpointGivenToAModeThatCannotUseItIsRefused`
-  needed a *valid* checkpoint to corrupt, which they now have honestly instead
-  of by minting one.
-
-✅ **`PolicyFixture`'s guard fired on the one event it was written for.** It
-hard-coded the trained stamp "so that swapping the file re-opens the question"
-and threw *"the checkpoint has been replaced, so `PolicyFixture.TrainedStamp`
-needs updating along with whatever else that replacement implies"* — months
-later, in a session that had never read it. That is what a guard written for a
-future reader looks like when it works.
-
-The minted-copy machinery, `TrainedStamp`, and `Load`'s `ignoreSimulationStamp`
-were **deleted**. Every caller now goes through the real gate, so the suite
-exercises the refusal instead of routinely bypassing it.
-
-### ⛔ A test's hard-coded class list is a copy of `TrainedClasses`
-
-`PolicyMatchTests.AnUntrainedClassIsNeverDrivenByThePolicy` drove
-`[Demoman, Medic]` and asserted no bot ever gets a policy tick. When demoman
-joined the trained set it was asserting that a **trained** class is never driven
-by the policy — and a demoman correctly took 36 policy micro-ticks.
-
-⚠️ **It could not report that at the time.** The fixture checkpoint was
-unloadable, so this test was red for an unrelated reason across the whole window
-in which the class set changed. **A test that is already red gates nothing**, and
-a change landing behind one is unreviewed however green the suite looks
-afterwards — the same shape as a filter that passes by discarding everything.
-
-⛔ **A THIRD DIRECTION, and it is the worst of them.** This repo already tracks
-two ways a check stops checking: it can pass for a reason unconnected to its name
-(the vacuous dkoth gate, the Arena rounds), and it can be unsatisfiable by the
-right evidence. **A check can also FAIL for a reason unconnected to its name**,
-and that one hides best — a red test reads as a known problem on its way to being
-fixed, so nobody asks what it stopped covering while it sat there. A green suite
-gets audited; a red test gets a ticket. **When a test is red for an unrelated
-reason, everything it used to gate is unguarded until it is green again** — so on
-fixing one, look at what changed underneath it rather than just at the fix.
-Named by the `gg2-rl` lane, which hit the first shape and this one on the same
-day from opposite ends.
-
-✅ The test now asserts its own premise (`PolicyController.IsTrained` is false
-for each class it drives) and says what to do if it fails: pick classes that are
-actually untrained rather than deleting the assertion. **A hard-coded list
-duplicating a constant elsewhere needs something keeping the two in step, or it
-is a stale copy waiting to happen.**
-
-✅ The 36 micro-ticks were also the only positive evidence the class switch took
-effect at all — every other check was a negative.
-
-
-### ✅ The first policy to improve deaths AND the objective at once
-
-**2026-09-06, measured by the `gg2-rl` lane, pinned at `c434229`.** 168
-map-runs, **67,200 matches**: 21 maps × 200 an arm, four seeds a family, 150px
-engagement window. The roster of each run was read off all eight runs rather
-than assumed.
-
-**Cleared to `6126b34` over the whole dependency closure, not the stamp** (see
-the next section for why the stamp is not enough): `src/GG2.Bots` has **0
-non-comment changed lines** across the range; `GG2.Env`, `GG2.Maps`, `GG2.Nav`,
-`nav/` and `maps/` do not appear in the diff at all; `tools/bench`'s only
-non-comment change is the new `Smoke.cs` plus an 8-line `BENCH_SMOKE` guard
-that returns early. **Q21 ran `BENCH_SWEEP` → `RangeSweep.Run`** (`Program.cs`
-line 178; `BENCH_PERMAP` is a different mode it never invoked), and
-`RangeSweep.cs` is untouched across the range. The 64 non-comment lines in
-`src/GG2.Server/BotBrain.cs` are **unreachable from the bench**: the project
-graph is `bench → {GG2.Env, GG2.Bots, GG2.Simulation} → {GG2.Protocol,
-GG2.Maps} → GG2.Protocol → nothing`, so no path reaches `GG2.Server`.
-⚠️ Verified **to the leaves**, not at the first edge — "bench.csproj does not
-reference `GG2.Server`" is a statement about one file, and a closure is a
-graph.
-
-| checkpoint | policy ticks | death share | Δ | 2·SE | t | round wins | Δ | 2·SE | t |
-|---|---|---|---|---|---|---|---|---|---|
-| `rest3` | 5.4–6.1% | 50.63 → 47.77/46.85/48.28/48.33 | **−2.82** | 0.69 | **−8.22** | 53.19 → 56.09/59.04/53.85/55.84 | **+3.02** | 2.14 | **+2.83** |
-| `control` | 4.1–4.4% | 49.90 → 50.44/48.72/49.72/48.91 | −0.45 | 0.79 | −1.15 | 59.70 → 57.56/58.44/56.60/58.39 | **−1.95** | 0.86 | **−4.51** |
-
-`rest3` passes both criteria with **all four seeds agreeing in sign on both
-measures**. The failure mode of the 450px widening — combat improving while the
-objective collapses — is simply absent at 150px and 5–6% of ticks.
-⛔ **`control` fails, and worse than a trade**: Q14's widening at least bought
-combat for objective. This is an objective loss with no purchase, all four seeds
-negative on wins, and one seed's death share *above* its own control.
-
-✅ **A free determinism check came with it**: within each family all four runs
-report the CONTROL arm to the digit (49.90/59.70 and 50.63/53.19), across a day
-in which the bench was rewritten three times. That is what allowed the one
-surprising cell (`control`'s mixed death share) to be attributed to the
-checkpoint rather than to the harness — the instrument is a candidate before the
-policy.
-
-⚠️ **THE TWO FAMILIES ARE NOT COMPARABLE TO EACH OTHER, and their control arms
-differ for a structural reason** (50.63/53.19 against 49.90/59.70). The roster
-follows the trained set, so a `rest3` run is a three-class match and a `control`
-run a four-class one — different matches, not two arms of one. **Each family is
-only ever judged against its own control**; ranking `rest3` above `control` from
-these numbers is not a comparison this instrument can make.
-
-### ⛔ "Should drive" cannot be priced by this bench — it is structural
-
-⚠️ **`AllowedClasses` and `PolicyController.Drives` read the SAME set**, so the
-roster on the field and the classes actually driven cannot be varied
-independently. Dropping engineer from `rest3`'s set to price its inclusion would
-also **remove engineers from the match** — a different match, not a cleaner
-comparison.
-
-Three consequences, all measured-by-implication rather than open questions:
-
-- The engineer question this repo raised (`rest3` mirrors 50.67% against a 50%
-  null, 2·SE 1.74 — nothing to choose against the scripted engineer) is
-  **unanswerable by this instrument**, and that is the answer. Absence of a
-  price, not evidence that inclusion is free.
-- **A single tier's contribution inside a mixed nine-class match is
-  unmeasurable** for the same reason, and so is a three-tier union, since the
-  bench loads one checkpoint.
-- Therefore **a should-drive field could not be justified by a match number
-  today**, whatever one's view of whether it should exist. The training lane
-  states it is *not* asking for the seam change that would be needed.
-
-⛔ **This is a statement of what the instrument can do, not a complaint about
-it**: the bench was built to compare one policy against scripted, and it does
-that well — see the section above, which is exactly that comparison.
-
-⚠️ **Two registered predictions were WRONG here, and both being visible is why
-the result is usable.** The training lane registered that `control`'s tier was
-"sniper alone within a four-class roster" — but `Drives` reads the whole trained
-set, so it drove scout, soldier, sniper AND heavy; the loss belongs to any of the
-four and **says nothing about a sniper tier**. It also registered that `rest3`'s
-win share might be degenerate for want of a flag-runner in its roster; over 21
-maps it is not — the arena and koth maps score, and the co-primary resolved at
-t +2.83. **Being wrong there was worth more than being right**: it means the
-objective was visible, so a null would have been a real null rather than an
-instrument floor.
-
-
-### ⛔ A stamp chain is not a clearance: `SIM_UUID` is blind to `GG2.Bots`
-
-**2026-09-06.** Clearing a `gg2-rl` number to a newer commit, this repo checked
-`git diff c434229..6126b34 -- src/GG2.Simulation src/GG2.Env/ObservationWriter.cs`,
-found it empty, and concluded the number described the current build. The
-conclusion was right and **the evidence did not cover the question**: the bot
-layer had moved in that range (`PolicyController.cs` +9, `PolicyNetwork.cs`
-+20) and the check never looked there.
-
-⚠️ **`SIM_UUID` deliberately does not cover `src/GG2.Bots`** — a policy is a
-bot and this project's bots are its own — so **no stamp agreement can clear a
-bot-layer change**, and a clean `GG2.Simulation` diff says nothing about it.
-That is the same coverage gap that made `RocketModel.Capable` need a re-score
-with no stamp moving.
-
-✅ **In this instance nothing was owed**: every changed line in both files is a
-comment, so no executable line moved. **But that was established by filtering
-the diff, not by characterising it.** "Probably just the comment I added" is
-the reasoning both lanes lost time to on the same day.
-
-⛔ **The counterfactual is the whole value of the check.** Had those twenty
-lines been code, the check as originally run would have returned empty *on the
-paths it looked at* and cleared a number it should not have — and the
-conclusion would have been stated with exactly the same confidence. **An
-incomplete check and a sufficient one are indistinguishable from their
-output**; only the closure they cover tells them apart.
-
-**The rule, in order.** Widen to the layer the stamp cannot see — for a bench
-number that is `GG2.Bots`, `GG2.Env`, the maps and nav, and the bench mode
-itself, plus a check that anything else which moved is not in the instrument's
-project closure. Then **read** the diff rather than characterise it. Named by
-the `gg2-rl` lane, which caught it in this repo's own clearance.
-
-⛔ **It took THREE passes to state that rule, and each pass was a strict subset
-of the next — which is the section's real content.** This repo checked what the
-SIMULATION runs on. `gg2-rl` widened to what the POLICY runs against
-(`GG2.Bots`) and stopped, never looking at `tools/bench` — **the thing that
-actually produced the number**. This repo then widened to the instrument but
-named the wrong mode in the write-up (`PerMap`; Q21 ran `BENCH_SWEEP` →
-`RangeSweep`), a wrong supporting sentence under a right conclusion, sending
-any reader who followed it to get a clean answer about a mode the number never
-used. **The settled form: for a number produced by an instrument, the closure
-is the INSTRUMENT'S project graph — not the stamp surface, and not one layer
-past it.**
-
-⚠️ **A textual match is not a dependency, in that direction too.** Checking the
-closure by `grep -l "GG2.Server"` over the csproj files hits three of them —
-all XML comments stating the dependency is *deliberately absent*. A grep that
-would have reported the opposite of the truth, caught only by reading the
-lines. Same rule as reading the diff, pointing the other way.
-
-### ⚠️ A stale "impossible" is worse than a stale "done", and nothing falsifies it
-
-The two stale claims Q21 broke ("NO trained checkpoint exists for this build",
-"nobody is making one") were stale in the **blocking** direction, and that is
-the more expensive one.
-
-**A stale "done" gets falsified the moment somebody tries the thing.** A stale
-"impossible" never does — nobody tries, so no contact with reality is ever
-made, and the claim can sit for as long as the project lasts getting more
-confident-looking with age. Here it sat three days telling every session that a
-behavioural re-measure was blocked when the checkpoints had already been minted
-and checked in *to this repo* as fixtures.
-
-⚠️ So `CLAUDE.md`'s "grep before writing a claim about what exists" applies
-**hardest to the claims that close work off**, not to the ones that advertise
-it. When writing "none exists", "not possible here" or "nobody is doing this",
-ask what would ever bring somebody into contact with the fact — and if the
-honest answer is nothing, check it by hand before writing it down.
-
-
 ## The shipped checkpoints and the class-routing settings
 
-`checkpoints/` holds two checkpoints driving five of the nine classes;
-`checkpoints/README.md` has the files, the measurements and their limits, and
-`docs/BOTS.md`, "the shipped bundle", is the operator-facing version. What
-belongs here is the part that is a trap.
-
-### A should-drive set lives in a trained-on field
-
-`tier2_pyro_rest3_s0.npz` says `PYRO` in `meta[7]`. The run trained
-`ENGINEER,SPY,PYRO`. A checkpoint has one class-set field answering two
-questions — what the run trained, and what its author intends it to drive — so
-the file is true about the second and incomplete about the first, and nothing in
-either repository can distinguish them.
-
-Consequences:
-
-- `PolicyNetwork.TrainedClasses` cannot be read as "what this learned". It is
-  what the file claims it should drive.
-- `[Bots] ClassPolicy` may name a class the file does not list, and that warns
-  rather than being refused. Refusing would make it impossible to drive engineer
-  or spy with `tier2_pyro`, which did train them.
-- The warning cannot say which case it is. Only someone who knows the checkpoint
-  can.
-- `gg2-rl`'s `ship_tier.py` refuses to widen a set, so the convention cannot make
-  a policy claim a class it never trained. That guard is entirely on the
-  producing side and nothing here can check it.
-
-Delete this section if `gg2-rl` adds a second metadata field, rather than editing
-it.
+`checkpoints/` holds nine gg2-sim `.gg2p` nets, one per class;
+`checkpoints/README.md` has the files and `docs/BOTS.md`, "the shipped bundle",
+is the operator-facing version. `.gg2p` is the only format the server loads.
+What belongs here is the part that is a trap.
 
 ### Which classes bots play and who drives them are separate settings
 
@@ -5793,26 +5439,17 @@ draws is driven correctly, so no log line, error or test says a tier is inert.
 
 ### Rules the resolution follows
 
-- The default is every checkpoint driving the classes its own file claims, so a
-  server that configures nothing is correct. `ClassPolicy` only names overrides.
-- An explicit assignment beats the file in both directions. `Class=scripted` is
-  the only way to drop a class a checkpoint claims without re-minting the file.
-- An explicit assignment also removes the class from every other tier, so it
-  resolves a tier overlap rather than adding to one.
-- Two tiers claiming the same class warns: list order then decides which weights
-  play it, and `HybridBot.Choose` takes the most capable eligible tier.
-- A tier left driving nothing warns. It is loaded, stamp-checked, reported and
-  never consulted, which is the defect the arbiter invariant refuses in its own
-  case; it is not refused here because turning a tier off to see what the rest do
-  is a real experiment.
-- `driven` with nothing driving is refused. The empty set would read as "no
-  restriction", which inverts the request.
+- A `.gg2p` names no classes, so a net drives exactly what `ClassPolicy` assigns
+  it and nothing else. A server that loads nets and assigns nothing runs every
+  class scripted, with a warning per net.
+- A net left driving nothing warns. It is loaded, reported and never consulted;
+  it is not refused because turning a tier off to see what the rest do is a real
+  experiment.
 - A label naming no loaded checkpoint is refused, with the loaded names in the
-  message. A class assigned twice is refused rather than last-wins.
-
-`PolicyMicroSpec` and `PolicyController` take the class set explicitly. A null
-set asks the checkpoint; an empty set means the tier drives nothing. Conflating
-those would silently re-enable every class an operator turned off.
+  message. A class assigned twice is refused rather than last-wins, so two tiers
+  can never claim one class.
+- A policy path that is not a `.gg2p` is refused by `BotBrain.CheckSettings`,
+  from the name alone, so the panel and the fleet renderer refuse it too.
 
 ## ⛔ Everything derived from a bot's team is derived one tick too early
 
@@ -6948,19 +6585,11 @@ carrier and `Intel.cs` drops the cloak on pickup, so a cloaked spy never has the
 briefcase. `CanSee` reads `Cloak` first, so the clause could only matter to a
 spy that is both cloaked and carrying — which the simulation cannot produce.
 
-⛔ **The policy observation has no visibility test at all, and this change did
-not give it one.** `WorldView.NearestEnemies` filters on team, alive and
-distance and says nothing about the cloak, so `ObservationWriter.WriteEnemies`
-hands a `PolicyNetwork` the position, velocity, class, hp and aim of a fully
-invisible spy — the opposite of the bug above, in the arm the scripted layer does
-not run. It is not fixed here because the observation is the env contract
-(`gg2-rl/gg2-rl/docs/ENV.md`): changing what those floats mean invalidates every checkpoint
-trained against them, and a policy is already DATED by the simulation. **It bites
-only where a checkpoint is driving** — `--bot-class-policy` is off unless
-configured, so a stock `--bots` server is entirely scripted and entirely subject
-to the rule above. What would show this has been dealt with: `NearestEnemies`
-growing a viewer-aware skip, or the observation growing a "can see" float, and
-either needs a retrain.
+**A gg2-sim net sees what the body sees.** Base layout v2 lists an enemy
+`BotVisibility.CanSee` refuses from the body's last sighting, not from where it
+is (`docs/BOTS.md`, "gg2-sim policies"), so a cloaked spy is not handed to the
+net. A v1 net has no such rule and is handed the spy's real position; none of
+the shipped nets is v1.
 
 ⚠️ **The mine's viewer is the demoman, not the mine.** `BotMines.AnyCharacterOn`
 now takes the demoman's `CharacterState` for no reason other than this question,
@@ -7169,30 +6798,6 @@ distributions the classifier's turn features summarise. A bot that beats this
 instrument can still be spotted by a person. What would show it is stale: a
 re-run of `gg2-rl`'s `scripts/human_style.py --observable` against newer fleet
 traces reading a different gap.
-
-### Spreading a policy's turn: the timing tell goes, the classifier moves on
-
-`PolicyController.SpreadTurn`, `[Bots] SpreadTurn` / `--bot-spread-turn`, off.
-`ActionDecoder` normally applies a decision's whole turn on its first tick (X,
-0, 0, 0). Spread, it adds a quarter on each of the four ticks: the same total
-under the same cap. A checkpoint observes the same aim at every decision
-boundary, so it runs unchanged.
-
-**Measured** (shipped bundle, `botrecord` arms as above, 800 paired matches):
-
-| | without | spread |
-|---|---|---|
-| fleet discriminator AUC vs people, 150px / 300px | 0.769 / 0.904 | **0.700 / 0.818** |
-| O2 (observable + aim timing, refitted per arm), 150px | 0.946 | 0.943 |
-| scout turn autocorrelation (people 0.49) | 0.08 | 0.50 |
-| zero-turn share (people 0.41) | 0.65 | 0.26 |
-| death share vs `full:5` | | −0.010 ± 0.003 |
-
-**Reading:** it removes the aim-timing tell, which is why the discriminator
-that was not fitted to it drops so far. A classifier refitted on the new bots
-moves to what is left: turn size, too few still ticks, no flicks and extra
-jumps. Those are the policy's own decisions. So it stays off. `gg2-rl`
-`docs/PLAN.md` phase 5, C0, has the registration.
 
 ### Lazy aim between shots (v5): the total turn is conserved
 

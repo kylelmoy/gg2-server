@@ -50,17 +50,16 @@ near them", has the state rules that apply to everyone, bot work included.
 | | where | gated by |
 |---|---|---|
 | the scripted bot — nav, A\*, path following, targeting, combat, objectives, population | `src/GG2.Bots/` | `ScenarioSuiteTests`, `BotObjectiveTests`, `PathFollowerFixtureTests` |
-| the learned policy — loads a `gg2-rl` `.npz`, 211→64→64→27, argmax per head | `PolicyNetwork.cs` | `PolicyNetworkTests` — logit-for-logit against their numpy |
-| the hybrid — a controller takes keys and aim inside an engagement window, scripted layer keeps movement, routing, objectives, class | `HybridBot.cs` | `PolicyMatchTests`, `SearchBotTests`, `HybridBotSeamTests` |
+| the learned policy — loads a gg2-sim `.gg2p`, the only checkpoint format the server loads | `SimPolicyNetwork.cs`, `SimPolicyObservation.cs` | `SimPolicyTests` |
+| the hybrid — a controller takes keys and aim inside an engagement window, scripted layer keeps movement, routing, objectives, class | `HybridBot.cs` | `SearchBotTests`, `HybridBotSeamTests`, `ShippedCheckpointTests` |
 | **the controller seam** — how a new bot implementation drops in | `IMicroController.cs`, `BotBrainSpec.cs` | `HybridBotSeamTests` |
 | the per-tick controller budget across bots | `IMicroArbiter.cs` | `HybridBotSeamTests` |
-| the policy as a controller | `PolicyController.cs` | `PolicyMatchTests` |
+| the policy as a controller | `SimPolicyController.cs` | `SimPolicyTests` |
 | the rollout search, and as a controller | `RolloutSearch.cs`, `SearchController.cs` | `RolloutRestrictionTests`, `SearchBotTests` |
 | the next-hop route table (CPD-Search) and the exact A\* heuristic — **ON by default**, `--no-nav-distances` | `NavDistances.cs`, `NavDistanceSet.cs`, `NavSearch.cs` | `NavDistancesTests`, `NavDistanceSetTests`, `NavSearchTests` |
 | the tables **on disk** — `nav/<key>.dist.gz`, next-hop only, cost rebuilt on load | `NavDistanceFile.cs`, `NavDistances.FromNextHops` | `NavDistanceFileTests` |
 | difficulty 1-4 aim like people, tier 5 untouched, `--no-bot-human-aim` to turn off (on) | `HumanizedBot.ByTier`, `BotSkill.HumanAim` | `HumanizedBotTests`, `BotCombatTests` |
 | human-like output inside a fight, `--bot-humanize` (off) | `HumanizedBot.cs` | `HumanizedBotTests` |
-| policy turns spread over the action repeat, `--bot-spread-turn` (off) | `ActionDecoder.cs`, `PolicyController.cs` | `ActionDecoderTests`, `PolicyTierWiringTests` |
 | route dispersion: occupancy (on) and static lanes (measured, not adopted), `--no-bot-occupancy` | `BotLanes.cs`, `BotRoles.cs`, `ScriptedBot.cs` | `BotLanesTests`, `BotOccupancyFlagTests`, `RouteDiversityTests` |
 | the training environment seam | `gg2-rl/env/GG2.Env/`, in the `gg2-rl` repo | `EnvProtocolTests`, in `gg2-rl` |
 | **is the nav graph followable** — every edge of every shipped graph flown by a real bot, and whole routes sampled | `EdgeFlights.SweepAll`, `BENCH_FLIGHT` | `EdgeFlightTests` — the corpus tally pinned on **both** routing arms, plus the node census |
@@ -147,118 +146,55 @@ duel bench or scenario undercounts real-match cost by 3-6x — 7.64ms in a
 worst tick (2026-09-01) — because a scenario has no projectiles, sentries or
 bystanders for the rollout to re-simulate.
 
-**The policy's untrained block.** `ObservationWriter.Enemies` is 2, and every
-training observation produced so far comes from a duel (1 enemy), so the
-second-enemy block — indices `[38, 57)` of the then-209-wide observation, ⚠️
-**measured against layout v1 and NOT re-derived for v2**, where the vector is 211
-wide and those indices no longer name that block — is
-constant zero in training; its first-layer weights are the random
-initialisation (`max|delta| = 0.0` from iteration 100 to final). Feeding a real
-second-enemy encoding changes 45.2% of the policy's decisions. This does not
-invalidate phase 4's own result (also measured in an 8-bot match, so internally
-consistent with itself) but means any arm-2/arm-3 comparison pits a controller
-with a provably untrained input against a search, which re-derives from the
-world state and has no equivalent blind spot.
-
-**Maintenance: a policy is dated by the physics; a search is not.**
-`PolicyNetwork` carries weights fit to one simulation version;
-`SimulationStamp.Require` refuses a checkpoint whose stamp does not match the
-current build. `RolloutSearch` carries no weights and re-derives from the
-simulation every decision, so it absorbs a physics change for free.
+**Maintenance: a policy is dated by the physics; a search is not.** A net
+carries weights fit to one simulation version, and a `.gg2p` carries no stamp,
+so nothing refuses a stale one: gg2-sim records the gg2-server commit it trained
+at, and a physics change here is the cue to retrain. `RolloutSearch` carries no
+weights and re-derives from the simulation every decision, so it absorbs a
+physics change for free.
 
 ### The shipped bundle — `checkpoints/`
 
-A trained policy ships in `checkpoints/`: two `HybridBot` tiers under
-`HandoverRule.MacroTask`, covering five of the nine classes. A tier **takes** the
-wheel within 150px and, once driving, **keeps** it out to 300px
-(`BotBrainSpec.ReleaseRange`, the release band). The band keeps the policy in
-fights it is already in without widening when it takes the wheel, which is what
-a wider take radius cost the objective for. `BENCH_HANDOVER` measured the band
-against none, over eight maps and 1,600 paired matches an arm: control share
-4.44% to 5.97%, death share −0.60 ± 0.18, win share −0.87 ± 2.12.
-
-| file | drives |
-|---|---|
-| `checkpoints/tier0_combat4_s2.npz` | scout, soldier, demoman, heavy |
-| `checkpoints/tier2_pyro_rest3_s0.npz` | pyro |
-| — | sniper, spy, engineer, medic stay scripted |
+Nine gg2-sim nets ship in `checkpoints/`, one per class, which is what the fleet
+runs (`checkpoints/README.md` has each file, its md5 and gg2-sim's note on it).
+Each is a `HybridBot` tier. A tier **takes** the wheel within the handover range
+and, once driving, **keeps** it out to 300px (`BotBrainSpec.ReleaseRange`, the
+release band); the fleet runs `HandoverRule=distance`, which is what gg2-sim
+measures its nets under.
 
 ```powershell
 dotnet run --project src/GG2.Host -- --map ctf_truefort --bots 12 --bot-mode policy `
-  --policy checkpoints/tier0_combat4_s2.npz --policy checkpoints/tier2_pyro_rest3_s0.npz
+  --bot-handover-rule distance `
+  --policy checkpoints/ppo-warm-soldier-s1.gg2p --policy checkpoints/ppo-finetune-scout-s1.gg2p `
+  --bot-class-policy Soldier=ppo-warm-soldier-s1,Scout=ppo-finetune-scout-s1
 ```
 
 `--policy` is repeatable and appends, one tier per checkpoint; `[Bots] Policy`
-takes the same list comma-separated. A checkpoint's class set is a property of
-the file, so two files is how five classes get covered by two families of
-weights, and each drives the classes its own file claims with nothing further
-configured.
+takes the same list comma-separated. A `.gg2p` names no classes, so every class
+a net drives has to be assigned, and a net nobody assigned a class is warned
+about at startup. The panel's live `bot-brain` switch, on a server started with
+no checkpoint, loads all nine with the fleet's assignment
+(`MapDirectory.ShippedClassPolicies`).
 
-Two settings adjust that, and they answer different questions:
+Two settings decide what plays, and they answer different questions:
 
 | setting | question |
 |---|---|
-| `--bot-class-policy Class=name` / `[Bots] ClassPolicy` | who drives a class: a checkpoint's file name without its extension, or `scripted`. Only has to name what is being overridden. |
-| `--bot-class-limit class=n` / `[BotClasslimits]` | which classes bots play: how many bots of each class one team may hold, 0 keeping bots off a class. Nothing derives it from the driven set, so to make every bot the configuration under test rather than a mix of that and the all-scripted arm, set the classes no checkpoint drives to 0 — the startup log names each checkpoint's classes. |
+| `--bot-class-policy Class=name` / `[Bots] ClassPolicy` | who drives a class: a checkpoint's file name without its extension, or `scripted`. A class not named is driven by no net. |
+| `--bot-class-limit class=n` / `[BotClasslimits]` | which classes bots play: how many bots of each class one team may hold, 0 keeping bots off a class. |
 
-`ClassPolicy` may name a
-class a checkpoint's file does not list; that warns rather than refusing, because
-`tier2_pyro` trained engineer and spy and no longer says so, and the warning
-cannot tell "never trained" from "narrowed out". `docs/TRAPS-BOTS.md`, "the
-shipped checkpoints and the class-routing settings".
-
-Read `checkpoints/README.md` before quoting any number off these. What has a
-match number and what does not is not obvious from the files: the pyro tier as
-shipped has none of its own, soldier ships undecided with a mirror below its
-null, and sniper and spy were dropped on judgement rather than refutation.
-
-This repository gates presence and routing, not quality. `ShippedCheckpointTests`
-pins both md5s, loads them through the ordinary stamp gate with no bypass,
-asserts each drives exactly its claimed classes in both directions across all
-nine, asserts the two sets are disjoint, and plays a match per tier to establish
-that the weights take the wheel. It says nothing about whether either checkpoint
-plays well.
-
-**Current state, verified 2026-09-06 at `6126b34`: trained checkpoints for
-this build EXIST.** All four files in `tests/GG2.Tests/Fixtures/policy/` carry
-`SIM_UUID f10afbdadc795d77`, which is exactly what `SimulationStampTests`
-pins this build's stamp to, and `rest3_s1_iter12000.npz` loads through
-`PolicyNetwork.Load` with **no** `ignoreSimulationStamp` (`TrainedClassesTests`,
-green at `6126b34`).
-⚠️ **They were trained against `698913b5ea547d60` and re-stamped on 2026-09-08**
-when `BotConstants` left the gating surface. No weight changed and no physics
-changed — `checkpoints/README.md` has what that did and did not mean, and
-`docs/TRAPS-BOTS.md`, "The `BOT_*` block does not belong on the gating surface",
-has why it was sound.
-⚠️ **This paragraph asserted the opposite until 2026-09-06.** The layout v2
-bump on 2026-09-03 did retire the last one, and `gg2-rl` minted new ones
-against the bumped stamp three days later — checked in here as fixtures — with
-nothing in this repo noticing. **A stale "none exists" costs what a stale
-"done" does**: it tells the next session a behavioural re-measure is blocked
-when it is not. What would show this has gone stale in the other direction is
-`SimulationStampTests`' pin moving without the fixture files being re-minted.
-
-⚠️ **`ppo_final.npz` is still the UNTRAINED forward-pass fixture** — its
-weights are a He-normal draw kept for `PolicyNetwork`'s arithmetic and nothing
-else, and it records no class set (seven metadata fields)
-(`tests/GG2.Tests/PolicyFixture.cs`; `gg2-rl/gg2-rl/docs/ENV.md`, "The checkpoint is a
-FIXTURE, not a policy"). ⛔ **A checkpoint loading cleanly is still not
-evidence that it plays**, which is the opposite of the reassurance a green
-stamp usually gives, and nothing in the suite depends on `gg2-rl` producing
-anything.
-
-⚠️ **Every phase-4 behavioural number — including the 21-of-21 death-share
-result — still describes a superseded simulation** (`7ff5940d97aa7bed`) and is
-history. What changed is only that re-measuring is no longer blocked for want
-of a checkpoint; `docs/TRAPS-BOTS.md`, "the first policy to improve deaths and
-the objective at once", is the match-level re-measure the training lane ran.
+This repository gates presence and wiring, not quality. `ShippedCheckpointTests`
+pins all nine md5s, loads each as a layout v2 team net, and plays a match in
+which the soldier net takes the wheel. It says nothing about whether any net
+plays well; that is gg2-sim's claim, judged against its other nets rather than
+against the scripted bots.
 
 ### ⚠️ A duel does not contain what a match contains
 
 A reduced setting does not *contain* what a real one does — a duel has no
 second enemy, no projectile crossfire, no sentry, no bystander — and **every
-absence arrives as a legal-looking zero, not an error.** The policy's untrained
-block above and the 3-6x cost gap above are both instances of this. Before
+absence arrives as a legal-looking zero, not an error.** The 3-6x cost gap
+above is an instance of this. Before
 trusting a duel- or scenario-scale measurement, ask what the reduced setting
 does not contain, not only what obvious parameter you forgot to vary.
 
@@ -545,6 +481,9 @@ in `gg2-rl/gg2-rl/docs/ENV.md`, "So a pure refactor". The worst: `EnvServer.cs` 
 that method goes red with no semantic change**.
 
 ⚠️ **Flagging a move is a courtesy on top of that gate, never a substitute.**
+`ObservationWriter.cs`, `PolicyNetwork.cs` and the `.npz` loader were removed
+with the gg2-rl nets, so any of its patterns that read those files no longer
+have a source here.
 
 `SIM_UUID` covers the constants, the action encoding, the observation layout
 and the simulation behaviour version — **not `GG2.Bots`**. So a bot change does
@@ -553,8 +492,8 @@ not invalidate a checkpoint, and a change to what an observation *means* does.
 ### gg2-sim policies (`.gg2p`)
 
 gg2-sim (a sibling checkout, a CUDA port of `GG2.Simulation` that trains bot
-policies) exports `.gg2p` files. `--policy x.gg2p` loads one as a
-`SimPolicyMicroSpec` tier beside or instead of a gg2-rl `.npz`:
+policies) exports `.gg2p` files, the only checkpoint format the server loads.
+`--policy x.gg2p` loads one as a `SimPolicyMicroSpec` tier:
 
 ```powershell
 gg2-server --bots 8 --bot-mode policy --bot-handover-rule distance --bot-engages-bots `
@@ -570,14 +509,14 @@ autobalance or the `team` verb changes brain with it; `HybridBot` itself is
 unchanged. It relies on a team change killing the character, which releases the
 wheel on the way across (the class remarks say what breaks if that stops).
 
-| | gg2-rl `.npz` | gg2-sim `.gg2p` |
-|---|---|---|
-| Observation | `ObservationWriter` | `SimPolicyObservation`: team (253 floats), duel (169), zoom (255: team plus own scope and rifle charge), demo (286: team plus the eight nearest own mines and lobbed/8), pyro (256: team plus ReadyToBlast, ReadyToFlare and own burn/210), medic (259: team plus uber/2000, uber ready, ubering, beaming, patient hp share and the patient's index among the listed team-mates), engineer (258: team plus nuts'n'bolts/100 and its own sentry's present, hp/100, dx/500, dy/500) or spy (257: team plus cloak, cloak alpha, ready to stab and stab freeze left). Every team width lists enemy mines and flares beside rockets and shots; the duel width does not. **Base layout v2** is any team width plus 10 (263 to 296): the two nearest sentries after the layout's columns, and hidden enemies listed from the body's memory (below) |
-| Actions | `ActionDecoder` | `SimPolicyController`: 24 absolute aim bins, then 25 relative to the k-th listed enemy (team) or to the nearest enemy (duel); a zoom net adds a fifth head, the scope level; a demo, pyro, medic or spy net's fifth head is the Special key (the detonate; the airblast, and with Attack the flare; the needles, and with Attack the uber when ready; the cloak toggle), held for the decision like Attack; an engineer net's is the build command (`IBuildController`), sent on every tick of the decision. A medic net's relative groups 1 and 2 aim at the two listed team-mates, with the aim distance on them (capped at 255) so the beam picks that patient |
-| Sniper scope, sentry build | `Zoom` head decoded, applied nowhere | a zoom net's scope and an engineer net's build, while it drives (`IScopeController`, `IBuildController`); otherwise the scripted layer's (which never builds) |
-| Classes it drives | the file's set, overridable | **only** what `ClassPolicy` assigns; none is warned about |
-| Stamp | `SIM_UUID`, refused on mismatch | none; gg2-sim records the gg2-server commit it trained at |
-| Decision cost | ~7 µs | 72 µs team, 57 µs duel |
+| | gg2-sim `.gg2p` |
+|---|---|
+| Observation | `SimPolicyObservation`: team (253 floats), duel (169), zoom (255: team plus own scope and rifle charge), demo (286: team plus the eight nearest own mines and lobbed/8), pyro (256: team plus ReadyToBlast, ReadyToFlare and own burn/210), medic (259: team plus uber/2000, uber ready, ubering, beaming, patient hp share and the patient's index among the listed team-mates), engineer (258: team plus nuts'n'bolts/100 and its own sentry's present, hp/100, dx/500, dy/500) or spy (257: team plus cloak, cloak alpha, ready to stab and stab freeze left). Every team width lists enemy mines and flares beside rockets and shots; the duel width does not. **Base layout v2** is any team width plus 10 (263 to 296): the two nearest sentries after the layout's columns, and hidden enemies listed from the body's memory (below) |
+| Actions | `SimPolicyController`: 24 absolute aim bins, then 25 relative to the k-th listed enemy (team) or to the nearest enemy (duel); a zoom net adds a fifth head, the scope level; a demo, pyro, medic or spy net's fifth head is the Special key (the detonate; the airblast, and with Attack the flare; the needles, and with Attack the uber when ready; the cloak toggle), held for the decision like Attack; an engineer net's is the build command (`IBuildController`), sent on every tick of the decision. A medic net's relative groups 1 and 2 aim at the two listed team-mates, with the aim distance on them (capped at 255) so the beam picks that patient |
+| Sniper scope, sentry build | a zoom net's scope and an engineer net's build, while it drives (`IScopeController`, `IBuildController`); otherwise the scripted layer's (which never builds) |
+| Classes it drives | **only** what `ClassPolicy` assigns; none is warned about |
+| Stamp | none; gg2-sim records the gg2-server commit it trained at |
+| Decision cost | 72 µs team, 57 µs duel |
 
 **Base layout v2** (gg2-sim `env/env.h`, `SentryBlockObs` and `SpyMemoryTicks`)
 is told apart by width alone (`SimPolicyNetwork.IsV2`); v1 nets load and run

@@ -75,7 +75,8 @@ and every test in the process — both are deeply immutable, and the
 `CollisionWorld` is still per-world because `SetCaptureZones` writes to one.
 **A map edited on disk mid-process is not re-read** (`resources: null` forces a
 decode), and **a shared cache makes first-call properties order-dependent** —
-it turned `ObservationWriter`'s zero-allocation gate into a coin flip.
+it turned an allocation gate (the retired gg2-rl observation writer's) into a
+coin flip.
 `gg2-rl/gg2-rl/docs/ENV.md`, "the reset reload".
 
 ## Why any of this is a contract at all
@@ -1972,9 +1973,9 @@ conditions — so the bump would have been a hand-made claim that every existing
 checkpoint is now dated. It was skipped because **the change cannot reach
 training**: nothing in `gg2-rl/env/GG2.Env` sets `SetupTimer` or `AttackDefend`, so both
 sit at their `default(WorldState)` values and the branch is unreachable there, and
-`PolicyController.TrainedClasses` (Scout, Soldier, Sniper, Heavy) contains no
-Medic. **If an env or a duel ever arms a setup timer, or the policy is trained
-on Medic, that reasoning expires and the bump is owed.**
+the gg2-rl nets trained no Medic. Those nets are retired, and the gg2-sim `.gg2p`
+nets the server runs carry no stamp, so the bump no longer has a checkpoint to
+protect.
 
 No parity fixture moved and none of the three pinned bot measurements shifted
 when it landed, which says no checked-in trace covers a medic healing a

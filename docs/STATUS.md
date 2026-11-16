@@ -21,7 +21,7 @@ and new features rather than phases.
 | 6 | all eight gamemodes, round after round, every `FULL_UPDATE` field real | closed — a stock client has survived four gamemode changes in one session |
 | 7 | bots: the input seam, nav, A\*, the follower, combat, the objective layer, the population manager | closed, with a number |
 | 8 | unpaced ticking, the human-play recorder, the headless match runner, the control port | closed — 44 matches across all 22 maps in 3.3s, 3,548x real time |
-| 9 | a learned policy: `NpyFile`, `PolicyNetwork`, `HybridBot`, `tools/bench/`; the `GG2.Env` seam now lives in `gg2-rl` | the runner is built and gated — see below for what a checkpoint has been measured to do |
+| 9 | a learned policy: `SimPolicyNetwork`, `HybridBot`, `tools/bench/`; nine gg2-sim `.gg2p` nets ship in `checkpoints/` | the runner is built and gated — see below for what is and is not measured |
 
 **Every class is implemented.** All ten are armed: rockets, mines, healing
 beams, ubercharge, afterburn, the airblast, the sentry gun, the sniper's scope,
@@ -176,39 +176,24 @@ like five real ones. `MatchActuallyHappensTests` makes that mechanical; any
 
 ## Phase 9 — a learned policy
 
-`PolicyNetwork` runs a checkpoint trained by the sibling `gg2-rl` project in
-this process, gated logit-for-logit against that project's own numpy on 64
-real states; `HybridBot` hands it the keys and aim inside a 150px engagement
-window while the scripted layer keeps movement, routing and objectives.
+`SimPolicyNetwork` runs a gg2-sim `.gg2p` net in this process, and `HybridBot`
+hands it the keys and aim inside an engagement window while the scripted layer
+keeps movement, routing and objectives. `.gg2p` is the only checkpoint format
+the server loads. Nine nets ship in `checkpoints/`, one per class, and the
+fleet runs them under `HandoverRule=distance`.
 
-An earlier checkpoint, at a 150px window, held about **7% of ticks** and beat
-the all-scripted bot on death share on **21 of 21 maps** over 400 matches a map
-(sign test p = 4.8e-7). Widening the window raises the combat gain while the
-objective collapses faster: at 450px on one map the policy wins 4 rounds to 133.
+What this repository gates is presence and wiring: `ShippedCheckpointTests`
+pins each file's md5, loads each as a layout v2 team net, and plays a match in
+which the soldier net takes the wheel; `SimPolicyTests` covers the observation,
+the action heads and each class's extra head. **How well the nets play is
+gg2-sim's claim**, judged against its other nets rather than against the
+scripted bots, and nothing here measures it. A `.gg2p` carries no simulation
+stamp, so a physics change here does not refuse one; it is the cue to retrain.
 
-**That result is about one checkpoint, not about the method** — training
-variance across seeds is larger than the effect.
-**It is stamped `SIM_UUID 7ff5940d97aa7bed` and is HISTORY**: the 2026-09-02
-physics carry invalidated it, and this build is `f10afbdadc795d77`.
-
-**Re-measured against the current build on 2026-09-06** by the training lane
-(`gg2-rl`, pinned at `c434229`, cleared to master over the whole dependency
-closure — `src/GG2.Bots` included, because `SIM_UUID` cannot see it; see
-`TRAPS-BOTS.md`, "a stamp chain is not a clearance"). 21 maps × 200 matches an arm, four seeds, 150px window, 67,200
-matches: the `rest3` checkpoint improves death share by **−2.82 points**
-(2·SE 0.69, t −8.22) **and** round wins by **+3.02** (2·SE 2.14, t +2.83), all
-four seeds agreeing in sign on both. **That is the first time a policy here has
-improved combat and the objective at once.** A `control`-family checkpoint on
-the same instrument fails both. **The two families are not comparable to each
-other** — the roster follows the trained set, so they play different matches;
-each is only judged against its own control. `TRAPS-BOTS.md`, "the first policy
-to improve deaths and the objective at once".
-
-The suite never waited for any of this: the shipped `ppo_final.npz` is a test
-**fixture** (real structure, a numpy oracle for the forward pass, untrained
-weights), and nothing here depends on `gg2-rl` doing anything.
-`gg2-rl/docs/ENV.md`, "The checkpoint is a fixture"; [`BOTS.md`](BOTS.md), "a
-policy is dated by the physics".
+The phase was first built on `gg2-rl`'s `.npz` nets, which beat the all-scripted
+bot on death share on 21 of 21 maps against a simulation since superseded. That
+runner, its nets and its fixtures are removed; the result describes nothing the
+server can run.
 
 ---
 

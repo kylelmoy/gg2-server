@@ -66,15 +66,18 @@ Then connect a GG2 client to `127.0.0.1:8190` (Join Game → Direct Connect).
 
 A custom map gets a nav graph built automatically when the server changes to it.
 
-To use trained bots, add `--bot-mode policy` and pass one or more checkpoints
-from `checkpoints/`. They control combat for the classes they were trained on,
-and the scripted bots handle everything else:
+To use trained bots, add `--bot-mode policy`, pass one or more gg2-sim nets
+from `checkpoints/`, and assign each the classes it drives. They control combat
+for those classes, and the scripted bots handle everything else:
 
 ```powershell
 gg2-server --bots 12 --bot-mode policy `
-  --policy checkpoints/tier0_combat4_s2.npz `
-  --policy checkpoints/tier2_pyro_rest3_s0.npz
+  --policy checkpoints/ppo-warm-soldier-s1.gg2p `
+  --policy checkpoints/ppo-finetune-scout-s1.gg2p `
+  --bot-class-policy Soldier=ppo-warm-soldier-s1,Scout=ppo-finetune-scout-s1
 ```
+
+`checkpoints/README.md` lists all nine and the class each drives.
 
 ### Admin panel and analytics
 
