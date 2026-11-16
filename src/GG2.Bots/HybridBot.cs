@@ -710,6 +710,17 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
 
         var input = Handicap(_tiers[tier].Poll(in world, slot, tick), tick);
 
+        // The policy never saw spawn protection (every rollout runs with it off),
+        // so it fires at a protected target and spends its own. A beaming medic is
+        // left alone: its Attack is a heal. BotSpawnProtection.
+        if (_scripted.Combat.Ally == BotAlly.None)
+        {
+            input = new PlayerInput(
+                BotSpawnProtection.HoldNearest(input.Keys, in world, slot, _scripted.Combat.Target),
+                input.NetAimDirection,
+                input.AimDistance);
+        }
+
         DecidedThisPoll = _tiers[tier].DecidedThisPoll;
 
         if (DecidedThisPoll)

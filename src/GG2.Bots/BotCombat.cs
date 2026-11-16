@@ -226,6 +226,10 @@ public static class BotCombat
                 keys &= ~PlayerKeys.Special;
         }
 
+        // Not at an ally: a beam heals whoever is protected.
+        if (!subjectIsAlly)
+            keys = BotSpawnProtection.Hold(keys, in world, slot, in target);
+
         state.AttackKeys = keys;
         return keys;
     }

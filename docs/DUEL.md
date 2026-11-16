@@ -59,6 +59,22 @@ decides on the life's first tick: measured on `duel_01`, a soldier, scout and
 heavy each press a direction within 3 ticks of spawning (it was 20 for the
 first soldier). Gated by `DuelServerTests.ADuelBotMovesOffItsSpawnAtOnce`.
 
+**A bot holds fire at a spawn-protected target.** Pressing `Attack` or
+`Special` ends a character's own protection whether or not anything fires
+(`Begin Step.xml:85`, `:124`), and damage to a protected victim is refused, so a
+bot that opened fire on sight lost its protection and a clip to a human who
+could then shoot it for free: every class fired 15-20 ticks into a life
+against a standing human with 120+ ticks of protection left. `BotSpawnProtection`
+strips `Attack` (and `Special` for the medic, or for anybody still protected
+themselves) while the target is protected, keeps the aim, and covers both the
+scripted layer and the policy nets, which fall back to the nearest allowed enemy
+when the scripted layer has no target yet. Every other bot match runs with
+protection off, so it changes nothing there. Gated by
+`DuelServerTests.ADuelBotHoldsFireWhileItsHumanIsSpawnProtected`, which goes red
+with either half removed. Not addressed: a bot still walks in and spends its
+own protection five times as fast as a human standing still, so a human who
+waits and shoots first still gets the first hit.
+
 **What the client sees of a win.** A `PLAYER_SPAWN` for a player who is
 alive: `doEventSpawn.gml` destroys the client's character and creates a new one
 at the point, the same as the server's `WorldState.Spawn`, so nothing is

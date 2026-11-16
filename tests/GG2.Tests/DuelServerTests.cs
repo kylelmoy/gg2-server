@@ -1,3 +1,4 @@
+using GG2.Bots;
 using GG2.Maps;
 using GG2.Protocol;
 using GG2.Server;
@@ -318,6 +319,90 @@ public sealed class DuelServerTests
 
         // Measured 3 ticks for each; the hold alone used to be up to 90.
         Assert.InRange(still, 0, 10);
+    }
+
+    /// <summary>
+    /// A bot does not press a key that ends its own spawn protection while its
+    /// human is still protected, and fires once that protection ends.
+    /// <c>BotSpawnProtection</c>.
+    /// </summary>
+    /// <remarks>
+    /// Under both brains the live duel server can run: the scripted layer, and
+    /// the shipped nets under the distance handover (<c>duel.ini</c>), with the
+    /// range widened so the nets hold the wheel while the human is protected —
+    /// at the live 150 px they do not, and the policy rows would test the
+    /// scripted layer again. The soldier net is the row that needs the
+    /// nearest-enemy fallback (it fires four ticks in, before the scripted layer
+    /// has a target), and it skips the second half: forced to drive against an
+    /// idle human it never fires once protection ends, with or without the hold. Without the
+    /// hold every class pressed Attack 15-20 ticks after spawning, against a human
+    /// with 120+ ticks of protection left. The second half is what keeps the first
+    /// from passing on a bot that never fires at all.
+    /// </remarks>
+    [Theory]
+    [InlineData(PlayerClass.Soldier, false, true)]
+    [InlineData(PlayerClass.Heavy, false, true)]
+    [InlineData(PlayerClass.Soldier, true, false)]
+    [InlineData(PlayerClass.Scout, true, true)]
+    [InlineData(PlayerClass.Heavy, true, true)]
+    public void ADuelBotHoldsFireWhileItsHumanIsSpawnProtected(
+        PlayerClass playerClass, bool policy, bool firesAfter)
+    {
+        using var harness = new ServerHarness(o =>
+        {
+            if (policy)
+            {
+                var nets = Path.Combine(ReferenceTree.RepositoryRoot, "checkpoints");
+                ServerConfigFile.ApplyLines(o, [
+                    // A range past the cell, so the nets drive the whole approach
+                    // rather than only inside 150 px.
+                    "[Bots]", "Mode=policy", "HandoverRule=distance", "HandoverRange=5000",
+                    $"Policy={Path.Combine(nets, "ppo-warm-soldier-s1.gg2p")},"
+                        + $"{Path.Combine(nets, "ppo-finetune-scout-s1.gg2p")},"
+                        + $"{Path.Combine(nets, "ppo-finetune2-heavy-s1.gg2p")}",
+                    "ClassPolicy=Soldier=ppo-warm-soldier-s1,Scout=ppo-finetune-scout-s1,Heavy=ppo-finetune2-heavy-s1",
+                ], Path.Combine(nets, "test.ini"));
+                BotBrain.Build(o);
+            }
+
+            o.Map = "duel_01";
+            o.MapDirectory = Path.Combine(ReferenceTree.MapsDirectory, "duel");
+            o.NavCacheDirectory = Path.Combine(ReferenceTree.RepositoryRoot, "nav", "duel");
+            o.Duel = true;
+        });
+
+        JoinAndPlay(harness, Team.Red, playerClass);
+
+        var server = harness.Server;
+        var human = HumanSlot(server);
+        var bot = BotSlot(server);
+        var protectedTicks = 0;
+        var policyTicks = 0;
+
+        // The loopback human presses nothing, so it keeps its protection the full
+        // 150 ticks standing still.
+        while (!Gml.Equal(server.WorldForTests.Characters[human].DeathmatchInvulnerable, 0))
+        {
+            Assert.Equal(PlayerKeys.None, server.WorldForTests.Characters[bot].KeyState & PlayerKeys.Attack);
+            harness.Tick();
+
+            if (HybridBot.Of(server.SourceOf(bot)) is { MicroDrove: true })
+                policyTicks++;
+            Assert.InRange(++protectedTicks, 0, 300);
+        }
+
+        Assert.InRange(protectedTicks, 100, 300);
+
+        if (policy)
+            Assert.InRange(policyTicks, 50, 300);
+
+        if (!firesAfter)
+            return;
+
+        harness.TickUntil(
+            () => (server.WorldForTests.Characters[bot].KeyState & PlayerKeys.Attack) != 0,
+            "the bot to fire once its human is unprotected",
+            maxTicks: 60);
     }
 
     /// <summary>A bot that dies while its human is dead is no win, and moves nobody.</summary>
