@@ -290,8 +290,10 @@ public sealed partial class GameServer
             // A server started without a checkpoint runs the shipped bundle: the
             // panel can name a mode and never a path, and a path from the network
             // is not something this verb should take. Not kept in the options,
-            // which say what was CONFIGURED.
+            // which say what was CONFIGURED. A .gg2p names no classes, so the
+            // bundle's assignment comes with it.
             _options.PolicyPaths = MapDirectory.ResolveCheckpoints();
+            _options.BotClassPolicies = MapDirectory.ShippedClassPolicies;
         }
 
         try

@@ -10,13 +10,10 @@ namespace GG2.Tests;
 /// <c>[Bots] Policy</c> list.
 /// </summary>
 /// <remarks>
-/// <b>Landed 2026-09-07, to receive the <c>gg2-rl</c> lane's two-tier ship
-/// bundle.</b> Until then a server could load exactly one checkpoint, and a
-/// checkpoint's class set is a property of the FILE — so covering five classes
-/// with two families of weights was not expressible at all. The seam it needed
-/// already existed: <c>HybridBot</c> has taken an ordered tier list since phase 9
-/// began, and <c>EligibleTiers</c> has always asked each tier which classes it
-/// drives. What was missing was a way to say so from outside the process.
+/// The fleet loads nine gg2-sim nets, one per class, as nine tiers of one brain.
+/// <c>HybridBot</c> takes an ordered tier list and <c>EligibleTiers</c> asks each
+/// tier which classes it drives; these gate the way to say so from outside the
+/// process.
 /// <para>
 /// ⚠️ <b>These assert the WIRING, not the bundle.</b> Which checkpoints ship,
 /// what they drive and what was measured is <see cref="ShippedCheckpointTests"/>
@@ -43,7 +40,7 @@ public sealed class PolicyTierWiringTests
         [
             "--bot-mode", "policy",
             "--policy", PolicyFixture.Checkpoint,
-            "--policy", PolicyFixture.EightFieldCheckpoint,
+            "--policy", PolicyFixture.Second,
         ]);
 
         var brain = Assert.IsType<BotBrainSpec>(options.Bots.Brain);
@@ -54,8 +51,7 @@ public sealed class PolicyTierWiringTests
         // from the file name. Two unlabelled policy tiers print "policy+policy",
         // which is the exact defect BotBrainSpec.Name exists to prevent.
         Assert.Equal(
-            "policy:" + Path.GetFileNameWithoutExtension(PolicyFixture.Checkpoint)
-            + "+policy:" + Path.GetFileNameWithoutExtension(PolicyFixture.EightFieldCheckpoint),
+            "gg2-sim:" + PolicyFixture.Label + "+gg2-sim:" + PolicyFixture.SecondLabel,
             brain.Name);
     }
 
@@ -76,11 +72,11 @@ public sealed class PolicyTierWiringTests
         [
             "--bot-mode", "policy",
             "--policy", PolicyFixture.Checkpoint,
-            "--policy", PolicyFixture.EightFieldCheckpoint,
+            "--policy", PolicyFixture.Second,
         ]);
 
         Assert.Equal(
-            [PolicyFixture.Checkpoint, PolicyFixture.EightFieldCheckpoint],
+            [PolicyFixture.Checkpoint, PolicyFixture.Second],
             options.PolicyPaths);
     }
 
@@ -98,7 +94,7 @@ public sealed class PolicyTierWiringTests
             $"""
              [Bots]
              Mode=policy
-             Policy={PolicyFixture.Checkpoint},{PolicyFixture.EightFieldCheckpoint}
+             Policy={PolicyFixture.Checkpoint},{PolicyFixture.Second}
              """);
 
         var options = CommandLine.Parse(["--config", config]);
@@ -107,7 +103,7 @@ public sealed class PolicyTierWiringTests
         Assert.Equal(2, brain.Tiers.Count);
 
         Assert.Equal(
-            [PolicyFixture.Checkpoint, PolicyFixture.EightFieldCheckpoint],
+            [PolicyFixture.Checkpoint, PolicyFixture.Second],
             options.PolicyPaths);
     }
 
@@ -130,32 +126,22 @@ public sealed class PolicyTierWiringTests
             $"""
              [Bots]
              Mode=policy
-             Policy={PolicyFixture.Checkpoint},{PolicyFixture.EightFieldCheckpoint}
+             Policy={PolicyFixture.Checkpoint},{PolicyFixture.Second}
              """);
 
         foreach (string[] args in new[]
                  {
-                     new[] { "--config", config, "--policy", PolicyFixture.SniperTrainedCheckpoint },
-                     ["--policy", PolicyFixture.SniperTrainedCheckpoint, "--config", config],
+                     new[] { "--config", config, "--policy", PolicyFixture.Second },
+                     ["--policy", PolicyFixture.Second, "--config", config],
                  })
         {
             var options = CommandLine.Parse(args);
 
-            Assert.Equal([PolicyFixture.SniperTrainedCheckpoint], options.PolicyPaths);
+            Assert.Equal([PolicyFixture.Second], options.PolicyPaths);
             Assert.Single(Assert.IsType<BotBrainSpec>(options.Bots.Brain).Tiers);
         }
     }
 
-    /// <summary>
-    /// Each checkpoint gets its own stamp line, naming the classes it will drive.
-    /// </summary>
-    /// <remarks>
-    /// <b>One line per tier, not one per server.</b> Two checkpoints can disagree
-    /// about their stamp — one bypassed and one not — and a single summary line
-    /// could not say which. The class set is on the line because since 2026-09-07
-    /// a shipped file may name a should-drive set narrower than what it trained on,
-    /// and what the server will DRIVE is the only half either repository can check.
-    /// </remarks>
     /// <summary>
     /// <c>[Bots] HandoverRange</c> reaches the brain, and leaving it out keeps the
     /// measured 150px every shipped arm ran at.
@@ -185,8 +171,15 @@ public sealed class PolicyTierWiringTests
         Assert.Equal(HybridBot.EngagementRange, plain.Bots.Brain!.Range);
     }
 
+    /// <summary>
+    /// Each checkpoint gets its own line, naming the classes it will drive.
+    /// </summary>
+    /// <remarks>
+    /// One line per tier, so a typo in <c>ClassPolicy</c> that silences one tier
+    /// shows as that tier driving nothing.
+    /// </remarks>
     [Fact]
-    public void EveryCheckpointReportsItsOwnStampAndClassSet()
+    public void EveryCheckpointReportsTheClassesItDrives()
     {
         var lines = new List<string>();
 
@@ -194,7 +187,8 @@ public sealed class PolicyTierWiringTests
         {
             MapDirectory = "maps",
             BotMode = BotMode.Policy,
-            PolicyPaths = [PolicyFixture.Checkpoint, PolicyFixture.EightFieldCheckpoint],
+            PolicyPaths = [PolicyFixture.Checkpoint, PolicyFixture.Second],
+            BotClassPolicies = [PolicyFixture.SoldierAssignment, PolicyFixture.ScoutAssignment],
         };
 
         BotBrain.Build(options, lines.Add);
@@ -202,84 +196,56 @@ public sealed class PolicyTierWiringTests
         var stamps = lines.Where(line => line.StartsWith("policy ", StringComparison.Ordinal)).ToArray();
 
         Assert.Equal(2, stamps.Length);
-
         Assert.Contains(Path.GetFileName(PolicyFixture.Checkpoint), stamps[0]);
-        Assert.Contains("Scout,Soldier,Demoman,Heavy", stamps[0]);
-
-        Assert.Contains(Path.GetFileName(PolicyFixture.EightFieldCheckpoint), stamps[1]);
-        Assert.Contains("Engineer,Spy,Pyro", stamps[1]);
-    }
-
-    /// <summary>
-    /// ⛔ Overlapping class sets WARN, naming the class and both files.
-    /// </summary>
-    /// <remarks>
-    /// <b>Reported, not refused.</b> An overlap is a legitimate fallback ladder —
-    /// the arbiter drops to the later tier under pressure — but it is also the only
-    /// thing that makes registration order change what the server plays, and
-    /// nothing downstream ever mentions it again. The shipped bundle's own
-    /// load-bearing claim is that its two sets are disjoint so order cannot matter
-    /// (<see cref="ShippedCheckpointTests"/>); an operator who breaks that by
-    /// adding a third checkpoint has to be told.
-    /// </remarks>
-    [Fact]
-    public void OverlappingClassSetsAreWarnedAboutRatherThanRefused()
-    {
-        var lines = new List<string>();
-
-        var options = new ServerOptions
-        {
-            MapDirectory = "maps",
-            BotMode = BotMode.Policy,
-
-            // ppo_final records no class set at all, so it falls back to the
-            // default four; DefaultSetCheckpoint's set IS the default four. Two
-            // files, same set, complete overlap.
-            PolicyPaths = [PolicyFixture.Checkpoint, PolicyFixture.DefaultSetCheckpoint],
-        };
-
-        BotBrain.Build(options, lines.Add);
-
-        var warnings = lines.Where(line => line.StartsWith("WARNING:", StringComparison.Ordinal)).ToArray();
-
-        // One per overlapping class, each naming both files, so a partial overlap
-        // says exactly which classes are affected rather than that one exists.
-        Assert.Equal(4, warnings.Length);
-
-        foreach (var warning in warnings)
-        {
-            Assert.Contains(Path.GetFileNameWithoutExtension(PolicyFixture.Checkpoint), warning);
-            Assert.Contains(
-                Path.GetFileNameWithoutExtension(PolicyFixture.DefaultSetCheckpoint), warning);
-        }
-
-        // And it built anyway — both tiers are there.
-        Assert.Equal(2, Assert.IsType<BotBrainSpec>(options.Bots.Brain).Tiers.Count);
-    }
-
-    /// <summary>
-    /// Disjoint sets produce no warning, which is what makes the one above real.
-    /// </summary>
-    /// <remarks>
-    /// <b>The control.</b> Without it the warning could fire on every pair and the
-    /// test above would still be green — and an operator who saw it every time
-    /// would learn to ignore it.
-    /// </remarks>
-    [Fact]
-    public void DisjointClassSetsProduceNoWarning()
-    {
-        var lines = new List<string>();
-
-        var options = new ServerOptions
-        {
-            MapDirectory = "maps",
-            BotMode = BotMode.Policy,
-            PolicyPaths = [PolicyFixture.Checkpoint, PolicyFixture.EightFieldCheckpoint],
-        };
-
-        BotBrain.Build(options, lines.Add);
-
+        Assert.EndsWith("drives Soldier", stamps[0]);
+        Assert.Contains(Path.GetFileName(PolicyFixture.Second), stamps[1]);
+        Assert.EndsWith("drives Scout", stamps[1]);
         Assert.DoesNotContain(lines, line => line.StartsWith("WARNING:", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A net nobody assigned a class to is warned about: it would load and never
+    /// drive.
+    /// </summary>
+    [Fact]
+    public void ANetThatDrivesNothingIsWarnedAbout()
+    {
+        var lines = new List<string>();
+
+        var options = new ServerOptions
+        {
+            MapDirectory = "maps",
+            BotMode = BotMode.Policy,
+            PolicyPaths = [PolicyFixture.Checkpoint],
+        };
+
+        BotBrain.Build(options, lines.Add);
+
+        Assert.Contains(lines, line => line.StartsWith("WARNING: " + PolicyFixture.Label + " drives no classes", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Only gg2-sim's <c>.gg2p</c> is loadable, and anything else is refused by
+    /// the settings check, before any file is opened.
+    /// </summary>
+    /// <remarks>
+    /// In <c>CheckSettings</c> rather than at load, so the panel's save and the
+    /// fleet renderer refuse it too instead of a restart ending in exit 2.
+    /// </remarks>
+    [Theory]
+    [InlineData("checkpoints/tier0_combat4_s2.npz")]
+    [InlineData("checkpoints/net.onnx")]
+    public void ACheckpointThatIsNotAGg2pIsRefused(string path)
+    {
+        var options = new ServerOptions
+        {
+            MapDirectory = "maps",
+            BotMode = BotMode.Policy,
+            PolicyPaths = [path],
+        };
+
+        var error = Assert.Throws<ArgumentException>(() => BotBrain.CheckSettings(options));
+        Assert.Contains("only gg2-sim .gg2p", error.Message);
     }
 
     /// <summary>
@@ -312,30 +278,5 @@ public sealed class PolicyTierWiringTests
         var hybrid = spec.Wrap(new ScriptedBot(null, new NavQuery(Team.Red), BotSkill.ForTier(5), stagger: 0));
         Assert.Equal(300, hybrid.ReleaseRange);
         Assert.Equal(HybridBot.EngagementRange, hybrid.Range);
-    }
-
-    /// <summary>
-    /// <c>[Bots] SpreadTurn</c> reaches every policy tier the server builds, and
-    /// is off when not asked for (gg2-rl phase 5, C0).
-    /// </summary>
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void TheSpreadTurnSettingReachesEveryPolicyTier(bool spread)
-    {
-        var options = new ServerOptions
-        {
-            MapDirectory = "maps",
-            BotMode = BotMode.Policy,
-            PolicyPaths = [PolicyFixture.Checkpoint],
-            BotSpreadTurn = spread,
-        };
-
-        BotBrain.Build(options, _ => { });
-
-        var policies = options.Bots.Brain!.Tiers.OfType<PolicyMicroSpec>().ToList();
-        Assert.NotEmpty(policies);
-        Assert.All(policies, p => Assert.Equal(spread, p.SpreadTurn));
-        Assert.All(policies, p => Assert.Equal(spread, ((PolicyController)p.Create()).SpreadTurn));
     }
 }

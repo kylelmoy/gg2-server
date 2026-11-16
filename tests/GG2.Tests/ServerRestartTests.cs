@@ -266,7 +266,7 @@ public sealed class ServerRestartTests : IDisposable
     /// <c>Mode</c>, so the server starts, and the save supplies both halves.
     /// </remarks>
     [Theory]
-    [InlineData("""{"Bots.Mode":"search","Bots.Policy":"checkpoints/a.npz"}""", "never consults one")]
+    [InlineData("""{"Bots.Mode":"search","Bots.Policy":"checkpoints/a.gg2p"}""", "never consults one")]
     [InlineData("""{"Bots.Mode":"policy"}""", "none was given")]
     public void ABotModeTheServerWouldRefuseIsRefusedAtTheSave(string settings, string expected)
     {

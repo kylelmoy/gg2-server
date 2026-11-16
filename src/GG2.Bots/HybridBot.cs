@@ -45,9 +45,10 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// <b>Do NOT widen past about 400px for a policy.</b> The observation
     /// saturates there: goal distance clamps at <c>min(d / 400, 1)</c>, the
     /// geometry rays reach 320px and the walkmask patch covers 128px. Beyond that
-    /// the policy is handed the wheel at a range its own input cannot describe. A
-    /// controller that does not use <c>ObservationWriter</c> is not bound by that
-    /// ceiling and would have to establish its own.
+    /// the policy is handed the wheel at a range its own input cannot describe.
+    /// Those figures are the retired gg2-rl observation's; a gg2-sim net's
+    /// observation (<c>SimPolicyObservation</c>) sets its own ceiling, and a range
+    /// past it is the same problem.
     /// </para>
     /// <para>
     /// Straight line, not path distance: a wall-separated pair inside the range is
@@ -214,9 +215,8 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// <para>
     /// <b>An INDEX rather than the controller, and that is what makes it
     /// reportable.</b> <see cref="IMicroController.Name"/> is the controller's
-    /// own — every <see cref="PolicyController"/> answers <c>policy</c>, whatever
-    /// checkpoint it holds — so a caller naming a tier from it prints
-    /// <c>policy</c> for both halves of a two-tier bundle. The LABEL lives on
+    /// own and need not say which checkpoint it holds, so a caller naming a tier
+    /// from it can print the same name for two tiers. The LABEL lives on
     /// <see cref="MicroControllerSpec"/>, index-aligned with
     /// <see cref="Tiers"/> by <see cref="BotBrainSpec.Wrap"/>, and an index is
     /// what reaches it.

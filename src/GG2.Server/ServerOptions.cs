@@ -603,19 +603,6 @@ public sealed class ServerOptions
     public string BotHumanizePreset { get; set; } = "v3";
 
     /// <summary>
-    /// Spread each policy decision's turn over its action repeat
-    /// (<c>GG2.Bots.PolicyController.SpreadTurn</c>) instead of turning on the
-    /// decision's first tick.
-    /// </summary>
-    /// <remarks>
-    /// <b>A behaviour switch, off by default until it is measured</b>
-    /// (<c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, C0). It changes only the aim
-    /// between a policy's decisions; the checkpoints observe the same thing
-    /// either way.
-    /// </remarks>
-    public bool BotSpreadTurn { get; set; }
-
-    /// <summary>
     /// Bots at difficulty 1-4 aim like people: <c>GG2.Bots.HumanizedBot.ByTier</c>
     /// with <c>HumanizeOptions.Tracking7</c>, lagging the target instead of tracking
     /// it exactly. Tier 5 is untouched. On by default.
@@ -1006,28 +993,24 @@ public sealed class ServerOptions
     /// <para>
     /// It is an option rather than a local in <c>CommandLine</c> because the
     /// brain cannot be written back to a config file: a <see cref="BotBrainSpec"/>
-    /// holds a loaded <c>PolicyNetwork</c>, megabytes of weights with no textual
+    /// holds a loaded <c>SimPolicyNetwork</c>, megabytes of weights with no textual
     /// form. The inputs have one, so the inputs are what round-trips.
     /// </para>
     /// </remarks>
     public BotMode BotMode { get; set; } = BotMode.Scripted;
 
     /// <summary>
-    /// The <c>gg2-rl</c> checkpoints a policy-driven mode loads — <c>--policy</c>,
-    /// repeatable. Empty is the all-scripted arm.
+    /// The gg2-sim <c>.gg2p</c> nets a policy-driven mode loads — <c>--policy</c>,
+    /// repeatable. Empty is the all-scripted arm. Anything else is refused.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A policy checkpoint is DATED by the simulation it was trained
-    /// against</b> — <c>docs/BOTS.md</c>, "a policy is DATED by the physics".
+    /// ⚠️ <b>A net is dated by the simulation it was trained against</b>, and a
+    /// <c>.gg2p</c> carries no stamp, so nothing here refuses a stale one —
+    /// <c>docs/BOTS.md</c>, "a policy is DATED by the physics".
     /// <para>
-    /// ⛔ <b>A LIST since 2026-09-07, because the shipped bundle is two tiers.</b>
-    /// One checkpoint drives one set of classes, and the set is a property of the
-    /// file (<c>PolicyNetwork.TrainedClasses</c>) — so covering five classes with
-    /// two families of weights needs two checkpoints loaded at once, one
-    /// <c>PolicyMicroSpec</c> each. Order is <see cref="BotBrainSpec.Tiers"/>'
-    /// order, most capable first; with DISJOINT class sets it cannot matter,
-    /// because exactly one tier is ever eligible. <c>docs/BOTS.md</c>, "the
-    /// shipped bundle".
+    /// <b>A list, one tier per net</b>; the shipped bundle is nine, one per class.
+    /// A net drives only what <see cref="BotClassPolicies"/> assigns it, so two
+    /// tiers cannot claim one class and the order cannot change what plays.
     /// </para>
     /// </remarks>
     public IReadOnlyList<string> PolicyPaths { get; set; } = [];
@@ -1038,31 +1021,16 @@ public sealed class ServerOptions
     /// </summary>
     /// <remarks>
     /// <b>A label is a checkpoint's file name without its extension</b>, which is
-    /// what the stamp line prints and what a result table calls the tier. Anything
-    /// not named here keeps the default: whichever loaded checkpoint's own class
-    /// set claims it, and the scripted layer if none does.
-    /// <para>
-    /// ⛔ <b>This is the OPERATOR's answer to a question the file cannot be asked.</b>
-    /// A checkpoint carries one class set doing two jobs — what the run trained and
-    /// what its author intends it to drive — and the ship bundle narrows the second
-    /// into the first, which destroys the record of what else was trained. Naming a
-    /// class the file does not list is therefore legal and <b>warned about</b>: the
-    /// warning cannot tell "the run never saw this class" from "the author narrowed
-    /// it out", and neither can anything else in either repository.
-    /// <c>docs/TRAPS-BOTS.md</c>, "a should-drive set lives in a trained-on field".
-    /// </para>
+    /// what the stamp line prints and what a result table calls the tier. A
+    /// <c>.gg2p</c> names no classes of its own, so a class not named here is
+    /// driven by no net: the search takes it in tiered mode, the scripted layer
+    /// otherwise.
     /// <para>
     /// ⚠️ <b>Separate from <c>[BotClasslimits]</c> on purpose.</b> That one decides
     /// which classes bots PLAY; this one decides who drives a class that is played.
     /// </para>
     /// </remarks>
     public IReadOnlyList<string> BotClassPolicies { get; set; } = [];
-
-    /// <summary>
-    /// ⛔ Load a checkpoint whose <c>SIM_UUID</c> does not match this build —
-    /// <c>--policy-ignore-stamp</c>.
-    /// </summary>
-    public bool PolicyIgnoreStamp { get; set; }
 
     /// <summary>
     /// Microseconds of bot-controller work per tick — <c>--bot-arbiter</c>. Null

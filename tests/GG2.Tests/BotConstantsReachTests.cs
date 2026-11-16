@@ -61,10 +61,10 @@ public sealed class BotConstantsReachTests(ITestOutputHelper output)
     /// </remarks>
     private static readonly string[] Inference =
     [
-        "ObservationWriter.cs",
+        "SimPolicyObservation.cs",
         "ActionDecoder.cs",
-        "PolicyNetwork.cs",
-        "PolicyController.cs",
+        "SimPolicyNetwork.cs",
+        "SimPolicyController.cs",
         "HybridBot.cs",
         "Handover.cs",
     ];

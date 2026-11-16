@@ -19,8 +19,8 @@ namespace GG2.Bots;
 /// `tools/bench/README.md`, trap 6.
 /// </para>
 /// <para>
-/// <b>Every line here came out of <c>SearchBot</c> unchanged</b>, for the
-/// reason <see cref="PolicyController"/> states.
+/// <b>Every line here came out of <c>SearchBot</c> unchanged</b>: the arms were
+/// measured with that bot, so a change here is a different arm.
 /// </para>
 /// </remarks>
 public sealed class SearchController : IMicroController
@@ -144,16 +144,22 @@ public sealed class SearchController : IMicroController
     /// Which set to restrict to, when <see cref="RestrictToTrainedClasses"/> is on.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Defaults to <see cref="PolicyNetwork.DefaultTrainedClasses"/> and
-    /// that is now an ASSUMPTION about the other arm rather than a fact.</b> This
-    /// controller holds no checkpoint — it restricts to the policy's classes only
-    /// so the two arms of a comparison engage on the same ones. Since 2026-09-06
-    /// the set is a property of the checkpoint, so a comparison against one whose
-    /// set is not the default has to say so here, or the arms differ on the axis
-    /// the restriction exists to hold still.
+    /// Defaults to <see cref="DefaultClasses"/>. This controller holds no
+    /// checkpoint; it restricts to a set only so the two arms of a comparison
+    /// engage on the same classes, so a comparison against a policy arm should
+    /// pass that arm's classes here.
     /// </remarks>
     public ReadOnlyMemory<PlayerClass> TrainedClasses { get; init; } =
-        PolicyNetwork.DefaultTrainedClasses.ToArray();
+        DefaultClasses.ToArray();
+
+    /// <summary>
+    /// The four classes the search has always led on: scout, soldier, demoman
+    /// and heavy. Not a prefix of <see cref="PlayerClass"/> (demoman is 3, heavy
+    /// 6). A live server's search drives these plus every class no policy tier
+    /// claims (<c>BotBrain.SearchClasses</c>).
+    /// </summary>
+    public static ReadOnlySpan<PlayerClass> DefaultClasses =>
+        [PlayerClass.Scout, PlayerClass.Soldier, PlayerClass.Demoman, PlayerClass.Heavy];
 
     public bool Drives(PlayerClass playerClass) =>
         !RestrictToTrainedClasses || TrainedClasses.Span.Contains(playerClass);
@@ -167,7 +173,7 @@ public sealed class SearchController : IMicroController
     /// re-entry waits for the search's next boundary rather than starting one.
     /// </summary>
     /// <remarks>
-    /// <b>Deliberately unlike <see cref="PolicyController.OnHandoverOut"/></b>,
+    /// <b>Deliberately unlike <see cref="SimPolicyController.OnHandoverOut"/></b>,
     /// and inherited verbatim from <c>SearchBot</c>, which zeroed nothing here.
     /// The arms were measured with this asymmetry.
     /// </remarks>

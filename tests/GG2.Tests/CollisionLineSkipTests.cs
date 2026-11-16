@@ -147,20 +147,4 @@ public sealed class CollisionLineSkipTests
             skippedProbes[0] * 2 < walked[0],
             $"{map}: the skip saved nothing — {skippedProbes[0]} probes against {walked[0]}");
     }
-
-    /// <summary>
-    /// The bound is shared with the geometry fan rather than written twice.
-    /// </summary>
-    /// <remarks>
-    /// Two readers march this mask now. The fan's own gate,
-    /// <c>ObservationRayFanTests</c>, proves the bound is safe; this proves the
-    /// walk is reading the same one, which is the part that could rot silently
-    /// when somebody "tidies" a duplicate constant.
-    /// </remarks>
-    [Fact]
-    public void TheWalkAndTheGeometryFanShareOneBound()
-    {
-        for (var clearance = 0; clearance <= 32; clearance++)
-            Assert.Equal(Walkmask.SafeSkipPixels(clearance), ObservationWriter.SafeSkipPixels(clearance));
-    }
 }

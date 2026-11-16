@@ -254,11 +254,9 @@ public sealed class Walkmask
     /// nothing solid is within that many cells. Row-major, <c>Width</c> stride.
     /// </summary>
     /// <remarks>
-    /// <b>An acceleration structure for marching a ray, and nothing else reads
-    /// it.</b> <c>ObservationWriter</c>'s geometry fan samples the mask every
-    /// four pixels out to 320, which is up to 80 probes a ray and 24 rays an
-    /// observation — <b>88% of the cost of writing one</b>, and an observation
-    /// is written for every agent on every decision.
+    /// <b>An acceleration structure for marching a line, and nothing else reads
+    /// it.</b> <c>CollisionLine.Walk</c> samples one pixel per pixel of a
+    /// segment, and a soldier's arc test walks ten of them a decision.
     /// <para>
     /// <b>It makes the march skip, never guess.</b> A clearance of <c>c</c>
     /// says every cell within Chebyshev distance <c>c - 1</c> is open, so every
@@ -267,8 +265,8 @@ public sealed class Walkmask
     /// advances by no more than that lands on open ground by construction, so
     /// the first solid probe it finds is the first solid probe there is. The
     /// answer is <b>identical</b> to the naive march, not an approximation of
-    /// it; <c>ObservationRayFanTests</c> asserts that against a transcription of
-    /// the naive loop.
+    /// it; <c>CollisionLineSkipTests</c> asserts that against the walk with the
+    /// skip switched off.
     /// </para>
     /// <para>
     /// <b>Built eagerly, with the mask.</b> Computing it lazily — on the first
@@ -288,10 +286,9 @@ public sealed class Walkmask
     /// anything solid.
     /// </summary>
     /// <remarks>
-    /// <b>The one copy of the bound, and it has to stay the one copy.</b> Two
-    /// readers march the mask — <c>ObservationWriter</c>'s geometry fan and
-    /// <c>CollisionLine.Walk</c> — and a bound that drifted between them would
-    /// make one of them step over a wall, which is a wrong answer that looks like
+    /// <b>The one copy of the bound.</b> <c>CollisionLine.Walk</c> reads it, and
+    /// a second marcher must read this one rather than its own copy: a bound that
+    /// drifted would step over a wall, which is a wrong answer that looks like
     /// nothing.
     /// <para>
     /// The algebra: a clearance of <c>c</c> says every cell within Chebyshev

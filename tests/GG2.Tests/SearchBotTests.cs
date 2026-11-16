@@ -181,7 +181,7 @@ public sealed class SearchBotTests
     /// <remarks>
     /// <b>Behavioural rather than structural.</b> Asserting that both call
     /// <c>Handover</c> would pass on two classes calling it with different
-    /// arguments. This runs a real <see cref="PolicyController"/> and a real
+    /// arguments. This runs a real <see cref="SimPolicyController"/> and a real
     /// <see cref="SearchController"/> over the same world and asserts they agree
     /// about who drives — which is the property the experiment actually needs.
     /// <para>
@@ -197,7 +197,7 @@ public sealed class SearchBotTests
     public void TheTwoArmsHandOverAtTheSameDistances(int gap)
     {
         var policyWorld = World();
-        var policy = new HybridBot(new PolicyController(PolicyFixture.Load()), Scripted(policyWorld));
+        var policy = new HybridBot(new SimPolicyController(PolicyFixture.Load(), [PlayerClass.Soldier]), Scripted(policyWorld));
 
         var policyRed = Duel(policyWorld, gap);
 

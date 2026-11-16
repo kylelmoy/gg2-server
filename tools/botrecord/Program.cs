@@ -10,8 +10,8 @@
 // --mode said.
 //
 //   botrecord --out <dir> --maps a,b,c --ticks-per-map 18000
-//             [--mode policy|tiered|scripted] [--policy x.npz]... [--bots 12]
-//             [--humanize [--humanize-preset v3|strokes|lazy|hold|tracking|tracking2|tracking3|tracking4|tracking5|tracking6|tracking7|tracking8]] [--spread-turn]
+//             [--mode policy|tiered|scripted] [--policy x.gg2p]... [--class-policy Soldier=x]... [--bots 12]
+//             [--humanize [--humanize-preset v3|strokes|lazy|hold|tracking|tracking2|tracking3|tracking4|tracking5|tracking6|tracking7|tracking8]]
 //             [--difficulty 1-5] [--no-human-aim] [--map-dir <path>] [--nav <path>]
 //
 // One server per map, run for --ticks-per-map ticks (30 a second), so a list of
@@ -26,19 +26,19 @@ var maps = (Flag("--maps") ?? "ctf_truefort").Split(',');
 var ticks = int.Parse(Flag("--ticks-per-map") ?? "18000", CultureInfo.InvariantCulture);
 var bots = int.Parse(Flag("--bots") ?? "12", CultureInfo.InvariantCulture);
 var humanize = args.Contains("--humanize");
-var spreadTurn = args.Contains("--spread-turn");
 var difficulty = int.Parse(Flag("--difficulty") ?? "5", CultureInfo.InvariantCulture);
 var humanAim = !args.Contains("--no-human-aim");
 var preset = Flag("--humanize-preset") ?? "v3";
 _ = HumanizeOptions.ForPreset(preset);
 var mode = Flag("--mode") ?? "policy";
 var policies = Repeated("--policy");
+var classPolicies = Repeated("--class-policy");
 var root = FindRoot();
 var mapDir = Flag("--map-dir") ?? Path.Combine(root, "maps");
 var navDir = Flag("--nav") ?? Path.Combine(root, "nav");
 
 Directory.CreateDirectory(outDir);
-Console.WriteLine($"{maps.Length} map(s) x {ticks} ticks, {bots} bots, mode {mode}, humanize {humanize} ({preset}), spread turn {spreadTurn}, difficulty {difficulty}, human aim {humanAim}, policies [{string.Join(", ", policies)}]");
+Console.WriteLine($"{maps.Length} map(s) x {ticks} ticks, {bots} bots, mode {mode}, humanize {humanize} ({preset}), difficulty {difficulty}, human aim {humanAim}, policies [{string.Join(", ", policies)}]");
 
 foreach (var map in maps)
 {
@@ -61,7 +61,7 @@ foreach (var map in maps)
         BotEngagesBotsToo = true,
         BotHumanize = humanize,
         BotHumanizePreset = preset,
-        BotSpreadTurn = spreadTurn,
+        BotClassPolicies = classPolicies,
         BotHumanAim = humanAim,
     };
 

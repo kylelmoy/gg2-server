@@ -33,7 +33,7 @@ public static class PerMapEval
 
     public static void Run(string maps, string nav, string npz, int perMap)
     {
-        var policy = PolicyNetwork.Load(npz);
+        var policy = Nets.Load(npz);
 
         // THE CENSORING. Every phase 4 number was taken at the 5-minute cap,
         // and on gen_destroy the CONTROL arm decides 50% of matches there and
@@ -49,7 +49,7 @@ public static class PerMapEval
 
         Console.WriteLine($"{list.Length} maps, {perMap} matches each, two arms, {cap}-minute cap");
         // ⛔ Handed to BOTH arms below. The control has no policy to ask.
-        PlayerClass[] allowed = [.. policy.TrainedClasses];
+        PlayerClass[] allowed = [.. policy.Drives];
 
         Roster.Announce(allowed, fromCheckpoint: true);
         Console.WriteLine();
@@ -195,7 +195,7 @@ public static class PerMapEval
     }
 
     private static Row Play(
-        string map, string maps, string nav, PolicyNetwork? policy, int count, int cap,
+        string map, string maps, string nav, SimPolicyMicroSpec? policy, int count, int cap,
         PlayerClass[] allowed)
     {
         var decided = 0;
@@ -225,7 +225,7 @@ public static class PerMapEval
                 // match with classes this policy never trained measures the
                 // fallback to scripted rather than the policy.
                 AllowedClasses = allowed,
-                Brain = policy is null ? null : BotBrainSpec.Of(new PolicyMicroSpec(policy)),
+                Brain = policy is null ? null : BotBrainSpec.Of(policy),
                 HybridTeam = Team.Red,
             };
 

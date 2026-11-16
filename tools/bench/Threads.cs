@@ -147,7 +147,7 @@ public static class ThreadsBench
         var cap = int.Parse(Environment.GetEnvironmentVariable("BENCH_CAP") ?? "5");
         var ladder = Ladder;
 
-        Roster.Announce([.. PolicyNetwork.DefaultTrainedClasses], fromCheckpoint: false);
+        Roster.Announce([.. SearchController.DefaultClasses], fromCheckpoint: false);
 
         Console.WriteLine(
             $"arm 3 only, {Bots} bots, {perMap} matches a map, cap {cap} min, "
@@ -228,7 +228,7 @@ public static class ThreadsBench
             // where it is: this mode loads no checkpoint — it measures the
             // search's throughput against thread count — so there is no
             // checkpoint set to prefer and it just needs a stable roster.
-            AllowedClasses = [.. PolicyNetwork.DefaultTrainedClasses],
+            AllowedClasses = [.. SearchController.DefaultClasses],
             Brain = BotBrainSpec.Of(new SearchMicroSpec(new RolloutOptions(Threads: threads))),
             HybridTeam = Team.Red,
         };

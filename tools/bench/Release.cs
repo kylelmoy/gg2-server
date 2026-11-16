@@ -39,9 +39,7 @@ public static class ReleaseReasons
         var list = Environment.GetEnvironmentVariable("BENCH_FOCUS") is { Length: > 0 } focus ? focus.Split(',') : PerMapEval.Maps;
         // One brain per thread, as Tiers does: a spec holds the loaded networks
         // and the matches run in parallel.
-        var brains = new ThreadLocal<BotBrainSpec>(() => BotBrainSpec.Of(
-            new PolicyMicroSpec(PolicyNetwork.Load(Path.Combine(checkpoints, "tier0_combat4_s2.npz"))),
-            new PolicyMicroSpec(PolicyNetwork.Load(Path.Combine(checkpoints, "tier2_pyro_rest3_s0.npz")))) with
+        var brains = new ThreadLocal<BotBrainSpec>(() => BotBrainSpec.Of(Nets.Shipped(checkpoints)) with
         {
             Rule = rule,
         });

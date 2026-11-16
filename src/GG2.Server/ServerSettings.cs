@@ -621,10 +621,6 @@ public static class ServerSettings
             o => o.BotHumanAim, (o, v) => o.BotHumanAim = v));
 
         settings.Add(BoolRow(
-            "Bots", "SpreadTurn", nameof(ServerOptions.BotSpreadTurn),
-            o => o.BotSpreadTurn, (o, v) => o.BotSpreadTurn = v));
-
-        settings.Add(BoolRow(
             "Bots", "EngageBots", nameof(ServerOptions.BotEngagesBotsToo),
             o => o.BotEngagesBotsToo, (o, v) => o.BotEngagesBotsToo = v));
 
@@ -676,11 +672,7 @@ public static class ServerSettings
         settings.Add(ListRow(
             "Bots", "Policy", nameof(ServerOptions.PolicyPaths),
             o => o.PolicyPaths, (o, v) => o.PolicyPaths = v,
-            "checkpoints/tier0_combat4_s2.npz,checkpoints/tier2_pyro_rest3_s0.npz"));
-
-        settings.Add(BoolRow(
-            "Bots", "PolicyIgnoreStamp", nameof(ServerOptions.PolicyIgnoreStamp),
-            o => o.PolicyIgnoreStamp, (o, v) => o.PolicyIgnoreStamp = v));
+            "checkpoints/ppo-warm-soldier-s1.gg2p,checkpoints/ppo-finetune-scout-s1.gg2p"));
 
         settings.Add(new ServerSetting
         {

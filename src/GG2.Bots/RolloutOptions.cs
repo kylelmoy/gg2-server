@@ -11,7 +11,6 @@ public readonly record struct RolloutOptions(
     byte[]? AimBins = null,
     bool ConsiderSpecial = false,
     int CommitTicks = 0,
-    PolicyNetwork? ContinuationPolicy = null,
     int Threads = 0)
 {
     /// <summary><c>docs/BOTAI.md</c> item 12 says 15-30 ticks; this is the middle.</summary>
@@ -101,20 +100,6 @@ public readonly record struct RolloutOptions(
         {
             throw new ArgumentOutOfRangeException(
                 nameof(Threads), Threads, "a search runs on at least one thread");
-        }
-
-        // ⛔ See the Threads remarks: PolicyNetwork forwards through shared scratch,
-        // so a threaded search with a continuation is a data race on the hidden
-        // layer. It would not throw and it would not look wrong — it would just
-        // decide from a half-written activation, which is the shape of bug this
-        // repo has no instrument for. Refused where the combination is chosen.
-        if (threads > 1 && ContinuationPolicy is not null)
-        {
-            throw new ArgumentException(
-                $"Threads {threads} cannot be combined with a ContinuationPolicy: "
-                + "PolicyNetwork.Act writes through per-instance hidden-layer scratch and "
-                + "is not re-entrant, so concurrent candidates would race on it.",
-                nameof(Threads));
         }
 
         return this with

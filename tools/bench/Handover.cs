@@ -61,9 +61,7 @@ public static class HandoverArms
 
         // One set of networks per thread: a spec holds them and matches run in
         // parallel (BENCH_RELEASE found a shared one nondeterministic).
-        var networks = new ThreadLocal<(PolicyNetwork Combat, PolicyNetwork Pyro)>(() => (
-            PolicyNetwork.Load(Path.Combine(checkpoints, "tier0_combat4_s2.npz")),
-            PolicyNetwork.Load(Path.Combine(checkpoints, "tier2_pyro_rest3_s0.npz"))));
+        var networks = new ThreadLocal<MicroControllerSpec[]>(() => Nets.Shipped(checkpoints));
 
         var results = new ConcurrentBag<Observation>();
         var work = from map in list from i in Enumerable.Range(0, perMap) from arm in arms select (map, i, arm);
@@ -73,7 +71,7 @@ public static class HandoverArms
         Parallel.ForEach(work, item =>
         {
             var (map, i, arm) = item;
-            var (combat, pyro) = networks.Value;
+            var shipped = networks.Value!;
 
             var options = HeadlessMatchOptions.Default with
             {
@@ -87,7 +85,7 @@ public static class HandoverArms
                 AllowedClasses = Classes,
                 Brain = arm.Name == "control"
                     ? null
-                    : BotBrainSpec.Of(new PolicyMicroSpec(combat), new PolicyMicroSpec(pyro)) with
+                    : BotBrainSpec.Of(shipped) with
                     {
                         ReleaseRange = arm.Release,
                         EngageNearOwnGoal = arm.NearGoal,

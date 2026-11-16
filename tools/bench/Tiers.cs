@@ -51,10 +51,6 @@ public static class Tiers
         // the same full:5 mirror every other arm is read against.
         ("hum:5", 5, false),
 
-        // Tier 5 with each policy turn spread over its action repeat
-        // (PolicyController.SpreadTurn): gg2-rl phase 5, C0.
-        ("spread:5", 5, false),
-
         // Tier 5 wrapped in HumanizedBot's v5 preset, lazy between shots
         // (HumanizeOptions.Lazy): gg2-rl phase 5, v5.
         ("lazy:5", 5, false),
@@ -74,8 +70,6 @@ public static class Tiers
         : arm.StartsWith("hold:", StringComparison.Ordinal) ? HumanizeOptions.Hold
         : HumanizeOptions.Default;
 
-    private static bool Spread(string arm) => arm.StartsWith("spread:", StringComparison.Ordinal);
-
     /// <summary>
     /// <c>BENCH_HUMAN_AIM=1</c>: every bot as the live server wraps it by default,
     /// so tiers 1-4 aim like people (<see cref="HumanizedBot.ByTier"/>). Matches only.
@@ -87,12 +81,10 @@ public static class Tiers
         long SubjectMicroTicks, string Detail);
 
     /// <summary>
-    /// The brain the live server builds from the two shipped checkpoints, one copy
-    /// per thread: a <see cref="PolicyNetwork"/> owns scratch buffers.
+    /// The brain the live server builds from the shipped nets, one copy per
+    /// thread: a <see cref="SimPolicyNetwork"/> owns scratch buffers.
     /// </summary>
-    private static ThreadLocal<BotBrainSpec> Brains(string checkpoints, HandoverRule rule = HandoverRule.MacroTask) => new(() => BotBrainSpec.Of(
-        new PolicyMicroSpec(PolicyNetwork.Load(Path.Combine(checkpoints, "tier0_combat4_s2.npz"))),
-        new PolicyMicroSpec(PolicyNetwork.Load(Path.Combine(checkpoints, "tier2_pyro_rest3_s0.npz")))) with
+    private static ThreadLocal<BotBrainSpec> Brains(string checkpoints, HandoverRule rule = HandoverRule.MacroTask) => new(() => BotBrainSpec.Of(Nets.Shipped(checkpoints)) with
     {
         Rule = rule,
     });
@@ -133,8 +125,8 @@ public static class Tiers
 
             var subjectSlot = subject == Team.Red ? red : blue;
             var otherSlot = subject == Team.Red ? blue : red;
-            var subjectBot = Bot(world, Spread(arm.Name) ? brains.Value.WithSpreadTurn() : brains.Value, subject, subjectSlot, arm);
-            var otherBot = Bot(world, brains.Value, subject == Team.Red ? Team.Blue : Team.Red, otherSlot, ("ref", 5, false));
+            var subjectBot = Bot(world, brains.Value!, subject, subjectSlot, arm);
+            var otherBot = Bot(world, brains.Value!, subject == Team.Red ? Team.Blue : Team.Red, otherSlot, ("ref", 5, false));
 
             world.Drive(
                 subjectSlot,
@@ -270,7 +262,6 @@ public static class Tiers
                 HandicapOnly = arm.HandicapOnly,
                 HumanizeTeam = Humanized(arm.Name) ? subject : null,
                 HumanizeWith = HumanizeFor(arm.Name),
-                SpreadTurnTeam = Spread(arm.Name) ? subject : null,
                 HumanAimByTier = HumanAimByTier,
                 HumanAimWith = Environment.GetEnvironmentVariable("BENCH_HUMAN_AIM_PRESET") is { Length: > 0 } preset
                     ? HumanizeOptions.ForPreset(preset)

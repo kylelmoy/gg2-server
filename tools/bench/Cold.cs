@@ -39,7 +39,7 @@ public static class ColdBench
         //     than inferred. Same algorithm, different code, so it pays its own
         //     tier-0 JIT exactly as Walkmask's does.
         sw.Restart();
-        var independent = RayBench.ClearanceFor(level.Walkmask);
+        var independent = Chamfer.ClearanceFor(level.Walkmask);
         var chamferMs = sw.Elapsed.TotalMilliseconds;
 
         // 3. The nav cache.
@@ -71,5 +71,49 @@ public static class ColdBench
         Console.WriteLine($"  ScenarioWorld.Load, x{worlds - 1,-3}     {restMs,7:0.00} ms   ({restMs / Math.Max(1, worlds - 1),5:0.00} ms each, cached)");
         Console.WriteLine($"  ---------------------------------------");
         Console.WriteLine($"  everything above             {total.Elapsed.TotalMilliseconds,7:0.00} ms");
+    }
+}
+
+/// <summary>An independent chamfer clearance field, for the cold-decode comparison.</summary>
+internal static class Chamfer
+{
+    public static int ClearanceFor(Walkmask mask) => Clearance(mask).Length;
+
+    private static byte[] Clearance(Walkmask mask)
+    {
+        var w = mask.Width;
+        var h = mask.Height;
+        var d = new byte[w * h];
+        const byte Max = 40;
+
+        for (var y = 0; y < h; y++)
+        for (var x = 0; x < w; x++)
+            d[(y * w) + x] = mask.IsSolid(x, y) ? (byte)0 : Max;
+
+        for (var y = 0; y < h; y++)
+        for (var x = 0; x < w; x++)
+        {
+            var best = d[(y * w) + x];
+            if (best == 0) continue;
+            if (x > 0) best = Math.Min(best, (byte)(d[(y * w) + x - 1] + 1));
+            if (y > 0) best = Math.Min(best, (byte)(d[((y - 1) * w) + x] + 1));
+            if (x > 0 && y > 0) best = Math.Min(best, (byte)(d[((y - 1) * w) + x - 1] + 1));
+            if (x + 1 < w && y > 0) best = Math.Min(best, (byte)(d[((y - 1) * w) + x + 1] + 1));
+            d[(y * w) + x] = best;
+        }
+
+        for (var y = h - 1; y >= 0; y--)
+        for (var x = w - 1; x >= 0; x--)
+        {
+            var best = d[(y * w) + x];
+            if (best == 0) continue;
+            if (x + 1 < w) best = Math.Min(best, (byte)(d[(y * w) + x + 1] + 1));
+            if (y + 1 < h) best = Math.Min(best, (byte)(d[((y + 1) * w) + x] + 1));
+            if (x + 1 < w && y + 1 < h) best = Math.Min(best, (byte)(d[((y + 1) * w) + x + 1] + 1));
+            if (x > 0 && y + 1 < h) best = Math.Min(best, (byte)(d[((y + 1) * w) + x - 1] + 1));
+            d[(y * w) + x] = best;
+        }
+
+        return d;
     }
 }

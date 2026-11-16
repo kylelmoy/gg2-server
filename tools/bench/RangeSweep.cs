@@ -35,7 +35,7 @@ public static class RangeSweep
 {
     public static void Run(string maps, string nav, string npz, int count)
     {
-        var policy = PolicyNetwork.Load(npz);
+        var policy = Nets.Load(npz);
         var mapList = (Environment.GetEnvironmentVariable("BENCH_FOCUS") ?? "gen_destroy").Split(',');
         var ranges = (Environment.GetEnvironmentVariable("BENCH_RANGES") ?? "0,80,150,220,300,450")
             .Split(',').Select(double.Parse).ToArray();
@@ -53,7 +53,7 @@ public static class RangeSweep
         // cap, a claim about the distribution the mean cannot support either way.
         var cap = int.Parse(Environment.GetEnvironmentVariable("BENCH_CAP") ?? "5");
         // ⛔ Handed to BOTH arms below. The control has no policy to ask.
-        PlayerClass[] allowed = [.. policy.TrainedClasses];
+        PlayerClass[] allowed = [.. policy.Drives];
 
         Roster.Announce(allowed, fromCheckpoint: true);
 
@@ -134,7 +134,7 @@ public static class RangeSweep
     private static string Share(int a, int total) => total == 0 ? "  -   " : $"{a / (double)total:0.0%}";
 
     private static void Row(
-        string map, string maps, string nav, PolicyNetwork? policy, double range, int count, int cap, string label,
+        string map, string maps, string nav, SimPolicyMicroSpec? policy, double range, int count, int cap, string label,
         PlayerClass[] allowed)
     {
         var decided = 0;
@@ -215,7 +215,7 @@ public static class RangeSweep
                 // default explicitly to keep the two arms comparable.
                 Brain = policy is null
                     ? null
-                    : new BotBrainSpec { Tiers = [new PolicyMicroSpec(policy)], Range = range },
+                    : new BotBrainSpec { Tiers = [policy], Range = range },
                 HybridTeam = Team.Red,
             };
 

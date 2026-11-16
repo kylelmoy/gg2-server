@@ -660,11 +660,6 @@ internal static class CommandLine
                     options.BotHumanAim = false;
                     break;
 
-                // A behaviour switch: ServerOptions.BotSpreadTurn.
-                case "--bot-spread-turn":
-                    options.BotSpreadTurn = true;
-                    break;
-
                 // A debugging aid: watch a brain change hands from inside the
                 // game rather than off the panel. Accepted under every bot mode,
                 // including one with no controller to hand over to — it is
@@ -736,10 +731,10 @@ internal static class CommandLine
                 // aim inside the same engagement window --search-bots uses.
                 //
                 // ⛔ REPEATABLE, and the second one APPENDS rather than replacing —
-                // one checkpoint is one tier, and the shipped bundle is two of them
-                // covering five classes between them. ⚠️ The first --policy on the
-                // command line CLEARS whatever a config file named, so `--config
-                // gg2.ini --policy x.npz` runs x.npz alone rather than x.npz appended
+                // one checkpoint is one tier, and the shipped bundle is nine of them,
+                // one per class. ⚠️ The first --policy on the command line CLEARS
+                // whatever a config file named, so `--config gg2.ini --policy
+                // x.gg2p` runs x.gg2p alone rather than x.gg2p appended
                 // to the file's list: a flag beats the file, and a flag that ADDED to
                 // it would be the one setting here that cannot override.
                 case "--policy":
@@ -753,21 +748,6 @@ internal static class CommandLine
                     policyOnCommandLine = true;
                     break;
                 }
-
-                // ⛔ BYPASSES THE SIMULATION STAMP, which exists to stop a policy
-                // running against a simulation it was not trained on. It is honest
-                // ONLY when the difference between the two simulations cannot reach
-                // the maps being played, and that is a claim to CHECK rather than
-                // assume: the 2026-09-02 case was the moving-platform carry, and
-                // MovingPlatforms.Build reads the `moving_platform` entity, which
-                // appears in ZERO shipped maps.
-                //
-                // ⚠️ The server prints both stamps and the reason when this is used,
-                // because a bypassed guard that leaves no trace is worse than no
-                // guard: the next reader cannot tell the run was overridden.
-                case "--policy-ignore-stamp":
-                    options.PolicyIgnoreStamp = true;
-                    break;
 
                 // WHICH CLASSES BOTS PLAY, as a per-team count of BOTS: one number
                 // for all nine, or `scout=2,spy=1`. Pairs apply OVER what is already
@@ -1187,9 +1167,9 @@ internal static class CommandLine
                             (default: cores/3, capped at 8). Changes cost only,
                             never a decision.
           --policy <path>   the trained checkpoint --bot-mode policy and
-                            --bot-mode tiered run - docs/BOTS.md arm 2: a gg2-rl
-                            .npz, or a gg2-sim .gg2p, which drives only the
-                            classes --bot-class-policy names. Given on
+                            --bot-mode tiered run - docs/BOTS.md arm 2: a
+                            gg2-sim .gg2p, which drives only the classes
+                            --bot-class-policy names. Given on
                             its own it selects policy mode. Given to a mode that
                             cannot consult it, it is REFUSED rather than ignored.
           --bot-arbiter <us>
@@ -1201,11 +1181,6 @@ internal static class CommandLine
                             which is the only mode with more than one tier.
                             A tick is 33300us; a search decision measures ~4800 at
                             12 live characters and a policy decision ~7.
-          --policy-ignore-stamp
-                            load a checkpoint whose simulation stamp does NOT
-                            match this build. Only honest when the simulation
-                            difference cannot reach the maps being played, which
-                            is a claim to check. Both stamps are always printed.
           --bots-min-humans <n>
                             humans who must be connected before any bot spawns
                             (default 0 with --bots). Below it the target is ZERO
@@ -1246,10 +1221,6 @@ internal static class CommandLine
           --bot-humanize-preset v3|strokes|lazy|hold|tracking|tracking2|tracking3|tracking4|tracking5|tracking6|tracking7|tracking8
                             which measured HumanizedBot preset --bot-humanize
                             uses. v3 by default.
-          --bot-spread-turn
-                            spread each policy decision's aim turn over the
-                            ticks it is held for, instead of turning on the
-                            first. A behaviour switch, off by default.
           --bot-engages-bots
                             let bots run their expensive micro-controller against
                             each other too. Without this a bot only hands the

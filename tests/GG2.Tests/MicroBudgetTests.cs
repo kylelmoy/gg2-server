@@ -109,7 +109,7 @@ public sealed class MicroBudgetTests
     [Fact]
     public void ThePolicyCostIsFlatInThePopulation()
     {
-        var policy = new PolicyController(PolicyFixture.Load());
+        var policy = new SimPolicyController(PolicyFixture.Load(), [GG2.Protocol.PlayerClass.Soldier]);
 
         Assert.Equal(policy.DecisionCostFor(2), policy.DecisionCostFor(20));
     }

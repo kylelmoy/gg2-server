@@ -537,7 +537,7 @@ public sealed class HeadlessMatchTests
         {
             Bots = 8,
             RedDifficulty = 1,
-            Brain = BotBrainSpec.Of(new PolicyMicroSpec(PolicyFixture.Load())),
+            Brain = BotBrainSpec.Of(PolicyFixture.Tier()),
             HandicapOnly = handicapOnly,
         };
 

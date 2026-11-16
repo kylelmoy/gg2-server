@@ -342,11 +342,9 @@ public static class Healing
             // existing checkpoint is now dated. Skipped because the change
             // cannot reach training: nothing in gg2-rl's GG2.Env sets SetupTimer or
             // AttackDefend, so both sit at their default(WorldState) values and
-            // this branch is unreachable there, and PolicyController's
-            // TrainedClasses (Scout, Soldier, Sniper, Heavy) contains no Medic.
-            // Falsification condition: if an env or a duel ever arms a setup
-            // timer, or the policy trains on Medic, this reasoning expires and
-            // the bump is owed.
+            // this branch is unreachable there, and the gg2-rl nets trained no
+            // Medic. Those nets are retired; a gg2-sim net carries no stamp, so
+            // the question no longer has a checkpoint to protect.
             var setup = state.AttackDefend && state.SetupTimer > 0;
 
             weapon.UberCharge += Gml.Less(patient.Hp, maxHp) || setup

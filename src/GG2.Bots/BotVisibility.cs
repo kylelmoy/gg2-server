@@ -16,7 +16,7 @@ namespace GG2.Bots;
 /// <para>
 /// ⛔ <b>The scripted layer only.</b> The policy observation reaches its enemies
 /// through <see cref="WorldView.NearestEnemies"/>, which has no visibility test
-/// of any kind, so a <c>PolicyNetwork</c> is handed a fully cloaked spy's
+/// of any kind, so a policy net is handed a fully cloaked spy's
 /// position and velocity. Fixing that means changing what the observation floats
 /// mean, which dates every checkpoint trained against them —
 /// <c>docs/TRAPS-BOTS.md</c>, "the cloak is not the whole of what a bot cannot

@@ -120,48 +120,9 @@ if (Environment.GetEnvironmentVariable("BENCH_SEARCH") == "1")
     return;
 }
 
-if (Environment.GetEnvironmentVariable("BENCH_OBS") is { } obsOut)
-{
-    var ond = Environment.GetEnvironmentVariable("GG2_NAV");
-    if (ond is not null && !Directory.Exists(ond)) ond = null;
-    Bench.ObsDump.Run(maps, ond, Environment.GetEnvironmentVariable("BENCH_MAP") ?? "gg_debug", obsOut, 64);
-    return;
-}
-
-if (Environment.GetEnvironmentVariable("BENCH_CMP") == "1")
-{
-    var d = Environment.GetEnvironmentVariable("SCRATCH")!;
-    Bench.PolicyCompare.Run(d + "/obs.bin", d + "/expected.txt", Environment.GetEnvironmentVariable("NPZ")!);
-    return;
-}
-
-if (Environment.GetEnvironmentVariable("BENCH_SMOKE") == "1")
-{
-    // ⚠️ ExitCode rather than `return n`: this is a top-level program, and giving
-    // one branch an int return value demands one from every other `return;` in
-    // the file. The status is the whole point of this mode — a smoke run nobody
-    // can script is a smoke run nobody runs — so it is set, not returned.
-    Environment.ExitCode = Bench.Smoke.Run(
-        maps,
-        Environment.GetEnvironmentVariable("GG2_NAV")!,
-        Environment.GetEnvironmentVariable("NPZ")!);
-
-    return;
-}
-
 if (Environment.GetEnvironmentVariable("BENCH_EVAL") is { } perMap)
 {
     Bench.PolicyEval.Run(maps, Environment.GetEnvironmentVariable("GG2_NAV")!, Environment.GetEnvironmentVariable("NPZ")!, int.Parse(perMap));
-    return;
-}
-
-if (Environment.GetEnvironmentVariable("BENCH_POLICYCOST") is not null)
-{
-    Bench.PolicyCost.Run(
-        Environment.GetEnvironmentVariable("NPZ")!,
-        Environment.GetEnvironmentVariable("OBS")!,
-        maps,
-        Environment.GetEnvironmentVariable("GG2_NAV")!);
     return;
 }
 
@@ -266,13 +227,10 @@ if (Environment.GetEnvironmentVariable("BENCH_DKOTH") == "1")
 
 if (Environment.GetEnvironmentVariable("BENCH_CONST") == "1")
 {
-    Console.WriteLine($"ObservationWriter.Length = {ObservationWriter.Length}");
     Console.WriteLine($"ActionDecoder.AimBins   = {ActionDecoder.AimBins}");
     Console.WriteLine($"SimulationStamp.Uuid    = {GG2.Simulation.SimulationStamp.Uuid}");
 
-    // The un-gated half. gg2-rl reads BOTH here: the first says whether a
-    // checkpoint is refused, the second says whether the world it was fitted to
-    // has moved underneath it.
+    // The un-gated half: whether the world the bots were tuned on has moved.
     Console.WriteLine(
         $"SimulationStamp.Routing = {GG2.Simulation.SimulationStamp.RoutingUuid} (reported, not gated)");
     Console.WriteLine($"ActionEncodingVersion   = {GG2.Simulation.SimulationStamp.ActionEncodingVersion}");
@@ -294,21 +252,9 @@ if (Environment.GetEnvironmentVariable("BENCH_DUEL") == "1")
     return;
 }
 
-if (Environment.GetEnvironmentVariable("BENCH_RAY") == "1")
-{
-    Bench.RayBench.Run(maps, Environment.GetEnvironmentVariable("GG2_NAV"), Environment.GetEnvironmentVariable("BENCH_MAP") ?? "gg_debug");
-    return;
-}
-
 if (Environment.GetEnvironmentVariable("BENCH_TICK") == "1")
 {
     Bench.TickBench.Run(maps, Environment.GetEnvironmentVariable("GG2_NAV"), Environment.GetEnvironmentVariable("BENCH_MAP") ?? "gg_debug");
-    return;
-}
-
-if (Environment.GetEnvironmentVariable("BENCH_GEOM") == "1")
-{
-    Bench.GeomBench.Run(maps, Environment.GetEnvironmentVariable("GG2_NAV"), Environment.GetEnvironmentVariable("BENCH_MAP") ?? "gg_debug");
     return;
 }
 

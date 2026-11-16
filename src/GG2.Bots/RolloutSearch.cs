@@ -50,12 +50,7 @@ namespace GG2.Bots;
 /// <para>
 /// Shortening the commitment under a neutral continuation (keys released,
 /// bearing kept) does separate the two, but does not help: it reduces the blind
-/// fraction while costing win rate, and the loss is not recovered. A
-/// continuation that keeps acting (<see cref="ContinuationPolicy"/>, added in
-/// protocol v8) reduces blindness further at a given commitment without paying
-/// the same win-rate cost as the neutral one — but a head-to-head against the
-/// unpruned search (commit = horizon) still loses substantially, so the reduced
-/// blindness does not translate into a stronger search.
+/// fraction while costing win rate, and the loss is not recovered.
 /// </para>
 /// <para>
 /// <b>Blindness and search strength are largely independent quantities here.</b>
@@ -81,15 +76,6 @@ namespace GG2.Bots;
 /// per-index slots and the winner is picked afterwards in ascending order, so the
 /// lexicographic tie-break sees the order it saw serially. It is a cost knob and
 /// nothing else.
-/// <para>
-/// <b>It is refused together with a <c>ContinuationPolicy</c>.</b>
-/// <see cref="PolicyNetwork"/> forwards through shared <c>_hiddenA</c>/
-/// <c>_hiddenB</c>/<c>_output</c> scratch, so two lanes calling it at once race
-/// on the hidden layer and produce a silently wrong action. Refusing at
-/// construction is the only version of this that cannot be got wrong by
-/// accident; making the forward re-entrant is the fix if the combination is ever
-/// wanted.
-/// </para>
 /// </remarks>
 /// <param name="ConsiderSpecial">
 
@@ -665,8 +651,6 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
         internal WorldState Fork;
         internal TickEvents Events;
         internal readonly ActionDecoder Decoder = new();
-        internal float[]? Observation;
-        internal int[]? Heads;
     }
 
     private readonly Lane _serial = new();
@@ -934,9 +918,6 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
             var sinceCommit = tick - _options.CommitTicks;
             var deciding = sinceCommit >= 0 && sinceCommit % _options.DecisionTicks == 0;
 
-            if (deciding && _options.ContinuationPolicy is { } policy)
-                continuation = PolicyContinuation(policy, collision, slot, lane);
-
             for (var other = 0; other < WorldState.MaxSlots; other++)
             {
                 if (other != slot)
@@ -945,17 +926,12 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
                     continue;
                 }
 
-                // Past the commitment the candidate is not held. Without a
-                // policy the searcher keeps the bearing the action turned it to
+                // Past the commitment the candidate is not held. The searcher
+                // keeps the bearing the action turned it to
                 // and releases the keys, which models "I will decide again shortly
                 // and am not committed to this key" — the ordinary receding-horizon
                 // split. With CommitTicks defaulted to the horizon this is
                 // unreachable and the behaviour is exactly what it always was.
-                //
-                // With a policy attached the continuation keeps acting, which is
-                // the whole point: the neutral continuation picks a plausible plan
-                // and then sees nothing land, because a candidate scores from
-                // damage inside the window where somebody is still playing.
                 inputs[other] = tick < _options.CommitTicks
                     ? lane.Decoder.Decode(slot, action, firstTickOfDecision: tick == 0)
                     : lane.Decoder.Decode(slot, continuation, firstTickOfDecision: deciding);
@@ -1019,49 +995,6 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// </para>
     /// </remarks>
     private static EnvAction Continuation => EnvAction.Idle;
-
-    /// <summary>
-    /// One policy decision for the searcher, taken inside the forked world.
-    /// </summary>
-    /// <remarks>
-    /// <b>This is why the continuation cannot be driven from outside.</b> It
-    /// runs inside the fork, k times per candidate per decision, in worlds the
-    /// socket never sees — so unlike a past checkpoint (which is
-    /// <c>EnvDriver.Client</c>, because the trainer holds the weights and can
-    /// drive that slot itself) there is no way to hand this out over the seam.
-    /// It is the first thing in this repo that requires a policy in-process.
-    /// <para>
-    /// <b>The observation is of the fork</b>, which is the point — a
-    /// continuation reading the real world would be answering about a state the
-    /// candidate did not produce, and every candidate would get the same reply.
-    /// </para>
-    /// <para>
-    /// <b>A bot must not draw from <c>WorldState.Random</c> and this does not:
-    /// <see cref="PolicyNetwork.Act"/> takes the argmax of each head.</b> It is
-    /// deterministic given the observation, so a continuation adds no draws to the
-    /// match's stream and cannot make the stream's position depend on how many
-    /// candidates were searched.
-    /// </para>
-    /// </remarks>
-    private EnvAction PolicyContinuation(PolicyNetwork policy, CollisionWorld collision, int slot, Lane lane)
-    {
-        lane.Observation ??= new float[ObservationWriter.Length];
-        lane.Heads ??= new int[ActionDecoder.HeadShape.Length];
-
-        var view = new WorldView(in lane.Fork, collision);
-        ObservationWriter.Write(in view, slot, lane.Observation);
-        policy.Act(lane.Observation, lane.Heads);
-
-        return new EnvAction
-        {
-            Horizontal = (byte)lane.Heads[0],
-            Jump = (byte)lane.Heads[1],
-            Down = (byte)lane.Heads[2],
-            Fire = (byte)lane.Heads[3],
-            AimDelta = (byte)lane.Heads[4],
-            Zoom = (byte)lane.Heads[5],
-        };
-    }
 
     /// <summary>
     /// What a character other than the searcher is assumed to be doing.

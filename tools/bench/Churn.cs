@@ -60,11 +60,11 @@ public static class ChurnBench
         // what the live server's bots do and the live server is running it that
         // way. A churn number measured on a configuration nobody is playing would
         // answer a question nobody asked.
-        var policy = PolicyNetwork.Load(npz, ignoreSimulationStamp: true);
+        var policy = Nets.Load(npz);
 
         Console.WriteLine(
             $"input churn per bot-second, {bots} bots, {perMap} matches a map, cap {cap} min");
-        Roster.Announce([.. policy.TrainedClasses], fromCheckpoint: true);
+        Roster.Announce([.. policy.Drives], fromCheckpoint: true);
         Console.WriteLine(
             "arm 1 all-scripted   arm 2 policy hybrid   arm 3 search hybrid");
         Console.WriteLine();
@@ -77,7 +77,7 @@ public static class ChurnBench
         // populated with different classes are not a comparison, and arm 3's
         // search has to engage on the classes arm 2's policy trained — for a
         // checkpoint outside the default family those two sets can be disjoint.
-        PlayerClass[] allowed = [.. policy.TrainedClasses];
+        PlayerClass[] allowed = [.. policy.Drives];
 
         foreach (var map in list)
         {
@@ -87,7 +87,7 @@ public static class ChurnBench
                     map, maps, nav, perMap, cap, bots,
                     arm switch
                     {
-                        2 => BotBrainSpec.Of(new PolicyMicroSpec(policy)),
+                        2 => BotBrainSpec.Of(policy),
                         3 => BotBrainSpec.Of(new SearchMicroSpec(
                             new RolloutOptions(Threads: 4), TrainedClasses: allowed)),
                         _ => null,

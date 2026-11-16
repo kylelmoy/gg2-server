@@ -201,8 +201,8 @@ public sealed class LiveSettingsTests
     [Fact]
     public void ABrainThatFailsToBuildIsRefusedAndChangesNothing()
     {
-        var checkpoint = Path.Combine(Path.GetTempPath(), $"gg2-gone-{Guid.NewGuid():N}.npz");
-        File.Copy(PolicyFixture.SniperTrainedCheckpoint, checkpoint);
+        var checkpoint = Path.Combine(Path.GetTempPath(), $"gg2-gone-{Guid.NewGuid():N}.gg2p");
+        File.Copy(PolicyFixture.Checkpoint, checkpoint);
 
         var parsed = GG2.Host.CommandLine.Parse(["--bot-mode", "policy", "--policy", checkpoint]);
 
@@ -278,7 +278,7 @@ public sealed class LiveSettingsTests
 
         Assert.Equal("policy", bots.GetProperty("mode").GetString());
         Assert.Equal(
-            MapDirectory.ShippedCheckpoints.Select(f => "policy:" + Path.GetFileNameWithoutExtension(f)).ToArray(),
+            MapDirectory.ShippedCheckpoints.Select(f => "gg2-sim:" + Path.GetFileNameWithoutExtension(f)).ToArray(),
             bots.GetProperty("tiers").EnumerateArray().Select(t => t.GetProperty("name").GetString()!).ToArray());
         Assert.Empty(harness.Server.Options.PolicyPaths);
 
@@ -290,7 +290,7 @@ public sealed class LiveSettingsTests
     /// <summary>The bundle resolves all or nothing.</summary>
     /// <remarks>
     /// Half a bundle would drive a different class set from the one documented,
-    /// so a directory missing either file is no bundle and the live switch to a
+    /// so a directory missing any file is no bundle and the live switch to a
     /// policy brain is refused instead.
     /// </remarks>
     [Fact]
@@ -309,7 +309,13 @@ public sealed class LiveSettingsTests
             File.WriteAllBytes(Path.Combine(bundle, MapDirectory.ShippedCheckpoints[0]), []);
             Assert.Empty(MapDirectory.ResolveCheckpoints(start));
 
-            File.WriteAllBytes(Path.Combine(bundle, MapDirectory.ShippedCheckpoints[1]), []);
+            // Every file but the last is still no bundle.
+            for (var i = 1; i < MapDirectory.ShippedCheckpoints.Count - 1; i++)
+                File.WriteAllBytes(Path.Combine(bundle, MapDirectory.ShippedCheckpoints[i]), []);
+
+            Assert.Empty(MapDirectory.ResolveCheckpoints(start));
+
+            File.WriteAllBytes(Path.Combine(bundle, MapDirectory.ShippedCheckpoints[^1]), []);
             Assert.Equal(
                 MapDirectory.ShippedCheckpoints.Select(f => Path.Combine(bundle, f)).ToArray(),
                 MapDirectory.ResolveCheckpoints(start));

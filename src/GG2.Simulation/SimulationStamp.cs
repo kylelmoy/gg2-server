@@ -55,8 +55,9 @@ public static class SimulationStamp
     /// The observation layout.
     /// </summary>
     /// <remarks>
-    /// The authority is <c>GG2.Bots.ObservationWriter</c>'s field order and its
-    /// own <c>LayoutVersion</c>, which this mirrors.
+    /// The authority was <c>GG2.Bots.ObservationWriter</c>'s field order, the
+    /// retired gg2-rl observation. Kept as a stamp input so the digest does not
+    /// move for a removal.
     /// <para>
     /// <b>Mirrored rather than referenced.</b> <c>GG2.Simulation</c> does not
     /// and must not depend on <c>GG2.Env</c> — the simulation is the thing an
@@ -175,10 +176,9 @@ public static class SimulationStamp
     /// else's 210) and <see cref="ClassStats.NumFlames"/> were a single constant
     /// for every class, so a pyro burned 21 times longer than the reference's.
     /// That is a damage number and the rule above says bump. It was not bumped
-    /// because the stamp only dates the <c>.npz</c> checkpoints, which are test
-    /// fixtures and two shipped files no host loads, and their trainer
-    /// (<c>gg2-rl</c>) has concluded. The <c>.gg2p</c> nets every host runs carry
-    /// no stamp at all. Both values are also left out of the class line below for
+    /// because the stamp dated only <c>gg2-rl</c>'s <c>.npz</c> checkpoints, which
+    /// the server no longer loads at all. The <c>.gg2p</c> nets every host runs
+    /// carry no stamp. Both values are also left out of the class line below for
     /// that reason. The next bump for any other cause should add them to it.
     /// </para>
     /// </remarks>
@@ -239,8 +239,8 @@ public static class SimulationStamp
     /// scripted bot layer, by <c>GG2.Nav</c> and by <c>HandoverRule</c> — and by
     /// nothing else. <b>No part of <c>GG2.Simulation</c> reads one</b>, so by
     /// construction none of them can change what an action does; and no part of
-    /// the inference path does either — not <c>ObservationWriter</c>, not
-    /// <c>ActionDecoder</c>, not <c>PolicyNetwork</c>, <c>PolicyController</c>,
+    /// the inference path does either — not <c>SimPolicyObservation</c>, not
+    /// <c>ActionDecoder</c>, not <c>SimPolicyNetwork</c>, <c>SimPolicyController</c>,
     /// <c>HybridBot</c> or <c>Handover</c>. What they change is which states the
     /// policy is asked about and when it is handed the wheel, which is this
     /// surface's own description.

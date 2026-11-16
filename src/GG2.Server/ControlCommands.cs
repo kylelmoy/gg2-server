@@ -1057,9 +1057,9 @@ public static class ControlCommands
         // layer entirely, which is a real answer and not an error.
         var tier = hybrid.TierIndexFor(playerClass);
 
-        // ⛔ Named from the SPEC, not from the controller. Every PolicyController
-        // answers `policy` whatever checkpoint it holds, so a two-tier bundle
-        // would report both halves under one name and the panel's tier rows —
+        // ⛔ Named from the SPEC, not from the controller. A controller's own name
+        // need not say which checkpoint it holds, so two tiers could report one
+        // name and the panel's tier rows —
         // which are the spec's — could not be matched to a single bot. The two
         // lists are index-aligned by BotBrainSpec.Wrap; the length check is for a
         // bot wrapped by some other spec, where the controller's own name is the

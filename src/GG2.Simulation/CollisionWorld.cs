@@ -240,13 +240,12 @@ public sealed class CollisionWorld
     /// one question at a time.
     /// </summary>
     /// <remarks>
-    /// <b>Exposed for observation extraction, not for the simulation.</b>
-    /// Nothing in the tick reads this — the tick asks <see cref="IsSolidAt"/> and
-    /// <see cref="PlaceFree"/>, which are the questions GM8 asks. It exists so
-    /// <c>ObservationWriter</c>'s ray fan can hoist the mask and use
-    /// <see cref="GG2.Maps.Walkmask.Clearance"/>, which is a policy concern and
-    /// deliberately not a collision one: a ray fan wants "how far", and this
-    /// world's primitives answer "is anything in the way".
+    /// <b>Exposed for the bot layer, not for the simulation.</b> Nothing in the
+    /// tick reads this — the tick asks <see cref="IsSolidAt"/> and
+    /// <see cref="PlaceFree"/>, which are the questions GM8 asks. It exists so a
+    /// marcher can hoist the mask and use
+    /// <see cref="GG2.Maps.Walkmask.Clearance"/>: a march wants "how far", and
+    /// this world's primitives answer "is anything in the way".
     /// </remarks>
     public Walkmask Mask => _mask;
 

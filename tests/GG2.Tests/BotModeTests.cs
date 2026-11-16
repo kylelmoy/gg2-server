@@ -16,19 +16,7 @@ namespace GG2.Tests;
 /// </remarks>
 public sealed class BotModeTests
 {
-    /// <summary>A checkpoint that loads in THIS build.</summary>
-    /// <remarks>
-    /// The checked-in fixture, which carries this build's stamp and takes the
-    /// accept path — which is what these tests are actually about: the flag
-    /// wiring, not the checkpoint.
-    /// <para>
-    /// This used to be a temporarily re-stamped copy, because the shipped fixture
-    /// was stamp-invalid and using it would have meant passing
-    /// <c>--policy-ignore-stamp</c> in every case — and a suite that routinely
-    /// bypasses a guard is how the guard stops being one. That reasoning still
-    /// holds; it simply no longer needs the scaffolding.
-    /// </para>
-    /// </remarks>
+    /// <summary>A shipped net, so these test the flag wiring and not a checkpoint.</summary>
     private static string[] WithPolicy(params string[] args) =>
         [.. args, "--policy", PolicyFixture.Checkpoint];
 
@@ -66,7 +54,7 @@ public sealed class BotModeTests
     {
         var brain = Assert.IsType<BotBrainSpec>(BrainOf(WithPolicy("--bot-mode", "policy")));
 
-        Assert.IsType<PolicyMicroSpec>(Assert.Single(brain.Tiers));
+        Assert.IsType<SimPolicyMicroSpec>(Assert.Single(brain.Tiers));
         Assert.IsType<DecisionQuotaArbiter>(brain.Arbiter);
     }
 
@@ -92,11 +80,14 @@ public sealed class BotModeTests
 
         Assert.Equal(2, brain.Tiers.Count);
         Assert.IsType<SearchMicroSpec>(brain.Tiers[0]);
-        Assert.IsType<PolicyMicroSpec>(brain.Tiers[1]);
+        Assert.IsType<SimPolicyMicroSpec>(brain.Tiers[1]);
 
         var arbiter = Assert.IsType<DecisionQuotaArbiter>(brain.Arbiter);
         Assert.Equal(DecisionQuotaArbiter.DefaultTieredBudgetMicroseconds, arbiter.UnitsPerTick);
     }
+
+    private static string ThreeClasses =>
+        $"Engineer={PolicyFixture.Label},Spy={PolicyFixture.Label},Pyro={PolicyFixture.Label}";
 
     private static PlayerClass[] Playable =>
         [.. Enum.GetValues<PlayerClass>().Where(c => c <= PlayerClass.Pyro)];
@@ -129,15 +120,16 @@ public sealed class BotModeTests
     /// drives, so no class is left without a controller.
     /// </summary>
     /// <remarks>
-    /// The <c>rest3</c> fixture drives Engineer, Spy and Pyro, which is disjoint
-    /// from the default four — the case that used to leave Medic and Sniper with
-    /// nothing. The policy's own classes stay the policy's alone.
+    /// The net is assigned Engineer, Spy and Pyro, disjoint from the default four —
+    /// the case that would leave Medic and Sniper with nothing. The policy's own
+    /// classes stay the policy's alone.
     /// </remarks>
     [Fact]
     public void TieredGivesTheSearchEveryClassNoPolicyDrives()
     {
         var brain = Assert.IsType<BotBrainSpec>(BrainOf(
-            "--bot-mode", "tiered", "--policy", PolicyFixture.EightFieldCheckpoint));
+            "--bot-mode", "tiered", "--policy", PolicyFixture.Checkpoint,
+            "--bot-class-policy", ThreeClasses));
 
         var search = DrivenBy(brain.Tiers[0]);
         var policy = DrivenBy(brain.Tiers[1]);
@@ -154,14 +146,15 @@ public sealed class BotModeTests
     public void AClassPinnedToScriptedStaysOutOfTheSearch()
     {
         var brain = Assert.IsType<BotBrainSpec>(BrainOf(
-            "--bot-mode", "tiered", "--policy", PolicyFixture.EightFieldCheckpoint,
-            "--bot-class-policy", "Medic=scripted"));
+            "--bot-mode", "tiered", "--policy", PolicyFixture.Checkpoint,
+            "--bot-class-policy", ThreeClasses + ",Medic=scripted"));
 
         Assert.DoesNotContain(PlayerClass.Medic, DrivenBy(brain.Tiers[0]));
 
         // The control: the same brain without the pin does hand the search Medic.
         var unpinned = Assert.IsType<BotBrainSpec>(BrainOf(
-            "--bot-mode", "tiered", "--policy", PolicyFixture.EightFieldCheckpoint));
+            "--bot-mode", "tiered", "--policy", PolicyFixture.Checkpoint,
+            "--bot-class-policy", ThreeClasses));
 
         Assert.Contains(PlayerClass.Medic, DrivenBy(unpinned.Tiers[0]));
     }
@@ -288,7 +281,7 @@ public sealed class BotModeTests
     {
         var brain = Assert.IsType<BotBrainSpec>(BrainOf(WithPolicy()));
 
-        Assert.IsType<PolicyMicroSpec>(Assert.Single(brain.Tiers));
+        Assert.IsType<SimPolicyMicroSpec>(Assert.Single(brain.Tiers));
     }
 
     /// <summary>

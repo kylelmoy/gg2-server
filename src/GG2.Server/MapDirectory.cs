@@ -147,17 +147,45 @@ public static class MapDirectory
     }
 
     /// <summary>
-    /// The checkpoints in the shipped bundle, by file name, most capable tier
-    /// first. <c>checkpoints/README.md</c> and <c>docs/BOTS.md</c>, "the shipped
-    /// bundle".
+    /// The nine gg2-sim nets in the shipped bundle, by file name, one per class.
+    /// <c>checkpoints/README.md</c>.
     /// </summary>
     /// <remarks>
     /// <b>Named rather than globbed</b>, so what a live switch loads is exactly
-    /// the pair <c>ShippedCheckpointTests</c> pins, and a stray <c>.npz</c>
-    /// dropped beside them does not become a tier nobody configured.
+    /// the set <c>ShippedCheckpointTests</c> pins, and a stray file dropped beside
+    /// them does not become a tier nobody configured.
     /// </remarks>
     public static readonly IReadOnlyList<string> ShippedCheckpoints =
-        ["tier0_combat4_s2.npz", "tier2_pyro_rest3_s0.npz"];
+    [
+        "ppo-warm-soldier-s1.gg2p",
+        "ppo-finetune-scout-s1.gg2p",
+        "ppo-finetune2-heavy-s1.gg2p",
+        "ppo-finetune2-sniper-s1.gg2p",
+        "ppo-freeze-demoman-s1.gg2p",
+        "ppo-finetune2-pyro-s1.gg2p",
+        "ppo-freeze-medic-s1.gg2p",
+        "ppo-freeze-engineer-s1.gg2p",
+        "ppo-freeze-spy-s1.gg2p",
+    ];
+
+    /// <summary>
+    /// Which class each of <see cref="ShippedCheckpoints"/> drives, as
+    /// <c>[Bots] ClassPolicy</c> entries. A <c>.gg2p</c> names no classes, so the
+    /// bundle is not usable without these; the fleet's <c>common.ini</c> carries
+    /// the same nine.
+    /// </summary>
+    public static readonly IReadOnlyList<string> ShippedClassPolicies =
+    [
+        "Soldier=ppo-warm-soldier-s1",
+        "Scout=ppo-finetune-scout-s1",
+        "Heavy=ppo-finetune2-heavy-s1",
+        "Sniper=ppo-finetune2-sniper-s1",
+        "Demoman=ppo-freeze-demoman-s1",
+        "Pyro=ppo-finetune2-pyro-s1",
+        "Medic=ppo-freeze-medic-s1",
+        "Engineer=ppo-freeze-engineer-s1",
+        "Spy=ppo-freeze-spy-s1",
+    ];
 
     /// <summary>
     /// The shipped bundle's full paths — <c>checkpoints/</c> beside the

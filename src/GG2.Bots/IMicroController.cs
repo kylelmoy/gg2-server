@@ -134,12 +134,11 @@ public interface IMicroController
     /// </summary>
     /// <remarks>
     /// <b>The two shipped controllers answer this differently and both are
-    /// right.</b> <see cref="PolicyController"/> abandons its part-finished
+    /// right.</b> <see cref="SimPolicyController"/> abandons its part-finished
     /// decision, so a re-entry starts a fresh one; <see cref="SearchController"/>
     /// leaves <c>RolloutSearch</c>'s counter alone, so a re-entry waits for the
-    /// search's own boundary. That asymmetry is inherited verbatim from
-    /// <c>PolicyBot</c> and <c>SearchBot</c> and is preserved on purpose — the
-    /// arms were measured with it.
+    /// search's own boundary. The search's half is inherited verbatim from
+    /// <c>SearchBot</c> and preserved on purpose — the arms were measured with it.
     /// </remarks>
     void OnHandoverOut();
 

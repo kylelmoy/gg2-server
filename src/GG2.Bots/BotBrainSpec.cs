@@ -12,9 +12,9 @@ namespace GG2.Bots;
 /// controllers hold per-slot state — <c>RolloutSearch</c>'s decision counter, a
 /// decoder's absolute aim — so one instance driving several bots would have them
 /// stepping on each other's cadence. What may be shared is the immutable half:
-/// <see cref="PolicyMicroSpec"/> hands every bot the SAME
-/// <see cref="PolicyNetwork"/>, which is how it has always worked and is safe only
-/// because bots are polled serially.
+/// <see cref="SimPolicyMicroSpec"/> hands every bot the SAME
+/// <see cref="SimPolicyNetwork"/>, which is safe only because bots are polled
+/// serially.
 /// </remarks>
 public abstract record MicroControllerSpec
 {
@@ -25,53 +25,12 @@ public abstract record MicroControllerSpec
     public abstract IMicroController Create();
 }
 
-/// <summary>A trained checkpoint driving keys and aim. <c>docs/BOTS.md</c>'s arm 2.</summary>
-/// <param name="Policy">The loaded weights, SHARED by every bot — see the base type.</param>
-/// <param name="Label">
-/// What to call this tier in a result table, or null for the bare word
-/// <c>policy</c>. ⚠️ <b>Set it whenever more than one of these is in the same
-/// brain</b>, which has been possible since 2026-09-07: <see cref="BotBrainSpec.Name"/>
-/// exists so an arm can be named in a table, and two unlabelled policy tiers
-/// print <c>policy+policy</c> — the exact defect that type's remarks describe.
-/// The host passes the checkpoint's file name.
-/// </param>
-/// <param name="Drives">
-/// Which classes this tier drives, or null to ask the checkpoint. ⛔ <b>An EMPTY
-/// array is not null</b> — it is a tier an operator has configured to drive
-/// nothing, and falling back to the file's set there would silently re-enable
-/// every class they turned off. <c>BotBrain.Build</c> computes this from
-/// <c>[Bots] ClassPolicy</c>; see <see cref="PolicyController"/>'s two-argument
-/// constructor for why an operator gets an answer the file cannot give.
-/// </param>
-/// <remarks>
-/// ⚠️ <b>Trained checkpoints for this build EXIST</b> — this sentence asserted the
-/// opposite until 2026-09-07, and by then it had been false for a day.
-/// <c>docs/BOTS.md</c>, "the shipped bundle", has what ships and what each file's
-/// numbers do and do not cover; <c>PolicyNetwork.Load</c> still refuses a foreign
-/// stamp by design.
-/// </remarks>
-public sealed record PolicyMicroSpec(
-    PolicyNetwork Policy, string? Label = null, PlayerClass[]? Drives = null)
-    : MicroControllerSpec
-{
-    public override string Name => Label is null ? "policy" : "policy:" + Label;
-
-    /// <summary><see cref="PolicyController.SpreadTurn"/>: off by default.</summary>
-    public bool SpreadTurn { get; init; }
-
-    public override IMicroController Create() => new PolicyController(Policy, Drives) { SpreadTurn = SpreadTurn };
-}
-
 /// <summary>A rollout search driving keys and aim. <c>docs/BOTS.md</c>'s arm 3.</summary>
 /// <param name="TrainedClasses">
-/// Which set to restrict to. ⛔ <b>Null takes
-/// <see cref="PolicyNetwork.DefaultTrainedClasses"/>, which is only right when
-/// there is no checkpoint in the comparison.</b> A bench arming this search
-/// against a policy arm must pass THAT checkpoint's set: since 2026-09-06 the set
-/// is a property of the file, and the two shipping families outside the default
-/// differ from it by two members and — for <c>rest3</c> — by ALL of them. Two arms
-/// restricted to disjoint class sets are not a comparison; the restriction exists
-/// to hold class coverage still and would be the thing varying it.
+/// Which set to restrict to. Null takes <see cref="SearchController.DefaultClasses"/>.
+/// A bench arming this search against a policy arm should pass the classes that
+/// arm drives: two arms restricted to different class sets are not a comparison,
+/// and the restriction exists to hold class coverage still.
 /// </param>
 public sealed record SearchMicroSpec(
     RolloutOptions Options,
@@ -84,7 +43,7 @@ public sealed record SearchMicroSpec(
         new SearchController(Options)
         {
             RestrictToTrainedClasses = RestrictToTrainedClasses,
-            TrainedClasses = TrainedClasses ?? PolicyNetwork.DefaultTrainedClasses.ToArray(),
+            TrainedClasses = TrainedClasses ?? SearchController.DefaultClasses.ToArray(),
         };
 }
 
@@ -176,15 +135,6 @@ public sealed record BotBrainSpec
     /// through the one field a caller already sets to change what a bot is.
     /// </remarks>
     public bool Bubbles { get; init; }
-
-    /// <summary>
-    /// This brain with every policy tier spreading its turns
-    /// (<see cref="PolicyController.SpreadTurn"/>). Other tiers are unchanged.
-    /// </summary>
-    public BotBrainSpec WithSpreadTurn() => this with
-    {
-        Tiers = [.. Tiers.Select(t => t is PolicyMicroSpec p ? p with { SpreadTurn = true } : t)],
-    };
 
     /// <summary>One tier, default gate. The shape almost every caller wants.</summary>
     public static BotBrainSpec Of(params MicroControllerSpec[] tiers) =>

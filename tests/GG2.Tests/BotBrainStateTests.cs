@@ -59,32 +59,27 @@ public sealed class BotBrainStateTests
     /// <remarks>
     /// ⛔ <b>The class set is the half that cannot be re-derived.</b>
     /// <c>IMicroController.Drives</c> is the one place a tier's classes are
-    /// decided — the checkpoint's own set, narrowed by <c>[Bots] ClassPolicy</c> —
-    /// so the state asks a built controller rather than reading the spec. A second
+    /// decided — from <c>[Bots] ClassPolicy</c> — so the state asks a built controller rather than reading the spec. A second
     /// copy of that resolution would be the copy nothing gates, and it would be
     /// wrong in exactly the configured case.
     /// </remarks>
     [Fact]
     public void APolicyServerNamesEachTierAndWhatItDrives()
     {
-        var label = Path.GetFileNameWithoutExtension(PolicyFixture.SniperTrainedCheckpoint);
-
-        using var harness = Policy(PolicyFixture.SniperTrainedCheckpoint);
+        using var harness = Policy();
 
         var bots = Bots(harness);
 
         Assert.Equal("policy", bots.GetProperty("mode").GetString());
-        Assert.Equal("policy:" + label, bots.GetProperty("brain").GetString());
+        Assert.Equal("gg2-sim:" + PolicyFixture.Label, bots.GetProperty("brain").GetString());
 
         var tier = Assert.Single(bots.GetProperty("tiers").EnumerateArray());
-        Assert.Equal("policy:" + label, tier.GetProperty("name").GetString());
+        Assert.Equal("gg2-sim:" + PolicyFixture.Label, tier.GetProperty("name").GetString());
 
-        // This fixture's set differs from PolicyNetwork.DefaultTrainedClasses by
-        // exactly two members — see PolicyFixture. A block that reported the
-        // default would be right on three of four names and wrong on the fourth,
-        // which is the shape of wrong nobody notices.
+        // Two classes assigned, so a block that reported only the first, or a
+        // default, would be visibly wrong.
         Assert.Equal(
-            ["Scout", "Soldier", "Sniper", "Heavy"],
+            ["Soldier", "Heavy"],
             tier.GetProperty("classes").EnumerateArray().Select(c => c.GetString()!).ToArray());
     }
 
@@ -98,17 +93,15 @@ public sealed class BotBrainStateTests
     /// so the panel names the scripted brain rather than leaving the row blank.
     /// </remarks>
     [Theory]
-    [InlineData(PlayerClass.Sniper, true)]
+    [InlineData(PlayerClass.Soldier, true)]
     [InlineData(PlayerClass.Demoman, false)]
     public void ABotsBrainIsTheTierThatWillDriveItsClass(PlayerClass playerClass, bool driven)
     {
-        var label = Path.GetFileNameWithoutExtension(PolicyFixture.SniperTrainedCheckpoint);
-
-        using var harness = Policy(PolicyFixture.SniperTrainedCheckpoint, playerClass);
+        using var harness = Policy(playerClass);
 
         var bot = Bot(harness);
 
-        Assert.Equal(driven ? "policy:" + label : "scripted", bot.GetProperty("brain").GetString());
+        Assert.Equal(driven ? "gg2-sim:" + PolicyFixture.Label : "scripted", bot.GetProperty("brain").GetString());
 
         // ⚠️ The counters are what say a named brain is CONSULTED. A tier can be
         // loaded, named on the panel and never admitted; `brain` cannot tell those
@@ -123,29 +116,26 @@ public sealed class BotBrainStateTests
     /// Two policy tiers are told apart on the bot as well as on the card.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>THE REGRESSION GATE for naming a slot's brain.</b> Every
-    /// <c>PolicyController</c> answers <c>policy</c> to
-    /// <see cref="IMicroController.Name"/> whatever checkpoint it holds, so a
-    /// slot named from the controller reports <c>policy</c> for both halves of a
-    /// two-tier bundle — indistinguishable, and unmatchable against the tier rows
-    /// the panel draws from the spec. The state names it from the spec through
+    /// ⛔ <b>THE REGRESSION GATE for naming a slot's brain.</b> A controller's
+    /// own <see cref="IMicroController.Name"/> does not say which checkpoint it
+    /// holds, so a slot named from the controller would be indistinguishable
+    /// across tiers and unmatchable against the tier rows the panel draws from the
+    /// spec. The state names it from the spec through
     /// <c>HybridBot.TierIndexFor</c> instead. A single-tier test passes either way.
     /// </remarks>
     [Theory]
-    [InlineData(PlayerClass.Sniper, 0)]
-    [InlineData(PlayerClass.Engineer, 1)]
+    [InlineData(PlayerClass.Soldier, 0)]
+    [InlineData(PlayerClass.Scout, 1)]
     public void TwoPolicyTiersAreToldApartOnTheBot(PlayerClass playerClass, int tier)
     {
-        // Disjoint on the classes asked about: the first drives SNIPER and not
-        // ENGINEER, the second the reverse. See PolicyFixture for both sets.
-        string[] checkpoints =
-            [PolicyFixture.SniperTrainedCheckpoint, PolicyFixture.EightFieldCheckpoint];
+        string[] checkpoints = [PolicyFixture.Checkpoint, PolicyFixture.Second];
 
         var parsed = CommandLine.Parse(
         [
             "--bot-mode", "policy",
             "--policy", checkpoints[0],
             "--policy", checkpoints[1],
+            "--bot-class-policy", PolicyFixture.SoldierAssignment + "," + PolicyFixture.ScoutAssignment,
         ]);
 
         var brain = parsed.Bots.Brain!;
@@ -163,7 +153,7 @@ public sealed class BotBrainStateTests
         harness.Tick(2);
 
         Assert.Equal(
-            "policy:" + Path.GetFileNameWithoutExtension(checkpoints[tier]),
+            "gg2-sim:" + Path.GetFileNameWithoutExtension(checkpoints[tier]),
             Bot(harness).GetProperty("brain").GetString());
     }
 
@@ -176,19 +166,21 @@ public sealed class BotBrainStateTests
     [Fact]
     public void TheEngagementGateIsReported()
     {
-        using var humans = Policy(PolicyFixture.SniperTrainedCheckpoint);
+        using var humans = Policy();
         Assert.Equal("humans", Bots(humans).GetProperty("engage").GetString());
 
-        using var anyone = Policy(PolicyFixture.SniperTrainedCheckpoint, engagesBots: true);
+        using var anyone = Policy(engagesBots: true);
         Assert.Equal("anyone", Bots(anyone).GetProperty("engage").GetString());
     }
 
-    private static ServerHarness Policy(
-        string checkpoint, PlayerClass playerClass = PlayerClass.Sniper, bool engagesBots = false)
+    private static ServerHarness Policy(PlayerClass playerClass = PlayerClass.Soldier, bool engagesBots = false)
     {
-        string[] arguments = engagesBots
-            ? ["--bot-mode", "policy", "--policy", checkpoint, "--bot-engages-bots"]
-            : ["--bot-mode", "policy", "--policy", checkpoint];
+        string[] arguments =
+        [
+            "--bot-mode", "policy", "--policy", PolicyFixture.Checkpoint,
+            "--bot-class-policy", PolicyFixture.SoldierAssignment + ",Heavy=" + PolicyFixture.Label,
+            .. engagesBots ? new[] { "--bot-engages-bots" } : [],
+        ];
 
         var parsed = CommandLine.Parse(arguments);
         var brain = parsed.Bots.Brain!;

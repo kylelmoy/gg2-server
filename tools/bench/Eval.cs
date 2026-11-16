@@ -50,7 +50,7 @@ public static class PolicyEval
         // it has to be populated with the same classes, and those come from the
         // checkpoint. Deciding the roster by whether this arm drives would move
         // two things between the arms at once.
-        var loaded = PolicyNetwork.Load(npz);
+        var loaded = Nets.Load(npz);
         var policy = usePolicy ? loaded : null;
         string[] mapNames =
         [
@@ -63,7 +63,7 @@ public static class PolicyEval
         // it did the opposite the moment a checkpoint's set was not the default —
         // the control would have played Scout/Soldier/Demoman/Heavy against a
         // policy arm playing Engineer/Spy/Pyro.
-        var trained = loaded.TrainedClasses.ToArray();
+        var trained = loaded.Drives.ToArray();
         Roster.Announce(trained, fromCheckpoint: true);
 
         var clock = Stopwatch.StartNew();
@@ -106,7 +106,7 @@ public static class PolicyEval
                         ? null
                         : new BotBrainSpec
                         {
-                            Tiers = [new PolicyMicroSpec(policy)],
+                            Tiers = [policy],
                             Rule = rule,
                             Range = range,
                         },

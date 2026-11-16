@@ -21,7 +21,7 @@ namespace Bench;
 /// </para>
 /// <para>
 /// <b>Two arms, both populated from <c>BENCH_CLASSES</c></b> (default the five
-/// outside <see cref="PolicyNetwork.DefaultTrainedClasses"/>): all-scripted, and
+/// outside <see cref="SearchController.DefaultClasses"/>): all-scripted, and
 /// the search hybrid with the restriction OFF. Red is the hybrid team, blue is
 /// scripted in both, and the seeds are shared, so the control is the same match
 /// with the controller removed.

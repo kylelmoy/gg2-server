@@ -111,21 +111,6 @@ public sealed class RolloutThreadingTests
         Assert.Contains(serial, d => d.Scores.Count(s => s == d.Best) > 1);
     }
 
-    /// <summary>
-    /// A threaded search with a policy continuation is refused, because
-    /// <see cref="PolicyNetwork"/> forwards through shared scratch.
-    /// </summary>
-    [Fact]
-    public void ThreadsAndAContinuationPolicyAreRefusedTogether()
-    {
-        var policy = PolicyFixture.Load();
-
-        var error = Assert.Throws<ArgumentException>(
-            () => new RolloutSearch(new RolloutOptions(Threads: 4, ContinuationPolicy: policy)));
-
-        Assert.Contains("re-entrant", error.Message);
-    }
-
     [Fact]
     public void ZeroThreadsMeansSerialAndNegativeIsRefused()
     {

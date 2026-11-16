@@ -57,9 +57,9 @@ public static class HandoverBubble
     /// and a new controller declares it as a matter of course.
     /// <para>
     /// ⚠️ <b>A prefix match, because a controller may be labelled.</b>
-    /// <c>PolicyController</c> answers the bare word today, but
-    /// <c>MicroControllerSpec</c> already carries <c>policy:&lt;checkpoint&gt;</c>
-    /// and a controller that grew the same habit should keep its bubble.
+    /// A gg2-sim controller answers <c>gg2-sim</c> or <c>gg2-sim:&lt;label&gt;</c>,
+    /// and the bare <c>policy</c> prefix is still accepted for a controller that
+    /// names itself that way.
     /// </para>
     /// <para>
     /// ⚠️ <b>An unrecognised controller gets NO bubble, and that is a gap to

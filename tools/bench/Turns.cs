@@ -73,9 +73,7 @@ public static class Turns
             preset += $" legs {legs}";
         }
         var list = Environment.GetEnvironmentVariable("BENCH_FOCUS") is { Length: > 0 } focus ? focus.Split(',') : PerMapEval.Maps;
-        var brains = new ThreadLocal<BotBrainSpec>(() => BotBrainSpec.Of(
-            new PolicyMicroSpec(PolicyNetwork.Load(Path.Combine(checkpoints, "tier0_combat4_s2.npz"))),
-            new PolicyMicroSpec(PolicyNetwork.Load(Path.Combine(checkpoints, "tier2_pyro_rest3_s0.npz")))));
+        var brains = new ThreadLocal<BotBrainSpec>(() => BotBrainSpec.Of(Nets.Shipped(checkpoints)));
         var acquire = BotSkill.ForTier(tier).AcquireTicks;
         var totals = new ConcurrentDictionary<string, Tally>();
         var work = from map in list from i in Enumerable.Range(0, perMap) select (map, i);

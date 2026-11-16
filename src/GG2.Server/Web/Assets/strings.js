@@ -791,7 +791,6 @@ const STRINGS = {
       "Humanize": "Inside a fight, hold movement keys a few ticks at a time and make aim flick and correct like a person's. Behavioural: also weaker.",
       "HumanizePreset": "Which measured humanize preset Humanize uses: v3 (default), strokes (v4), lazy (v5, lazy aim between shots), hold (D2, aim held while no target), tracking (D3) tracking2 (D4-D5) tracking3 (D6, with the policy's legs filtered) tracking4 (D7, the policy's legs kept running) tracking5 (D8, the aim's timing refitted) tracking6 (D9, D8 with a slower pursuit) tracking7 (D10, tracking6 with legs and jumps thinned to the people's airtime; what tiers 1-4 use) or tracking8 (D11, tracking7 with a faster pursuit).",
       "HumanAim": "Difficulty 1-4 aim like people: they lag a target and sit off it. Tier 5 is untouched. Behavioural: the lower tiers are weaker for it.",
-      "SpreadTurn": "Spread each policy decision's aim turn over the ticks it is held for, instead of turning on the first. Behavioural.",
       "EngageBots": "Run the micro-controller in bot-vs-bot fights too. Costs tick time; does not improve play.",
       "HandoverRule": "When a bot hands the wheel to its controller. macrotask is what the shipped bots were measured under; distance (enemy within 150px, kept to 300px) is what gg2-sim policies use.",
       "HandoverRange": "Pixels: how near the nearest opponent must be for that handover (150 by default). Very large with distance: the policy drives whenever an opponent is alive.",
@@ -799,8 +798,7 @@ const STRINGS = {
       "HandoverBubbles": "Chat bubble on brain handover: z1 policy, z3 search, z2 scripted. Debug only; each bubble is a broadcast.",
       "AdaptiveBudget": "Lower the controller budget when ticks approach their deadline. Arbiter remains the upper bound.",
       "Mode": "Which of the four shipped brains runs. search plays best and costs most.",
-      "Policy": "gg2-rl checkpoints for the policy and tiered modes, one per tier. A checkpoint is tied to the simulation it was trained on; its classes are read from the file.",
-      "PolicyIgnoreStamp": "Bypass the SIM_UUID check that stops a policy running against a simulation it was not trained on. Both stamps are logged.",
+      "Policy": "gg2-sim .gg2p nets for the policy and tiered modes, one per tier. A net drives only the classes ClassPolicy assigns it.",
       "Arbiter": "Bot-controller budget per tick, µs (tick = 33,300 µs). Empty: mode default.",
       "SearchThreads": "Rollout search threads. Affects cost only, never decisions."
     },

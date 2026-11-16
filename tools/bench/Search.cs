@@ -128,7 +128,7 @@ public static class SearchBench
             var tickK = slope / candidates * k;
             var affordable = (budget - forkK) / tickK;
 
-            // MEASURED, not estimated: BENCH_POLICYCOST=1 in Release reads inference
+            // MEASURED, not estimated: the retired policy-cost mode in Release reads inference
             // 3.67 us and observation extraction 2.92 us — 6.58 us per policy
             // decision. This drives the (affordable)/(OVER) verdicts below.
             //
@@ -137,7 +137,7 @@ public static class SearchBench
             // 6.58 us EVERY tick and k=20 is over budget; at the search's own
             // DecisionTicks of 4 it is amortised to 1.65 us and k=20 fits twice over.
             // Re-measure before quoting: this number is older than the next change
-            // to ObservationWriter or PolicyNetwork.
+            // to the retired gg2-rl policy it was measured with.
             const double policyDecisionUs = 6.58;
             var cadence = double.TryParse(
                 Environment.GetEnvironmentVariable("BENCH_CADENCE"), out var c) && c >= 1 ? c : 4;

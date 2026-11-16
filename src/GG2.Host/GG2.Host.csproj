@@ -75,15 +75,15 @@
 
   <!--
     The shipped policy checkpoints, for the same reason as the two above: the
-    command README.md and docs/BOTS.md both print names a checkpoint as
-    `checkpoints/tier0_combat4_s2.npz`, and a relative path resolves
+    fleet's config names a checkpoint as `checkpoints/ppo-warm-soldier-s1.gg2p`,
+    and a relative path resolves
     against the working directory. Without this it works from the repo — where
     the file happens to be one level up from bin/ — and fails on a published
     deployment, which is the failure mode the maps comment above describes.
 
-    ⚠️ 160 KB, and unlike maps/ and nav/ there is NO fallback: a missing map
-    directory is searched for and a missing nav graph is generated, but
-    PolicyNetwork.Load on a path that is not there is a refusal with the path in
+    ⚠️ Unlike maps/ and nav/ there is NO fallback: a missing map directory is
+    searched for and a missing nav graph is generated, but SimPolicyNetwork.Load
+    on a path that is not there is a refusal with the path in
     it. Which is the right failure — it just has to be one nobody meets by
     publishing.
 

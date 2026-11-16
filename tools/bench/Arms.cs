@@ -61,7 +61,7 @@ public static class ArmsEval
 
     public static void Run(string maps, string nav, string npz, int perMap)
     {
-        var policy = PolicyNetwork.Load(npz);
+        var policy = Nets.Load(npz);
         var cap = int.Parse(Environment.GetEnvironmentVariable("BENCH_CAP") ?? "5");
         var focus = Environment.GetEnvironmentVariable("BENCH_FOCUS");
         var list = focus is { Length: > 0 } ? focus.Split(',') : PerMapEval.Maps;
@@ -73,7 +73,7 @@ public static class ArmsEval
 
         Console.WriteLine(
             $"{list.Length} maps, {perMap} matches an arm, THREE arms, {cap}-minute cap, {Bots} bots");
-        Roster.Announce([.. policy.TrainedClasses], fromCheckpoint: true);
+        Roster.Announce([.. policy.Drives], fromCheckpoint: true);
         Console.WriteLine("arm 1 all-scripted   arm 2 policy hybrid   arm 3 search hybrid");
         Console.WriteLine();
 
@@ -94,10 +94,10 @@ public static class ArmsEval
             // comparison whose arms are populated with different classes is not
             // one; before 2026-09-06 this read a constant, which was right only
             // for a checkpoint that happened to train those four.
-            PlayerClass[] allowed = [.. policy.TrainedClasses];
+            PlayerClass[] allowed = [.. policy.Drives];
 
             one.Add(Play(map, maps, nav, null, perMap, cap, "1", allowed));
-            two.Add(Play(map, maps, nav, BotBrainSpec.Of(new PolicyMicroSpec(policy)), perMap, cap, "2", allowed));
+            two.Add(Play(map, maps, nav, BotBrainSpec.Of(policy), perMap, cap, "2", allowed));
             // ⛔ The POLICY's set, not the default. Arm 2 drives the classes this
             // checkpoint trained; arm 3 has to engage on the same ones or the two
             // differ on class coverage as well as on the controller — and for a
@@ -220,7 +220,7 @@ public static class ArmsEval
             // ⚠️ The classes the match is POPULATED with, which has to be the
             // checkpoint's own set: filling a match with classes the policy never
             // trained measures the fallback to scripted, not the policy.
-            var allowed = allowedClasses ?? [.. PolicyNetwork.DefaultTrainedClasses];
+            var allowed = allowedClasses ?? [.. SearchController.DefaultClasses];
 
             var options = HeadlessMatchOptions.Default with
             {

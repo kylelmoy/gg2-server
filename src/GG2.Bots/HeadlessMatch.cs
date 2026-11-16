@@ -476,7 +476,7 @@ public sealed class HeadlessMatch : DrivenWorld
             if (Options.HybridTeam is { } team && State.Players[slot].Team != team)
                 continue;
 
-            var hybrid = (Options.SpreadTurnTeam == State.Players[slot].Team ? brain.WithSpreadTurn() : brain).Wrap(scripted);
+            var hybrid = brain.Wrap(scripted);
 
             if (Options.HandicapOnly)
                 hybrid.HandicapSkill = BotSkill.ForTier(Options.DifficultyOf(State.Players[slot].Team));

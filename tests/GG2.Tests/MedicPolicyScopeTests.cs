@@ -6,8 +6,7 @@ using GG2.Simulation;
 namespace GG2.Tests;
 
 /// <summary>
-/// The medic is trained on needle combat only: a beaming medic is never handed
-/// to a policy, and the policy is never shown a charge it cannot spend. A
+/// A beaming medic is never handed to a policy that does not heal itself. A
 /// controller that heals itself (<see cref="IBeamController"/>, gg2-sim's medic
 /// layout) is the exception, made in <see cref="HybridBot"/> rather than here;
 /// <c>HybridBotSeamTests</c> covers it.
@@ -109,124 +108,6 @@ public sealed class MedicPolicyScopeTests
             wantsToEngage: true,
             EngageOpponents.Anyone,
             healTarget);
-
-    // ------------------------------------------------------------------
-    // The observation column
-    // ------------------------------------------------------------------
-
-    /// <summary>
-    /// A medic's übercharge does not reach the observation at all.
-    /// </summary>
-    /// <remarks>
-    /// The shared special column was <c>Medic =&gt; UberCharge</c>, and it has been
-    /// identically 0.0 in every training row of every run because no trained class
-    /// hit a non-<c>_</c> arm. Adding Medic does not populate it either — uber
-    /// cannot accrue in a 1v1 duel, since <c>Healing</c>'s only accrual path needs
-    /// a patient — so a deployed medic carrying banked charge would have been the
-    /// only time that weight ever saw a non-zero input.
-    /// <para>
-    /// <b>Compared as whole observations rather than by column index</b>, so
-    /// this keeps working when the layout moves and cannot quietly start asserting
-    /// about the wrong float.
-    /// </para>
-    /// </remarks>
-    [Fact]
-    public void AMedicsUberChargeIsInvisibleToThePolicy()
-    {
-        var empty = ObservationOfMedic(uberCharge: 0);
-        var full = ObservationOfMedic(uberCharge: WeaponState.MaxUberCharge);
-
-        Assert.Equal(empty, full);
-    }
-
-    /// <summary>
-    /// The control: the column is still WIRED, and the test can see it move.
-    /// </summary>
-    /// <remarks>
-    /// Without this, <see cref="AMedicsUberChargeIsInvisibleToThePolicy"/> would
-    /// pass just as happily against an observation writer that had stopped writing
-    /// the column at all, or against a comparison that could not detect a
-    /// one-float difference anywhere in a hundred-odd values.
-    /// </remarks>
-    [Fact]
-    public void AnEngineersNutsAndBoltsStillReachTheObservation()
-    {
-        var empty = ObservationOfEngineer(nutsAndBolts: 0);
-        var full = ObservationOfEngineer(nutsAndBolts: CharacterState.MaxNutsNBolts);
-
-        Assert.NotEqual(empty, full);
-    }
-
-    /// <summary>
-    /// KNOWN GAP, PINNED: a sniper's rifle charge is invisible to the policy.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <c>WeaponState.Charge</c> is real state and <c>Weapons.RifleBeginStep</c> sets rifle
-    /// damage to <c>base + sqrt(Charge / RifleChargeTime) * (max - base)</c> over
-    /// 105 ticks — so charge <em>is</em> the sniper's damage. Sniper falls to the
-    /// shared column's <c>_</c> arm and Sniper is in
-    /// <c>PolicyController.TrainedClasses</c>, so <b>a trained sniper policy fires
-    /// without being able to see what its shot will do, and cannot learn to hold
-    /// it.</b>
-    /// </para>
-    /// <para>
-    /// <b>This test asserts the WRONG behaviour on purpose.</b> Closing the gap
-    /// is an <c>ObservationLayoutVersion</c> bump and a full retrain, which is
-    /// <c>gg2-rl</c>'s cost to price and not a free improvement to hand them. The
-    /// pin exists so that closing it FAILS HERE and becomes a deliberate change to
-    /// a recorded fact — the alternative is a gap that lives in one evening's chat
-    /// message, which is exactly how the sandvich went missing for eight phases.
-    /// </para>
-    /// <para>
-    /// <b>When it is closed:</b> delete this test, bump
-    /// <c>ObservationLayoutVersion</c>, and say in the commit that every existing
-    /// checkpoint is dated by it.
-    /// </para>
-    /// </remarks>
-    [Fact]
-    public void ASnipersChargeIsInvisibleToThePolicy()
-    {
-        var empty = ObservationOfSniper(charge: 0);
-        var full = ObservationOfSniper(charge: Weapons.RifleChargeTime);
-
-        Assert.Equal(empty, full);
-    }
-
-    private static float[] ObservationOfSniper(double charge)
-    {
-        var state = MedicWithEnemy(out var slot, out _);
-        state.Characters[slot].Class = PlayerClass.Sniper;
-        state.Weapons[slot] = WeaponState.Spawn(
-            PlayerClass.Sniper, state.Characters[slot].X, state.Characters[slot].Y);
-        state.Weapons[slot].Charge = charge;
-
-        return Observation(in state, slot);
-    }
-
-    private static float[] ObservationOfMedic(double uberCharge)
-    {
-        var state = MedicWithEnemy(out var medic, out _);
-        state.Weapons[medic].UberCharge = uberCharge;
-
-        return Observation(in state, medic);
-    }
-
-    private static float[] ObservationOfEngineer(double nutsAndBolts)
-    {
-        var state = MedicWithEnemy(out var slot, out _);
-        state.Characters[slot].Class = PlayerClass.Engineer;
-        state.Characters[slot].NutsNBolts = nutsAndBolts;
-
-        return Observation(in state, slot);
-    }
-
-    private static float[] Observation(in WorldState state, int slot)
-    {
-        var observation = new float[ObservationWriter.Length];
-        ObservationWriter.Write(new WorldView(in state, Collision), slot, observation);
-        return observation;
-    }
 
     // ------------------------------------------------------------------
     // Fixtures

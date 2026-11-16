@@ -56,11 +56,6 @@ namespace GG2.Bots;
 /// The preset <paramref name="HumanAimByTier"/> applies, or null for the server's
 /// (<see cref="HumanizeOptions.Tracking7"/>). A bench arm for a candidate.
 /// </param>
-/// <param name="SpreadTurnTeam">
-/// The team whose policy tiers spread each turn over the action repeat
-/// (<see cref="PolicyController.SpreadTurn"/>), or null for neither. One team,
-/// for the same reason as <paramref name="HumanizeTeam"/>.
-/// </param>
 public readonly record struct HeadlessMatchOptions(
     string Map,
     int Area,
@@ -82,7 +77,6 @@ public readonly record struct HeadlessMatchOptions(
     int? BlueDifficulty = null,
     bool HandicapOnly = false,
     Team? HumanizeTeam = null,
-    Team? SpreadTurnTeam = null,
     HumanizeOptions? HumanizeWith = null,
     bool HumanAimByTier = false,
     HumanizeOptions? HumanAimWith = null)

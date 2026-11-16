@@ -106,7 +106,6 @@ public sealed class CliCoverageTests
         ("BotHandoverRange", ["--bot-handover-range", "400"], o => o.BotHandoverRange),
         ("BotBrainTeam", ["--bot-brain-team", "red"], o => o.BotBrainTeam),
         ("BotHumanize", ["--bot-humanize"], o => o.BotHumanize),
-        ("BotSpreadTurn", ["--bot-spread-turn"], o => o.BotSpreadTurn),
         ("BotHumanAim", ["--no-bot-human-aim"], o => o.BotHumanAim),
         ("BotHumanizePreset", ["--bot-humanize-preset", "lazy"], o => o.BotHumanizePreset),
         ("BotHandoverBubbles", ["--bot-handover-bubbles"], o => o.BotHandoverBubbles),
@@ -142,8 +141,7 @@ public sealed class CliCoverageTests
         // than the BotBrainSpec are the configuration.
         //
         // ⚠️ --policy needs a checkpoint that actually LOADS, because the brain is
-        // built inside Parse. PolicyFixture's is real and carries this build's
-        // stamp, so it takes the ordinary accept path.
+        // built inside Parse. PolicyFixture's is a shipped net.
         ("BotMode", ["--bot-mode", "search"], o => o.BotMode),
         ("PolicyPaths", ["--policy", PolicyFixture.Checkpoint],
             o => string.Join(',', o.PolicyPaths)),
@@ -151,18 +149,12 @@ public sealed class CliCoverageTests
         // ⛔ The SECOND --policy, which appends rather than replacing. A row of its
         // own because the one above passes either way: a flag that kept overwriting
         // would leave one path in the list and still differ from the empty default,
-        // so nothing here would go red for the shipped two-tier bundle collapsing to
-        // one tier. The two fixtures' class sets are DISJOINT on purpose — an
-        // overlap is legal but warns, and a warning is not what this row is about.
+        // so nothing here would go red for the fleet's nine tiers collapsing to one.
         ("PolicyPaths",
-            ["--policy", PolicyFixture.Checkpoint, "--policy", PolicyFixture.EightFieldCheckpoint],
+            ["--policy", PolicyFixture.Checkpoint, "--policy", PolicyFixture.Second],
             o => string.Join(',', o.PolicyPaths)),
-        ("PolicyIgnoreStamp",
-            ["--policy", PolicyFixture.Checkpoint, "--policy-ignore-stamp"],
-            o => o.PolicyIgnoreStamp),
-        // WHICH CONTROLLER DRIVES A CLASS. Sniper=scripted is a no-op against this
-        // checkpoint's own set — deliberately, because this row is about the flag
-        // reaching the option; BotClassPolicyTests is where the resolution lives.
+        // WHICH CONTROLLER DRIVES A CLASS. This row is about the flag reaching the
+        // option; BotClassPolicyTests is where the resolution lives.
         ("BotClassPolicies",
             ["--bot-mode", "policy", "--policy", PolicyFixture.Checkpoint,
              "--bot-class-policy", "Sniper=scripted"],
