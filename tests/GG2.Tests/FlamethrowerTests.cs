@@ -465,6 +465,79 @@ public sealed class FlamethrowerTests
     }
 
     /// <summary>
+    /// A pyro holds ten ticks of fuel, everybody else 210.
+    /// </summary>
+    /// <remarks>
+    /// <c>Pyro.events/Create.xml</c> runs <c>action_inherited</c> and then sets
+    /// <c>maxDuration = 10</c>, over <c>Character.events/Create.xml:87</c>'s 210.
+    /// It is the only class that overrides it, and the clamp in
+    /// <c>BurningProjectile.events/Collision with Character.xml:50</c> reads the
+    /// victim's own. A pyro is not immune: it burns for at most ten ticks after
+    /// the last flame, up to 13/30 hp a tick.
+    /// </remarks>
+    [Theory]
+    [InlineData(PlayerClass.Pyro, 10)]
+    [InlineData(PlayerClass.Scout, 210)]
+    [InlineData(PlayerClass.Soldier, 210)]
+    [InlineData(PlayerClass.Sniper, 210)]
+    [InlineData(PlayerClass.Demoman, 210)]
+    [InlineData(PlayerClass.Medic, 210)]
+    [InlineData(PlayerClass.Engineer, 210)]
+    [InlineData(PlayerClass.Heavy, 210)]
+    [InlineData(PlayerClass.Spy, 210)]
+    [InlineData(PlayerClass.Quote, 210)]
+    public void FuelIsCappedAtTheVictimsOwnClassCeiling(PlayerClass victim, double ceiling)
+    {
+        var state = default(WorldState);
+        Put(ref state, 1, PlayerClass.Pyro, Team.Red, OpenX, OpenY);
+        Put(ref state, 2, victim, Team.Blue, OpenX + 40, OpenY);
+        state.Characters[2].BurnDuration = 205;
+
+        state.SpawnProjectile(Flame(OpenX + 40, OpenY, 1, Team.Red, lifetime: 0));
+
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
+
+        Assert.Equal(ceiling, state.Characters[2].BurnDuration);
+    }
+
+    /// <summary>
+    /// The drawn flame count is <c>numFlames * burnDuration / maxDuration</c>
+    /// with the class's own two values, and a fresh character starts at 5.
+    /// </summary>
+    /// <remarks>
+    /// Each class's Create sets <c>numFlames</c> after <c>action_inherited</c>, and
+    /// <c>Character.events/Create.xml:95</c>'s <c>realnumflames = numFlames</c>
+    /// runs inside the inherited half, before the override — so every class
+    /// spawns at the shared 5. Not cosmetic: an airblast extinguish throws off
+    /// <c>realnumflames</c> loose flames (<see cref="AirBlastTests"/>).
+    /// </remarks>
+    [Theory]
+    [InlineData(PlayerClass.Scout, 3)]
+    [InlineData(PlayerClass.Soldier, 4)]
+    [InlineData(PlayerClass.Sniper, 4)]
+    [InlineData(PlayerClass.Demoman, 3)]
+    [InlineData(PlayerClass.Medic, 4)]
+    [InlineData(PlayerClass.Engineer, 3)]
+    [InlineData(PlayerClass.Heavy, 5)]
+    [InlineData(PlayerClass.Spy, 4)]
+    [InlineData(PlayerClass.Pyro, 3)]
+    [InlineData(PlayerClass.Quote, 3)]
+    public void TheFlameCountIsTheClassesOwn(PlayerClass playerClass, double numFlames)
+    {
+        var character = CharacterState.Fresh(playerClass, Team.Red);
+        Assert.Equal(5, character.RealNumFlames);
+
+        character.X = OpenX;
+        character.Y = OpenY;
+        var ceiling = playerClass == PlayerClass.Pyro ? 10 : 210;
+        character.BurnDuration = ceiling / 2.0;
+
+        CharacterPhysics.EndStep(World, ref character);
+
+        Assert.Equal(numFlames / 2, character.RealNumFlames, 12);
+    }
+
+    /// <summary>
     /// A flame burns one person and dies on the <em>second</em>.
     /// </summary>
     /// <remarks>

@@ -587,6 +587,16 @@ which is the only way to see bytes that were never written.
   high. Do not "fix" it to match the comment.
 - ⚠️ **The penetration cap is compared before the victim is recorded**, so a
   flame burns its first target and dies on the *second*.
+- **A pyro is not immune to fire; it burns for at most 10 ticks.**
+  `Pyro.events/Create.xml` sets `maxDuration = 10` after `action_inherited`,
+  over the shared 210, and the flame's clamp reads the victim's own. Every
+  class also sets its own `numFlames` (3, 4 or 5) the same way, which
+  `realnumflames` and so an airblast extinguish's loose-flame count read; a
+  fresh character still starts at the shared 5, because the inherited Create
+  assigns `realnumflames` before the override. `ClassStats.MaxBurnDuration` and
+  `NumFlames`, gated by `FlamethrowerTests.FuelIsCappedAtTheVictimsOwnClassCeiling`
+  and `TheFlameCountIsTheClassesOwn`. Deliberately not in `SIM_UUID`;
+  `SimulationStamp.SimulationBehaviourVersion` says why.
 - ⚠️ **A burning character at or below zero hp takes no afterburn damage and
   the fire takes no credit** — the reference cites its own bug number for it.
   The fuel still burns.

@@ -728,7 +728,7 @@ public static class CharacterPhysics
         // extinguish will read next Begin Step. Below the death exit, so a dead
         // character's last value freezes — like everything else here.
         character.RealNumFlames =
-            CharacterState.NumFlames * character.BurnDuration / CharacterState.MaxBurnDuration;
+            character.Stats.NumFlames * character.BurnDuration / character.Stats.MaxBurnDuration;
 
         // Character.events/End Step.xml:131-135, the line below realnumflames.
         //

@@ -169,6 +169,18 @@ public static class SimulationStamp
     /// consistent with the argument and is not the same as establishing it.
     /// </para>
     /// </para>
+    /// <para>
+    /// <b>NOT bumped, by the owner's decision: the per-class afterburn values.</b>
+    /// <see cref="ClassStats.MaxBurnDuration"/> (a pyro's 10 against everyone
+    /// else's 210) and <see cref="ClassStats.NumFlames"/> were a single constant
+    /// for every class, so a pyro burned 21 times longer than the reference's.
+    /// That is a damage number and the rule above says bump. It was not bumped
+    /// because the stamp only dates the <c>.npz</c> checkpoints, which are test
+    /// fixtures and two shipped files no host loads, and their trainer
+    /// (<c>gg2-rl</c>) has concluded. The <c>.gg2p</c> nets every host runs carry
+    /// no stamp at all. Both values are also left out of the class line below for
+    /// that reason. The next bump for any other cause should add them to it.
+    /// </para>
     /// </remarks>
     public const int SimulationBehaviourVersion = 4;
 

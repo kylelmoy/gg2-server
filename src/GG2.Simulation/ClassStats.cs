@@ -81,6 +81,31 @@ public readonly record struct ClassStats
     public required int TauntFrames { get; init; }
 
     /// <summary>
+    /// <c>maxDuration</c>: the afterburn fuel ceiling, in ticks.
+    /// </summary>
+    /// <remarks>
+    /// <c>Character.events/Create.xml:87</c> sets 210 and only
+    /// <c>Pyro.events/Create.xml</c> overrides it, to <b>10</b>, after its
+    /// <c>action_inherited</c>. A pyro is not immune to fire, it just stops
+    /// burning ten ticks after the last flame. Read by the flame's clamp and by
+    /// <c>realnumflames</c>.
+    /// </remarks>
+    public required double MaxBurnDuration { get; init; }
+
+    /// <summary>
+    /// <c>numFlames</c>: how many flames a full burn is drawn with, and the
+    /// numerator of <c>realnumflames</c>, which an airblast extinguish throws
+    /// off as loose flames.
+    /// </summary>
+    /// <remarks>
+    /// Each class's own Create sets it after <c>action_inherited</c>
+    /// (<c>Objects/Characters/*.events/Create.xml</c>): 3, 4 or 5. The shared
+    /// 5 only survives in a fresh character's first <c>realnumflames</c>, which
+    /// the inherited half assigns before the override.
+    /// </remarks>
+    public required double NumFlames { get; init; }
+
+    /// <summary>
     /// <c>abs(baseRunPower * baseControl / (baseFriction - 1))</c> — the speed
     /// at which acceleration and friction balance.
     /// </summary>
@@ -88,16 +113,16 @@ public readonly record struct ClassStats
 
     public static ClassStats For(PlayerClass playerClass) => playerClass switch
     {
-        PlayerClass.Scout => new ClassStats { RunPower = 1.4, MaxHp = 100, CanDoubleJump = true, TauntFrames = 9 },
-        PlayerClass.Soldier => new ClassStats { RunPower = 0.9, MaxHp = 160, TauntFrames = 16 },
-        PlayerClass.Sniper => new ClassStats { RunPower = 0.9, MaxHp = 120, TauntFrames = 13 },
-        PlayerClass.Demoman => new ClassStats { RunPower = 1.0, MaxHp = 120, TauntFrames = 11 },
-        PlayerClass.Medic => new ClassStats { RunPower = 1.09, MaxHp = 120, TauntFrames = 12 },
-        PlayerClass.Engineer => new ClassStats { RunPower = 1.0, MaxHp = 120, TauntFrames = 13 },
-        PlayerClass.Heavy => new ClassStats { RunPower = 0.8, MaxHp = 200, TauntFrames = 12 },
-        PlayerClass.Spy => new ClassStats { RunPower = 1.08, MaxHp = 100, CanCloak = true, TauntFrames = 11 },
-        PlayerClass.Pyro => new ClassStats { RunPower = 1.1, MaxHp = 120, TauntFrames = 10 },
-        PlayerClass.Quote => new ClassStats { RunPower = 1.07, MaxHp = 140, TauntFrames = 17 },
+        PlayerClass.Scout => new ClassStats { RunPower = 1.4, MaxHp = 100, CanDoubleJump = true, TauntFrames = 9, NumFlames = 3, MaxBurnDuration = CharacterState.MaxBurnDuration },
+        PlayerClass.Soldier => new ClassStats { RunPower = 0.9, MaxHp = 160, TauntFrames = 16, NumFlames = 4, MaxBurnDuration = CharacterState.MaxBurnDuration },
+        PlayerClass.Sniper => new ClassStats { RunPower = 0.9, MaxHp = 120, TauntFrames = 13, NumFlames = 4, MaxBurnDuration = CharacterState.MaxBurnDuration },
+        PlayerClass.Demoman => new ClassStats { RunPower = 1.0, MaxHp = 120, TauntFrames = 11, NumFlames = 3, MaxBurnDuration = CharacterState.MaxBurnDuration },
+        PlayerClass.Medic => new ClassStats { RunPower = 1.09, MaxHp = 120, TauntFrames = 12, NumFlames = 4, MaxBurnDuration = CharacterState.MaxBurnDuration },
+        PlayerClass.Engineer => new ClassStats { RunPower = 1.0, MaxHp = 120, TauntFrames = 13, NumFlames = 3, MaxBurnDuration = CharacterState.MaxBurnDuration },
+        PlayerClass.Heavy => new ClassStats { RunPower = 0.8, MaxHp = 200, TauntFrames = 12, NumFlames = 5, MaxBurnDuration = CharacterState.MaxBurnDuration },
+        PlayerClass.Spy => new ClassStats { RunPower = 1.08, MaxHp = 100, CanCloak = true, TauntFrames = 11, NumFlames = 4, MaxBurnDuration = CharacterState.MaxBurnDuration },
+        PlayerClass.Pyro => new ClassStats { RunPower = 1.1, MaxHp = 120, TauntFrames = 10, NumFlames = 3, MaxBurnDuration = 10 },
+        PlayerClass.Quote => new ClassStats { RunPower = 1.07, MaxHp = 140, TauntFrames = 17, NumFlames = 3, MaxBurnDuration = CharacterState.MaxBurnDuration },
         _ => throw new ArgumentOutOfRangeException(nameof(playerClass), playerClass, "no stats for this class"),
     };
 

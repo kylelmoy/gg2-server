@@ -164,8 +164,9 @@ public static class Afterburn
 
         victim.BurnIntensity += FlameStats.IntensityIncrease(flame.Kind) * falloffFactor;
 
-        // Both ceilings are applied after both additions, not inside them.
-        victim.BurnDuration = Math.Min(victim.BurnDuration, CharacterState.MaxBurnDuration);
+        // Both ceilings are applied after both additions, not inside them, and
+        // the fuel ceiling is the VICTIM's class's: a pyro's is 10, not 210.
+        victim.BurnDuration = Math.Min(victim.BurnDuration, victim.Stats.MaxBurnDuration);
         victim.BurnIntensity = Math.Min(victim.BurnIntensity, CharacterState.MaxBurnIntensity);
 
         victim.BurnedBy = (byte)ownerSlot;

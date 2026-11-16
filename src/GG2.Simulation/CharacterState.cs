@@ -37,7 +37,10 @@ public struct CharacterState
     /// <summary>Afterburn intensity ceiling, in damage per second.</summary>
     public const double MaxBurnIntensity = 13;
 
-    /// <summary>Afterburn duration ceiling, in ticks.</summary>
+    /// <summary>
+    /// Afterburn duration ceiling, in ticks, of every class but the pyro's.
+    /// The live value is <see cref="ClassStats.MaxBurnDuration"/>.
+    /// </summary>
     public const double MaxBurnDuration = 210;
 
     /// <summary>
@@ -415,7 +418,11 @@ public struct CharacterState
     /// </remarks>
     public double RealNumFlames;
 
-    /// <summary><c>numFlames</c>: the flame count at full burn intensity.</summary>
+    /// <summary>
+    /// <c>Character.events/Create.xml</c>'s shared <c>numFlames</c>, which only
+    /// a fresh character's first <see cref="RealNumFlames"/> ever sees. Each
+    /// class's own is <see cref="ClassStats.NumFlames"/>.
+    /// </summary>
     public const double NumFlames = 5;
 
     /// <summary>
