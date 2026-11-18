@@ -96,7 +96,7 @@ they were trained and scored under:
 ```ini
 [Bots]
 Mode=policy
-Policy=ppo-duel2-soldier-s1.gg2p,...        ; one per class
+Policy=checkpoints/duel/ppo-duel2-soldier-s1.gg2p,...   ; all ten in checkpoints/duel/
 ClassPolicy=Soldier=ppo-duel2-soldier-s1,...
 HandoverRule=distance
 HandoverRange=100000    ; past a cell's 1,082 px diagonal: the net always drives
@@ -108,8 +108,8 @@ server already runs. The sniper's net is gg2-sim's 1B checkpoint
 (`ppo-duel2-sniper-s1-1000M`), the spy's is `ppo-duel3-spy-s1`, and Quote's is
 `ppo-duelq-quote-s1-1000M` (`ClassPolicy=...,Quote=ppo-duelq-quote-s1-1000M`):
 a duel bot takes its human's class, so a Quote human gets a Quote bot, and that
-is the only way a bot is ever a Quote. The nets ship
-in gg2-sim as `.pt` checkpoints; `python/export_policy.py` writes the `.gg2p`.
+is the only way a bot is ever a Quote. All ten ship in `checkpoints/duel/`
+(README there has their md5s and sources).
 Their numbers are gg2-sim's and none has been measured on this server against a
 person.
 

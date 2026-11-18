@@ -98,6 +98,11 @@
              Link="checkpoints\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
+    <!-- The duel server's nets, kept apart from the fleet's nine. -->
+    <Content Include="..\..\checkpoints\duel\*"
+             Link="checkpoints\duel\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
