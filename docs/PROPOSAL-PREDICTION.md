@@ -75,7 +75,8 @@ to 60 plus 255. These sit well clear of that.
   bug on one side, and the client should not predict on that connection.
 - **`PREDICT_ACK`** is sent once per tick to every client that has been welcomed,
   queued as the last per-player bytes before `FlushBroadcast`.
-  `inputsApplied` is the count captured at `GatherInputs`. **It applies to the
+  `inputsApplied` is the number of this client's INPUTSTATEs consumed into
+  ticks so far, merged ones included ("The input queue" below). **It applies to the
   next INPUTSTATE or QUICK_UPDATE in the stream.** A CAPS_UPDATE or plugin
   packet may come between them, but no other state update can. On a tick where
   the server does not advance (only `--control-port` freeze does that), the
@@ -116,8 +117,9 @@ client never receives one.
 
 ### Why this is allowed under "the rule"
 
-Prediction runs only in the client and changes no simulation. The server
-simulates exactly what it does today. A stock client receives a byte-identical
+Prediction runs only in the client. The server's only change is the input
+queue below, which applies to a welcomed client only and is argued there. A
+stock client receives a byte-identical
 stream, because the new messages go only to a connection that sent the hello.
 A stock client never sends the hello. A stock server ignores the hello. That
 is the "cannot see the difference at all" arm of `CLAUDE.md`'s test for a new
@@ -130,8 +132,13 @@ For approval, not yet written:
 - `ClientCommands`: `0xC0` with length 0. `MessageType`: `PredictHello`,
   `PredictWelcome`, `PredictAck`.
 - `ClientPlayer`: `uint InputsRead`, incremented in the `InputState` case of
-  `Handle`; `uint InputsApplied`, captured in `GatherInputs` for every
-  connection, alive or not; `bool Predicting`.
+  `Handle`; `uint InputsApplied`; `bool Predicting`.
+- `NetworkInputSource` gains a queued mode, switched on by the welcome. An
+  INPUTSTATE is enqueued rather than assigned. `GatherInputs` consumes one
+  input, applies the depth and drain merges, and advances `InputsApplied`.
+  Without the welcome, nothing about the source changes.
+- `[Server] PredictionMaxQueuedInputs` (2) and `PredictionQueueDrainTicks`
+  (30), in `ServerSettings.All`.
 - `Handle(PredictHello)`: if prediction is enabled and the client is not yet
   `Predicting`, send the welcome and set the flag. A repeated hello does
   nothing, so it cannot make the server send more than one welcome. No log
@@ -149,21 +156,75 @@ Gates:
   tick, as it does today, with prediction on. This is the stock-client claim.
 - After N INPUTSTATEs and a hello, the welcome says N.
 - Every state update a welcomed client receives is preceded by exactly one ack.
-  With two INPUTSTATEs coalesced into one tick, the ack moves by 2. With none,
-  it does not move.
+  When two INPUTSTATEs arrive in one tick, the ack moves by 1 on that tick and
+  1 on the next, and the broadcast keys follow the two inputs in turn. When none
+  arrive, the ack does not move.
+- The queue cap holds: a burst of five inputs leaves the depth at the cap, with
+  the ack counting the merged ones. A press and release merged into one tick
+  still reaches `PressedKeys`. A standing depth of one drains after
+  `QueueDrainTicks`.
 - The ack equals the input count that actually reached `ApplyInput`. This test
   should go red if the capture moves below `WriteStateUpdate`.
+- An unwelcomed connection's coalescing is unchanged.
+  `NetworkInputSource.TakeEdges`'s existing gates stay green untouched.
 
-### What the client should expect from coalescing
+### The input queue: one input per tick for a welcomed client
 
-The server applies inputs at its own tick boundaries. One INPUTSTATE a tick is
-the steady state. Under jitter, two arrive in one tick (the ack jumps by 2, the
-first one's held keys never got a tick of their own, but its edges did) and
-none in the next (the ack holds, and the server holds the last keys). Total
-ticks of movement match. One tick ran on the later input's keys instead of the
-earlier one's. That is the misprediction jitter causes, and the ack makes the
-correction exact rather than estimated. **Send exactly one INPUTSTATE per
-predicted tick**, or the mapping from input number to tick breaks.
+**In v1, because it decides what the ack means.** Adding it later would change
+the meaning of the same field.
+
+Without a queue, the server coalesces. If two INPUTSTATEs arrive in one tick,
+it applies the last one's keys plus both inputs' edges. If none arrive, it holds
+the last keys. The client's replay gives every input a tick of its own, so
+every burst costs a tick of misprediction that reconciliation then corrects.
+On mobile, where TCP batching makes bursts common, that shows as jitter.
+
+So a welcomed client's inputs go through a small queue on its connection:
+
+- **One input is consumed per advancing tick.** Its keys and aim become the
+  tick's input, and its edges are taken against the previously consumed input,
+  exactly as `ApplyInput` takes them. `inputsApplied` counts **consumed**
+  inputs, and the replay is exact whenever the queue is neither empty nor
+  merging.
+- **Empty queue: hold.** The tick keeps the last consumed input, as today. A
+  late input is a misprediction the ack cannot prevent, only report.
+- **Bounded depth.** Inputs waiting after the consume are capped at
+  `MaxQueuedInputs` (proposed: 2, about 67 ms). Past that, the two oldest merge
+  into one tick, and both are counted. The merge keeps the later one's keys and
+  ORs both inputs' edges, so a tap is never lost. Without the cap, one stall
+  would add permanent latency.
+- **Standing latency drains.** If at least one input has still been waiting
+  after the consume for `QueueDrainTicks` consecutive ticks (proposed: 30, one
+  second), the two oldest merge once. A gap followed by a pair of inputs
+  otherwise leaves one tick of queueing in place for the rest of the
+  connection.
+- **What it costs.** A burst waits up to a tick or two instead of landing at
+  once. That is latency only for the opted-in player, and prediction hides it
+  from them. The two knobs are a jitter buffer's knobs. The proposed values are
+  starting points, to be tuned against gg2-client's measured correction, not
+  settled numbers.
+
+**Why this is allowed under the rule.** The queue changes which tick an
+opted-in player's input lands on. The broadcast carries the keys the server
+actually applied, every tick, to every client. So every stock client
+re-simulates the same thing the server did, exactly as it does for a player
+whose packets simply arrived later. Nothing is simulated that the wire does not
+carry.
+
+**Interactions:**
+
+- `AimCheck` and aim analysis judge each INPUTSTATE as it is read, before the
+  queue, so they see the same stream as today.
+- `ClientCommands.PerTickLimit` still bounds how many commands are read in a
+  tick. The queue bound is separate and smaller.
+- A dead player's inputs are consumed or held as today. gg2-client sends
+  INPUTSTATE only while alive, so its queue empties on death.
+- The merge is what makes a misbehaving client harmless. A client sending
+  faster than 30 Hz is merged down to one tick per tick. It cannot buy extra
+  ticks of movement, and it cannot grow the server's memory.
+
+**Send exactly one INPUTSTATE per predicted tick**, or the mapping from input
+number to tick breaks.
 
 ## 2. The simulation side
 
