@@ -61,6 +61,10 @@ public sealed partial class GameServer
 
     bool IPluginHost.IsClient(int slot) => _roster[slot].Connection is not null;
 
+    bool IPluginHost.IsAlive(int slot) => _world.IsAlive(slot);
+
+    bool IPluginHost.RoundOver => _world.MapChanging || _world.RoundDecided;
+
     long IPluginHost.CurrentTimeMilliseconds => _pluginClock;
 
     void IPluginHost.Log(string message) => _log.Info(message);
@@ -121,6 +125,9 @@ public sealed partial class GameServer
     /// <c>[Server] ChatJoinMessage</c>, read straight off the options.
     /// </summary>
     string IPluginHost.ChatJoinMessage => _options.ChatJoinMessage;
+
+    /// <summary><c>[Plugins] chat_*</c>, read straight off the options.</summary>
+    Chat2026Settings IPluginHost.Chat2026 => _options.Chat2026;
 
     /// <summary>
     /// What <c>/bots</c> may do and what the population is doing.

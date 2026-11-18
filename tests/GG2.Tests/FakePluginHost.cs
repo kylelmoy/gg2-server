@@ -28,6 +28,8 @@ public sealed class FakePluginHost : IPluginHost
         public Team Team { get; set; } = Team;
 
         public int Points { get; set; }
+
+        public bool Alive { get; set; } = true;
     }
 
     private readonly List<Player> _players = [];
@@ -82,6 +84,9 @@ public sealed class FakePluginHost : IPluginHost
 
     /// <summary><c>[Server] ChatJoinMessage</c>.</summary>
     public string ChatJoinMessage { get; set; } = string.Empty;
+
+    /// <summary><c>[Plugins] chat_*</c>.</summary>
+    public Chat2026Settings Chat2026 { get; set; } = new();
 
     /// <summary><c>[Bots] SuspendMinutes</c>. Zero, the default, is "no such command".</summary>
     public int SuspendMinutes { get; set; }
@@ -148,6 +153,14 @@ public sealed class FakePluginHost : IPluginHost
     public string RemoteAddressOf(int slot) => _players[slot].Client ? _players[slot].Address : string.Empty;
 
     public bool IsClient(int slot) => _players[slot].Client;
+
+    /// <summary>Everyone is alive unless <see cref="SetAlive"/> says otherwise.</summary>
+    public bool IsAlive(int slot) => _players[slot].Alive;
+
+    public void SetAlive(int slot, bool alive) => _players[slot].Alive = alive;
+
+    /// <summary><c>global.mapchanging</c>. Set by a test; <see cref="EndRound"/> only records.</summary>
+    public bool RoundOver { get; set; }
 
     public long StableIdOf(int slot) => _players[slot].StableId;
 

@@ -707,6 +707,16 @@ const STRINGS = {
       "UseLobby": "Announce to the ganggarrison.com lobby (the client's server list). The only outbound connection this server makes.",
       "Rewards": "Answer REWARD_REQUEST by relaying each player's reward id to the auth server."
     },
+    "Plugins": {
+      "chat_gravetalk": "Chat: the living hear dead players and spectators. Off: those are heard only by each other.",
+      "chat_unique_names": "Chat: rename a duplicate name to the lowest free number (bob2). Every client sees the rename.",
+      "chat_mute_minutes": "Chat: length of a vote mute, and of /mute with no minutes, 1..1440. Follows the address across reconnects.",
+      "chat_votes": "Chat: players may call votes (/votekick, /votemute, /votescramble, /votenextround, /votemap).",
+      "chat_vote_kick_percent": "Chat: Yes share a kick vote needs, 1..100. Half the voters, and at least two, must answer.",
+      "chat_vote_mute_percent": "Chat: Yes share a mute vote needs, 1..100.",
+      "chat_kickban_minutes": "Chat: how long a vote-kicked address is refused, 0..1440. Refuses everyone behind that address.",
+      "chat_admin_password": "Chat: password for /login (/say, /kick, /mute, /unmute, /nextround, /map). Empty: /login disabled."
+    },
     "Server": {
       "ServerName": "Shown in the server browser and on join.",
       "WelcomeMessage": "Sent to each joining player. Empty: none.",

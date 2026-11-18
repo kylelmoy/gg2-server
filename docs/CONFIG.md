@@ -343,6 +343,21 @@ and it is described above.
 | `AuthServerHost` | text | `ganggarrison.com` | The reward auth service. Only contacted when `Rewards` is on. |
 | `AuthServerPort` | integer | `45022` | That service's port. |
 
+### `[Plugins]`
+
+The chat core's settings, read by `chat` and `chat2026` alike (`docs/PLUGINS.md`, "The chat core"). The keys are the ones the chat2026 GML half reads, so one `gg2.ini` configures either host. They do nothing unless a chat plugin is in `ServerPluginList`, and none has a command-line flag.
+
+| Key | Type | Default | |
+|---|---|---|---|
+| `chat_gravetalk` | boolean | `1` | The living hear dead players and spectators. Off, those are heard only by each other. |
+| `chat_unique_names` | boolean | `0` | Rename a player whose name is taken to the lowest free number (`bob2`). Every client sees the rename, with or without a chat plugin. |
+| `chat_mute_minutes` | integer | `10` | A vote mute, and `/mute` with no minutes, 1..1440. Follows the address across reconnects. |
+| `chat_votes` | boolean | `1` | Players may call `/votekick`, `/votemute`, `/votescramble`, `/votenextround` and `/votemap`. |
+| `chat_vote_kick_percent` | integer | `60` | Yes share a kick vote needs, 1..100, inclusive. Half the voters, and at least two, must answer. |
+| `chat_vote_mute_percent` | integer | `60` | The same, for a mute vote. |
+| `chat_kickban_minutes` | integer | `10` | How long a vote-kicked address is refused, 0..1440. It is an address, so everyone behind the same NAT is refused with it. |
+| `chat_admin_password` | secret | *(empty)* | The password for `/login`, which gives `/say`, `/kick`, `/mute`, `/unmute`, `/nextround` and `/map` for the session. Empty disables `/login`. |
+
 ### `[Analytics]`
 
 Both off by default, and grouped rather than left in `[Server]` because both are

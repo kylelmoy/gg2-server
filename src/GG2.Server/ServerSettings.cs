@@ -262,6 +262,41 @@ public static class ServerSettings
             "Server", "ChatJoinMessage", nameof(ServerOptions.ChatJoinMessage),
             o => o.ChatJoinMessage, (o, v) => o.ChatJoinMessage = v, "type /help"));
 
+        // [Plugins] chat_* — the chat2026 plugin's settings, under the same keys its
+        // GML half reads, so one gg2.ini configures both halves. Read only when
+        // chat2026 is in ServerPluginList.
+        settings.Add(BoolRow(
+            "Plugins", "chat_gravetalk", nameof(ServerOptions.Chat2026),
+            o => o.Chat2026.Gravetalk, (o, v) => o.Chat2026 = o.Chat2026 with { Gravetalk = v }));
+
+        settings.Add(BoolRow(
+            "Plugins", "chat_unique_names", nameof(ServerOptions.Chat2026),
+            o => o.Chat2026.UniqueNames, (o, v) => o.Chat2026 = o.Chat2026 with { UniqueNames = v }));
+
+        settings.Add(IntRow(
+            "Plugins", "chat_mute_minutes", nameof(ServerOptions.Chat2026),
+            o => o.Chat2026.MuteMinutes, (o, v) => o.Chat2026 = o.Chat2026 with { MuteMinutes = v }, "5"));
+
+        settings.Add(BoolRow(
+            "Plugins", "chat_votes", nameof(ServerOptions.Chat2026),
+            o => o.Chat2026.VotesEnabled, (o, v) => o.Chat2026 = o.Chat2026 with { VotesEnabled = v }));
+
+        settings.Add(IntRow(
+            "Plugins", "chat_vote_kick_percent", nameof(ServerOptions.Chat2026),
+            o => o.Chat2026.VoteKickPercent, (o, v) => o.Chat2026 = o.Chat2026 with { VoteKickPercent = v }, "75"));
+
+        settings.Add(IntRow(
+            "Plugins", "chat_vote_mute_percent", nameof(ServerOptions.Chat2026),
+            o => o.Chat2026.VoteMutePercent, (o, v) => o.Chat2026 = o.Chat2026 with { VoteMutePercent = v }, "75"));
+
+        settings.Add(IntRow(
+            "Plugins", "chat_kickban_minutes", nameof(ServerOptions.Chat2026),
+            o => o.Chat2026.KickBanMinutes, (o, v) => o.Chat2026 = o.Chat2026 with { KickBanMinutes = v }, "30"));
+
+        settings.Add(SecretRow(
+            "Plugins", "chat_admin_password", nameof(ServerOptions.Chat2026),
+            o => o.Chat2026.AdminPassword, (o, v) => o.Chat2026 = o.Chat2026 with { AdminPassword = v }, "hunter2"));
+
         settings.Add(SecretRow(
             "Server", "Password", nameof(ServerOptions.Password),
             o => o.Password, (o, v) => o.Password = v, "hunter2"));

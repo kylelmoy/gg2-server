@@ -43,6 +43,13 @@ public sealed class CliCoverageTests
     /// </remarks>
     private static readonly Dictionary<string, string> NotOnTheCommandLine = new()
     {
+        ["Chat2026"] =
+            "is one plugin's eight [Plugins] chat_* settings, which do nothing unless chat2026 "
+            + "is in ServerPluginList. They keep the GML half's own ini keys so that one "
+            + "gg2.ini configures a chat2026 server whichever half hosts it, and eight flags "
+            + "spelled differently from those keys would be a second vocabulary for the same "
+            + "thing. --config reaches every one; ConfigFileCoverageTests gates that.",
+
         ["CommandLineOverrides"] =
             "is what Parse itself computes about the command line — which settings a flag "
             + "pinned to something the config file does not say, so the admin panel can grey "
