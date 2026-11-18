@@ -791,6 +791,20 @@ public sealed class ServerOptions
     public int BotHandoverRange { get; set; } = (int)HybridBot.EngagementRange;
 
     /// <summary>
+    /// Whether a gg2-sim policy's decisions are drawn from each head's softmax
+    /// rather than taken greedily — <c>--bot-policy-sampled</c>.
+    /// </summary>
+    /// <remarks>
+    /// <b>A BEHAVIOUR switch, off by default</b>: greedy is the arm cross-checked
+    /// against gg2-sim's ref and every number in <c>docs/BOTS.md</c>. Sampled is
+    /// how the duel nets were trained and scored: greedy, a duel net stops firing
+    /// at an idle target in about 6% of cells, under 2% sampled (gg2-sim
+    /// <c>docs/HANDOFF-SERVER-DUEL.md</c>). Each bot draws from its own stream,
+    /// never <c>WorldState.Random</c> (<see cref="SimPolicyController"/>).
+    /// </remarks>
+    public bool BotPolicySampled { get; set; }
+
+    /// <summary>
     /// The one team whose bots the brain drives, or <see cref="Team.Any"/> for
     /// both — <c>--bot-brain-team</c>.
     /// </summary>

@@ -58,10 +58,30 @@ public sealed class SimPolicyNetwork
     /// width alone, as gg2-sim's <c>PolicyDriver.V2</c> is: no v1 team width is
     /// another's plus ten.
     /// </summary>
-    public bool IsV2 => IsTeamWidth(InputSize - SimPolicyObservation.SentryColumns);
+    public bool IsV2 => IsTeamWidth(WithoutTerrain - SimPolicyObservation.SentryColumns);
 
-    /// <summary>The input width without a v2 net's sentry block: which layout it is.</summary>
-    private int LayoutSize => IsV2 ? InputSize - SimPolicyObservation.SentryColumns : InputSize;
+    /// <summary>
+    /// A net on gg2-sim's terrain layout (<c>env/env.h</c>, <c>TerrainObs</c>, the
+    /// duel nets): any team layout, either version,
+    /// <see cref="SimPolicyObservation.TerrainColumns"/> wider, with its position
+    /// columns written 0 and terrain blocks, lines of sight and a route after the
+    /// rest. Told apart by width as gg2-sim's <c>PolicyDriver.Terrain</c> is: every
+    /// terrain width is past every other team width.
+    /// </summary>
+    public bool IsTerrain
+    {
+        get
+        {
+            var rest = InputSize - SimPolicyObservation.TerrainColumns;
+            return IsTeamWidth(rest) || IsTeamWidth(rest - SimPolicyObservation.SentryColumns);
+        }
+    }
+
+    /// <summary>The input width without a terrain net's terrain columns.</summary>
+    private int WithoutTerrain => IsTerrain ? InputSize - SimPolicyObservation.TerrainColumns : InputSize;
+
+    /// <summary>The input width without a v2 net's sentry block or a terrain net's columns: which layout it is.</summary>
+    private int LayoutSize => IsV2 ? WithoutTerrain - SimPolicyObservation.SentryColumns : WithoutTerrain;
 
     /// <summary>
     /// A team net (<see cref="SimPolicyObservation.TeamSize"/> inputs, or a class
@@ -216,7 +236,8 @@ public sealed class SimPolicyNetwork
                 $"{InputSize} inputs; expected {SimPolicyObservation.TeamSize} (team), {SimPolicyObservation.ZoomSize} (zoom), "
                 + $"{SimPolicyObservation.DemoSize} (demo), {SimPolicyObservation.PyroSize} (pyro), {SimPolicyObservation.MedicSize} (medic), "
                 + $"{SimPolicyObservation.EngineerSize} (engineer), {SimPolicyObservation.SpySize} (spy), any of those plus "
-                + $"{SimPolicyObservation.SentryColumns} (v2), or {SimPolicyObservation.DuelSize}/{SimPolicyObservation.DuelSizeNoClasses} (duel)");
+                + $"{SimPolicyObservation.SentryColumns} (v2) and {SimPolicyObservation.TerrainColumns} (terrain), "
+                + $"or {SimPolicyObservation.DuelSize}/{SimPolicyObservation.DuelSizeNoClasses} (duel)");
         }
 
         // Both or neither: a fifth head on a net that does not observe what it
@@ -239,11 +260,18 @@ public sealed class SimPolicyNetwork
     }
 
     /// <summary>
-    /// The greedy action for <paramref name="observation"/>, one index per head.
+    /// The greedy action for <paramref name="observation"/>, one index per head,
+    /// or with <paramref name="sample"/> each head drawn from its softmax.
     /// </summary>
     /// <param name="a">Scratch of at least <see cref="Widest"/>.</param>
     /// <param name="b">Scratch of at least <see cref="Widest"/>.</param>
-    public void Decide(ReadOnlySpan<float> observation, Span<float> a, Span<float> b, Span<int> action)
+    /// <param name="sample">
+    /// Null: greedy. Otherwise the bot's own stream, never the world's, drawn once
+    /// per head in head order: gg2-sim's <c>PolicyDriver.Decide</c> with a
+    /// <see cref="Random"/>, which is how training acts (<c>train_ppo.py</c>,
+    /// <c>act</c>). The softmax is in double, shifted by the head's greedy logit.
+    /// </param>
+    public void Decide(ReadOnlySpan<float> observation, Span<float> a, Span<float> b, Span<int> action, Random? sample = null)
     {
         observation[..InputSize].CopyTo(a);
         var x = a;
@@ -280,6 +308,27 @@ public sealed class SimPolicyNetwork
             }
 
             action[h] = best;
+
+            if (sample is null)
+                continue;
+
+            var total = 0.0;
+
+            for (var k = 0; k < _heads[h]; k++)
+                total += Math.Exp(x[at + k] - x[at + best]);
+
+            var u = sample.NextDouble() * total;
+
+            for (var k = 0; k < _heads[h]; k++)
+            {
+                u -= Math.Exp(x[at + k] - x[at + best]);
+
+                if (u >= 0)
+                    continue;
+
+                action[h] = k;
+                break;
+            }
         }
     }
 

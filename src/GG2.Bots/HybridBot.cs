@@ -444,6 +444,15 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
 
     public PlayerInput Poll(in WorldView world, int slot, int tick)
     {
+        // A tier whose observation routes is handed the graph and tables the
+        // scripted layer routes with, every tick, so a map change reaches it
+        // before its next decision (IRouteController).
+        foreach (var tier in _tiers)
+        {
+            if (tier is IRouteController route)
+                route.SetRoute(_scripted.Graph, _scripted.Distances);
+        }
+
         // A tier that remembers what its body has seen learns it while the
         // scripted layer drives, before anything this tick can change who does
         // (ISightingController; gg2-sim's ref/Matches.cs calls it at this point).

@@ -268,6 +268,9 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         }
     }
 
+    /// <summary>The map's nav graph this bot routes on, or null; replaced by <see cref="SetMap"/>.</summary>
+    public NavGraph? Graph => _graph;
+
     /// <summary>
     /// The precomputed A\* distance tables, or null for the straight-line
     /// heuristic. <c>--nav-distances</c>; off unless asked for.

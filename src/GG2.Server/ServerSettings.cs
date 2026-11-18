@@ -637,6 +637,11 @@ public static class ServerSettings
             "Bots", "HandoverRange", nameof(ServerOptions.BotHandoverRange),
             o => o.BotHandoverRange, (o, v) => o.BotHandoverRange = v, "400"));
 
+        // A BEHAVIOUR switch: ServerOptions.BotPolicySampled.
+        settings.Add(BoolRow(
+            "Bots", "PolicySampled", nameof(ServerOptions.BotPolicySampled),
+            o => o.BotPolicySampled, (o, v) => o.BotPolicySampled = v));
+
         // A BEHAVIOUR switch: ServerOptions.BotBrainTeam.
         settings.Add(ChoiceRow(
             "Bots", "BrainTeam", nameof(ServerOptions.BotBrainTeam),

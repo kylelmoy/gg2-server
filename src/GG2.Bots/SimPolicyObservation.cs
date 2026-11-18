@@ -107,6 +107,15 @@ public static class SimPolicyObservation
     /// <summary>How many team-mates a team observation lists: a medic net's ally aim groups.</summary>
     public const int ListedAllies = NearAllies;
 
+    private const int TerrainW = 15, TerrainH = 11, TerrainBlock = 9, RouteColumns = 8;
+
+    /// <summary>
+    /// gg2-sim's <c>TerrainObs</c>: what the terrain layout adds to any team width,
+    /// after v2's sentry block: the 15x11 terrain blocks, a line of sight per
+    /// listed enemy, and eight route columns.
+    /// </summary>
+    public const int TerrainColumns = (TerrainW * TerrainH) + NearEnemies + RouteColumns;
+
     /// <summary>
     /// The team observation for <paramref name="meSlot"/>, and the enemies it
     /// listed (nearest first, -1 past them) into <paramref name="listed"/>.
@@ -122,17 +131,24 @@ public static class SimPolicyObservation
     /// the way the caller's other calls do), hidden enemies are listed from them,
     /// and the sentry block follows the layout's columns.
     /// </para>
+    /// <para>
+    /// With <paramref name="terrain"/> the row is the terrain layout
+    /// (<see cref="TerrainColumns"/> more, position columns written 0), routed on
+    /// <paramref name="graph"/> and <paramref name="tables"/>, the ones the body's
+    /// scripted layer routes with. Either missing leaves route columns 0.
+    /// </para>
     /// </summary>
     public static void Team(
         in WorldView world, int meSlot, Span<float> o, Span<int> listed, bool zoom = false, bool demo = false, bool pyro = false,
         bool medic = false, Span<int> listedAllies = default, bool engineer = false, bool spy = false,
-        SimPolicyMemory? memory = null, int tick = 0)
+        SimPolicyMemory? memory = null, int tick = 0, bool terrain = false, NavGraph? graph = null, NavDistanceSet? tables = null)
     {
         ref readonly var me = ref world.Character(meSlot);
         ref readonly var gun = ref world.Weapon(meSlot);
         var map = world.Collision;
         var v2 = memory is not null;
-        o[..(Width(zoom, demo, pyro, medic, engineer, spy) + (v2 ? SentryColumns : 0))].Clear();
+        var withSentries = Width(zoom, demo, pyro, medic, engineer, spy) + (v2 ? SentryColumns : 0);
+        o[..(withSentries + (terrain ? TerrainColumns : 0))].Clear();
         var k = 0;
         o[k++] = (float)(me.X / map.Width);
         o[k++] = (float)(me.Y / map.Height);
@@ -305,7 +321,146 @@ public static class SimPolicyObservation
 
         if (v2)
             WriteSentries(in world, in me, o, k);
+
+        if (terrain)
+        {
+            o[0] = 0;
+            o[1] = 0;
+            WriteTerrain(in world, meSlot, listed, memory, graph, tables, o, withSentries);
+        }
     }
+
+    // gg2-sim env/env.h, WriteTerrain, from o[k] on: the blocks, then the lines of
+    // sight to the listed enemies (a hidden one's remembered position in v2, which
+    // ListedX/ListedY hold for every listed one), then the route.
+    private static void WriteTerrain(
+        in WorldView world, int meSlot, Span<int> listed, SimPolicyMemory? memory, NavGraph? graph, NavDistanceSet? tables,
+        Span<float> o, int k)
+    {
+        ref readonly var me = ref world.Character(meSlot);
+        var map = world.Collision;
+        var mask = map.Map.Walkmask;
+        const int Side = TerrainBlock * 6, Area = Side * Side;
+        int cc = FloorDiv((int)Math.Floor(me.X), 6), cr = FloorDiv((int)Math.Floor(me.Y), 6);
+
+        for (var by = 0; by < TerrainH; by++)
+        {
+            for (var bx = 0; bx < TerrainW; bx++)
+            {
+                int c0 = cc + ((bx - (TerrainW / 2)) * TerrainBlock) - (TerrainBlock / 2);
+                int r0 = cr + ((by - (TerrainH / 2)) * TerrainBlock) - (TerrainBlock / 2);
+                var cells = 0;
+
+                for (var r = r0; r < r0 + TerrainBlock; r++)
+                {
+                    for (var c = c0; c < c0 + TerrainBlock; c++)
+                    {
+                        if (c >= 0 && r >= 0 && mask.IsSolid(c, r))
+                            cells++;
+                    }
+                }
+
+                // The larger of the walkmask's share and the largest share one
+                // rect solid to the body covers, not their union.
+                var best = cells * 36;
+                int x0 = c0 * 6, y0 = r0 * 6;
+
+                foreach (ref readonly var q in map.RectSpan)
+                {
+                    if (!q.IsSolidTo(me.Filter))
+                        continue;
+
+                    int left = Math.Max(q.Left, x0), right = Math.Min(q.Right + 1, x0 + Side);
+                    int top = Math.Max(q.Top, y0), bottom = Math.Min(q.Bottom + 1, y0 + Side);
+
+                    if (left < right && top < bottom && (right - left) * (bottom - top) > best)
+                        best = (right - left) * (bottom - top);
+                }
+
+                o[k++] = (float)best / Area;
+            }
+        }
+
+        for (var n = 0; n < NearEnemies; n++)
+        {
+            if (listed[n] < 0)
+            {
+                o[k++] = 0;
+                continue;
+            }
+
+            var tx = memory is not null ? memory.ListedX[n] : world.Character(listed[n]).X;
+            var ty = memory is not null ? memory.ListedY[n] : world.Character(listed[n]).Y;
+            o[k++] = map.CollisionLineBlocksBullets(me.X, me.Y, tx, ty, world.State.BulletFilter) ? 0 : 1;
+        }
+
+        var target = listed[0] >= 0;
+        var gx = !target ? 0 : memory is not null ? memory.ListedX[0] : world.Character(listed[0]).X;
+        var gy = !target ? 0 : memory is not null ? memory.ListedY[0] : world.Character(listed[0]).Y;
+        WriteRoute(graph, tables, in me, in world.Weapon(meSlot), target, gx, gy, o, k);
+    }
+
+    // gg2-sim env/env.h, WriteRoute: hops 1 and 2 toward the target on the table
+    // the scripted layer routes this body with (ScriptedBot.Poll's Query; gg2-sim
+    // leaves the intel and setup-gate terms at their defaults, and so does this),
+    // each dx/500, dy/500 to the hop node's SnapObjective point and 1; then
+    // standing on a node, then from == goal.
+    private static void WriteRoute(
+        NavGraph? graph, NavDistanceSet? tables, in CharacterState me, in WeaponState gun, bool target, double tx, double ty,
+        Span<float> o, int k)
+    {
+        if (graph is null)
+            return;
+
+        o[k + 6] = graph.NodeFromWorld(me.X, me.Y) >= 0 ? 1 : 0;
+
+        if (!target)
+            return;
+
+        int from = graph.SnapObjective(me.X, me.Y).Node, goal = graph.SnapObjective(tx, ty).Node;
+
+        if (from < 0 || goal < 0)
+            return;
+
+        if (from == goal)
+        {
+            o[k + 7] = 1;
+            return;
+        }
+
+        // No tables (--no-nav-distances, or a map too large to derive them for)
+        // leaves the hops absent. gg2-sim always has them, so that is a row no net
+        // trained on: docs/BOTS.md, "gg2-sim policies".
+        if (tables is null)
+            return;
+
+        var table = tables.For(new NavQuery(
+            me.Team, CanDoubleJump: BotClassProfile.AirJump(me.Class), CanRocketJump: RocketModel.Capable(in me, in gun)));
+        var anchor = NavGraph.AnchorColumn(me.X);
+        var at = from;
+
+        for (var h = 0; h < 2; h++)
+        {
+            var hop = table.NextHop(at, goal);
+
+            if (hop < 0)
+                return;
+
+            var node = graph.Nodes[hop];
+            var hx = NavGraph.ColumnWorldX(Math.Clamp(anchor, node.X0, node.X1));
+            var hy = graph.StandY(hop);
+            o[k + (3 * h)] = Clip((hx - me.X) / 500, 4);
+            o[k + (3 * h) + 1] = Clip((hy - me.Y) / 500, 4);
+            o[k + (3 * h) + 2] = 1;
+
+            if (hop == goal)
+                return;
+
+            at = hop;
+        }
+    }
+
+    private static int FloorDiv(int a, int b) => (a / b) - ((a % b != 0 && (a < 0) != (b < 0)) ? 1 : 0);
 
     private static int Width(bool zoom, bool demo, bool pyro, bool medic, bool engineer, bool spy) =>
         zoom ? ZoomSize : demo ? DemoSize : pyro ? PyroSize : medic ? MedicSize : engineer ? EngineerSize : spy ? SpySize : TeamSize;

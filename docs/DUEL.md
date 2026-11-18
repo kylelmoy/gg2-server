@@ -85,6 +85,31 @@ is mirrored on the server. No death is scored. The sentry goes by
 `DESTROY_SENTRY`'s body, seen through the subobject bit. Mines and projectiles
 already in flight stay in the old cell.
 
+## The duel nets
+
+gg2-sim trains one net per class for this server (`docs/HANDOFF-SERVER-DUEL.md`
+there): same-class 1v1 starts in these cells and in generated ones, spawn
+protection 0, driving the whole cell. They are terrain-layout nets
+(`docs/BOTS.md`, "gg2-sim policies"), and they were scored sampled. The settings
+they were trained and scored under:
+
+```ini
+[Bots]
+Mode=policy
+Policy=ppo-duel2-soldier-s1.gg2p,...        ; one per class
+ClassPolicy=Soldier=ppo-duel2-soldier-s1,...
+HandoverRule=distance
+HandoverRange=100000    ; past a cell's 1,082 px diagonal: the net always drives
+PolicySampled=1
+```
+
+and `[Server] Team Deathmatch Invulnerability Seconds=0`, which the live duel
+server already runs. The sniper's net is gg2-sim's 1B checkpoint
+(`ppo-duel2-sniper-s1-1000M`) and the spy's is `ppo-duel3-spy-s1`. The nets ship
+in gg2-sim as `.pt` checkpoints; `python/export_policy.py` writes the `.gg2p`.
+Their numbers are gg2-sim's and none has been measured on this server against a
+person.
+
 ## The cell maps
 
 `CellMapGenerator` (`src/GG2.Host/`) cuts each cell from a shipped map and

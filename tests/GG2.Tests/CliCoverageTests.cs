@@ -104,6 +104,7 @@ public sealed class CliCoverageTests
         ("BotEngagesBotsToo", ["--bot-engages-bots"], o => o.BotEngagesBotsToo),
         ("BotHandoverRule", ["--bot-handover-rule", "distance"], o => o.BotHandoverRule),
         ("BotHandoverRange", ["--bot-handover-range", "400"], o => o.BotHandoverRange),
+        ("BotPolicySampled", ["--bot-policy-sampled"], o => o.BotPolicySampled),
         ("BotBrainTeam", ["--bot-brain-team", "red"], o => o.BotBrainTeam),
         ("BotHumanize", ["--bot-humanize"], o => o.BotHumanize),
         ("BotHumanAim", ["--no-bot-human-aim"], o => o.BotHumanAim),

@@ -56,8 +56,23 @@ namespace GG2.Bots;
 /// aimed at where the observation listed it, and the fallback when a listed one has
 /// died is the nearest enemy it can see.
 /// </para>
+/// <para>
+/// <b>A terrain net</b> (<see cref="SimPolicyNetwork.IsTerrain"/>, the duel nets)
+/// routes its observation on the graph and next-hop tables its body's scripted
+/// layer routes with, handed over every tick (<see cref="SetRoute"/>).
+/// </para>
+/// <para>
+/// <b>Sampled</b> (<see cref="Sampled"/>), each decision draws every head from its
+/// softmax with the controller's own <see cref="Random"/>, seeded from the first
+/// roster slot it decides for, as gg2-sim's <c>PolicyDriver(net, new Random(seed))</c>
+/// does. Greedy is the default and the cross-checked arm: on a static scene its
+/// argmax is a fixed point, and gg2-sim's duel nets stop firing at an idle target
+/// in about 6% of cells greedy against under 2% sampled (gg2-sim
+/// <c>docs/HANDOFF-SERVER-DUEL.md</c>).
+/// </para>
 /// </remarks>
-public sealed class SimPolicyController : IMicroController, IScopeController, IBeamController, IBuildController, ISightingController
+public sealed class SimPolicyController
+    : IMicroController, IScopeController, IBeamController, IBuildController, ISightingController, IRouteController
 {
     /// <summary>Ticks a decision is held for: the cadence every gg2-sim policy trained at.</summary>
     public const int ActionRepeat = 3;
@@ -94,13 +109,21 @@ public sealed class SimPolicyController : IMicroController, IScopeController, IB
     // A decision WantsZoomToggle made this tick, before the keys, for Poll to use.
     private bool _decidedEarly;
 
+    // A terrain net's route source: the body's scripted layer's, every tick.
+    private NavGraph? _graph;
+    private NavDistanceSet? _tables;
+
+    // A sampled controller's stream (null until its first decision, or greedy).
+    private Random? _sample;
+
     /// <param name="network">The weights, shared read-only by every bot playing them.</param>
     /// <param name="drives">
     /// The classes this tier drives. A <c>.gg2p</c> names none, so this is always
     /// configured; an empty array drives nothing.
     /// </param>
     /// <param name="label">What to call it after <c>gg2-sim:</c>, or null for the bare name.</param>
-    public SimPolicyController(SimPolicyNetwork network, PlayerClass[] drives, string? label = null)
+    /// <param name="sampled">Draw each head from its softmax rather than take the argmax.</param>
+    public SimPolicyController(SimPolicyNetwork network, PlayerClass[] drives, string? label = null, bool sampled = false)
     {
         ArgumentNullException.ThrowIfNull(network);
         ArgumentNullException.ThrowIfNull(drives);
@@ -112,8 +135,21 @@ public sealed class SimPolicyController : IMicroController, IScopeController, IB
         _scratchB = new float[network.Widest];
         _action = new int[network.Heads.Length];
         _memory = network.IsV2 ? new SimPolicyMemory() : null;
+        Sampled = sampled;
         Name = label is null ? "gg2-sim" : "gg2-sim:" + label;
     }
+
+    /// <summary>Whether each decision is drawn from the heads' softmax (gg2-sim's <c>sampled:</c> driver).</summary>
+    public bool Sampled { get; }
+
+    public void SetRoute(NavGraph? graph, NavDistanceSet? tables)
+    {
+        _graph = graph;
+        _tables = tables;
+    }
+
+    /// <summary>The graph the last <see cref="SetRoute"/> handed over, for a test of the wiring.</summary>
+    internal NavGraph? RouteGraph => _graph;
 
     public string Name { get; }
 
@@ -123,10 +159,12 @@ public sealed class SimPolicyController : IMicroController, IScopeController, IB
     /// Observation plus forward pass, Release, one core of an i7-13700K
     /// (2026-10-27): 72 µs for the 253-256-256-106 team net, 57 µs for the
     /// 169-256-256-56 duel net, scalar by design (see <see cref="SimPolicyNetwork"/>)
-    /// — ten times a gg2-rl decision. The larger is used for both. Re-measure for
-    /// a wider net.
+    /// — ten times a gg2-rl decision. The larger is used for both. A terrain net
+    /// (2026-11-17, same machine, sampled): 102-107 µs for the 439-256-256-106
+    /// duel soldier net against 71 µs for the 263-wide v2 soldier net, the blocks
+    /// and the wider first layer. Re-measure for a wider net.
     /// </summary>
-    public int DecisionCostFor(int liveCharacters) => 75;
+    public int DecisionCostFor(int liveCharacters) => _network.IsTerrain ? 110 : 75;
 
     public bool DecidedThisPoll { get; private set; }
 
@@ -253,11 +291,16 @@ public sealed class SimPolicyController : IMicroController, IScopeController, IB
         if (_network.IsTeam)
             SimPolicyObservation.Team(
                 in world, me, _observation, _listed, _network.IsZoom, _network.IsDemo, _network.IsPyro, _network.IsMedic, _listedAllies,
-                _network.IsEngineer, _network.IsSpy, _memory is null ? null : Memory(me), tick);
+                _network.IsEngineer, _network.IsSpy, _memory is null ? null : Memory(me), tick, _network.IsTerrain, _graph, _tables);
         else
             SimPolicyObservation.Duel(in world, me, op, _observation, _network.InputSize);
 
-        _network.Decide(_observation, _scratchA, _scratchB, _action);
+        // Seeded once, by the first slot decided for, so a headless match is
+        // reproducible and two bots on one server do not share a stream.
+        if (Sampled)
+            _sample ??= new Random(unchecked((me * 104729) ^ 0x5A3C7E1));
+
+        _network.Decide(_observation, _scratchA, _scratchB, _action, _sample);
     }
 
     private static PlayerKeys Keys(int[] a)
@@ -380,10 +423,11 @@ public sealed class SimPolicyController : IMicroController, IScopeController, IB
 /// <param name="Network">The loaded weights, SHARED by every bot — see <see cref="MicroControllerSpec"/>.</param>
 /// <param name="Drives">The classes it drives; a <c>.gg2p</c> names none of its own.</param>
 /// <param name="Label">The checkpoint's file name, for a result table.</param>
-public sealed record SimPolicyMicroSpec(SimPolicyNetwork Network, PlayerClass[] Drives, string? Label = null)
+/// <param name="Sampled">Each bot's decisions drawn from the heads' softmax; see <see cref="SimPolicyController"/>.</param>
+public sealed record SimPolicyMicroSpec(SimPolicyNetwork Network, PlayerClass[] Drives, string? Label = null, bool Sampled = false)
     : MicroControllerSpec
 {
     public override string Name => Label is null ? "gg2-sim" : "gg2-sim:" + Label;
 
-    public override IMicroController Create() => new SimPolicyController(Network, Drives, Label);
+    public override IMicroController Create() => new SimPolicyController(Network, Drives, Label, Sampled);
 }

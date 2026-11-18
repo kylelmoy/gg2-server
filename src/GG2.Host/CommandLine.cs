@@ -640,6 +640,11 @@ internal static class CommandLine
                     options.BotHandoverRange = int.Parse(cursor.Take(), CultureInfo.InvariantCulture);
                     break;
 
+                // A behaviour switch: ServerOptions.BotPolicySampled.
+                case "--bot-policy-sampled":
+                    options.BotPolicySampled = true;
+                    break;
+
                 // A behaviour switch: ServerOptions.BotBrainTeam.
                 case "--bot-brain-team":
                     options.BotBrainTeam = ServerSettings.ParseBrainTeam(cursor.Take());
@@ -1238,6 +1243,10 @@ internal static class CommandLine
                             handover; 150 by default. Very large with
                             --bot-handover-rule distance: the policy drives
                             whenever an opponent is alive.
+          --bot-policy-sampled
+                            draw each gg2-sim policy decision from its softmax
+                            instead of taking the argmax: how the duel nets
+                            were trained and scored. Off (greedy) by default.
           --bot-brain-team both|red|blue
                             the one team whose bots --bot-mode's brain drives;
                             the other team's bots are plain scripted bots. Both

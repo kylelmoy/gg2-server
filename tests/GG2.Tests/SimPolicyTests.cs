@@ -537,6 +537,173 @@ public sealed class SimPolicyTests : IDisposable
         Assert.DoesNotContain(enemy, listed);
     }
 
+    /// <summary>
+    /// gg2-sim's terrain layout (the duel nets) is told apart by width alone, on
+    /// top of any team layout and either version.
+    /// </summary>
+    [Fact]
+    public void LoadsTerrainNetsOnEveryTeamLayout()
+    {
+        Assert.Equal(176, SimPolicyObservation.TerrainColumns);
+
+        var soldier = SimPolicyNetwork.Load(Write(
+            "t-soldier.gg2p", SimPolicyObservation.TeamSize + SimPolicyObservation.SentryColumns + SimPolicyObservation.TerrainColumns,
+            SimPolicyController.TeamAimActions));
+        var v1 = SimPolicyNetwork.Load(Write(
+            "t-v1.gg2p", SimPolicyObservation.TeamSize + SimPolicyObservation.TerrainColumns, SimPolicyController.TeamAimActions));
+        var spy = SimPolicyNetwork.Load(Write(
+            "t-spy.gg2p", SimPolicyObservation.SpySize + SimPolicyObservation.SentryColumns + SimPolicyObservation.TerrainColumns,
+            SimPolicyController.TeamAimActions, zoomHead: true));
+        var plain = SimPolicyNetwork.Load(Write(
+            "plain.gg2p", SimPolicyObservation.TeamSize + SimPolicyObservation.SentryColumns, SimPolicyController.TeamAimActions));
+
+        Assert.Equal(439, soldier.InputSize);
+        Assert.True(soldier is { IsTerrain: true, IsV2: true, IsTeam: true });
+        Assert.True(v1 is { IsTerrain: true, IsV2: false, IsTeam: true });
+        Assert.True(spy is { IsTerrain: true, IsV2: true, IsSpy: true, FifthIsSpecial: true });
+        Assert.False(plain.IsTerrain);
+    }
+
+    /// <summary>
+    /// A terrain row zeroes its position, and its route columns are hops on the
+    /// tables the body routes with: present with them, absent without.
+    /// </summary>
+    /// <remarks>
+    /// The values themselves are checked against gg2-sim's ref outside the suite
+    /// (<c>docs/BOTS.md</c>, "gg2-sim policies"); this holds the wiring.
+    /// </remarks>
+    [Fact]
+    public void ATerrainRowRoutesOnTheBodysTables()
+    {
+        var match = SoldiersInView(out var me, out _);
+        var view = new WorldView(in match.State, match.Collision);
+        var graph = match.Nav!;
+        var tables = match.HybridBotFor(me)?.ScriptedBot.Distances ?? NavDistanceSet.Derive(graph);
+        var width = SimPolicyObservation.TeamSize + SimPolicyObservation.SentryColumns + SimPolicyObservation.TerrainColumns;
+        var routed = new float[width];
+        var unrouted = new float[width];
+        var listed = new int[3];
+
+        SimPolicyObservation.Team(in view, me, routed, listed, memory: new SimPolicyMemory(), terrain: true, graph: graph, tables: tables);
+        SimPolicyObservation.Team(in view, me, unrouted, listed, memory: new SimPolicyMemory(), terrain: true, graph: graph);
+
+        Assert.Equal(0f, routed[0]);
+        Assert.Equal(0f, routed[1]);
+
+        // Some block around a body standing in a map is solid.
+        var blocks = routed.AsSpan(width - SimPolicyObservation.TerrainColumns, 165).ToArray();
+        Assert.Contains(blocks, share => share > 0);
+
+        var route = width - 8;
+        Assert.True(routed[route + 2] == 1 || routed[route + 7] == 1, "neither a first hop nor the same node");
+        Assert.Equal(0f, unrouted[route + 2]);
+        Assert.Equal(routed[route + 6], unrouted[route + 6]);
+    }
+
+    /// <summary>
+    /// Sampled, a decision is drawn from each head's softmax with the bot's own
+    /// stream: it varies on a fixed observation where greedy cannot, and the same
+    /// seed repeats it.
+    /// </summary>
+    [Fact]
+    public void ASampledDecisionVariesAndRepeatsWithItsSeed()
+    {
+        var net = SimPolicyNetwork.Load(Write("s.gg2p", SimPolicyObservation.TeamSize, SimPolicyController.TeamAimActions));
+        var observation = new float[net.InputSize];
+
+        for (var i = 0; i < observation.Length; i++)
+            observation[i] = (i % 7) / 7f;
+
+        var a = new float[net.Widest];
+        var b = new float[net.Widest];
+        var greedy = new HashSet<int>();
+        var first = new List<int>();
+        var second = new List<int>();
+        var one = new Random(11);
+        var two = new Random(11);
+        var action = new int[net.Heads.Length];
+
+        for (var n = 0; n < 200; n++)
+        {
+            net.Decide(observation, a, b, action);
+            greedy.Add(action[3]);
+            net.Decide(observation, a, b, action, one);
+            first.Add(action[3]);
+            net.Decide(observation, a, b, action, two);
+            second.Add(action[3]);
+        }
+
+        Assert.Single(greedy);
+        Assert.True(first.Distinct().Count() > 1, "sampling never left one aim bin");
+        Assert.Equal(first, second);
+    }
+
+    [Fact]
+    public void PolicySampledReachesEveryGg2pTier()
+    {
+        var path = Write("kill.gg2p", SimPolicyObservation.TeamSize, SimPolicyController.TeamAimActions);
+        string[] args = ["--bot-mode", "policy", "--policy", path, "--bot-class-policy", "Soldier=kill"];
+
+        var greedy = Assert.IsType<SimPolicyMicroSpec>(Assert.Single(CommandLine.Parse(args).Bots.Brain!.Tiers));
+        var sampled = Assert.IsType<SimPolicyMicroSpec>(Assert.Single(CommandLine.Parse([.. args, "--bot-policy-sampled"]).Bots.Brain!.Tiers));
+
+        Assert.False(greedy.Sampled);
+        Assert.True(sampled.Sampled);
+        Assert.True(Assert.IsType<SimPolicyController>(sampled.Create()).Sampled);
+    }
+
+    /// <summary>
+    /// A terrain net drives in a match, sampled, and the hybrid hands it the
+    /// graph its scripted layer routes on (IRouteController). Without that
+    /// hand-over its route columns would be absent on every decision.
+    /// </summary>
+    [Fact]
+    public void AHybridBotHandsATerrainNetItsRoute()
+    {
+        var net = SimPolicyNetwork.Load(Write(
+            "t.gg2p", SimPolicyObservation.TeamSize + SimPolicyObservation.SentryColumns + SimPolicyObservation.TerrainColumns,
+            SimPolicyController.TeamAimActions));
+        var brain = BotBrainSpec.Of(new SimPolicyMicroSpec(net, [PlayerClass.Soldier], "t", Sampled: true)) with
+        {
+            Rule = HandoverRule.Distance,
+        };
+        var options = HeadlessMatchOptions.Default with
+        {
+            Map = "ctf_truefort",
+            Bots = 4,
+            Seed = 7123,
+            MaxTicks = 900,
+            AllowedClasses = [PlayerClass.Soldier],
+            Brain = brain,
+            HybridTeam = Team.Red,
+        };
+        var match = HeadlessMatch.Load(options, MapDirectory.Resolve(), MapDirectory.ResolveNav());
+        var driven = 0;
+        var routed = 0;
+
+        while (match.Outcome == MatchOutcome.Running)
+        {
+            match.Step();
+
+            for (var slot = 1; slot < WorldState.MaxSlots; slot++)
+            {
+                if (match.HybridBotFor(slot) is not { } hybrid)
+                    continue;
+
+                var tier = Assert.IsType<SimPolicyController>(Assert.Single(hybrid.Tiers));
+
+                if (ReferenceEquals(tier.RouteGraph, match.Nav))
+                    routed++;
+
+                if (hybrid.Driving == tier)
+                    driven++;
+            }
+        }
+
+        Assert.True(driven > 0, "the terrain net never drove");
+        Assert.True(routed > 0, "no tier was handed the match's graph");
+    }
+
     // A soldier match stepped until slot `me` has a live enemy within 300 px.
     private static HeadlessMatch SoldiersInView(out int me, out int enemy)
     {

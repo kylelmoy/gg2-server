@@ -105,7 +105,7 @@ public static class BotBrain
 
                 labels.Add(label);
 
-                var tier = SimTier(policyPath, label, assigned, report);
+                var tier = SimTier(policyPath, label, assigned, report) with { Sampled = options.BotPolicySampled };
 
                 foreach (var playerClass in tier.Drives)
                     claimedBy.TryAdd(playerClass, label);
@@ -221,7 +221,8 @@ public static class BotBrain
             .ToArray();
 
         report?.Invoke(
-            $"policy {Path.GetFileName(policyPath)}: a gg2-sim {(network.IsTeam ? network.IsV2 ? "team (layout v2)" : "team" : "duel")} net "
+            $"policy {Path.GetFileName(policyPath)}: a gg2-sim {(network.IsTeam ? network.IsV2 ? "team (layout v2)" : "team" : "duel")}"
+            + $"{(network.IsTerrain ? " terrain" : "")} net "
             + $"({network.InputSize} inputs) with no simulation stamp - gg2-sim records the commit it "
             + $"trained against - this build is {SimulationStamp.Uuid}, drives {Classes(drives)}");
 

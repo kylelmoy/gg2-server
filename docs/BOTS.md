@@ -511,12 +511,13 @@ wheel on the way across (the class remarks say what breaks if that stops).
 
 | | gg2-sim `.gg2p` |
 |---|---|
-| Observation | `SimPolicyObservation`: team (253 floats), duel (169), zoom (255: team plus own scope and rifle charge), demo (286: team plus the eight nearest own mines and lobbed/8), pyro (256: team plus ReadyToBlast, ReadyToFlare and own burn/210), medic (259: team plus uber/2000, uber ready, ubering, beaming, patient hp share and the patient's index among the listed team-mates), engineer (258: team plus nuts'n'bolts/100 and its own sentry's present, hp/100, dx/500, dy/500) or spy (257: team plus cloak, cloak alpha, ready to stab and stab freeze left). Every team width lists enemy mines and flares beside rockets and shots; the duel width does not. **Base layout v2** is any team width plus 10 (263 to 296): the two nearest sentries after the layout's columns, and hidden enemies listed from the body's memory (below) |
+| Observation | `SimPolicyObservation`: team (253 floats), duel (169), zoom (255: team plus own scope and rifle charge), demo (286: team plus the eight nearest own mines and lobbed/8), pyro (256: team plus ReadyToBlast, ReadyToFlare and own burn/210), medic (259: team plus uber/2000, uber ready, ubering, beaming, patient hp share and the patient's index among the listed team-mates), engineer (258: team plus nuts'n'bolts/100 and its own sentry's present, hp/100, dx/500, dy/500) or spy (257: team plus cloak, cloak alpha, ready to stab and stab freeze left). Every team width lists enemy mines and flares beside rockets and shots; the duel width does not. **Base layout v2** is any team width plus 10 (263 to 296): the two nearest sentries after the layout's columns, and hidden enemies listed from the body's memory (below). **The terrain layout** is any team width, either version, plus 176 (the duel nets: 439 to 472), below |
 | Actions | `SimPolicyController`: 24 absolute aim bins, then 25 relative to the k-th listed enemy (team) or to the nearest enemy (duel); a zoom net adds a fifth head, the scope level; a demo, pyro, medic or spy net's fifth head is the Special key (the detonate; the airblast, and with Attack the flare; the needles, and with Attack the uber when ready; the cloak toggle), held for the decision like Attack; an engineer net's is the build command (`IBuildController`), sent on every tick of the decision. A medic net's relative groups 1 and 2 aim at the two listed team-mates, with the aim distance on them (capped at 255) so the beam picks that patient |
 | Sniper scope, sentry build | a zoom net's scope and an engineer net's build, while it drives (`IScopeController`, `IBuildController`); otherwise the scripted layer's (which never builds) |
 | Classes it drives | **only** what `ClassPolicy` assigns; none is warned about |
 | Stamp | none; gg2-sim records the gg2-server commit it trained at |
-| Decision cost | 72 µs team, 57 µs duel |
+| Decision | greedy by default; `[Bots] PolicySampled` draws each head from its softmax (below) |
+| Decision cost | 72 µs team, 57 µs duel, 102-107 µs terrain |
 
 **Base layout v2** (gg2-sim `env/env.h`, `SentryBlockObs` and `SpyMemoryTicks`)
 is told apart by width alone (`SimPolicyNetwork.IsV2`); v1 nets load and run
@@ -538,6 +539,32 @@ but for up to 60 ticks after somebody else leaves, an entry can describe
 whoever moved into a remembered slot. It is read only for an enemy the body
 cannot see, so the cost is one stale remembered row. gg2-sim's environment has
 no departures, so nothing there can show it.
+
+**The terrain layout** (gg2-sim `env/env.h`, `TerrainObs`; the duel nets) is told
+apart by width alone (`SimPolicyNetwork.IsTerrain`). Its position columns are
+written 0, and after the sentry block every row ends in 15x11 blocks of 9x9 mask
+cells (54 px) centred on the body's cell, each the larger of its walkmask share
+and the largest share one rect solid to the body covers; then, per listed enemy,
+1 when `CollisionLineBlocksBullets` from the body to it (its remembered position
+when hidden) is clear; then eight route columns toward the first listed enemy:
+hops 1 and 2 on the next-hop table the body's scripted layer routes with, between
+the two bodies' `SnapObjective` nodes (dx/500, dy/500, present each), standing on
+a node, and same node. The graph and tables come from the body's own
+`ScriptedBot` through `IRouteController`, which `HybridBot.Poll` calls on every
+tier at the top of every poll. **With no tables (`--no-nav-distances`, or a
+custom map too large to derive them) the hops are written absent**, a row no
+net trained on; gg2-sim always has them.
+
+**Sampled decisions** (`[Bots] PolicySampled`, `--bot-policy-sampled`, off by
+default) draw each head from the softmax of its logits, in double after a shift
+by the head's greedy logit, one `NextDouble` per head in head order: gg2-sim's
+`PolicyDriver(net, new Random(seed))`. Each controller owns its `System.Random`,
+seeded from the first roster slot it decides for, never `WorldState.Random`.
+Greedy on a static scene is a fixed point: the duel soldier net stops pressing
+Attack at an idle target in about 6% of cells greedy and under 2% sampled, and
+sampled wins more against every opponent gg2-sim scores for all nine classes
+(gg2-sim `docs/HANDOFF-SERVER-DUEL.md`). Greedy remains the arm every earlier
+cross-check below was taken with.
 
 **The observation, the forward pass and the decode are gg2-sim's
 `ref/PolicyDriver.cs` and `ref/Matches.cs` (`SimPolicyController`), expression
@@ -585,7 +612,16 @@ hp, cloak, scope and sentry on every one of 106,714 ticks, with 181,904
 policy-driven bot-ticks and 30 sentries built by the engineer net. Removing the
 `HybridBot` sighting call made the lockstep run diverge (tick 4,725 on
 `arena_montane`); holding a remembered row's present column at 1 failed the
-observation check at tick 18. **A medic on the beam is handed over only to a controller that heals
+observation check at tick 18. The terrain layout and sampled decisions were
+checked against gg2-sim `4f7723c`'s `ref/PolicyDriver.cs` (pin `da4fafb`) on
+2026-11-17 with its nine duel nets (`ppo-duel2-{soldier,scout,heavy,demoman,pyro,
+medic,engineer}-s1`, `ppo-duel2-sniper-s1-1000M`, `ppo-duel3-spy-s1`, exported
+from the `.pt` checkpoints), over six 2,400-tick hybrid matches the nets drove
+sampled (`duel_01`, `duel_04`, `duel_07`, `ctf_truefort`, `cp_dirtbowl`,
+`koth_harvest`): every live body observed through all nine layouts every tick
+with its own memory, 719,550 observations bitwise equal (539,946 with a first
+hop, 535,599 with two, 23,238 with a clear line of sight), and 239,850 sampled
+decisions equal with the same seed on each side. **A medic on the beam is handed over only to a controller that heals
 itself**: `Handover.ShouldEngage` keeps a beaming medic scripted, and
 `HybridBot` drops that term when every eligible tier is an `IBeamController`
 owning the beam, which a medic-layout net is (the user's call, 2026-10-29). Any
