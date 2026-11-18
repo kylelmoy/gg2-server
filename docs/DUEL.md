@@ -105,7 +105,10 @@ PolicySampled=1
 
 and `[Server] Team Deathmatch Invulnerability Seconds=0`, which the live duel
 server already runs. The sniper's net is gg2-sim's 1B checkpoint
-(`ppo-duel2-sniper-s1-1000M`) and the spy's is `ppo-duel3-spy-s1`. The nets ship
+(`ppo-duel2-sniper-s1-1000M`), the spy's is `ppo-duel3-spy-s1`, and Quote's is
+`ppo-duelq-quote-s1-1000M` (`ClassPolicy=...,Quote=ppo-duelq-quote-s1-1000M`):
+a duel bot takes its human's class, so a Quote human gets a Quote bot, and that
+is the only way a bot is ever a Quote. The nets ship
 in gg2-sim as `.pt` checkpoints; `python/export_policy.py` writes the `.gg2p`.
 Their numbers are gg2-sim's and none has been measured on this server against a
 person.

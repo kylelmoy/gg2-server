@@ -94,7 +94,7 @@ public sealed class SimPolicyNetwork
 
     private static bool IsFiveHeadWidth(int width) => width is SimPolicyObservation.ZoomSize or SimPolicyObservation.DemoSize
         or SimPolicyObservation.PyroSize or SimPolicyObservation.MedicSize or SimPolicyObservation.EngineerSize
-        or SimPolicyObservation.SpySize;
+        or SimPolicyObservation.SpySize or SimPolicyObservation.QuoteSize;
 
     /// <summary>
     /// A sniper net in gg2-sim's zoom layout: a team net with
@@ -142,8 +142,15 @@ public sealed class SimPolicyNetwork
     /// </summary>
     public bool IsSpy => LayoutSize == SimPolicyObservation.SpySize && _heads.Length == ZoomHeads;
 
+    /// <summary>
+    /// A Quote net in gg2-sim's Quote layout: a team net with
+    /// <see cref="SimPolicyObservation.QuoteSize"/> inputs and a fifth head,
+    /// Special — the blade throw.
+    /// </summary>
+    public bool IsQuote => LayoutSize == SimPolicyObservation.QuoteSize && _heads.Length == ZoomHeads;
+
     /// <summary>A five-head net whose fifth head is the Special key, held for the decision.</summary>
-    public bool FifthIsSpecial => IsDemo || IsPyro || IsMedic || IsSpy;
+    public bool FifthIsSpecial => IsDemo || IsPyro || IsMedic || IsSpy || IsQuote;
 
     /// <summary>A class layout's head count (zoom, demo, pyro, medic, engineer, spy); every other net has four.</summary>
     public const int ZoomHeads = 5;
@@ -235,7 +242,7 @@ public sealed class SimPolicyNetwork
             throw new InvalidDataException(
                 $"{InputSize} inputs; expected {SimPolicyObservation.TeamSize} (team), {SimPolicyObservation.ZoomSize} (zoom), "
                 + $"{SimPolicyObservation.DemoSize} (demo), {SimPolicyObservation.PyroSize} (pyro), {SimPolicyObservation.MedicSize} (medic), "
-                + $"{SimPolicyObservation.EngineerSize} (engineer), {SimPolicyObservation.SpySize} (spy), any of those plus "
+                + $"{SimPolicyObservation.EngineerSize} (engineer), {SimPolicyObservation.SpySize} (spy), {SimPolicyObservation.QuoteSize} (Quote), any of those plus "
                 + $"{SimPolicyObservation.SentryColumns} (v2) and {SimPolicyObservation.TerrainColumns} (terrain), "
                 + $"or {SimPolicyObservation.DuelSize}/{SimPolicyObservation.DuelSizeNoClasses} (duel)");
         }

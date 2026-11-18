@@ -511,8 +511,8 @@ wheel on the way across (the class remarks say what breaks if that stops).
 
 | | gg2-sim `.gg2p` |
 |---|---|
-| Observation | `SimPolicyObservation`: team (253 floats), duel (169), zoom (255: team plus own scope and rifle charge), demo (286: team plus the eight nearest own mines and lobbed/8), pyro (256: team plus ReadyToBlast, ReadyToFlare and own burn/210), medic (259: team plus uber/2000, uber ready, ubering, beaming, patient hp share and the patient's index among the listed team-mates), engineer (258: team plus nuts'n'bolts/100 and its own sentry's present, hp/100, dx/500, dy/500) or spy (257: team plus cloak, cloak alpha, ready to stab and stab freeze left). Every team width lists enemy mines and flares beside rockets and shots; the duel width does not. **Base layout v2** is any team width plus 10 (263 to 296): the two nearest sentries after the layout's columns, and hidden enemies listed from the body's memory (below). **The terrain layout** is any team width, either version, plus 176 (the duel nets: 439 to 472), below |
-| Actions | `SimPolicyController`: 24 absolute aim bins, then 25 relative to the k-th listed enemy (team) or to the nearest enemy (duel); a zoom net adds a fifth head, the scope level; a demo, pyro, medic or spy net's fifth head is the Special key (the detonate; the airblast, and with Attack the flare; the needles, and with Attack the uber when ready; the cloak toggle), held for the decision like Attack; an engineer net's is the build command (`IBuildController`), sent on every tick of the decision. A medic net's relative groups 1 and 2 aim at the two listed team-mates, with the aim distance on them (capped at 255) so the beam picks that patient |
+| Observation | `SimPolicyObservation`: team (253 floats), duel (169), zoom (255: team plus own scope and rifle charge), demo (286: team plus the eight nearest own mines and lobbed/8), pyro (256: team plus ReadyToBlast, ReadyToFlare and own burn/210), medic (259: team plus uber/2000, uber ready, ubering, beaming, patient hp share and the patient's index among the listed team-mates), engineer (258: team plus nuts'n'bolts/100 and its own sentry's present, hp/100, dx/500, dy/500) spy (257: team plus cloak, cloak alpha, ready to stab and stab freeze left) or Quote (262: team plus own live bubbles/25, a blade of its own in the air, magazine refilling, each listed enemy's live bubbles/25 and each listed enemy Quote's magazine/90, the enemy columns 0 for a remembered one). Every team width lists enemy mines and flares and either team's thrown blades beside rockets and shots; the duel width does not. **Base layout v2** is any team width plus 10 (263 to 296): the two nearest sentries after the layout's columns, and hidden enemies listed from the body's memory (below). **The terrain layout** is any team width, either version, plus 176 (the duel nets: 439 to 472), below |
+| Actions | `SimPolicyController`: 24 absolute aim bins, then 25 relative to the k-th listed enemy (team) or to the nearest enemy (duel); a zoom net adds a fifth head, the scope level; a demo, pyro, medic or spy net's fifth head is the Special key (the detonate; the airblast, and with Attack the flare; the needles, and with Attack the uber when ready; the cloak toggle; Quote's blade throw), held for the decision like Attack; an engineer net's is the build command (`IBuildController`), sent on every tick of the decision. A medic net's relative groups 1 and 2 aim at the two listed team-mates, with the aim distance on them (capped at 255) so the beam picks that patient |
 | Sniper scope, sentry build | a zoom net's scope and an engineer net's build, while it drives (`IScopeController`, `IBuildController`); otherwise the scripted layer's (which never builds) |
 | Classes it drives | **only** what `ClassPolicy` assigns; none is warned about |
 | Stamp | none; gg2-sim records the gg2-server commit it trained at |
@@ -621,7 +621,16 @@ sampled (`duel_01`, `duel_04`, `duel_07`, `ctf_truefort`, `cp_dirtbowl`,
 `koth_harvest`): every live body observed through all nine layouts every tick
 with its own memory, 719,550 observations bitwise equal (539,946 with a first
 hop, 535,599 with two, 23,238 with a clear line of sight), and 239,850 sampled
-decisions equal with the same seed on each side. **A medic on the beam is handed over only to a controller that heals
+decisions equal with the same seed on each side. The Quote layout was
+checked the same way on 2026-11-17 (gg2-sim `cc9ae50`'s ref, its duel net
+`ppo-duelq-quote-s1-1000M`), through the real duel server: a loopback Quote
+human strafing, swinging, throwing at its bot on `duel_01`, `duel_03` and
+`duel_06` for 6,000 ticks each, the bot driven by the net sampled. 17,997
+observations bitwise equal and 5,997 sampled decisions equal, with own bubbles
+in 17,032, an enemy's in 14,617, an enemy magazine in 16,557 and a blade in
+flight in 3,367; the net killed the human 48 times and was never killed.
+`HeadlessMatch` cannot make a Quote bot (its class draw stops at Pyro), which
+is why that check runs on the duel server. **A medic on the beam is handed over only to a controller that heals
 itself**: `Handover.ShouldEngage` keeps a beaming medic scripted, and
 `HybridBot` drops that term when every eligible tier is an `IBeamController`
 owning the beam, which a medic-layout net is (the user's call, 2026-10-29). Any

@@ -99,6 +99,15 @@ public static class SimPolicyObservation
 
     public const int SpySize = TeamSize + SpyColumns;
 
+    /// <summary>
+    /// gg2-sim's <c>QuoteObs</c>: own live bubbles/25, a blade of its own in the air,
+    /// its magazine refilling; then each listed enemy's live bubbles/25, then each
+    /// listed enemy Quote's magazine/90 (0 unlisted, remembered or another class).
+    /// </summary>
+    public const int QuoteColumns = 3 + (2 * NearEnemies);
+
+    public const int QuoteSize = TeamSize + QuoteColumns;
+
     private const int NearSentries = 2, SentryObs = 5;
 
     /// <summary>gg2-sim's <c>SentryBlockObs</c>: what base layout v2 adds to every layout's width.</summary>
@@ -141,13 +150,14 @@ public static class SimPolicyObservation
     public static void Team(
         in WorldView world, int meSlot, Span<float> o, Span<int> listed, bool zoom = false, bool demo = false, bool pyro = false,
         bool medic = false, Span<int> listedAllies = default, bool engineer = false, bool spy = false,
-        SimPolicyMemory? memory = null, int tick = 0, bool terrain = false, NavGraph? graph = null, NavDistanceSet? tables = null)
+        SimPolicyMemory? memory = null, int tick = 0, bool terrain = false, NavGraph? graph = null, NavDistanceSet? tables = null,
+        bool quote = false)
     {
         ref readonly var me = ref world.Character(meSlot);
         ref readonly var gun = ref world.Weapon(meSlot);
         var map = world.Collision;
         var v2 = memory is not null;
-        var withSentries = Width(zoom, demo, pyro, medic, engineer, spy) + (v2 ? SentryColumns : 0);
+        var withSentries = Width(zoom, demo, pyro, medic, engineer, spy, quote) + (v2 ? SentryColumns : 0);
         o[..(withSentries + (terrain ? TerrainColumns : 0))].Clear();
         var k = 0;
         o[k++] = (float)(me.X / map.Width);
@@ -314,6 +324,24 @@ public static class SimPolicyObservation
             o[k++] = gun.ReadyToStab ? 1 : 0;
             o[k++] = (float)((double)me.StabFreezeTimer / Weapons.StabFreezeTicks);
         }
+        else if (quote)
+        {
+            // A hidden (remembered) enemy's bubbles and magazine are not seen, so 0.
+            k += ClassCount;
+            o[k++] = (float)((double)gun.BubbleCount / Weapons.BladeMaxBubbles);
+            o[k++] = gun.BladesOut > 0 ? 1 : 0;
+            o[k++] = gun.Replenishing ? 1 : 0;
+
+            for (var n = 0; n < NearEnemies; n++)
+                o[k++] = n < ne && !hidden[n] ? (float)((double)world.Weapon(enemies[n]).BubbleCount / Weapons.BladeMaxBubbles) : 0;
+
+            for (var n = 0; n < NearEnemies; n++)
+            {
+                o[k++] = n < ne && !hidden[n] && world.Character(enemies[n]).Class == PlayerClass.Quote
+                    ? (float)(world.Weapon(enemies[n]).AmmoCount / WeaponStats.For(PlayerClass.Quote).MaxAmmo)
+                    : 0;
+            }
+        }
         else
         {
             k += ClassCount;
@@ -462,8 +490,9 @@ public static class SimPolicyObservation
 
     private static int FloorDiv(int a, int b) => (a / b) - ((a % b != 0 && (a < 0) != (b < 0)) ? 1 : 0);
 
-    private static int Width(bool zoom, bool demo, bool pyro, bool medic, bool engineer, bool spy) =>
-        zoom ? ZoomSize : demo ? DemoSize : pyro ? PyroSize : medic ? MedicSize : engineer ? EngineerSize : spy ? SpySize : TeamSize;
+    private static int Width(bool zoom, bool demo, bool pyro, bool medic, bool engineer, bool spy, bool quote) =>
+        zoom ? ZoomSize : demo ? DemoSize : pyro ? PyroSize : medic ? MedicSize : engineer ? EngineerSize : spy ? SpySize
+        : quote ? QuoteSize : TeamSize;
 
     /// <summary>
     /// A v2 body's sightings, learned as an observation would learn them without
@@ -730,7 +759,9 @@ public static class SimPolicyObservation
                 var p = world.State.LiveProjectileHandle(i).Index;
                 ref readonly var pr = ref world.State.Projectiles[p];
 
+                // The team layout lists Quote's thrown blades too, either team's.
                 var shot = pr.Kind is ProjectileKind.Rocket or ProjectileKind.Shot
+                    || (enemyHazards && pr.Kind is ProjectileKind.Blade)
                     || (enemyHazards && pr.Kind is (ProjectileKind.Mine or ProjectileKind.Flare) && pr.Team != me.Team);
 
                 if (!shot || picked[..count].Contains(p))

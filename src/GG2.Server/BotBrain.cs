@@ -404,14 +404,16 @@ public static class BotBrain
             var name = entry[..separator].Trim();
             var target = entry[(separator + 1)..].Trim();
 
-            // ⚠️ The same class ceiling ParseClasses uses: PlayerClass runs past
-            // Pyro into values no bot can be, and Enum.TryParse accepts them.
+            // Quote is the ceiling, not Pyro as in ParseClasses: the fill never
+            // draws a Quote bot, but the duel server makes one for a Quote human,
+            // and gg2-sim trains a Quote net for it. Enum.TryParse also accepts
+            // any number, hence the bound at all.
             if (!Enum.TryParse(name, ignoreCase: true, out PlayerClass playerClass)
-                || playerClass > PlayerClass.Pyro)
+                || playerClass > PlayerClass.Quote)
             {
                 throw new ArgumentException(
                     $"bot class policy '{entry}': '{name}' is not a class a bot can be. "
-                    + "Scout, Pyro, Soldier, Heavy, Demoman, Medic, Engineer, Spy or Sniper.");
+                    + "Scout, Pyro, Soldier, Heavy, Demoman, Medic, Engineer, Spy, Sniper or Quote.");
             }
 
             if (assigned.TryGetValue(playerClass, out var already))

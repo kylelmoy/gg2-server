@@ -704,6 +704,86 @@ public sealed class SimPolicyTests : IDisposable
         Assert.True(routed > 0, "no tier was handed the match's graph");
     }
 
+    /// <summary>
+    /// gg2-sim's Quote layout: nine columns after the class one-hots and a fifth
+    /// head pressing Special (the blade throw), told apart by width like the rest.
+    /// </summary>
+    [Fact]
+    public void LoadsAQuoteNetInEveryVersion()
+    {
+        var aim = SimPolicyController.TeamAimActions;
+        var v1 = SimPolicyNetwork.Load(Write("q1.gg2p", SimPolicyObservation.QuoteSize, aim, zoomHead: true));
+        var duel = SimPolicyNetwork.Load(Write(
+            "qd.gg2p", SimPolicyObservation.QuoteSize + SimPolicyObservation.SentryColumns + SimPolicyObservation.TerrainColumns,
+            aim, zoomHead: true));
+
+        Assert.Equal(262, SimPolicyObservation.QuoteSize);
+        Assert.True(v1 is { IsQuote: true, IsTeam: true, FifthIsSpecial: true, IsV2: false, IsTerrain: false });
+        Assert.Equal(448, duel.InputSize);
+        Assert.True(duel is { IsQuote: true, IsV2: true, IsTerrain: true, FifthIsSpecial: true });
+        Assert.Throws<InvalidDataException>(() => SimPolicyNetwork.Load(Write("q4.gg2p", SimPolicyObservation.QuoteSize, aim)));
+    }
+
+    /// <summary>
+    /// A Quote human on the duel server gets a Quote bot, and a Quote net assigned
+    /// by <c>ClassPolicy=Quote=...</c> drives it and presses Special. The fill
+    /// never draws a Quote bot, so this is the one place one exists.
+    /// </summary>
+    [Fact]
+    public void AQuoteNetDrivesAQuoteHumansDuelBot()
+    {
+        var net = WriteSpecial(
+            "quote.gg2p", SimPolicyObservation.QuoteSize + SimPolicyObservation.SentryColumns + SimPolicyObservation.TerrainColumns);
+        using var harness = new ServerHarness(o =>
+        {
+            ServerConfigFile.ApplyLines(o, [
+                "[Bots]", "Mode=policy", "HandoverRule=distance", "HandoverRange=100000", "PolicySampled=1",
+                $"Policy={net}", "ClassPolicy=Quote=quote",
+            ], Path.Combine(_directory, "quote.ini"));
+            BotBrain.Build(o);
+            o.Map = "duel_01";
+            o.MapDirectory = Path.Combine(ReferenceTree.MapsDirectory, "duel");
+            o.NavCacheDirectory = Path.Combine(ReferenceTree.RepositoryRoot, "nav", "duel");
+            o.Duel = true;
+            o.TdmInvulnerabilitySeconds = 0;
+        });
+        var server = harness.Server;
+        var client = harness.JoinClient("duellist");
+        client.SendChangeTeam(Team.Red);
+        client.SendChangeClass(PlayerClass.Quote);
+
+        harness.TickUntil(
+            () => server.BotSlots.Count == 1 && server.IsAlive(server.BotSlots[0]),
+            "the Quote human's bot to be alive",
+            maxTicks: 300);
+
+        var bot = server.BotSlots[0];
+        var driven = 0;
+        var special = 0;
+
+        for (var t = 0; t < 150; t++)
+        {
+            harness.Tick();
+
+            if (!server.IsAlive(bot))
+                break;
+
+            if (HybridBot.Of(server.SourceOf(bot))?.Driving is SimPolicyController { Network.IsQuote: true })
+                driven++;
+
+            if ((server.WorldForTests.Characters[bot].KeyState & PlayerKeys.Special) != 0)
+                special++;
+        }
+
+        Assert.Equal(PlayerClass.Quote, server.ClassOf(bot));
+        Assert.True(driven > 100, $"the Quote net drove {driven} of 150 ticks");
+        Assert.True(special > 0, "the Quote net never pressed Special");
+    }
+
+    // A five-head net of the given width whose fifth head always says press.
+    private string WriteSpecial(string name, int inputs) =>
+        Write(name, inputs, SimPolicyController.TeamAimActions, zoomHead: true, zoomLevel: 1);
+
     // A soldier match stepped until slot `me` has a live enemy within 300 px.
     private static HeadlessMatch SoldiersInView(out int me, out int enemy)
     {

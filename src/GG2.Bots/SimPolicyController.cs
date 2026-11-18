@@ -291,7 +291,8 @@ public sealed class SimPolicyController
         if (_network.IsTeam)
             SimPolicyObservation.Team(
                 in world, me, _observation, _listed, _network.IsZoom, _network.IsDemo, _network.IsPyro, _network.IsMedic, _listedAllies,
-                _network.IsEngineer, _network.IsSpy, _memory is null ? null : Memory(me), tick, _network.IsTerrain, _graph, _tables);
+                _network.IsEngineer, _network.IsSpy, _memory is null ? null : Memory(me), tick, _network.IsTerrain, _graph, _tables,
+                _network.IsQuote);
         else
             SimPolicyObservation.Duel(in world, me, op, _observation, _network.InputSize);
 
