@@ -902,9 +902,9 @@ public static class ControlCommands
 
     /// <summary>The classes a controller will drive, asked of the controller.</summary>
     /// <remarks>
-    /// <b>Pyro is the ceiling</b>, the same one <c>BotBrain.ParseClassPolicies</c>
-    /// uses: <c>PlayerClass</c> runs past it into values no bot can be, and a
-    /// controller asked about one would answer for a class that cannot appear.
+    /// <b>Quote is the ceiling</b>, the same one <c>BotBrain.ParseClassPolicies</c>
+    /// uses: the fill never draws a Quote bot, but the duel server makes one for a
+    /// Quote human, and a tier assigned Quote would otherwise show no class.
     /// </remarks>
     private static void AppendDrives(StringBuilder json, GG2.Bots.IMicroController tier)
     {
@@ -912,7 +912,7 @@ public static class ControlCommands
 
         var first = true;
 
-        for (var playerClass = PlayerClass.Scout; playerClass <= PlayerClass.Pyro; playerClass++)
+        for (var playerClass = PlayerClass.Scout; playerClass <= PlayerClass.Quote; playerClass++)
         {
             if (!tier.Drives(playerClass))
                 continue;

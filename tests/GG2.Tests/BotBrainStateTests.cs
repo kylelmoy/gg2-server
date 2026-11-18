@@ -76,10 +76,11 @@ public sealed class BotBrainStateTests
         var tier = Assert.Single(bots.GetProperty("tiers").EnumerateArray());
         Assert.Equal("gg2-sim:" + PolicyFixture.Label, tier.GetProperty("name").GetString());
 
-        // Two classes assigned, so a block that reported only the first, or a
-        // default, would be visibly wrong.
+        // Three classes assigned, so a block that reported only the first, or a
+        // default, would be visibly wrong. Quote is past the fill's Pyro ceiling
+        // and is listed: the duel server makes Quote bots.
         Assert.Equal(
-            ["Soldier", "Heavy"],
+            ["Soldier", "Heavy", "Quote"],
             tier.GetProperty("classes").EnumerateArray().Select(c => c.GetString()!).ToArray());
     }
 
@@ -178,7 +179,7 @@ public sealed class BotBrainStateTests
         string[] arguments =
         [
             "--bot-mode", "policy", "--policy", PolicyFixture.Checkpoint,
-            "--bot-class-policy", PolicyFixture.SoldierAssignment + ",Heavy=" + PolicyFixture.Label,
+            "--bot-class-policy", PolicyFixture.SoldierAssignment + ",Heavy=" + PolicyFixture.Label + ",Quote=" + PolicyFixture.Label,
             .. engagesBots ? new[] { "--bot-engages-bots" } : [],
         ];
 
