@@ -707,20 +707,21 @@ const STRINGS = {
       "UseLobby": "Announce to the ganggarrison.com lobby (the client's server list). The only outbound connection this server makes.",
       "Rewards": "Answer REWARD_REQUEST by relaying each player's reward id to the auth server."
     },
-    "Plugins": {
-      "chat_gravetalk": "Chat: the living hear dead players and spectators. Off: those are heard only by each other.",
-      "chat_unique_names": "Chat: rename a duplicate name to the lowest free number (bob2). Every client sees the rename.",
-      "chat_mute_minutes": "Chat: length of a vote mute, and of /mute with no minutes, 1..1440. Follows the address across reconnects.",
-      "chat_votes": "Chat: players may call votes (/votekick, /votemute, /votescramble, /votenextround, /votemap).",
-      "chat_vote_kick_percent": "Chat: Yes share a kick vote needs, 1..100. Half the voters, and at least two, must answer.",
-      "chat_vote_mute_percent": "Chat: Yes share a mute vote needs, 1..100.",
-      "chat_kickban_minutes": "Chat: how long a vote-kicked address is refused, 0..1440. Refuses everyone behind that address.",
-      "chat_admin_password": "Chat: password for /login (/say, /kick, /mute, /unmute, /nextround, /map). Empty: /login disabled."
+    "Chat": {
+      "Enabled": "The server's own chat. On also advertises the chat plugin, which is how a stock client gets a chat window. Off: no chat.",
+      "Gravetalk": "The living hear dead players and spectators. Off: those are heard only by each other.",
+      "UniqueNames": "Rename a duplicate name to the lowest free number (bob2). Every client sees the rename.",
+      "MuteMinutes": "Length of a vote mute, and of /mute with no minutes, 1..1440. Follows the address across reconnects.",
+      "Votes": "Players may call votes (/votekick, /votemute, /votescramble, /votenextround, /votemap).",
+      "VoteKickPercent": "Yes share a kick vote needs, 1..100. Half the voters, and at least two, must answer.",
+      "VoteMutePercent": "Yes share a mute vote needs, 1..100.",
+      "KickBanMinutes": "How long a vote-kicked address is refused, 0..1440. Refuses everyone behind that address.",
+      "AdminPassword": "Password for /login (/say, /kick, /mute, /unmute, /nextround, /map). Empty: /login disabled."
     },
     "Server": {
       "ServerName": "Shown in the server browser and on join.",
       "WelcomeMessage": "Sent to each joining player. Empty: none.",
-      "ChatJoinMessage": "Chat line sent to each player on joining chat. Empty: none. Requires a chat plugin in ServerPluginList.",
+      "ChatJoinMessage": "Chat line sent to each player on joining chat. Empty: none. Requires chat ([Chat] Enabled, or chat_v2_pr).",
       "Password": "Game password. Empty: none (no PASSWORD_REQUEST).",
       "Map": "Starting map. Empty: first rotation entry.",
       "Rotation": "Map rotation, in order. Duplicates allowed.",
@@ -793,7 +794,7 @@ const STRINGS = {
       "MaxBots": "Hard cap on bots, applied after the fill target.",
       "MinHumans": "Humans required before any bot spawns. Below it the target is 0, so an empty server does not look full in the lobby.",
       "Difficulty": "1..5. 5 is full strength; lower tiers are deliberate handicaps.",
-      "SuspendMinutes": "Duration of the /bots off chat command, 0..1440. 0 disables the command. Requires a chat plugin in ServerPluginList.",
+      "SuspendMinutes": "Duration of the /bots off chat command, 0..1440. 0 disables the command. Requires chat ([Chat] Enabled, or chat_v2_pr).",
       "NamePrefix": "Bot name prefix.",
       "ClassPolicy": "Class=name pairs choosing each class's driver; name is a checkpoint file name without extension, or 'scripted'. Unlisted classes: the loaded checkpoint that claims them, else scripted.",
       "Occupancy": "Penalise edges teammates already use so squads spread out. Behavioural: off drops match dispersion 0.785 to 0.634.",

@@ -887,11 +887,11 @@ public sealed class ServerOptions
     public int BotSuspendMinutes { get; set; }
 
     /// <summary>
-    /// The chat core's settings: <c>[Plugins] chat_*</c>, the same keys and
-    /// defaults chat2026's GML half reads, so one <c>gg2.ini</c> configures both.
+    /// The server's chat: <c>[Chat]</c>. On by default, which also advertises the
+    /// <c>chat</c> plugin, the only way a stock client gets a chat window.
     /// </summary>
-    /// <remarks>Read only when <c>chat</c> or <c>chat2026</c> is in <see cref="ServerPluginList"/>.</remarks>
-    public Plugins.ChatSettings Chat { get; set; } = new();
+    /// <remarks><c>docs/CHAT.md</c>.</remarks>
+    public ChatSettings Chat { get; set; } = new();
 
     /// <summary>
     /// Drop to a slow tick when nobody is connected and no bots are running.
@@ -1136,7 +1136,23 @@ public sealed class ServerOptions
         // the server's start, not a client's join. GameServerCreate.gml:131-142
         // reaches game_end() for the same reason — a server advertising a list
         // it cannot serve strands every client that believes it.
-        Plugins.PluginNames.ParseList(ServerPluginList);
+        var pluginSpecs = Plugins.PluginNames.ParseList(ServerPluginList);
+
+        // The server's chat is advertised as `chat`. Listing it with chat off would
+        // advertise a plugin nothing answers; listing another chat plugin with
+        // chat on would give a stock client two chat windows on one key.
+        foreach (var spec in pluginSpecs)
+        {
+            if (!Chat.Enabled && spec.Name == ServerChat.PluginName)
+                throw new ArgumentException(
+                    "ServerPluginList names chat, which is the server's own chat, but [Chat] "
+                    + "Enabled is off. Turn chat on, or take chat out of the list");
+
+            if (Chat.Enabled && spec.Name == "chat_v2_pr")
+                throw new ArgumentException(
+                    "ServerPluginList names chat_v2_pr, a second chat plugin, while the server's "
+                    + "own chat is on. Set [Chat] Enabled=0 to use chat_v2_pr instead");
+        }
 
         // The reference clamps at 48 (game_init.gml:152). Beyond 255 the roster
         // index stops fitting in the ubyte every message uses to name a player.

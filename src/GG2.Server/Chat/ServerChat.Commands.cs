@@ -2,10 +2,12 @@
 using System.Text;
 using GG2.Protocol;
 
-namespace GG2.Server.Plugins;
+using GG2.Server.Plugins;
+
+namespace GG2.Server;
 
 /// <summary>
-/// chat2026's command console: <c>host/command.gml</c>, <c>host/fn_parse_args.gml</c>,
+/// The command console: <c>host/command.gml</c>, <c>host/fn_parse_args.gml</c>,
 /// <c>host/fn_find_player.gml</c> and <c>src/commands/*.gml</c>.
 /// </summary>
 /// <remarks>
@@ -13,7 +15,7 @@ namespace GG2.Server.Plugins;
 /// relayed as chat. Every reply string is the GML's, byte for byte: a client
 /// cannot tell which host it is talking to.
 /// </remarks>
-public sealed partial class ChatPlugin
+public sealed partial class ServerChat
 {
     private delegate void Command(int sender, List<string> args, string rest);
 

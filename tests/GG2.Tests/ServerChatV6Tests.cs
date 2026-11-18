@@ -1,29 +1,29 @@
 using GG2.Protocol;
+using GG2.Server;
 using GG2.Server.Plugins;
 
 namespace GG2.Tests;
 
 /// <summary>
-/// The chat core on <c>chat</c>'s bridged wire: stock v6 clients and chat2026
-/// clients (behind <see cref="ChatPlugin.Envelope"/>) in one room, and players
-/// who never say hello.
+/// The server's chat to stock v6 clients, and v6 and native clients (behind
+/// <see cref="ServerChat.Envelope"/>) in one room, and players who never say hello.
 /// </summary>
 /// <remarks>
-/// <c>Chat2026PluginTests</c> holds the core's behaviour to the chat2026 GML's
-/// strings on the plain wire. These hold each translation: what a v6 client is
+/// <c>ServerChatTests</c> holds the behaviour to the native reference host's
+/// strings. These hold each translation: what a v6 client is
 /// sent for each thing the core does, and that the two formats meet in one room,
 /// one tally and one mute list. The v6 byte shapes are from <c>plugin.gml</c> in
 /// <c>chat@bad8081d64f0b808a2bb3a6d88978fb5.zip</c>, the client's user event 1.
 /// </remarks>
-public sealed class ChatBridgeTests
+public sealed class ServerChatV6Tests
 {
-    private const byte E = ChatPlugin.Envelope;
+    private const byte E = ServerChat.Envelope;
 
-    private static (FakePluginHost Host, ChatPlugin Plugin) Fresh(
-        ChatWire wire = ChatWire.Bridged, ChatSettings? settings = null, FakePluginHost? host = null)
+    private static (FakePluginHost Host, ServerChat Plugin) Fresh(
+        ChatSettings? settings = null, FakePluginHost? host = null)
     {
         host ??= new FakePluginHost();
-        var plugin = new ChatPlugin(wire, settings);
+        var plugin = new ServerChat(settings);
         plugin.Attach(new PluginChannel(host, 0));
 
         host.Add("Server", Team.Spectator, address: string.Empty, client: false);
@@ -33,7 +33,7 @@ public sealed class ChatBridgeTests
         return (host, plugin);
     }
 
-    private static int Arrive(FakePluginHost host, ChatPlugin plugin, string name, Team team, string address)
+    private static int Arrive(FakePluginHost host, ServerChat plugin, string name, Team team, string address)
     {
         var slot = host.Add(name, team, address);
         plugin.PlayerAdded(slot);
@@ -41,27 +41,27 @@ public sealed class ChatBridgeTests
         return slot;
     }
 
-    private static int JoinV6(FakePluginHost host, ChatPlugin plugin, string name, Team team, string? address = null)
+    private static int JoinV6(FakePluginHost host, ServerChat plugin, string name, Team team, string? address = null)
     {
         var slot = Arrive(host, plugin, name, team, address ?? "10.0.0." + (host.PlayerCount + 1));
         plugin.Receive(slot, [0]);
         return slot;
     }
 
-    private static int JoinChat2026(FakePluginHost host, ChatPlugin plugin, string name, Team team, string? address = null)
+    private static int JoinNative(FakePluginHost host, ServerChat plugin, string name, Team team, string? address = null)
     {
         var slot = Arrive(host, plugin, name, team, address ?? "10.0.0." + (host.PlayerCount + 1));
-        plugin.Receive(slot, [E, 0, ChatPlugin.ProtocolVersion, 0]);
+        plugin.Receive(slot, [E, 0, ServerChat.ProtocolVersion, 0]);
         return slot;
     }
 
-    private static void SayV6(ChatPlugin plugin, int slot, string text, bool team = false)
+    private static void SayV6(ServerChat plugin, int slot, string text, bool team = false)
     {
         var bytes = GG2Text.Encode(text);
         plugin.Receive(slot, [team ? (byte)2 : (byte)1, (byte)bytes.Length, .. bytes]);
     }
 
-    private static void SayChat2026(ChatPlugin plugin, int slot, string text, bool team = false)
+    private static void SayNative(ServerChat plugin, int slot, string text, bool team = false)
     {
         var bytes = GG2Text.Encode(text);
         plugin.Receive(slot, [E, 1, team ? (byte)1 : (byte)0, (byte)bytes.Length, .. bytes]);
@@ -120,7 +120,7 @@ public sealed class ChatBridgeTests
                     at = 4;
                     return $"VOTE_END {data[2]} winner={data[3]} {Str()}";
                 default:
-                    return $"chat2026 kind {data[1]}";
+                    return $"native kind {data[1]}";
             }
         }
 
@@ -160,16 +160,16 @@ public sealed class ChatBridgeTests
         var (host, plugin) = Fresh(settings: new ChatSettings { AdminPassword = "pw" });
         host.ChatJoinMessage = "Welcome";
         var alice = JoinV6(host, plugin, "alice", Team.Red);
-        var bob = JoinChat2026(host, plugin, "bob", Team.Blue);
+        var bob = JoinNative(host, plugin, "bob", Team.Blue);
         var carol = Arrive(host, plugin, "carol", Team.Red, "10.0.0.9");
         plugin.Receive(carol, [E, 1, 0, 2, (byte)'h', (byte)'i']);
         plugin.Receive(carol, [1, 2, (byte)'h', (byte)'i']);
 
         SayV6(plugin, alice, "hello");
-        SayChat2026(plugin, bob, "hi", team: true);
+        SayNative(plugin, bob, "hi", team: true);
         SayV6(plugin, alice, "/help");
         plugin.SayAsServer("from the panel");
-        SayChat2026(plugin, bob, "/votescramble");
+        SayNative(plugin, bob, "/votescramble");
         plugin.Receive(alice, [3, 1]);
         plugin.Tick();
         host.Rename(alice, "alice2");
@@ -186,7 +186,7 @@ public sealed class ChatBridgeTests
         var (host, plugin) = Fresh();
         host.ChatJoinMessage = "Hi#Type /help";
         var alice = JoinV6(host, plugin, "alice", Team.Red);
-        var bob = JoinChat2026(host, plugin, "bob", Team.Blue);
+        var bob = JoinNative(host, plugin, "bob", Team.Blue);
 
         Assert.Equal(["v6 255 OHi#Type /help"], To(host, alice).Take(1));
         Assert.Equal(["WELCOME v1 motd=Hi#Type /help"], To(host, bob));
@@ -194,7 +194,7 @@ public sealed class ChatBridgeTests
 
     /// <summary>
     /// On a real server the hello can arrive before the plugin's first tick for
-    /// that player, so a chat2026 client hears its own join. Once.
+    /// that player, so a native client hears its own join. Once.
     /// </summary>
     [Fact]
     public void AHelloBeforeTheFirstTickHearsItsOwnJoinOnce()
@@ -202,7 +202,7 @@ public sealed class ChatBridgeTests
         var (host, plugin) = Fresh();
         var bob = host.Add("bob", Team.Spectator, "10.0.0.2");
         plugin.PlayerAdded(bob);
-        plugin.Receive(bob, [E, 0, ChatPlugin.ProtocolVersion, 0]);
+        plugin.Receive(bob, [E, 0, ServerChat.ProtocolVersion, 0]);
         plugin.Tick();
         plugin.Tick();
 
@@ -215,11 +215,11 @@ public sealed class ChatBridgeTests
         var (host, plugin) = Fresh();
         host.ChatJoinMessage = "Hi";
         var alice = JoinV6(host, plugin, "alice", Team.Red);
-        var bob = JoinChat2026(host, plugin, "bob", Team.Blue);
+        var bob = JoinNative(host, plugin, "bob", Team.Blue);
         host.Sent.Clear();
 
         plugin.Receive(alice, [0]);
-        plugin.Receive(bob, [E, 0, ChatPlugin.ProtocolVersion, 0]);
+        plugin.Receive(bob, [E, 0, ServerChat.ProtocolVersion, 0]);
 
         Assert.Empty(host.Sent);
     }
@@ -235,33 +235,19 @@ public sealed class ChatBridgeTests
     {
         var (host, plugin) = Fresh();
         var alice = JoinV6(host, plugin, "alice", Team.Red);
-        var bob = JoinChat2026(host, plugin, "bob", Team.Blue);
+        var bob = JoinNative(host, plugin, "bob", Team.Blue);
 
         plugin.Receive(bob, [0]);
         host.Sent.Clear();
         SayV6(plugin, alice, "hello");
-        SayChat2026(plugin, bob, "ignored now");
+        SayNative(plugin, bob, "ignored now");
         SayV6(plugin, bob, "v6 now");
 
         Assert.Equal(["v6 #1 audience=0 hello", "v6 #2 audience=0 v6 now"], To(host, bob));
         Assert.DoesNotContain(host.Sent, s => s.Data[0] == E);
 
-        plugin.Receive(bob, [E, 0, ChatPlugin.ProtocolVersion, 0]);
+        plugin.Receive(bob, [E, 0, ServerChat.ProtocolVersion, 0]);
         Assert.Equal("WELCOME v1 motd=", To(host, bob)[^1]);
-    }
-
-    [Fact]
-    public void APlainWireIgnoresV6AndNeverSendsTheEnvelope()
-    {
-        var (host, plugin) = Fresh(ChatWire.Plain);
-        var alice = Arrive(host, plugin, "alice", Team.Red, "10.0.0.2");
-
-        plugin.Receive(alice, [0]);
-        Assert.DoesNotContain(host.Sent, s => s.Slot == alice);
-
-        plugin.Receive(alice, [0, ChatPlugin.ProtocolVersion, 0]);
-        Assert.Equal([0, ChatPlugin.ProtocolVersion], host.Sent.Single(s => s.Slot == alice).Data[..2]);
-        Assert.Equal("chat2026", plugin.Name);
     }
 
     // --- lines ------------------------------------------------------------------
@@ -271,11 +257,11 @@ public sealed class ChatBridgeTests
     {
         var (host, plugin) = Fresh();
         var alice = JoinV6(host, plugin, "alice", Team.Red);
-        var bob = JoinChat2026(host, plugin, "bob", Team.Blue);
+        var bob = JoinNative(host, plugin, "bob", Team.Blue);
         host.Sent.Clear();
 
         SayV6(plugin, alice, "hello");
-        SayChat2026(plugin, bob, "hi");
+        SayNative(plugin, bob, "hi");
 
         Assert.Equal(
             [
@@ -303,12 +289,12 @@ public sealed class ChatBridgeTests
     {
         var (host, plugin) = Fresh();
         var alice = JoinV6(host, plugin, "alice", Team.Red);
-        var bob = JoinChat2026(host, plugin, "bob", Team.Blue);
-        var dave = JoinChat2026(host, plugin, "dave", Team.Red);
+        var bob = JoinNative(host, plugin, "bob", Team.Blue);
+        var dave = JoinNative(host, plugin, "dave", Team.Red);
         host.Sent.Clear();
 
         SayV6(plugin, alice, "\rwaves", team: true);
-        SayChat2026(plugin, dave, "/me dances");
+        SayNative(plugin, dave, "/me dances");
 
         Assert.Equal(["v6 #1 audience=1 \rwaves", "v6 #3 audience=0 \rdances"], To(host, alice));
         Assert.Equal(["LINE #1 flags=9 team=0 alice: waves", "LINE #3 flags=8 team=0 dave: dances"], To(host, dave));
@@ -317,7 +303,7 @@ public sealed class ChatBridgeTests
 
     /// <summary>
     /// A command typed into v6 team chat runs. v6's own host relays it as text
-    /// (<c>plugin.gml:493-505</c>); the core follows chat2026.
+    /// (<c>plugin.gml:493-505</c>); the server follows the native host.
     /// </summary>
     [Fact]
     public void ACommandInV6TeamChatRuns()
@@ -338,7 +324,7 @@ public sealed class ChatBridgeTests
     {
         var (host, plugin) = Fresh();
         var alice = JoinV6(host, plugin, "alice", Team.Red);
-        var bob = JoinChat2026(host, plugin, "bob", Team.Blue);
+        var bob = JoinNative(host, plugin, "bob", Team.Blue);
         host.Sent.Clear();
 
         Arrive(host, plugin, "a#b", Team.Blue, "10.0.0.7");
@@ -354,7 +340,7 @@ public sealed class ChatBridgeTests
     {
         var (host, plugin) = Fresh();
         var alice = JoinV6(host, plugin, "alice", Team.Red);
-        var bob = JoinChat2026(host, plugin, "bob", Team.Blue);
+        var bob = JoinNative(host, plugin, "bob", Team.Blue);
         host.Sent.Clear();
 
         plugin.SayAsServer("/not a command");
@@ -375,12 +361,12 @@ public sealed class ChatBridgeTests
     {
         var (host, plugin) = Fresh();
         var alice = JoinV6(host, plugin, "alice", Team.Red);
-        var bob = JoinChat2026(host, plugin, "bob", Team.Blue);
-        var carol = JoinChat2026(host, plugin, "carol", Team.Red);
+        var bob = JoinNative(host, plugin, "bob", Team.Blue);
+        var carol = JoinNative(host, plugin, "carol", Team.Red);
         var dave = JoinV6(host, plugin, "dave", Team.Blue);
         host.Sent.Clear();
 
-        SayChat2026(plugin, bob, "/votescramble");
+        SayNative(plugin, bob, "/votescramble");
         plugin.Receive(alice, [3, 1]);
         plugin.Receive(dave, [3, 2]);
         plugin.Receive(carol, [E, 2, 1, 1]);
@@ -413,12 +399,12 @@ public sealed class ChatBridgeTests
     public void AV6KickTargetGetsNoDialogOnlyTheResult()
     {
         var (host, plugin) = Fresh();
-        var alice = JoinChat2026(host, plugin, "alice", Team.Red);
+        var alice = JoinNative(host, plugin, "alice", Team.Red);
         var eve = JoinV6(host, plugin, "eve", Team.Blue);
         JoinV6(host, plugin, "dave", Team.Blue);
         host.Sent.Clear();
 
-        SayChat2026(plugin, alice, "/votekick eve");
+        SayNative(plugin, alice, "/votekick eve");
         plugin.Receive(eve, [3, 2]);
         Assert.True(plugin.VoteActive);
 
@@ -439,11 +425,11 @@ public sealed class ChatBridgeTests
     public void SwitchingFormatMidVoteIsNotASecondVote()
     {
         var (host, plugin) = Fresh();
-        var alice = JoinChat2026(host, plugin, "alice", Team.Red);
-        var bob = JoinChat2026(host, plugin, "bob", Team.Blue);
-        JoinChat2026(host, plugin, "carol", Team.Blue);
+        var alice = JoinNative(host, plugin, "alice", Team.Red);
+        var bob = JoinNative(host, plugin, "bob", Team.Blue);
+        JoinNative(host, plugin, "carol", Team.Blue);
 
-        SayChat2026(plugin, alice, "/votescramble");
+        SayNative(plugin, alice, "/votescramble");
         plugin.Receive(bob, [E, 2, 1, 2]);
         host.Sent.Clear();
 
@@ -458,9 +444,9 @@ public sealed class ChatBridgeTests
     public void AV6ClientGreetingMidVoteIsCaughtUp()
     {
         var (host, plugin) = Fresh();
-        var alice = JoinChat2026(host, plugin, "alice", Team.Red);
-        JoinChat2026(host, plugin, "bob", Team.Blue);
-        SayChat2026(plugin, alice, "/votenextround");
+        var alice = JoinNative(host, plugin, "alice", Team.Red);
+        JoinNative(host, plugin, "bob", Team.Blue);
+        SayNative(plugin, alice, "/votenextround");
 
         var dave = JoinV6(host, plugin, "dave", Team.Blue);
 
@@ -477,29 +463,29 @@ public sealed class ChatBridgeTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void AMuteSurvivesAReconnectInEitherFormat(bool backAsChat2026)
+    public void AMuteSurvivesAReconnectInEitherFormat(bool backAsNative)
     {
         var (host, plugin) = Fresh(settings: new ChatSettings { AdminPassword = "pw" });
-        var admin = JoinChat2026(host, plugin, "admin", Team.Red);
+        var admin = JoinNative(host, plugin, "admin", Team.Red);
         var bob = JoinV6(host, plugin, "bob", Team.Blue, "10.0.0.50");
-        SayChat2026(plugin, admin, "/login pw");
-        SayChat2026(plugin, admin, "/mute bob 5");
+        SayNative(plugin, admin, "/login pw");
+        SayNative(plugin, admin, "/mute bob 5");
 
         plugin.PlayerRemoving(bob);
         host.RemoveAt(bob);
-        bob = backAsChat2026
-            ? JoinChat2026(host, plugin, "bob", Team.Blue, "10.0.0.50")
+        bob = backAsNative
+            ? JoinNative(host, plugin, "bob", Team.Blue, "10.0.0.50")
             : JoinV6(host, plugin, "bob", Team.Blue, "10.0.0.50");
         host.Sent.Clear();
 
-        if (backAsChat2026)
-            SayChat2026(plugin, bob, "let me talk");
+        if (backAsNative)
+            SayNative(plugin, bob, "let me talk");
         else
             SayV6(plugin, bob, "let me talk");
 
         Assert.Empty(To(host, admin));
         Assert.Equal(
-            backAsChat2026 ? "NOTICE 5 You are muted for another 300 seconds." : "v6 255 OYou are muted for another 300 seconds.",
+            backAsNative ? "NOTICE 5 You are muted for another 300 seconds." : "v6 255 OYou are muted for another 300 seconds.",
             Assert.Single(To(host, bob)));
     }
 
@@ -526,11 +512,11 @@ public sealed class ChatBridgeTests
         var host = new FakePluginHost { SuspendMinutes = 20, BotsManaged = true, BotCount = 4 };
         (host, var plugin) = Fresh(host: host);
         var alice = JoinV6(host, plugin, "alice", Team.Red);
-        var bob = JoinChat2026(host, plugin, "bob", Team.Blue);
+        var bob = JoinNative(host, plugin, "bob", Team.Blue);
         host.Sent.Clear();
 
-        SayChat2026(plugin, bob, "/bots");
-        SayChat2026(plugin, bob, "/bots off");
+        SayNative(plugin, bob, "/bots");
+        SayNative(plugin, bob, "/bots off");
         SayV6(plugin, alice, "/bots off");
         SayV6(plugin, alice, "/bots on");
 

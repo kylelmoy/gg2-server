@@ -25,6 +25,20 @@ public sealed partial class GameServer
     private void LoadPlugins()
     {
         var specs = PluginNames.ParseList(_options.ServerPluginList);
+
+        // The server's own chat. A stock client gets chat only by downloading the
+        // `chat` plugin, so with chat on the server advertises it whether or not
+        // the list names it, appended so every listed plugin keeps its packet id.
+        // ServerOptions.Validate refuses `chat` listed with chat off, and a second
+        // chat plugin with it on.
+        ServerChat? chat = null;
+        if (_options.Chat.Enabled)
+        {
+            chat = new ServerChat();
+            if (!specs.Any(spec => spec.Name == ServerChat.PluginName))
+                specs = [.. specs, new PluginSpec(ServerChat.PluginName, null)];
+        }
+
         if (specs.Count == 0)
         {
             _plugins = ServerPlugins.None;
@@ -34,7 +48,9 @@ public sealed partial class GameServer
         var owned = PluginHashSource is null ? new GanggarrisonPluginHashes() : null;
         try
         {
-            _plugins = ServerPlugins.Load(specs, this, PluginHashSource ?? owned!, _log);
+            _plugins = ServerPlugins.Load(
+                specs, this, PluginHashSource ?? owned!, _log,
+                native: name => name == ServerChat.PluginName ? chat : null);
         }
         finally
         {

@@ -375,7 +375,7 @@ public sealed class MapRotationTests
         Assert.Equal(Second, client.TakeString1());
         Assert.Equal(string.Empty, client.TakeString1()); // built-in map: no MD5
         Assert.Equal(0, client.TakeByte());               // pluginsRequired
-        Assert.Equal(string.Empty, client.TakeString2()); // pluginList
+        Assert.Equal("chat@bad8081d64f0b808a2bb3a6d88978fb5", client.TakeString2()); // pluginList: the server's chat
 
         client.SendReserveSlot("late");
         harness.TickUntil(() => client.Received.Count > 0, "the slot reservation");

@@ -142,7 +142,7 @@ public sealed class FleetConfigTests : IDisposable
     [Fact]
     public void AHostThatSetsAChatSettingWithNoChatPluginIsWarnedAboutBeforeThePush()
     {
-        Common("[Server]\nServerName=Solo\nChatJoinMessage=type /bots\n");
+        Common("[Server]\nServerName=Solo\nChatJoinMessage=type /bots\n[Chat]\nEnabled=0\n");
         Overlay("a", "[Bots]\nSuspendMinutes=15\n");
 
         var warnings = FleetConfig.Warnings(ConfigDir, ["a"]);
@@ -154,11 +154,18 @@ public sealed class FleetConfigTests : IDisposable
         // the plugin silences both, so it is the configuration being described
         // and not the feature existing.
         Common("[Server]\nServerName=Solo\nChatJoinMessage=type /bots\n"
-            + "ServerPluginList=chat_v2_pr\n");
+            + "ServerPluginList=chat_v2_pr\n[Chat]\nEnabled=0\n");
 
         Assert.DoesNotContain(
             FleetConfig.Warnings(ConfigDir, ["a"]),
-            w => w.Contains("no chat plugin", StringComparison.Ordinal));
+            w => w.Contains("chat is off", StringComparison.Ordinal));
+
+        // And the server's own chat, on by default, silences them too.
+        Common("[Server]\nServerName=Solo\nChatJoinMessage=type /bots\n");
+
+        Assert.DoesNotContain(
+            FleetConfig.Warnings(ConfigDir, ["a"]),
+            w => w.Contains("chat is off", StringComparison.Ordinal));
     }
 
     [Fact]

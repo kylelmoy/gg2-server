@@ -33,7 +33,9 @@ public sealed class HandshakeTests
         // whole map-download path out of scope.
         Assert.Equal(string.Empty, client.TakeString1());
         Assert.Equal(0, client.TakeByte());
-        Assert.Equal(string.Empty, client.TakeString2());
+
+        // The server's own chat is on by default and rides the `chat` plugin.
+        Assert.Equal("chat@bad8081d64f0b808a2bb3a6d88978fb5", client.TakeString2());
         Assert.Empty(client.Received);
     }
 

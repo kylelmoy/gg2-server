@@ -148,14 +148,17 @@ public static class PluginHashes
         IReadOnlyList<PluginSpec> specs,
         IPluginHashSource source,
         IServerLog log,
-        string? debugDirectory = null)
+        string? debugDirectory = null,
+        Func<string, IServerPlugin?>? native = null)
     {
         var loaded = new List<LoadedPlugin>(specs.Count);
         debugDirectory ??= DebugDirectory;
 
         foreach (var spec in specs)
         {
-            var implementation = ServerPluginCatalogue.Create(spec.Name);
+            // A server-owned implementation (the native chat on `chat`) first;
+            // otherwise the catalogue's.
+            var implementation = native?.Invoke(spec.Name) ?? ServerPluginCatalogue.Create(spec.Name);
             var pinned = ServerPluginCatalogue.PinnedMd5(spec.Name);
 
             string md5;

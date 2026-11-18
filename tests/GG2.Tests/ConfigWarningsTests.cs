@@ -17,15 +17,31 @@ namespace GG2.Tests;
 /// </remarks>
 public sealed class ConfigWarningsTests
 {
+    /// <summary>
+    /// Options with the server's own chat OFF unless <paramref name="chat"/> says
+    /// otherwise, so each test states which chat it is about.
+    /// </summary>
     private static ServerOptions Options(
-        string plugins = "", string joinMessage = "", int suspendMinutes = 0) =>
+        string plugins = "", string joinMessage = "", int suspendMinutes = 0, bool chat = false) =>
         new()
         {
             MapDirectory = "maps",
             ServerPluginList = plugins,
             ChatJoinMessage = joinMessage,
             BotSuspendMinutes = suspendMinutes,
+            Chat = new ChatSettings { Enabled = chat },
         };
+
+    /// <summary>
+    /// The server's own chat is on by default, so a server that sets both and
+    /// lists no plugin at all is configured correctly and says nothing.
+    /// </summary>
+    [Fact]
+    public void TheServersOwnChatSilencesBoth()
+    {
+        Assert.Empty(ConfigWarnings.For(Options(joinMessage: "hello", suspendMinutes: 15, chat: true)));
+        Assert.True(new ServerOptions().Chat.Enabled);
+    }
 
     /// <summary>
     /// A join line with no chat plugin is a line nobody can receive, and the
@@ -75,14 +91,11 @@ public sealed class ConfigWarningsTests
     /// learns to ignore the line — so an unknown plugin name still warns, and
     /// each of the two real ones does not.
     /// </remarks>
-    [Theory]
-    [InlineData("chat")]
-    [InlineData("chat_v2_pr")]
-    [InlineData("chat_v2_pr,chat")]
-    public void AChatPluginSilencesBoth(string plugins)
+    [Fact]
+    public void TheOtherChatPluginSilencesBoth()
     {
         Assert.Empty(ConfigWarnings.For(
-            Options(plugins: plugins, joinMessage: "hello", suspendMinutes: 15)));
+            Options(plugins: "chat_v2_pr", joinMessage: "hello", suspendMinutes: 15)));
     }
 
     /// <summary>A pinned <c>name@md5</c> entry is still that plugin.</summary>
@@ -115,7 +128,8 @@ public sealed class ConfigWarningsTests
     public void AServerThatAsksForNeitherIsSilent()
     {
         Assert.Empty(ConfigWarnings.For(Options()));
-        Assert.Empty(ConfigWarnings.For(Options(plugins: "chat")));
+        Assert.Empty(ConfigWarnings.For(Options(plugins: "chat_v2_pr")));
+        Assert.Empty(ConfigWarnings.For(Options(chat: true)));
     }
 
     /// <summary>

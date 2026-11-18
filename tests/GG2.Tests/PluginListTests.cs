@@ -177,8 +177,16 @@ public sealed class PluginListTests
             PluginNames.ParseList("chat"), new RefusingHashes(), log, NoDebugDirectory());
 
         Assert.Equal(ChatV6Md5, loaded[0].Md5);
-        Assert.NotNull(loaded[0].Implementation);
         Assert.NotEqual(ChatMd5, ChatV6Md5);
+
+        // Its server half is the server's own chat, which the catalogue does not
+        // build: resolved alone it has none, and the server supplies it.
+        Assert.Null(loaded[0].Implementation);
+        var chat = new GG2.Server.ServerChat();
+        var supplied = PluginHashes.Resolve(
+            PluginNames.ParseList("chat"), new RefusingHashes(), log, NoDebugDirectory(),
+            native: name => name == "chat" ? chat : null);
+        Assert.Same(chat, supplied[0].Implementation);
     }
 
     [Fact]

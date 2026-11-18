@@ -86,7 +86,8 @@ public sealed class ServerPlugins
         IPluginHost host,
         IPluginHashSource hashSource,
         IServerLog log,
-        string? debugDirectory = null)
+        string? debugDirectory = null,
+        Func<string, IServerPlugin?>? native = null)
     {
         if (specs.Count == 0)
             return None;
@@ -98,7 +99,7 @@ public sealed class ServerPlugins
             throw new InvalidOperationException(
                 $"{specs.Count} plugins: a plugin packet id is one byte, so 256 is the ceiling");
 
-        var loaded = PluginHashes.Resolve(specs, hashSource, log, debugDirectory).ToArray();
+        var loaded = PluginHashes.Resolve(specs, hashSource, log, debugDirectory, native).ToArray();
         var plugins = new ServerPlugins(loaded, PluginNames.Advertise(loaded));
 
         for (var i = 0; i < loaded.Length; i++)

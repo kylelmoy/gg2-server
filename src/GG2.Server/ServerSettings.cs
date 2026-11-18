@@ -262,39 +262,42 @@ public static class ServerSettings
             "Server", "ChatJoinMessage", nameof(ServerOptions.ChatJoinMessage),
             o => o.ChatJoinMessage, (o, v) => o.ChatJoinMessage = v, "type /help"));
 
-        // [Plugins] chat_* — the chat2026 plugin's settings, under the same keys its
-        // GML half reads, so one gg2.ini configures both halves. Read only when
-        // chat2026 is in ServerPluginList.
+        // [Chat] — the server's own chat (docs/CHAT.md). On by default, and on means
+        // the `chat` plugin is advertised so a stock client has a chat window.
         settings.Add(BoolRow(
-            "Plugins", "chat_gravetalk", nameof(ServerOptions.Chat),
+            "Chat", "Enabled", nameof(ServerOptions.Chat),
+            o => o.Chat.Enabled, (o, v) => o.Chat = o.Chat with { Enabled = v }));
+
+        settings.Add(BoolRow(
+            "Chat", "Gravetalk", nameof(ServerOptions.Chat),
             o => o.Chat.Gravetalk, (o, v) => o.Chat = o.Chat with { Gravetalk = v }));
 
         settings.Add(BoolRow(
-            "Plugins", "chat_unique_names", nameof(ServerOptions.Chat),
+            "Chat", "UniqueNames", nameof(ServerOptions.Chat),
             o => o.Chat.UniqueNames, (o, v) => o.Chat = o.Chat with { UniqueNames = v }));
 
         settings.Add(IntRow(
-            "Plugins", "chat_mute_minutes", nameof(ServerOptions.Chat),
+            "Chat", "MuteMinutes", nameof(ServerOptions.Chat),
             o => o.Chat.MuteMinutes, (o, v) => o.Chat = o.Chat with { MuteMinutes = v }, "5"));
 
         settings.Add(BoolRow(
-            "Plugins", "chat_votes", nameof(ServerOptions.Chat),
+            "Chat", "Votes", nameof(ServerOptions.Chat),
             o => o.Chat.VotesEnabled, (o, v) => o.Chat = o.Chat with { VotesEnabled = v }));
 
         settings.Add(IntRow(
-            "Plugins", "chat_vote_kick_percent", nameof(ServerOptions.Chat),
+            "Chat", "VoteKickPercent", nameof(ServerOptions.Chat),
             o => o.Chat.VoteKickPercent, (o, v) => o.Chat = o.Chat with { VoteKickPercent = v }, "75"));
 
         settings.Add(IntRow(
-            "Plugins", "chat_vote_mute_percent", nameof(ServerOptions.Chat),
+            "Chat", "VoteMutePercent", nameof(ServerOptions.Chat),
             o => o.Chat.VoteMutePercent, (o, v) => o.Chat = o.Chat with { VoteMutePercent = v }, "75"));
 
         settings.Add(IntRow(
-            "Plugins", "chat_kickban_minutes", nameof(ServerOptions.Chat),
+            "Chat", "KickBanMinutes", nameof(ServerOptions.Chat),
             o => o.Chat.KickBanMinutes, (o, v) => o.Chat = o.Chat with { KickBanMinutes = v }, "30"));
 
         settings.Add(SecretRow(
-            "Plugins", "chat_admin_password", nameof(ServerOptions.Chat),
+            "Chat", "AdminPassword", nameof(ServerOptions.Chat),
             o => o.Chat.AdminPassword, (o, v) => o.Chat = o.Chat with { AdminPassword = v }, "hunter2"));
 
         settings.Add(SecretRow(
@@ -333,7 +336,7 @@ public static class ServerSettings
 
         settings.Add(TextRow(
             "Server", "ServerPluginList", nameof(ServerOptions.ServerPluginList),
-            o => o.ServerPluginList, (o, v) => o.ServerPluginList = v, "chat_v2_pr"));
+            o => o.ServerPluginList, (o, v) => o.ServerPluginList = v, "chat"));
 
         settings.Add(BoolRow(
             "Server", "ServerPluginsRequired", nameof(ServerOptions.ServerPluginsRequired),

@@ -34,18 +34,18 @@ namespace GG2.Tests;
 public sealed class PluginPacketTests
 {
     /// <summary>
-    /// With nothing configured, the HELLO promises no plugins — which is what
-    /// keeps the kick unreachable for a default server.
+    /// With nothing configured, the HELLO promises one plugin, <c>chat</c>, which
+    /// the server's own chat answers, and does not require it.
     /// </summary>
     /// <remarks>
     /// The load-bearing half of the pair: the advertisement and the kick must
     /// agree, or a stock client sends packets the server can only answer by
     /// kicking it. That invariant is now the general one — the kick's boundary
     /// is the advertised list's length — and this asserts the default end of it,
-    /// that configuring nothing advertises nothing.
+    /// that configuring nothing advertises only the chat the server answers.
     /// </remarks>
     [Fact]
-    public void TheGreetingAdvertisesNoPluginsAndDoesNotRequireThem()
+    public void TheDefaultGreetingAdvertisesOnlyTheServersChatAndDoesNotRequireIt()
     {
         using var harness = new ServerHarness();
         var client = harness.Connect();
@@ -59,7 +59,7 @@ public sealed class PluginPacketTests
         client.TakeString1();                       // map md5, empty for a built-in
 
         Assert.Equal(0, client.TakeByte());         // pluginsRequired
-        Assert.Equal(string.Empty, client.TakeString2());
+        Assert.Equal("chat@bad8081d64f0b808a2bb3a6d88978fb5", client.TakeString2());
     }
 
     [Fact]

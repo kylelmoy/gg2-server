@@ -17,7 +17,7 @@ public sealed class ServerSayTests
     [Fact]
     public void WithoutAChatPluginTheLineIsANoticeEveryClientReceives()
     {
-        using var harness = new ServerHarness();
+        using var harness = new ServerHarness(options => options.Chat = options.Chat with { Enabled = false });
         var client = harness.JoinClient("alice");
         var before = client.Received.Count;
 

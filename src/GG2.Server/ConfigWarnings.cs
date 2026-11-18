@@ -42,16 +42,16 @@ public static class ConfigWarnings
 
         var warnings = new List<string>();
 
-        // Both of these are delivered by a chat plugin and by nothing else, and
-        // ServerPluginList is EMPTY by default — so the obvious way to configure
-        // either is on a server that can never show it to anybody.
-        if (!ServerPluginCatalogue.ListHasChatConsole(options.ServerPluginList))
+        // Both of these are delivered by chat and by nothing else: the server's
+        // own (on by default) or chat_v2_pr. With chat off and no chat_v2_pr,
+        // either is configured on a server that can never show it to anybody.
+        if (!options.Chat.Enabled && !ServerPluginCatalogue.ListHasChatConsole(options.ServerPluginList))
         {
             if (options.ChatJoinMessage.Length != 0)
             {
                 warnings.Add(
-                    "ChatJoinMessage is set but no chat plugin is loaded, so nobody will see it. "
-                    + "Add chat or chat_v2_pr to ServerPluginList");
+                    "ChatJoinMessage is set but chat is off, so nobody will see it. "
+                    + "Turn on [Chat] Enabled, or add chat_v2_pr to ServerPluginList");
             }
 
             // ⚠️ Says what still works. The control port and the admin panel reach
@@ -60,8 +60,8 @@ public static class ConfigWarnings
             if (options.BotSuspendMinutes > 0)
             {
                 warnings.Add(
-                    $"Bots.SuspendMinutes is {options.BotSuspendMinutes} but no chat plugin is "
-                    + "loaded, so no player can type /bots. Add chat or chat_v2_pr to "
+                    $"Bots.SuspendMinutes is {options.BotSuspendMinutes} but chat is off, so no "
+                    + "player can type /bots. Turn on [Chat] Enabled, or add chat_v2_pr to "
                     + "ServerPluginList; the control port's bots-suspend still works");
             }
         }

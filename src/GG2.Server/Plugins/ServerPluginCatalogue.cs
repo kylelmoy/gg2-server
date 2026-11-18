@@ -28,7 +28,12 @@ public static class ServerPluginCatalogue
     /// live plugin because a settings page has a plugin LIST and no server: the
     /// fleet editor configures machines that are not running.
     /// </param>
-    private sealed record Entry(string Md5, bool ChatConsole, Func<IServerPlugin> Create);
+    /// <param name="Create">
+    /// The server half, or null when the server supplies its own: <c>chat</c>'s
+    /// packet id is answered by the server's native <see cref="ServerChat"/>,
+    /// which the server builds and owns rather than the catalogue.
+    /// </param>
+    private sealed record Entry(string Md5, bool ChatConsole, Func<IServerPlugin>? Create);
 
     private static readonly Dictionary<string, Entry> Entries = new(StringComparer.Ordinal)
     {
@@ -37,10 +42,11 @@ public static class ServerPluginCatalogue
         // (md5 of the zip confirmed to equal the hash in its own filename).
         // Re-check http://www.ganggarrison.com/plugins/chat.md5 before changing
         // this implementation; a difference means the client half has moved and
-        // nobody has read the new GML. The server half is the chat core on its
-        // bridged wire: v6 to a stock client, chat2026 behind 0x80 to one that
-        // greets that way (ChatPlugin, docs/PLUGINS.md "The chat core").
-        ["chat"] = new("bad8081d64f0b808a2bb3a6d88978fb5", true, () => new ChatPlugin(ChatWire.Bridged)),
+        // nobody has read the new GML. Its server half is the server's own chat
+        // (ServerChat, docs/CHAT.md), which the server advertises under this
+        // name whenever [Chat] Enabled is on; no factory here, because the
+        // server owns that object.
+        ["chat"] = new("bad8081d64f0b808a2bb3a6d88978fb5", true, null),
 
         // chat_v2_pr — "chat_v2 by Lorgan, various fixes by PrOF", plugin.gml
         // dated 2017-04-10, from
@@ -50,14 +56,6 @@ public static class ServerPluginCatalogue
         // A DIFFERENT plugin from "chat" above, not an older one: separate
         // hashes, separate packet formats, and no vote dialog.
         ["chat_v2_pr"] = new("46d0937c9206dcf27e036100d1ea8685", true, () => new ChatV2Plugin()),
-
-        // chat2026 — not on ganggarrison.com yet. The pin is the md5 of
-        // dist/chat2026.zip built by `node tools/build.js` at gg2-chat2026 commit
-        // 4e62b8f (D:\Code\gg2-chat2026), whose PROTOCOL.md version 1 is what
-        // ChatPlugin speaks on its plain wire. Until it is published, clients load it from
-        // ServerPluginsDebug/chat2026.zip, and so must this server
-        // (PluginHashes.Resolve's second choice), or they will disagree on the hash.
-        ["chat2026"] = new("ff37fbcb3c4f1a86099cea524e2eba8a", true, () => new ChatPlugin(ChatWire.Plain)),
     };
 
     /// <summary>Every plugin name this port can serve, ascending.</summary>
@@ -68,7 +66,7 @@ public static class ServerPluginCatalogue
     /// this port has none.
     /// </summary>
     public static IServerPlugin? Create(string name) =>
-        Entries.TryGetValue(name, out var entry) ? entry.Create() : null;
+        Entries.TryGetValue(name, out var entry) ? entry.Create?.Invoke() : null;
 
     /// <summary>
     /// Whether <paramref name="pluginList"/> — a raw <c>ServerPluginList</c> —

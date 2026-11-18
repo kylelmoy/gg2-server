@@ -1,100 +1,101 @@
 ﻿using System.Text;
 using GG2.Protocol;
 
-namespace GG2.Server.Plugins;
+using GG2.Server.Plugins;
+
+namespace GG2.Server;
 
 /// <summary>
-/// What an operator can change about <see cref="ChatPlugin"/>. The defaults
-/// are chat2026's GML defaults for the same <c>[Plugins]</c> keys.
+/// What an operator can change about <see cref="ServerChat"/>: <c>[Chat]</c> in
+/// <c>--config</c>, as <see cref="ServerOptions.Chat"/>.
 /// </summary>
 /// <remarks>
-/// Set from <c>[Plugins]</c> in <c>--config</c> as <see cref="ServerOptions.Chat"/>
-/// and handed to the plugin by <see cref="IPluginHost.ChatSettings"/> when it attaches.
+/// The defaults are the GML reference host's (<see cref="ServerChat"/> names it).
+/// <see cref="ServerChat"/> reads them through
+/// <see cref="IPluginHost.ChatSettings"/> when it attaches.
 /// </remarks>
 public sealed record ChatSettings
 {
-    /// <summary><c>chat_gravetalk</c>: whether the living hear the dead and spectators.</summary>
+    /// <summary>
+    /// <c>Enabled</c>: the server runs chat and advertises <c>chat</c> for it. Off,
+    /// there is no chat and nothing is advertised for it.
+    /// </summary>
+    public bool Enabled { get; init; } = true;
+
+    /// <summary><c>Gravetalk</c>: whether the living hear the dead and spectators.</summary>
     public bool Gravetalk { get; init; } = true;
 
-    /// <summary><c>chat_unique_names</c>: suffix a duplicate name with the lowest free number.</summary>
+    /// <summary><c>UniqueNames</c>: suffix a duplicate name with the lowest free number.</summary>
     public bool UniqueNames { get; init; }
 
-    /// <summary><c>chat_mute_minutes</c>: a vote mute, and <c>/mute</c> with no minutes.</summary>
+    /// <summary><c>MuteMinutes</c>: a vote mute, and <c>/mute</c> with no minutes.</summary>
     public int MuteMinutes { get; init; } = 10;
 
-    /// <summary><c>chat_votes</c>.</summary>
+    /// <summary><c>Votes</c>.</summary>
     public bool VotesEnabled { get; init; } = true;
 
-    /// <summary><c>chat_vote_kick_percent</c>: the Yes share a kick needs, inclusive.</summary>
+    /// <summary><c>VoteKickPercent</c>: the Yes share a kick needs, inclusive.</summary>
     public int VoteKickPercent { get; init; } = 60;
 
-    /// <summary><c>chat_vote_mute_percent</c>: the Yes share a mute needs, inclusive.</summary>
+    /// <summary><c>VoteMutePercent</c>: the Yes share a mute needs, inclusive.</summary>
     public int VoteMutePercent { get; init; } = 60;
 
-    /// <summary><c>chat_kickban_minutes</c>: how long a vote-kicked address is refused.</summary>
+    /// <summary><c>KickBanMinutes</c>: how long a vote-kicked address is refused.</summary>
     public int KickBanMinutes { get; init; } = 10;
 
-    /// <summary><c>chat_admin_password</c>; empty disables <c>/login</c>.</summary>
+    /// <summary><c>AdminPassword</c>; empty disables <c>/login</c>.</summary>
     public string AdminPassword { get; init; } = string.Empty;
 
-    /// <summary>The ranges the GML clamps to, refused up front here.</summary>
+    /// <summary>The ranges the reference host clamps to, refused up front here.</summary>
     public void Validate()
     {
         if (MuteMinutes is < 1 or > 1440)
-            throw new ArgumentOutOfRangeException(nameof(MuteMinutes), MuteMinutes, "chat_mute_minutes must be 1..1440");
+            throw new ArgumentOutOfRangeException(nameof(MuteMinutes), MuteMinutes, "Chat.MuteMinutes must be 1..1440");
 
         if (KickBanMinutes is < 0 or > 1440)
-            throw new ArgumentOutOfRangeException(nameof(KickBanMinutes), KickBanMinutes, "chat_kickban_minutes must be 0..1440");
+            throw new ArgumentOutOfRangeException(nameof(KickBanMinutes), KickBanMinutes, "Chat.KickBanMinutes must be 0..1440");
 
         if (VoteKickPercent is < 1 or > 100)
-            throw new ArgumentOutOfRangeException(nameof(VoteKickPercent), VoteKickPercent, "chat_vote_kick_percent must be 1..100");
+            throw new ArgumentOutOfRangeException(nameof(VoteKickPercent), VoteKickPercent, "Chat.VoteKickPercent must be 1..100");
 
         if (VoteMutePercent is < 1 or > 100)
-            throw new ArgumentOutOfRangeException(nameof(VoteMutePercent), VoteMutePercent, "chat_vote_mute_percent must be 1..100");
+            throw new ArgumentOutOfRangeException(nameof(VoteMutePercent), VoteMutePercent, "Chat.VoteMutePercent must be 1..100");
     }
 }
 
-/// <summary>Which wire a <see cref="ChatPlugin"/> speaks, and so which name it is advertised under.</summary>
-public enum ChatWire
-{
-    /// <summary>
-    /// <c>chat</c>: Lorgan3's v6 for a stock client, and chat2026 inside it,
-    /// each message behind a <see cref="ChatPlugin.Envelope"/> byte, for a client
-    /// that greets with it.
-    /// </summary>
-    Bridged,
-
-    /// <summary><c>chat2026</c>: chat2026 alone, with no envelope.</summary>
-    Plain,
-}
-
 /// <summary>
-/// The chat core: one room, one rate limit, one mute and ban list, one command
-/// console and one vote engine, spoken to each player in the format that player
-/// greeted with.
+/// The server's chat: one room, one rate limit, one mute and kick-ban list, one
+/// command console and one vote engine, spoken to each player in the format that
+/// player greeted with.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Advertised as <c>chat</c></b> (<see cref="ChatWire.Bridged"/>), because
-/// <c>chat@bad8081d64f0b808a2bb3a6d88978fb5</c> is on ganggarrison.com and every
-/// stock client can fetch it. A stock client speaks Lorgan3's v6
-/// (<c>plugin.gml</c>, <c>chat_api.gml</c>, <c>vote_api.gml</c> in that zip). A
-/// client that knows chat2026 (gg2-client's desktop build) sends
-/// <see cref="Envelope"/> followed by a chat2026 HELLO, and from then on every
-/// message to and from it is one chat2026 message (<c>gg2-chat2026/PROTOCOL.md</c>,
-/// version 1) behind that byte. v6's kinds are 0-3 and its host ignores any other
-/// first byte (<c>plugin.gml</c> user event 0 has no <c>default</c>), so the
-/// envelope is safe at any <c>chat</c> server. Advertised as <c>chat2026</c>
-/// (<see cref="ChatWire.Plain"/>) it is chat2026 with no envelope and no v6.
+/// <b>Native to the server, carried by the <c>chat</c> plugin's packet id.</b> A
+/// stock GM8 client has no chat of its own: it gets one by downloading
+/// <c>chat@bad8081d64f0b808a2bb3a6d88978fb5</c> (Lorgan3's chat v6) from
+/// ganggarrison.com. So with chat on (<see cref="ChatSettings.Enabled"/>, the
+/// default) the server advertises <c>chat</c> itself and this object answers its
+/// packet id. Nothing else about it is a plugin: the server builds it, owns it and
+/// configures it from <c>[Chat]</c>.
 /// </para>
 /// <para>
-/// <b>The behaviour is chat2026's for everybody</b>: its routing (TF2 gravetalk,
-/// spectator team chat), its token-bucket rate limit, its timed address mutes and
-/// kick bans, commands in team chat too, and its vote thresholds and quorum.
-/// Only the encoding differs, per recipient:
+/// <b>Two formats on that id.</b> A stock client speaks v6 (<c>plugin.gml</c>,
+/// <c>chat_api.gml</c>, <c>vote_api.gml</c> in that zip). A native client
+/// (gg2-client) sends <see cref="Envelope"/> followed by a HELLO, and from then on
+/// every message to and from it is one native message behind that byte. The
+/// native format is <c>PROTOCOL.md</c> version 1 in gg2-chat2026, which is the
+/// spec both ends cite. v6's client kinds are 0-3 and its host ignores any other
+/// first byte (<c>plugin.gml</c> user event 0 has no <c>default</c>), so a native
+/// client may greet any <c>chat</c> server this way.
+/// </para>
+/// <para>
+/// <b>The behaviour is the native one for everybody</b>: TF2 gravetalk,
+/// spectator team chat, a token-bucket rate limit, timed address mutes and kick
+/// bans, commands in team chat too, and its vote thresholds and quorum. Only the
+/// encoding differs, per recipient:
 /// </para>
 /// <list type="table">
-/// <item><term>a player's line</term><description>chat2026 LINE with the server's flags; v6 roster index, audience (0, or 1 + team) and raw text. v6 has no field for DEAD or SPEC.</description></item>
+/// <item><term>a player's line</term><description>native LINE with the server's flags; v6 roster index, audience (0, or 1 + team) and raw text. v6 has no field for DEAD or SPEC.</description></item>
 /// <item><term>/me</term><description>LINE with the action flag; v6 <c>chr(13)</c> + text, the form v6's own <c>/me</c> sends; <c>doColorCode</c> draws it as <c>*Name text</c>.</description></item>
 /// <item><term>a notice</term><description>NOTICE with its category; v6 254 for join, leave, rename and team change (a client may hide those), 255 for everything else, as <c>O</c> + text with <c>#</c> escaped.</description></item>
 /// <item><term>the MOTD</term><description>WELCOME's motd; v6 a 255 on hello, where <c>#</c> stays GM8's line break.</description></item>
@@ -104,35 +105,39 @@ public enum ChatWire
 /// ⛔ <b>Nothing is sent to a player who has not greeted</b>, in either format. A
 /// GM8 client without the plugin raises a fatal error on a plugin packet it has no
 /// queue for, and a client that joined without chat (gg2-client on iOS) must stay
-/// silent. And <b>a chat2026 frame never reaches a v6 player</b>: v6 would read
+/// silent. And <b>an enveloped frame never reaches a v6 player</b>: v6 would read
 /// <see cref="Envelope"/> as player 128.
 /// </para>
 /// <para>
 /// <b>The most recent hello sets the format.</b> A repeat in the same format is
-/// ignored, as both protocols say; a hello in the other format switches the
-/// player and greets them again in it, with the running vote re-offered without
-/// clearing their answer. A desktop client that gave up waiting for WELCOME and
-/// fell back to v6 therefore ends up v6 at both ends.
+/// ignored; a hello in the other format switches the player and greets them again
+/// in it, with the running vote re-offered without clearing their answer. A native
+/// client that gave up waiting for WELCOME and fell back to v6 therefore ends up
+/// v6 at both ends.
+/// </para>
+/// <para>
+/// The host half's logic is transcribed from the GML host in gg2-chat2026
+/// (<c>src/host/</c>, <c>src/commands/</c>, <c>src/votes/</c>); a method citing a
+/// <c>host/*.gml</c> file names the file it stands for.
 /// </para>
 /// </remarks>
-public sealed partial class ChatPlugin(ChatWire wire = ChatWire.Bridged, ChatSettings? settings = null)
-    : ServerPlugin, IServerChat
+public sealed partial class ServerChat(ChatSettings? settings = null) : ServerPlugin, IServerChat
 {
     /// <summary>PROTOCOL.md, "Protocol version".</summary>
     public const byte ProtocolVersion = 1;
 
     /// <summary>
-    /// The first byte of a chat2026 message on <see cref="ChatWire.Bridged"/>, in
-    /// both directions. Outside v6's client kinds (0-3), and never sent to a v6 player.
+    /// The first byte of a native message, in both directions. Outside v6's
+    /// client kinds (0-3), and never sent to a v6 player.
     /// </summary>
     public const byte Envelope = 0x80;
 
-    // chat2026, client to host.
+    // Native, client to host.
     private const byte KindHello = 0;
     private const byte KindSay = 1;
     private const byte KindVote = 2;
 
-    // chat2026, host to client.
+    // Native, host to client.
     private const byte KindWelcome = 0;
     private const byte KindLine = 1;
     private const byte KindNotice = 2;
@@ -190,10 +195,10 @@ public sealed partial class ChatPlugin(ChatWire wire = ChatWire.Bridged, ChatSet
         /// <summary>No hello yet: sent nothing.</summary>
         None,
         V6,
-        Chat2026,
+        Native,
     }
 
-    /// <summary>chat2026's SAY cap. A v6 line may be a whole 255-byte string.</summary>
+    /// <summary>The native SAY cap. A v6 line may be a whole 255-byte string.</summary>
     private const int MaxSayLength = 127;
     private const int MaxStringLength = 255;
 
@@ -214,7 +219,7 @@ public sealed partial class ChatPlugin(ChatWire wire = ChatWire.Bridged, ChatSet
         /// <summary>Greeted in either format, so may be sent anything in that format.</summary>
         public bool Hello => Format != Format.None;
 
-        /// <summary>The chat2026 protocol version the player greeted with.</summary>
+        /// <summary>The native protocol version the player greeted with.</summary>
         public int Version;
 
         /// <summary><c>chatSeen</c>: announced, and name- and team-tracked from now on.</summary>
@@ -255,8 +260,6 @@ public sealed partial class ChatPlugin(ChatWire wire = ChatWire.Bridged, ChatSet
         public readonly int[] V6Counted = new int[9];
     }
 
-    private readonly ChatWire _wire = wire;
-
     private ChatSettings _settings = settings ?? new ChatSettings();
 
     private readonly PluginPlayerTable<Chatter> _chatters = new(() => new Chatter());
@@ -267,15 +270,18 @@ public sealed partial class ChatPlugin(ChatWire wire = ChatWire.Bridged, ChatSet
     /// <summary><c>global.chatKickBans</c>: remote address to kick-ban expiry.</summary>
     private readonly Dictionary<string, long> _kickBans = new(StringComparer.Ordinal);
 
-    /// <summary>The chat2026 frame being built, envelope included on the bridged wire.</summary>
+    /// <summary>The native frame being built, envelope included.</summary>
     private readonly NetWriter _out = new(4096);
 
-    /// <summary>The v6 frame being built. Separate, so one send can carry both.</summary>
+    /// <summary>The v6 frame being built. Separate, so one send can carry both formats.</summary>
     private readonly NetWriter _v6 = new(4096);
 
     private string _currentMap = string.Empty;
 
-    public override string Name => _wire == ChatWire.Bridged ? "chat" : "chat2026";
+    /// <summary>The plugin whose packet id carries chat, and which the server advertises for it.</summary>
+    public const string PluginName = "chat";
+
+    public override string Name => PluginName;
 
     /// <summary>Settings passed to the constructor win; otherwise the server's.</summary>
     public override void Attach(PluginChannel channel)
@@ -416,8 +422,8 @@ public sealed partial class ChatPlugin(ChatWire wire = ChatWire.Bridged, ChatSet
     // --- receiving ----------------------------------------------------------
 
     /// <summary>
-    /// One client-to-host packet. On the bridged wire a leading
-    /// <see cref="Envelope"/> means chat2026 and anything else is v6. A short
+    /// One client-to-host packet. A leading <see cref="Envelope"/> means a native
+    /// message and anything else is v6. A short
     /// packet is dropped, never read past, and an unknown kind is ignored.
     /// </summary>
     public override void Receive(int slot, ReadOnlySpan<byte> data)
@@ -425,16 +431,14 @@ public sealed partial class ChatPlugin(ChatWire wire = ChatWire.Bridged, ChatSet
         if (!_chatters.Has(slot) || data.Length < 1)
             return;
 
-        if (_wire == ChatWire.Plain)
-            ReceiveChat2026(slot, data);
-        else if (data[0] == Envelope)
-            ReceiveChat2026(slot, data[1..]);
+        if (data[0] == Envelope)
+            ReceiveNative(slot, data[1..]);
         else
             ReceiveV6(slot, data);
     }
 
-    /// <summary><c>host/receive.gml</c>: one chat2026 message, without its envelope.</summary>
-    private void ReceiveChat2026(int slot, ReadOnlySpan<byte> data)
+    /// <summary><c>host/receive.gml</c>: one native message, without its envelope.</summary>
+    private void ReceiveNative(int slot, ReadOnlySpan<byte> data)
     {
         if (data.Length < 1)
             return;
@@ -444,11 +448,11 @@ public sealed partial class ChatPlugin(ChatWire wire = ChatWire.Bridged, ChatSet
         switch (data[0])
         {
             case KindHello:
-                if (data.Length < 3 || chatter.Format == Format.Chat2026)
+                if (data.Length < 3 || chatter.Format == Format.Native)
                     return;
 
                 chatter.Version = data[1];
-                Greet(slot, Format.Chat2026);
+                Greet(slot, Format.Native);
                 return;
 
             case KindSay:
@@ -461,7 +465,7 @@ public sealed partial class ChatPlugin(ChatWire wire = ChatWire.Bridged, ChatSet
                 if (data.Length - 3 < length)
                     return;
 
-                if (chatter.Format != Format.Chat2026 || chatter.Version != ProtocolVersion)
+                if (chatter.Format != Format.Native || chatter.Version != ProtocolVersion)
                     return;
 
                 var text = Cap(StripControl(GG2Text.Decode(data.Slice(3, length)), " "), MaxSayLength);
@@ -473,7 +477,7 @@ public sealed partial class ChatPlugin(ChatWire wire = ChatWire.Bridged, ChatSet
             }
 
             case KindVote:
-                if (data.Length < 3 || chatter.Format != Format.Chat2026)
+                if (data.Length < 3 || chatter.Format != Format.Native)
                     return;
 
                 ReceiveVote(slot, data[1], data[2]);
@@ -543,7 +547,7 @@ public sealed partial class ChatPlugin(ChatWire wire = ChatWire.Bridged, ChatSet
         if (expiry > chatter.MutedUntil)
             chatter.MutedUntil = expiry;
 
-        if (format == Format.Chat2026)
+        if (format == Format.Native)
             SendWelcome(slot);
         else if (Host.ChatJoinMessage.Length != 0)
             SendV6(slot, V6Notice, 0, V6Orange + Host.ChatJoinMessage.Replace('\n', ' ').Replace('\r', ' '));
@@ -653,12 +657,11 @@ public sealed partial class ChatPlugin(ChatWire wire = ChatWire.Bridged, ChatSet
 
     // --- sending ------------------------------------------------------------
 
-    /// <summary>Starts a chat2026 frame in <see cref="_out"/>, behind the envelope on the bridged wire.</summary>
+    /// <summary>Starts a native frame in <see cref="_out"/>, behind the envelope.</summary>
     private void Begin(byte kind)
     {
         _out.Reset();
-        if (_wire == ChatWire.Bridged)
-            _out.WriteUByte(Envelope);
+        _out.WriteUByte(Envelope);
 
         _out.WriteUByte(kind);
     }
@@ -750,7 +753,7 @@ public sealed partial class ChatPlugin(ChatWire wire = ChatWire.Bridged, ChatSet
 
             // A roster index of 200 or more would read as a v6 code. No roster
             // is that large; drop rather than mislabel.
-            if (format == Format.Chat2026)
+            if (format == Format.Native)
                 Channel.SendTo(slot, _out.WrittenSpan);
             else if (sender < V6Poll)
                 SendV6(slot, sender, v6Audience, v6Text);
@@ -807,7 +810,7 @@ public sealed partial class ChatPlugin(ChatWire wire = ChatWire.Bridged, ChatSet
     {
         switch (_chatters[slot].Format)
         {
-            case Format.Chat2026:
+            case Format.Native:
                 Channel.SendTo(slot, _out.WrittenSpan);
                 break;
 

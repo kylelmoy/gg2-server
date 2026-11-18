@@ -44,11 +44,9 @@ public sealed class CliCoverageTests
     private static readonly Dictionary<string, string> NotOnTheCommandLine = new()
     {
         ["Chat"] =
-            "is the chat core's eight [Plugins] chat_* settings, which do nothing unless chat "
-            + "or chat2026 is in ServerPluginList. They keep the GML half's own ini keys so that one "
-            + "gg2.ini configures a chat2026 server whichever half hosts it, and eight flags "
-            + "spelled differently from those keys would be a second vocabulary for the same "
-            + "thing. --config reaches every one; ConfigFileCoverageTests gates that.",
+            "is the [Chat] section, nine settings of the server's own chat, configured "
+            + "from the file like the rest of a subsystem's tuning rather than per launch; "
+            + "--config reaches every one and ConfigFileCoverageTests gates that.",
 
         ["CommandLineOverrides"] =
             "is what Parse itself computes about the command line — which settings a flag "
@@ -91,7 +89,7 @@ public sealed class CliCoverageTests
         ("Password", ["--password", "hunter2"], o => o.Password),
         ("WelcomeMessage", ["--welcome", "hello"], o => o.WelcomeMessage),
         ("ChatJoinMessage", ["--chat-join-message", "type /bots"], o => o.ChatJoinMessage),
-        ("ServerPluginList", ["--plugins", "chat_v2_pr"], o => o.ServerPluginList),
+        ("ServerPluginList", ["--plugins", "chat"], o => o.ServerPluginList),
         ("ServerPluginsRequired", ["--plugins-required"], o => o.ServerPluginsRequired),
         ("VotableMaps", ["--votable-maps", "ctf_truefort,koth_valley"], o => string.Join(',', o.VotableMaps)),
         ("PlayerLimit", ["--players", "24"], o => o.PlayerLimit),

@@ -60,7 +60,7 @@ public interface IPluginHost
     /// <c>player.object != -1</c>.
     /// </summary>
     /// <remarks>
-    /// A plain read of the simulation, never a write. <c>chat2026</c> tags a dead
+    /// A plain read of the simulation, never a write. The server's chat tags a dead
     /// player's line <c>*DEAD*</c> and routes it by gravetalk, which is TF2's rule
     /// and the reason this exists.
     /// </remarks>
@@ -71,7 +71,7 @@ public interface IPluginHost
     /// <c>global.mapchanging</c>.
     /// </summary>
     /// <remarks>
-    /// <c>chat2026</c> cancels a running vote at this point, so a vote started on
+    /// The server's chat cancels a running vote at this point, so a vote started on
     /// one map never acts on the next, and refuses to start one.
     /// </remarks>
     bool RoundOver { get; }
@@ -203,11 +203,11 @@ public interface IPluginHost
     string ChatJoinMessage { get; }
 
     /// <summary>
-    /// <c>[Plugins] chat_*</c>: the chat core's settings (<c>chat</c> and <c>chat2026</c>).
+    /// <c>[Chat]</c>: the server's chat settings (<see cref="ServerChat"/>).
     /// </summary>
     /// <remarks>
     /// A plain read of configuration, and here for the same reason as
-    /// <see cref="ChatJoinMessage"/>: the catalogue builds a plugin with no
+    /// <see cref="ChatJoinMessage"/>: <see cref="ServerChat"/> is built with no
     /// arguments, and the settings are the server's.
     /// </remarks>
     ChatSettings ChatSettings { get; }

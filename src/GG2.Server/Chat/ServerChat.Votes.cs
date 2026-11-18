@@ -1,10 +1,12 @@
 ﻿using System.Globalization;
 using GG2.Protocol;
 
-namespace GG2.Server.Plugins;
+using GG2.Server.Plugins;
+
+namespace GG2.Server;
 
 /// <summary>
-/// chat2026's votes: <c>host/fn_vote_*.gml</c>, <c>host/vote_clock.gml</c>,
+/// The votes: <c>host/fn_vote_*.gml</c>, <c>host/vote_clock.gml</c>,
 /// <c>host/fn_open_picker.gml</c> and <c>src/votes/*.gml</c>.
 /// </summary>
 /// <remarks>
@@ -14,7 +16,7 @@ namespace GG2.Server.Plugins;
 /// and everybody else a vote refers to by stable id, never by slot: a vote runs
 /// long enough for the roster to compact under it.
 /// </remarks>
-public sealed partial class ChatPlugin
+public sealed partial class ServerChat
 {
     private enum VoteHandler
     {
@@ -123,7 +125,7 @@ public sealed partial class ChatPlugin
         var ticks = (long)Math.Ceiling((_voteEndsAt - Now) * 30 / 1000.0);
         var ticksLeft = (ushort)Math.Clamp(ticks, 0, ushort.MaxValue);
 
-        if (chatter.Format == Format.Chat2026)
+        if (chatter.Format == Format.Native)
         {
             Begin(KindVoteStart);
             _out.WriteUByte((byte)_voteId);
@@ -227,7 +229,7 @@ public sealed partial class ChatPlugin
     private void SendTallyTo(int slot)
     {
         var chatter = _chatters[slot];
-        if (chatter.Format == Format.Chat2026)
+        if (chatter.Format == Format.Native)
         {
             Channel.SendTo(slot, _out.WrittenSpan);
             return;
@@ -341,7 +343,7 @@ public sealed partial class ChatPlugin
             var chatter = _chatters[slot];
             if (chatter.Hello && ShownTo(slot))
             {
-                if (chatter.Format == Format.Chat2026)
+                if (chatter.Format == Format.Native)
                     Channel.SendTo(slot, _out.WrittenSpan);
                 else
                     EndV6Vote(slot, winner, text);

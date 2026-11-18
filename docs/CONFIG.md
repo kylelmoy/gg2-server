@@ -143,8 +143,8 @@ carries it is a reasonable order to work in, and a configuration that will not
 start is worse than one that says what it is missing.
 
 What it currently names: `[Server] ChatJoinMessage` and `[Bots] SuspendMinutes`
-on a server whose `ServerPluginList` loads no chat plugin. Both are delivered by
-a chat plugin and by nothing else, and that list is **empty by default**.
+on a server with no chat: `[Chat] Enabled=0` and no `chat_v2_pr` in
+`ServerPluginList`. Both are delivered by chat and by nothing else.
 `ConfigWarningsTests` gates each one in both directions — a warning that fired
 whatever was configured would be noise an operator learns to skip.
 
@@ -320,13 +320,13 @@ and it is described above.
 |---|---|---|---|
 | `ServerName` | text | `My Server` | Shown in the client's server browser and on join. |
 | `WelcomeMessage` | text | *(empty)* | Sent to each joiner. Empty means none. |
-| `ChatJoinMessage` | text | *(empty)* | A **chat** line sent to each player as they join chat. Empty means none. A different channel from `WelcomeMessage`: that one is a `MESSAGE_STRING` every client draws, this one needs a chat plugin in `ServerPluginList` and a client without one never sees it — ⚠️ set without one it is **warned about**, not refused. On `chat`, `#` starts a new line; on `chat_v2_pr` it becomes a space, because that plugin's renderer uses `#` as a colour marker. |
+| `ChatJoinMessage` | text | *(empty)* | A **chat** line sent to each player as they join chat. Empty means none. A different channel from `WelcomeMessage`: that one is a `MESSAGE_STRING` every client draws, this one needs chat (`[Chat] Enabled`, the default, or `chat_v2_pr`) and a client without it never sees it — ⚠️ set with neither it is **warned about**, not refused. To a v6 client `#` starts a new line, to a native client it is a `#`, and on `chat_v2_pr` it becomes a space, because that plugin's renderer uses `#` as a colour marker. |
 | `Password` | secret | *(empty)* | The game password. Empty means none, and no `PASSWORD_REQUEST`. |
 | `Map` | text | `ctf_truefort` | The map to open on. Empty means the first entry of the rotation. |
 | `Rotation` | list | *(empty)* | The map rotation, in order. A map may appear more than once. |
 | `ShuffleRotation` | none / arena-last / any | `none` | How the rotation is ordered at startup. `arena-last` shuffles but does not open on an arena map. |
 | `VotableMaps` | list | *(empty)* | Maps a plugin map vote may offer. Empty means the rotation, else every map in the maps directory. |
-| `ServerPluginList` | text | *(empty)* | Server-sent plugins clients are asked to load, comma-separated. |
+| `ServerPluginList` | text | *(empty)* | Server-sent plugins clients are asked to load, comma-separated. With `[Chat] Enabled` on (the default) the server also advertises `chat`, appended unless listed here. |
 | `ServerPluginsRequired` | boolean | `0` | Clients must load the plugin list to join. |
 | `AutoBalance` | boolean | `1` | Move a player across when one team is two larger. |
 | `AimCheck` | `off`, `log`, `kick` | `log` | Port's own. What to do about an `INPUTSTATE` whose aim no mouse could produce: nothing, one log line per connection, or that line and a kick after 30. `docs/HARDENING.md`, "The aim check". |
@@ -343,20 +343,21 @@ and it is described above.
 | `AuthServerHost` | text | `ganggarrison.com` | The reward auth service. Only contacted when `Rewards` is on. |
 | `AuthServerPort` | integer | `45022` | That service's port. |
 
-### `[Plugins]`
+### `[Chat]`
 
-The chat core's settings, read by `chat` and `chat2026` alike (`docs/PLUGINS.md`, "The chat core"). The keys are the ones the chat2026 GML half reads, so one `gg2.ini` configures either host. They do nothing unless a chat plugin is in `ServerPluginList`, and none has a command-line flag.
+The server's own chat (`docs/CHAT.md`). None has a command-line flag.
 
 | Key | Type | Default | |
 |---|---|---|---|
-| `chat_gravetalk` | boolean | `1` | The living hear dead players and spectators. Off, those are heard only by each other. |
-| `chat_unique_names` | boolean | `0` | Rename a player whose name is taken to the lowest free number (`bob2`). Every client sees the rename, with or without a chat plugin. |
-| `chat_mute_minutes` | integer | `10` | A vote mute, and `/mute` with no minutes, 1..1440. Follows the address across reconnects. |
-| `chat_votes` | boolean | `1` | Players may call `/votekick`, `/votemute`, `/votescramble`, `/votenextround` and `/votemap`. |
-| `chat_vote_kick_percent` | integer | `60` | Yes share a kick vote needs, 1..100, inclusive. Half the voters, and at least two, must answer. |
-| `chat_vote_mute_percent` | integer | `60` | The same, for a mute vote. |
-| `chat_kickban_minutes` | integer | `10` | How long a vote-kicked address is refused, 0..1440. It is an address, so everyone behind the same NAT is refused with it. |
-| `chat_admin_password` | secret | *(empty)* | The password for `/login`, which gives `/say`, `/kick`, `/mute`, `/unmute`, `/nextround` and `/map` for the session. Empty disables `/login`. |
+| `Enabled` | boolean | `1` | The server runs chat and advertises the `chat` plugin for it, which is how a stock client gets a chat window: appended to `ServerPluginList` unless the list names it. Off, nothing is advertised for chat. `chat` listed with this off, or `chat_v2_pr` listed with it on, is refused at startup. |
+| `Gravetalk` | boolean | `1` | The living hear dead players and spectators. Off, those are heard only by each other. |
+| `UniqueNames` | boolean | `0` | Rename a player whose name is taken to the lowest free number (`bob2`). Every client sees the rename, with or without chat. |
+| `MuteMinutes` | integer | `10` | A vote mute, and `/mute` with no minutes, 1..1440. Follows the address across reconnects. |
+| `Votes` | boolean | `1` | Players may call `/votekick`, `/votemute`, `/votescramble`, `/votenextround` and `/votemap`. |
+| `VoteKickPercent` | integer | `60` | Yes share a kick vote needs, 1..100, inclusive. Half the voters, and at least two, must answer. |
+| `VoteMutePercent` | integer | `60` | The same, for a mute vote. |
+| `KickBanMinutes` | integer | `10` | How long a vote-kicked address is refused, 0..1440. It is an address, so everyone behind the same NAT is refused with it. |
+| `AdminPassword` | secret | *(empty)* | The password for `/login`, which gives `/say`, `/kick`, `/mute`, `/unmute`, `/nextround` and `/map` for the session. Empty disables `/login`. |
 
 ### `[Analytics]`
 
@@ -435,7 +436,7 @@ a way to give an attacker more room.
 | `Difficulty` | integer | `5` | 1 to 5. 5 is "as good as the layer gets"; the lower tiers are a deliberate handicap ladder, and with `HumanAim` on (the default) they also aim like people. |
 | `NamePrefix` | text | `[BOT] ` | What a bot's name starts with. ⚠️ The trailing space is real — see the quoting rule above. |
 | `Duel` | boolean | `0` | The duel server: each human on red fights one blue bot of their own class, both pinned to one cell of a cell map. Replaces the fill (`Enabled`, `FillToPlayers` and `MaxBots` are not read), moves a human who picks blue to red, and holds `AutoBalance` off. Serve `maps/duel`; see `docs/DUEL.md`. |
-| `SuspendMinutes` | integer | `0` | How long the `/bots off` chat command takes the bot population away for, 0..1440. ⚠️ **0 means the command does not exist on this server**, which is the default — one key rather than a flag and a duration that can disagree. Needs a chat plugin in `ServerPluginList`, which is the only way a player can type `/bots`; set without one it is **warned about**, not refused, and the control port's `bots-suspend` still works. An operator ends a running suspension by saving a bot count in the admin panel, or with `bots-suspend` at 0 minutes. `docs/PLUGINS.md`, "the bot suspension". |
+| `SuspendMinutes` | integer | `0` | How long the `/bots off` chat command takes the bot population away for, 0..1440. ⚠️ **0 means the command does not exist on this server**, which is the default — one key rather than a flag and a duration that can disagree. Needs chat (`[Chat] Enabled`, the default, or `chat_v2_pr`), which is the only way a player can type `/bots`; set with neither it is **warned about**, not refused, and the control port's `bots-suspend` still works. An operator ends a running suspension by saving a bot count in the admin panel, or with `bots-suspend` at 0 minutes. `docs/PLUGINS.md`, "the bot suspension". |
 | `ClassPolicy` | list | *(empty)* | Which controller **drives** each class — `Class=name` entries, where name is a checkpoint's file name without its extension or `scripted`. A class not named is driven by no net: the search takes it under `tiered`, the scripted layer otherwise. A net nobody assigned a class is warned about, because it loads and never drives. A misspelt name, a class named twice, or the setting under a mode that runs no policy is refused. `Quote` is accepted: no fill bot is ever a Quote, but the duel server makes one for a Quote human. |
 | `Occupancy` | boolean | `1` | Price an edge a team-mate is already walking above its honest cost, so a squad fans out. ⛔ A **behaviour** switch: off, match dispersion falls 0.785 → 0.634 and nothing replaces it. |
 | `Humanize` | boolean | `0` | Inside a fight, make each bot's aim flick and correct the way a person's does. Keys are untouched. A **behaviour** switch, and a human-like bot is a weaker one. `docs/TRAPS-BOTS.md`, "Human-like output". |

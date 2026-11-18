@@ -1,29 +1,31 @@
 using System.Text;
 using GG2.Protocol;
+using GG2.Server;
 using GG2.Server.Plugins;
 
 namespace GG2.Tests;
 
 /// <summary>
-/// The <c>chat2026</c> server half, against a host that is not a server.
+/// The server's chat, as a native client sees it: every frame behind
+/// <see cref="ServerChat.Envelope"/>, against a host that is not a server.
 /// </summary>
 /// <remarks>
-/// The GML half was verified live against a GM8 host with <c>tests/live.js</c> in
-/// the gg2-chat2026 repository, and every expected string below is one that run
-/// read back out of a real client's <c>global.chatLogPlain</c> or the reply
-/// text the GML sends. These tests hold the C# half to the same answers, so a
-/// client cannot tell the two hosts apart. <c>PROTOCOL.md</c> there is the wire.
+/// The native wire's reference host is the GML host in gg2-chat2026, verified live
+/// against a GM8 server with its <c>tests/live.js</c>; every expected string below
+/// is one that run read back out of a real client or the reply text the GML sends,
+/// so a native client cannot tell the two hosts apart. <c>ServerChatV6Tests</c>
+/// covers what a stock v6 client is sent.
 /// </remarks>
-public sealed class Chat2026PluginTests
+public sealed class ServerChatTests
 {
     private const byte Hello = 0;
     private const byte Say = 1;
     private const byte VoteKind = 2;
 
-    private static (FakePluginHost Host, ChatPlugin Plugin) Fresh(ChatSettings? settings = null)
+    private static (FakePluginHost Host, ServerChat Plugin) Fresh(ChatSettings? settings = null)
     {
         var host = new FakePluginHost();
-        var plugin = new ChatPlugin(ChatWire.Plain, settings);
+        var plugin = new ServerChat(settings);
         plugin.Attach(new PluginChannel(host, 0));
 
         host.Add("Server", Team.Spectator, address: string.Empty, client: false);
@@ -34,24 +36,28 @@ public sealed class Chat2026PluginTests
     }
 
     /// <summary>A roster entry, its first Begin Step, then its HELLO — the order a join takes.</summary>
-    private static int Join(FakePluginHost host, ChatPlugin plugin, string name, Team team, string address = "10.0.0.1", bool greet = true)
+    private static int Join(FakePluginHost host, ServerChat plugin, string name, Team team, string address = "10.0.0.1", bool greet = true)
     {
         var slot = host.Add(name, team, address);
         plugin.PlayerAdded(slot);
         plugin.Tick();
         if (greet)
-            plugin.Receive(slot, [Hello, ChatPlugin.ProtocolVersion, 0]);
+            Send(plugin, slot, [Hello, ServerChat.ProtocolVersion, 0]);
 
         return slot;
     }
 
-    private static void Leave(FakePluginHost host, ChatPlugin plugin, int slot)
+    /// <summary>One native message from <paramref name="slot"/>, behind the envelope.</summary>
+    private static void Send(ServerChat plugin, int slot, ReadOnlySpan<byte> message) =>
+        plugin.Receive(slot, [ServerChat.Envelope, .. message]);
+
+    private static void Leave(FakePluginHost host, ServerChat plugin, int slot)
     {
         plugin.PlayerRemoving(slot);
         host.RemoveAt(slot);
     }
 
-    private static void Speak(ChatPlugin plugin, int slot, string text, int audience = 0)
+    private static void Speak(ServerChat plugin, int slot, string text, int audience = 0)
     {
         var bytes = GG2Text.Encode(text);
         var body = new byte[3 + bytes.Length];
@@ -59,19 +65,26 @@ public sealed class Chat2026PluginTests
         body[1] = (byte)audience;
         body[2] = (byte)bytes.Length;
         bytes.CopyTo(body, 3);
-        plugin.Receive(slot, body);
+        Send(plugin, slot, body);
     }
 
-    private static void Answer(ChatPlugin plugin, int slot, int voteId, int option) =>
-        plugin.Receive(slot, [VoteKind, (byte)voteId, (byte)option]);
+    private static void Answer(ServerChat plugin, int slot, int voteId, int option) =>
+        Send(plugin, slot, [VoteKind, (byte)voteId, (byte)option]);
 
     /// <summary>Every packet sent to <paramref name="slot"/>, decoded to one readable line each.</summary>
     private static List<string> To(FakePluginHost host, int slot) =>
-        host.Sent.Where(s => s.Slot == slot).Select(s => Decode(s.Data)).ToList();
+        host.Sent.Where(s => s.Slot == slot).Select(s => Decode(Unwrap(s.Data))).ToList();
 
     /// <summary>Just the text a client would log: LINE as "tags name: text", NOTICE and VOTE_END text.</summary>
     private static List<string> Log(FakePluginHost host, int slot) =>
-        host.Sent.Where(s => s.Slot == slot).Select(s => Plain(s.Data)).Where(t => t is not null).Select(t => t!).ToList();
+        host.Sent.Where(s => s.Slot == slot).Select(s => Plain(Unwrap(s.Data))).Where(t => t is not null).Select(t => t!).ToList();
+
+    /// <summary>A sent frame without its envelope; a frame without one is a bug, and fails here.</summary>
+    private static byte[] Unwrap(byte[] data)
+    {
+        Assert.Equal(ServerChat.Envelope, data[0]);
+        return data[1..];
+    }
 
     private static string Decode(byte[] data)
     {
@@ -171,7 +184,7 @@ public sealed class Chat2026PluginTests
         var alice = Join(host, plugin, "alice", Team.Red);
         host.Sent.Clear();
 
-        plugin.Receive(alice, [Hello, ChatPlugin.ProtocolVersion, 0]);
+        Send(plugin, alice, [Hello, ServerChat.ProtocolVersion, 0]);
 
         Assert.Empty(host.Sent);
     }
@@ -198,7 +211,7 @@ public sealed class Chat2026PluginTests
         var (host, plugin) = Fresh();
         var alice = host.Add("alice", Team.Red);
         plugin.PlayerAdded(alice);
-        plugin.Receive(alice, [Hello, 2, 0]);
+        Send(plugin, alice, [Hello, 2, 0]);
         host.Sent.Clear();
 
         Speak(plugin, alice, "hello");
@@ -220,9 +233,9 @@ public sealed class Chat2026PluginTests
 
         foreach (var packet in packets)
             for (var length = 0; length < packet.Length; length++)
-                plugin.Receive(alice, packet.AsSpan(0, length));
+                Send(plugin, alice, packet.AsSpan(0, length));
 
-        plugin.Receive(alice, [99, 1, 2, 3]);
+        Send(plugin, alice, [99, 1, 2, 3]);
     }
 
     // --- routing -------------------------------------------------------------
@@ -563,8 +576,8 @@ public sealed class Chat2026PluginTests
 
     private static int VoteIdIn(FakePluginHost host, int slot)
     {
-        var start = host.Sent.Last(s => s.Slot == slot && s.Data[0] == 3);
-        return start.Data[1];
+        var start = host.Sent.Last(s => s.Slot == slot && s.Data[1] == 3);
+        return start.Data[2];
     }
 
     [Fact]
@@ -803,10 +816,10 @@ public sealed class Chat2026PluginTests
     }
 
     [Fact]
-    public void ACataloguePluginTakesTheServersChatSettings()
+    public void WithNoSettingsOfItsOwnTheChatTakesTheServers()
     {
         var host = new FakePluginHost { ChatSettings = new ChatSettings { AdminPassword = "from-config", VotesEnabled = false } };
-        var plugin = (ChatPlugin)ServerPluginCatalogue.Create("chat2026")!;
+        var plugin = new ServerChat();
         plugin.Attach(new PluginChannel(host, 0));
         host.Add("Server", Team.Spectator, address: string.Empty, client: false);
         plugin.PlayerAdded(0);
@@ -820,40 +833,44 @@ public sealed class Chat2026PluginTests
     }
 
     [Fact]
-    public void TheChatSettingsAreReadFromPluginsInTheConfigFile()
+    public void TheChatSettingsAreReadFromTheChatSectionOfTheConfigFile()
     {
         var options = new GG2.Server.ServerOptions();
-        foreach (var setting in GG2.Server.ServerSettings.All)
+        foreach (var setting in GG2.Server.ServerSettings.All.Where(s => s.Section == "Chat"))
         {
             switch (setting.Key)
             {
-                case "chat_gravetalk": setting.Set(options, "0"); break;
-                case "chat_unique_names": setting.Set(options, "1"); break;
-                case "chat_mute_minutes": setting.Set(options, "5"); break;
-                case "chat_votes": setting.Set(options, "0"); break;
-                case "chat_vote_kick_percent": setting.Set(options, "75"); break;
-                case "chat_vote_mute_percent": setting.Set(options, "70"); break;
-                case "chat_kickban_minutes": setting.Set(options, "30"); break;
-                case "chat_admin_password": setting.Set(options, "pw"); break;
+                case "Enabled": setting.Set(options, "0"); break;
+                case "Gravetalk": setting.Set(options, "0"); break;
+                case "UniqueNames": setting.Set(options, "1"); break;
+                case "MuteMinutes": setting.Set(options, "5"); break;
+                case "Votes": setting.Set(options, "0"); break;
+                case "VoteKickPercent": setting.Set(options, "75"); break;
+                case "VoteMutePercent": setting.Set(options, "70"); break;
+                case "KickBanMinutes": setting.Set(options, "30"); break;
+                case "AdminPassword": setting.Set(options, "pw"); break;
+                default: Assert.Fail("[Chat] " + setting.Key + " is not covered here"); break;
             }
         }
 
         Assert.Equal(
             new ChatSettings
             {
-                Gravetalk = false, UniqueNames = true, MuteMinutes = 5, VotesEnabled = false,
+                Enabled = false, Gravetalk = false, UniqueNames = true, MuteMinutes = 5, VotesEnabled = false,
                 VoteKickPercent = 75, VoteMutePercent = 70, KickBanMinutes = 30, AdminPassword = "pw",
             },
             options.Chat);
-        Assert.All(GG2.Server.ServerSettings.All.Where(s => s.Key.StartsWith("chat_", StringComparison.Ordinal)),
-            s => Assert.Equal("Plugins", s.Section));
     }
 
+    /// <summary>
+    /// The chat is the server's: the catalogue knows <c>chat</c> only as the zip a
+    /// stock client downloads, and builds nothing for it.
+    /// </summary>
     [Fact]
-    public void TheCatalogueServesChat2026WithItsPin()
+    public void TheCatalogueOnlyPinsTheChatZip()
     {
-        Assert.IsType<ChatPlugin>(ServerPluginCatalogue.Create("chat2026"));
-        Assert.Equal("ff37fbcb3c4f1a86099cea524e2eba8a", ServerPluginCatalogue.PinnedMd5("chat2026"));
-        Assert.True(ServerPluginCatalogue.ListHasChatConsole("chat2026"));
+        Assert.Null(ServerPluginCatalogue.Create(ServerChat.PluginName));
+        Assert.Equal("bad8081d64f0b808a2bb3a6d88978fb5", ServerPluginCatalogue.PinnedMd5(ServerChat.PluginName));
+        Assert.Null(ServerPluginCatalogue.PinnedMd5("chat2026"));
     }
 }

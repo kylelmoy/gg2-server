@@ -1,4 +1,5 @@
 using GG2.Protocol;
+using GG2.Server;
 using GG2.Server.Plugins;
 
 namespace GG2.Tests;
@@ -32,6 +33,9 @@ public sealed class PluginWireTests
         {
             options.ServerPluginList = ChatPlugin;
             options.ServerPluginsRequired = required;
+
+            // chat_v2_pr is a second chat; the server's own must be off to list it.
+            options.Chat = options.Chat with { Enabled = false };
         });
 
     /// <summary>
@@ -157,13 +161,63 @@ public sealed class PluginWireTests
             options.ServerPluginList = $"some_other_plugin@{hash}");
 
         var client = harness.JoinClient("alice");
-        Assert.Equal($"some_other_plugin@{hash}", harness.Server.AdvertisedPlugins);
+
+        // The server's own chat is appended, so the listed plugin keeps id 0.
+        Assert.Equal($"some_other_plugin@{hash},{ChatV6Plugin}@{ChatV6Md5}", harness.Server.AdvertisedPlugins);
 
         Drain(client);
         SendPluginPacket(client, packetId: 0, [1, 2, 3]);
         harness.Tick(3);
 
         Assert.False(client.IsClosed);
+    }
+
+    /// <summary>
+    /// <c>chat</c> named in the list keeps its place there, and is not advertised
+    /// twice: the position is its packet id on both sides.
+    /// </summary>
+    [Fact]
+    public void ChatNamedInTheListKeepsItsPlaceAndIsNotAdvertisedTwice()
+    {
+        var hash = new string('d', 32);
+        using var harness = new ServerHarness(options =>
+            options.ServerPluginList = $"{ChatV6Plugin},some_other_plugin@{hash}");
+
+        harness.JoinClient("alice");
+
+        Assert.Equal($"{ChatV6Plugin}@{ChatV6Md5},some_other_plugin@{hash}", harness.Server.AdvertisedPlugins);
+    }
+
+    /// <summary>With the server's chat off, nothing is advertised for it.</summary>
+    [Fact]
+    public void ChatOffAdvertisesNothing()
+    {
+        using var harness = new ServerHarness(options => options.Chat = options.Chat with { Enabled = false });
+
+        harness.JoinClient("alice");
+
+        Assert.Equal(string.Empty, harness.Server.AdvertisedPlugins);
+        Assert.Null(harness.Server.ChatPluginName);
+    }
+
+    /// <summary>
+    /// <c>chat</c> listed with chat off would advertise a plugin nothing answers,
+    /// and <c>chat_v2_pr</c> with chat on would give a stock client two chats on
+    /// one key. Both are refused at startup, not discovered by a player.
+    /// </summary>
+    [Theory]
+    [InlineData("chat", false)]
+    [InlineData("chat_v2_pr", true)]
+    public void AConflictingChatListIsRefused(string plugins, bool chatOn)
+    {
+        var options = new ServerOptions
+        {
+            MapDirectory = "maps",
+            ServerPluginList = plugins,
+            Chat = new ChatSettings { Enabled = chatOn },
+        };
+
+        Assert.Throws<ArgumentException>(options.Validate);
     }
 
     /// <summary>
@@ -235,8 +289,8 @@ public sealed class PluginWireTests
     }
 
     /// <summary>
-    /// One room over a real socket: a v6 client, a chat2026 client speaking
-    /// behind the <see cref="GG2.Server.Plugins.ChatPlugin.Envelope"/> byte on <c>chat</c>'s packet
+    /// One room over a real socket: a v6 client, a native client speaking
+    /// behind the <see cref="GG2.Server.ServerChat.Envelope"/> byte on <c>chat</c>'s packet
     /// id, and a client that joined without ever saying hello.
     /// </summary>
     /// <remarks>
@@ -245,7 +299,7 @@ public sealed class PluginWireTests
     /// must hold none of what the other two were sent.
     /// </remarks>
     [Fact]
-    public void AV6AndAChat2026ClientShareOneRoomAndASilentClientHearsNothing()
+    public void AV6AndANativeClientShareOneRoomAndASilentClientHearsNothing()
     {
         using var harness = new ServerHarness(options => options.ServerPluginList = ChatV6Plugin);
         var alice = harness.JoinClient("alice");
@@ -253,20 +307,20 @@ public sealed class PluginWireTests
         var carol = harness.JoinClient("carol");
 
         SendPluginPacket(alice, 0, [0]);
-        SendPluginPacket(bob, 0, [GG2.Server.Plugins.ChatPlugin.Envelope, 0, GG2.Server.Plugins.ChatPlugin.ProtocolVersion, 0]);
+        SendPluginPacket(bob, 0, [GG2.Server.ServerChat.Envelope, 0, GG2.Server.ServerChat.ProtocolVersion, 0]);
         harness.Tick(3);
 
         // WELCOME: version 1, gravetalk and votes on, a burst of 3, 2 seconds, no motd.
-        AssertReceivedPluginData(bob, 0, [GG2.Server.Plugins.ChatPlugin.Envelope, 0, 1, 3, 3, 2, 0]);
+        AssertReceivedPluginData(bob, 0, [GG2.Server.ServerChat.Envelope, 0, 1, 3, 3, 2, 0]);
 
         SendPluginPacket(alice, 0, [1, 5, .. GG2Text.Encode("hello")]);
-        SendPluginPacket(bob, 0, [GG2.Server.Plugins.ChatPlugin.Envelope, 1, 0, 2, .. GG2Text.Encode("hi")]);
+        SendPluginPacket(bob, 0, [GG2.Server.ServerChat.Envelope, 1, 0, 2, .. GG2Text.Encode("hi")]);
         harness.Tick(3);
 
-        // alice (slot 1) to bob as a chat2026 LINE: envelope, kind, sender, then
+        // alice (slot 1) to bob as a native LINE: envelope, kind, sender, then
         // flags and team, which depend on the round; the name and text are fixed.
         var aliceLine = GG2Text.Encode("\u0005alice\u0005hello");
-        Assert.True(FindSubsequence(bob.Received, [GG2.Server.Plugins.ChatPlugin.Envelope, 1, 1]));
+        Assert.True(FindSubsequence(bob.Received, [GG2.Server.ServerChat.Envelope, 1, 1]));
         Assert.True(FindSubsequence(bob.Received, aliceLine));
 
         // bob (slot 2) to alice as a v6 line: roster index, audience 0, raw text.

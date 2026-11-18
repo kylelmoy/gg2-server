@@ -232,7 +232,7 @@ public sealed partial class ChatV2Plugin
     /// <remarks>
     /// <para>
     /// <b>Not a vote, deliberately</b>, and the same body as
-    /// <see cref="ChatPlugin"/>'s — see <c>ChatPlugin.BotsCommand</c> for why
+    /// <see cref="ServerChat"/>'s — see <c>ServerChat.BotsCommand</c> for why
     /// the clock rather than a quorum is what bounds it. The two copies exist
     /// because the wording is all these plugins share: the decisions are
     /// <see cref="IPluginHost"/>'s, in one place, so the two cannot answer
