@@ -1,9 +1,19 @@
 # Server support for client-side prediction
 
 **Implemented as specified here** (`GameServer.Prediction.cs`,
-`NetworkInputSource`'s queued mode, `PredictionTests`). Not yet run against a
-real gg2-client over a network; "What would show this has gone stale" says
-what would show the design wrong. Asked for by gg2-client (its
+`NetworkInputSource`'s queued mode, `PredictionTests`). Verified live against
+gg2-client (its `docs/DECISIONS.md` D21, pin `7475a32`), measured as the
+distance between successive predictions for the same input number:
+
+| Run | Result |
+|---|---|
+| Lock-step test, 4 bots | p50 0.11 px; p99 1.8-11 px across runs, attributed to combat knockback |
+| Burst of 5 inputs | folds once (an 11 px correction), drains to 2 ahead or fewer |
+| barbara:8190 over the LAN, 60 s, scout, NetProbe | steady at 2 inputs ahead; rewind corrections n=1628, p50 0, p95 0.22 px, p99 0.36 px, 9 over 5 px. Replica drift unchanged (p50 0.13 px) |
+
+The over-5-px corrections are not yet split into queue folds and knockback;
+if folds dominate, `PredictionMaxQueuedInputs` is the knob. "What would show
+this has gone stale" says what would show the design wrong. Asked for by gg2-client (its
 `docs/DECISIONS.md`, D12 item 2): predict the local character only, rewind to the replica's state on each
 server tick, and replay the inputs the server has not applied yet. Remote
 players stay as they are. This document is the server half: what the wire
