@@ -389,6 +389,33 @@ public sealed class ServerOptions
     public bool AimAnalysis { get; set; } = true;
 
     /// <summary>
+    /// Answer a client's <c>PREDICT_HELLO</c>: welcome it, give its inputs one
+    /// tick each through a short queue, and acknowledge them every tick. Off,
+    /// the hello is ignored as a GM8 server ignores it. A stock client never
+    /// sends one, so it receives the same bytes either way. docs/PREDICTION.md.
+    /// Read at use time; a client already welcomed stays welcomed.
+    /// </summary>
+    public bool ClientPrediction { get; set; } = true;
+
+    /// <summary>
+    /// Inputs a predicting client may have waiting after a tick's consume
+    /// before the oldest merge into that tick. About 33 ms each. Read at use time.
+    /// </summary>
+    public int PredictionMaxQueuedInputs { get; set; } = 2;
+
+    /// <summary>
+    /// Consecutive ticks a predicting client's queue may stand non-empty before
+    /// two inputs merge to give back a tick of latency. Read at use time.
+    /// </summary>
+    public int PredictionQueueDrainTicks { get; set; } = 30;
+
+    /// <summary>
+    /// The largest <see cref="PredictionMaxQueuedInputs"/> the queue can honour:
+    /// its capacity less one tick's worth of reads.
+    /// </summary>
+    public const int PredictionQueueCeiling = 4;
+
+    /// <summary>
     /// Announce this server to the public lobby at
     /// <c>ganggarrison.com:29944</c>, so it appears in the client's server list.
     /// </summary>

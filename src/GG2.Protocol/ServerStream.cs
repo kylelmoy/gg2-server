@@ -407,6 +407,14 @@ public sealed class ServerStream
             case MessageType.BlueTeamCap:
                 return Fixed(type, ref reader, start, 0);
 
+            // --- the port's own: sent only to a client that asked ---------------
+            // docs/PREDICTION.md. A stock client is never sent either.
+            case MessageType.Predict:
+                return Fixed(type, ref reader, start, 5);
+
+            case MessageType.PredictAck:
+                return Fixed(type, ref reader, start, 4);
+
             // --- variable ------------------------------------------------------
             case MessageType.ArenaEndRound:
             {

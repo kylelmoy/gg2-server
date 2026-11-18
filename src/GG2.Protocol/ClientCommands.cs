@@ -55,6 +55,11 @@ public static class ClientCommands
         table[(int)MessageType.PluginPacket] = PrefixLength2;
         table[(int)MessageType.ClientSettings] = 1;
 
+        // The port's own: PREDICT_HELLO. A bare byte, so a GM8 server that does
+        // not know it skips exactly that byte and loses nothing after it.
+        // docs/PREDICTION.md.
+        table[(int)MessageType.Predict] = 0;
+
         return table;
     }
 

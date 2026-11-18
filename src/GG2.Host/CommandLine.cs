@@ -406,6 +406,20 @@ internal static class CommandLine
                     options.AimAnalysis = false;
                     break;
 
+                // docs/PREDICTION.md. The clamps are ServerSettings' own.
+                case "--no-client-prediction":
+                    options.ClientPrediction = false;
+                    break;
+
+                case "--prediction-max-queued":
+                    options.PredictionMaxQueuedInputs =
+                        Math.Clamp(cursor.TakeInt(), 1, ServerOptions.PredictionQueueCeiling);
+                    break;
+
+                case "--prediction-drain-ticks":
+                    options.PredictionQueueDrainTicks = Math.Clamp(cursor.TakeInt(), 1, 3600);
+                    break;
+
                 case "--multi-client-limit":
                     options.MultiClientLimit = cursor.TakeInt();
                     break;
@@ -1145,6 +1159,14 @@ internal static class CommandLine
                             input no mouse could produce. docs/HARDENING.md
           --no-aim-analysis do not keep aim statistics or log players whose aim
                             no recorded human matches (on by default; log only)
+          --no-client-prediction
+                            ignore a client's request for input acks (on by
+                            default; a stock client never asks). docs/PREDICTION.md
+          --prediction-max-queued <1-4>
+                            inputs a predicting client may have waiting (default 2)
+          --prediction-drain-ticks <n>
+                            ticks a predicting client's queue may stand before
+                            two inputs merge (default 30)
           --bots <n>        fill the server to n players with bots (0 = off)
           --bot-difficulty <1-5>
                             how good they are (default 5, the top tier). The

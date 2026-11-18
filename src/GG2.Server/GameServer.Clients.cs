@@ -31,6 +31,18 @@ public sealed partial class GameServer
         public int ImpossibleAims { get; set; }
 
         /// <summary>
+        /// <c>INPUTSTATE</c>s read on this connection, counting from 1 the way
+        /// the client numbers them. docs/PREDICTION.md, "Implicit numbering".
+        /// </summary>
+        public uint InputsRead { get; set; }
+
+        /// <summary>
+        /// Whether this connection has been sent <c>PREDICT_WELCOME</c> and so
+        /// gets a <c>PREDICT_ACK</c> every tick. Never cleared.
+        /// </summary>
+        public bool Predicting { get; set; }
+
+        /// <summary>
         /// Bytes already standing in the broadcast buffer when this client
         /// joined, which its next flush must skip.
         /// </summary>
@@ -517,10 +529,29 @@ public sealed partial class GameServer
                 // NetworkInputSource behind it, so the cast never fails.
             {
                 var input = PlayerInput.Read(ref reader);
-                ((NetworkInputSource)entry.Source).Latest = input;
+                var source = (NetworkInputSource)entry.Source;
+                client.InputsRead++;
+
+                // A predicting client's inputs take a tick each; everybody
+                // else's coalesce as they always have. The aim check judges
+                // each input as it is read, before the queue, either way.
+                if (source.Queueing)
+                    source.Enqueue(input);
+                else
+                    source.Latest = input;
+
                 CheckAim(client, input);
                 break;
             }
+
+            // The port's own: docs/PREDICTION.md. Ignored when the option is
+            // off, exactly as a GM8 server ignores it; a repeat does nothing, so
+            // a client cannot make the server send more than one welcome. No log
+            // line: a client chooses how often to send it (docs/HARDENING.md).
+            case MessageType.Predict:
+                if (_options.ClientPrediction && !client.Predicting)
+                    WelcomePredictingClient(client);
+                break;
 
             case MessageType.PlayerChangeTeam:
                 ExecuteChangeTeam(entry, (Team)reader.ReadUByte());

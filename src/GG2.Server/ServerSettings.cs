@@ -359,6 +359,25 @@ public static class ServerSettings
             "Server", "AimAnalysis", nameof(ServerOptions.AimAnalysis),
             o => o.AimAnalysis, (o, v) => o.AimAnalysis = v));
 
+        // The port's own keys. docs/PREDICTION.md. The clamps keep a queue that
+        // exists: zero waiting inputs would merge every burst, and a drain of
+        // zero ticks would drain on every tick.
+        settings.Add(BoolRow(
+            "Server", "ClientPrediction", nameof(ServerOptions.ClientPrediction),
+            o => o.ClientPrediction, (o, v) => o.ClientPrediction = v));
+
+        settings.Add(IntRow(
+            "Server", "PredictionMaxQueuedInputs", nameof(ServerOptions.PredictionMaxQueuedInputs),
+            o => o.PredictionMaxQueuedInputs,
+            (o, v) => o.PredictionMaxQueuedInputs = Math.Clamp(v, 1, ServerOptions.PredictionQueueCeiling),
+            "4"));
+
+        settings.Add(IntRow(
+            "Server", "PredictionQueueDrainTicks", nameof(ServerOptions.PredictionQueueDrainTicks),
+            o => o.PredictionQueueDrainTicks,
+            (o, v) => o.PredictionQueueDrainTicks = Math.Clamp(v, 1, 3600),
+            "45"));
+
         // The same max/min clamps game_init.gml applies, and they are not
         // decoration: `CapLimit=0` in the reference is a ONE-capture round, not an
         // endless one, because the floor is applied before anything sees it.

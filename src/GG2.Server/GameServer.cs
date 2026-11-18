@@ -1056,6 +1056,10 @@ public sealed partial class GameServer : IDisposable, IPluginHost
 
         if (advancing)
         {
+            // Above the gather, so the input it consumes is the one the gather
+            // polls and the one PREDICT_ACK below counts.
+            ConsumePredictedInputs();
+
             GatherInputs(live);
 
             for (var slot = 0; slot < live; slot++)
@@ -1133,6 +1137,11 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         // would name the tick after the one whose state it describes. Nothing is
         // written to the wire, and nothing runs at all when recording is off.
         _recorder?.SyncRoster(RecordedRoster());
+
+        // The last per-player bytes before the flush, so each lands ahead of the
+        // state update WriteStateUpdate put in the broadcast. Per player and not
+        // broadcast, so neither the recorder nor a stock client sees one.
+        SendPredictionAcks();
 
         FlushBroadcast();
 

@@ -62,6 +62,147 @@ public sealed class NetworkInputSource : IInputSource
 
     public PlayerInput Poll(in WorldView world, int slot, int tick) => _latest;
 
+    // --- Queued mode: a client that asked for prediction ---------------------
+    //
+    // docs/PREDICTION.md, "The input queue". Without a welcome none of this
+    // runs and the source coalesces exactly as above.
+
+    /// <summary>
+    /// Room for every input one tick can read (<c>ClientCommands.PerTickLimit</c>)
+    /// on top of a full queue, with slack. A freeze reads inputs without
+    /// consuming them, so <see cref="Enqueue"/> still merges when this fills;
+    /// the memory a client can make the server hold is this, whatever it sends.
+    /// </summary>
+    internal const int QueueCapacity = 16;
+
+    private readonly QueuedInput[] _queue = new QueuedInput[QueueCapacity];
+    private int _head;
+    private int _count;
+    private int _standingTicks;
+
+    /// <summary>The last input enqueued, which the next one's edges are taken against.</summary>
+    private PlayerInput _lastQueued;
+
+    /// <summary>
+    /// Whether <c>INPUTSTATE</c>s go through the queue. Set once, by
+    /// <see cref="StartQueueing"/>, and never cleared for the connection.
+    /// </summary>
+    public bool Queueing { get; private set; }
+
+    /// <summary>Inputs consumed into ticks so far — what <c>PREDICT_ACK</c> carries.</summary>
+    public uint InputsApplied { get; private set; }
+
+    /// <summary>Inputs waiting for a tick of their own.</summary>
+    public int QueuedCount => _count;
+
+    /// <summary>
+    /// Switches this connection to one input per tick.
+    /// </summary>
+    /// <param name="inputsRead">
+    /// Every <c>INPUTSTATE</c> read so far. All of them have reached
+    /// <see cref="Latest"/>, and this tick's gather applies them, so all of
+    /// them count as applied from here.
+    /// </param>
+    public void StartQueueing(uint inputsRead)
+    {
+        if (Queueing)
+            return;
+
+        Queueing = true;
+        InputsApplied = inputsRead;
+        _lastQueued = _latest;
+    }
+
+    /// <summary>
+    /// Delivers one <c>INPUTSTATE</c> to a queueing connection.
+    /// </summary>
+    /// <remarks>
+    /// The edges are taken here, against the input before it, which is the
+    /// input consumed before it — so they are exactly what
+    /// <see cref="GG2.Simulation.CharacterState.ApplyInput"/> takes, one tick
+    /// at a time.
+    /// </remarks>
+    public void Enqueue(PlayerInput input)
+    {
+        var entry = new QueuedInput(
+            input,
+            input.Keys & ~_lastQueued.Keys,
+            ~input.Keys & _lastQueued.Keys,
+            1);
+        _lastQueued = input;
+
+        if (_count == QueueCapacity)
+            MergeOldest();
+
+        _queue[(_head + _count) % QueueCapacity] = entry;
+        _count++;
+    }
+
+    /// <summary>
+    /// Takes this tick's input off the queue: one input, or more than one
+    /// merged when the queue is too deep or has stood too long.
+    /// </summary>
+    /// <param name="maxQueued">Inputs that may wait after the consume (<c>PredictionMaxQueuedInputs</c>).</param>
+    /// <param name="drainTicks">Ticks an input may stand waiting before two merge (<c>PredictionQueueDrainTicks</c>).</param>
+    /// <remarks>
+    /// An empty queue holds <see cref="Latest"/>, as an unqueued source does.
+    /// The consumed input's edges are ORed into the accumulator
+    /// <see cref="TakeEdges"/> drains, so the tick's caller is unchanged.
+    /// Called only on a tick that advances, for every slot alive or not.
+    /// </remarks>
+    public void ConsumeTick(int maxQueued, int drainTicks)
+    {
+        if (_count == 0)
+        {
+            _standingTicks = 0;
+            return;
+        }
+
+        // Deeper than the cap after this consume: fold the oldest into it. Both
+        // are counted, so the ack moves past every input folded in.
+        while (_count - 1 > Math.Max(0, maxQueued))
+            MergeOldest();
+
+        // A standing queue gives back one tick of latency at a time.
+        if (_count >= 2 && _standingTicks >= Math.Max(1, drainTicks))
+        {
+            MergeOldest();
+            _standingTicks = 0;
+        }
+
+        var taken = _queue[_head];
+        _head = (_head + 1) % QueueCapacity;
+        _count--;
+
+        _latest = taken.Input;
+        _pressed |= taken.Pressed;
+        _released |= taken.Released;
+        InputsApplied += taken.Count;
+
+        _standingTicks = _count > 0 ? _standingTicks + 1 : 0;
+    }
+
+    /// <summary>
+    /// Folds the oldest queued input into the one after it: the later keys and
+    /// aim, both inputs' edges, both counted — so a tap is never lost.
+    /// </summary>
+    private void MergeOldest()
+    {
+        var first = _queue[_head];
+        _head = (_head + 1) % QueueCapacity;
+        _count--;
+
+        ref var second = ref _queue[_head];
+        second = new QueuedInput(
+            second.Input,
+            first.Pressed | second.Pressed,
+            first.Released | second.Released,
+            first.Count + second.Count);
+    }
+
+    private readonly record struct QueuedInput(
+        PlayerInput Input, PlayerKeys Pressed, PlayerKeys Released, uint Count);
+
     /// <summary>
     /// The key edges every <c>INPUTSTATE</c> since the last call created,
     /// clearing them.

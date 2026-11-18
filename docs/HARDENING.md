@@ -241,6 +241,19 @@ a few in a burst. `ChatBubbleIntervalMs = 0` restores the reference exactly.
 
 ---
 
+### Client prediction — `GameServer.Prediction.cs`
+
+`PREDICT_HELLO` (`0xC0`) is the one client command the reference does not
+have. What it can make the server hold or send is bounded: one welcome per
+connection however many hellos arrive, one five-byte ack per tick to that
+connection only, and an input queue that is a fixed ring of 16 which merges
+rather than grows (`NetworkInputSource.QueueCapacity`). A client sending faster
+than 30 Hz is merged down to one tick per tick, so it cannot buy extra movement.
+Nothing about a hello is logged. `ClientPrediction=0` makes the byte ignored, as
+GM8 ignores it. `docs/PREDICTION.md`.
+
+---
+
 ### The aim check — `src/GG2.Server/AimCheck.cs`
 
 `INPUTSTATE`'s aim is `ClientInputstate.gml`'s `point_direction` and

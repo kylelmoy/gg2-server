@@ -75,6 +75,27 @@ public enum MessageType : byte
     ClientSettings = 58,
     KickMultiClient = 59,
     ReserveSlot = 60,
+
+    // --- the port's own, not the reference's -------------------------------
+    // docs/PREDICTION.md. Well clear of every id the reference
+    // allocates. A stock client never sends either and is never sent either.
+
+    /// <summary>
+    /// Client prediction. Client to server, a bare byte asking for
+    /// acknowledgements (<c>PREDICT_HELLO</c>); server to client, the one reply
+    /// to it (<c>PREDICT_WELCOME</c>: <c>ubyte version</c>, <c>uint inputsRead</c>).
+    /// </summary>
+    /// <remarks>
+    /// One member for both directions, as the reference's own ids are, rather
+    /// than two members sharing a value — see the remarks on this type.
+    /// </remarks>
+    Predict = 0xC0,
+
+    /// <summary>
+    /// Server to client, once a tick to a welcomed client: <c>uint inputsApplied</c>,
+    /// for the next <c>INPUTSTATE</c> or <c>QUICK_UPDATE</c> in the stream.
+    /// </summary>
+    PredictAck = 0xC1,
 }
 
 /// <summary>Payload byte of a <see cref="MessageType.Kick"/>.</summary>

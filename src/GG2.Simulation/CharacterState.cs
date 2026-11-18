@@ -996,6 +996,17 @@ public struct CharacterState
         LastKeyState = KeyState;
     }
 
+    /// <summary>
+    /// The input this character is holding: what <see cref="ApplyInput"/> last
+    /// gave it.
+    /// </summary>
+    /// <remarks>
+    /// What a forked rollout feeds a slot whose next input it does not know —
+    /// the server does the same for a late packet. Reapplied, it creates no
+    /// edge, so it never re-triggers a jump or a shot. docs/PREDICTION.md.
+    /// </remarks>
+    public readonly PlayerInput HeldInput => new(KeyState, NetAimDirection, AimDistance);
+
     /// <summary>Aim direction in degrees, <c>[0, 360)</c>.</summary>
     public readonly double AimDirection => NetAimDirection * 360.0 / 65536.0;
 }

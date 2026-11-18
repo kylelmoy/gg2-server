@@ -302,7 +302,11 @@ public sealed class CommandStreamTests
             if (ClientCommands.IsValid((byte)i))
                 valid++;
 
-        Assert.Equal(15, valid); // the fifteen assignments in GameServerDefineCommands.gml
+        // The fifteen assignments in GameServerDefineCommands.gml, plus the
+        // port's own PREDICT_HELLO (docs/PREDICTION.md), a bare byte.
+        Assert.Equal(CommandLength.Fixed, ClientCommands.KindOf((byte)MessageType.Predict));
+        Assert.Equal(0, ClientCommands.FixedLengthOf((byte)MessageType.Predict));
+        Assert.Equal(16, valid);
     }
 
     private void Feed(params byte[] bytes) => _buffer.Append(bytes);

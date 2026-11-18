@@ -331,6 +331,9 @@ and it is described above.
 | `AutoBalance` | boolean | `1` | Move a player across when one team is two larger. |
 | `AimCheck` | `off`, `log`, `kick` | `log` | Port's own. What to do about an `INPUTSTATE` whose aim no mouse could produce: nothing, one log line per connection, or that line and a kick after 30. `docs/HARDENING.md`, "The aim check". |
 | `AimAnalysis` | boolean | `1` | Port's own. Per-player aim statistics; logs a player whose lock, flick, trigger or hidden-lock rate crosses a threshold no recorded human has. Log only. `docs/HARDENING.md`, "Aim analysis". |
+| `ClientPrediction` | boolean | `1` | Port's own. Answers a client's `PREDICT_HELLO`: a welcome, one input per tick through a short queue, and an ack every tick, to that client only. A stock client never sends the hello and is sent the same bytes either way. `docs/PREDICTION.md`. |
+| `PredictionMaxQueuedInputs` | integer | `2` | Port's own. Inputs a predicting client may have waiting after a tick before the oldest fold into that tick. Clamped 1-4. `docs/PREDICTION.md`, "The input queue". |
+| `PredictionQueueDrainTicks` | integer | `30` | Port's own. Ticks a predicting client's queue may stand non-empty before two inputs fold together. Clamped 1-3600. |
 | `CapLimit` | integer | `5` | Captures that win a round, 1..255. **0 is clamped to 1, not to unlimited.** |
 | `Time Limit` | integer | `15` | Round length in minutes, 1..255. 0 is clamped to 1. |
 | `Deathmatch Kill Limit` | integer | `30` | Kills that win a team-deathmatch round, 1..65535. |

@@ -855,6 +855,10 @@ tree, so the list above is a *complete* accounting rather than a plausible one:
   Fools substitution, same file). `PLUGIN_PACKET` is dispatched or kicked per
   `docs/PLUGINS.md` — silence is what a *client* does with an unknown id; the
   server kicks.
+- **One client command is the port's own**: `PREDICT_HELLO` (`0xC0`, no
+  payload), with two server replies sent only to the client that sent it,
+  `PREDICT_WELCOME` (`0xC0`) and `PREDICT_ACK` (`0xC1`). A GM8 server skips
+  the byte as it skips any unknown one in the in-game loop. `docs/PREDICTION.md`.
 - **Every map entity type** registered by `builder_init.gml`'s `addEntity` block
   is in `EntityTypes.cs`; every simulation-bearing object in `InGameElements`
   and `GameElements` has a home in `GG2.Simulation`.

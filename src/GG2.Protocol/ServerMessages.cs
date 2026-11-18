@@ -643,4 +643,32 @@ public static class ServerMessages
 
     public static void ReserveSlot(NetWriter writer) =>
         writer.WriteMessageType(MessageType.ReserveSlot);
+
+    /// <summary>The version of the prediction messages this server speaks.</summary>
+    /// <remarks>A later version is a different hello byte, not a new value here. docs/PREDICTION.md.</remarks>
+    public const byte PredictVersion = 1;
+
+    /// <summary>
+    /// <c>PREDICT_WELCOME</c>: the one reply to a client's <c>PREDICT_HELLO</c>.
+    /// </summary>
+    /// <param name="inputsRead">
+    /// <c>INPUTSTATE</c>s this connection had sent when the hello was read. The
+    /// client checks it against its own count and does not predict on a mismatch.
+    /// </param>
+    public static void PredictWelcome(NetWriter writer, uint inputsRead)
+    {
+        writer.WriteMessageType(MessageType.Predict);
+        writer.WriteUByte(PredictVersion);
+        writer.WriteUInt(inputsRead);
+    }
+
+    /// <summary>
+    /// <c>PREDICT_ACK</c>: this connection's <c>INPUTSTATE</c>s consumed into
+    /// ticks so far, for the next state update in the stream.
+    /// </summary>
+    public static void PredictAck(NetWriter writer, uint inputsApplied)
+    {
+        writer.WriteMessageType(MessageType.PredictAck);
+        writer.WriteUInt(inputsApplied);
+    }
 }

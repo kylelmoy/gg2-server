@@ -1,8 +1,10 @@
-# Proposal: server support for client-side prediction
+# Server support for client-side prediction
 
-**Status: approved 2026-11-18, not yet implemented.** Kyle approved the wire
-as specified, `ClientPrediction` on by default, and lag compensation out. Asked for by gg2-client (its `docs/DECISIONS.md`, D12 item
-2): predict the local character only, rewind to the replica's state on each
+**Implemented as specified here** (`GameServer.Prediction.cs`,
+`NetworkInputSource`'s queued mode, `PredictionTests`). Not yet run against a
+real gg2-client over a network; "What would show this has gone stale" says
+what would show the design wrong. Asked for by gg2-client (its
+`docs/DECISIONS.md`, D12 item 2): predict the local character only, rewind to the replica's state on each
 server tick, and replay the inputs the server has not applied yet. Remote
 players stay as they are. This document is the server half: what the wire
 carries, what the simulation offers, and what to predict.
@@ -125,48 +127,35 @@ A stock client never sends the hello. A stock server ignores the hello. That
 is the "cannot see the difference at all" arm of `CLAUDE.md`'s test for a new
 feature.
 
-### What the server change is
+### Where it lives
 
-For approval, not yet written:
+| Piece | Where |
+|---|---|
+| Ids | `MessageType.Predict` (`0xC0`, both directions, as the reference's own ids are) and `MessageType.PredictAck` (`0xC1`). `ClientCommands` gives `0xC0` length 0; `ServerStream` frames both server messages |
+| Writers | `ServerMessages.PredictWelcome`, `ServerMessages.PredictAck`, `ServerMessages.PredictVersion` (1) |
+| Counting | `ClientPlayer.InputsRead`, incremented for every INPUTSTATE in `Handle`; `ClientPlayer.Predicting`, set once by the welcome and never cleared |
+| The queue | `NetworkInputSource.StartQueueing`, `Enqueue`, `ConsumeTick`, `InputsApplied`. A fixed ring of 16; a full ring merges its two oldest on enqueue, so a frozen server or a flood cannot grow it. Without a welcome none of it runs |
+| The tick | `GameServer.Prediction.cs`. `ConsumePredictedInputs` runs above `GatherInputs` on an advancing tick; `SendPredictionAcks` runs just above `FlushBroadcast`, per player, so neither the recorder nor any other client sees an ack |
+| Settings | `[Server] ClientPrediction` (1), `PredictionMaxQueuedInputs` (2, clamped 1-4), `PredictionQueueDrainTicks` (30, clamped 1-3600). All read at use time; turning prediction off leaves an already-welcomed client welcomed |
+| Fork helper | `CharacterState.HeldInput`, the input a slot is holding. It is on the character rather than a `PlayerInput.HeldBy`, because `GG2.Protocol` does not reference `GG2.Simulation` |
 
-- `ClientCommands`: `0xC0` with length 0. `MessageType`: `PredictHello`,
-  `PredictWelcome`, `PredictAck`.
-- `ClientPlayer`: `uint InputsRead`, incremented in the `InputState` case of
-  `Handle`; `uint InputsApplied`; `bool Predicting`.
-- `NetworkInputSource` gains a queued mode, switched on by the welcome. An
-  INPUTSTATE is enqueued rather than assigned. `GatherInputs` consumes one
-  input, applies the depth and drain merges, and advances `InputsApplied`.
-  Without the welcome, nothing about the source changes.
-- `[Server] PredictionMaxQueuedInputs` (2) and `PredictionQueueDrainTicks`
-  (30), in `ServerSettings.All`.
-- `Handle(PredictHello)`: if prediction is enabled and the client is not yet
-  `Predicting`, send the welcome and set the flag. A repeated hello does
-  nothing, so it cannot make the server send more than one welcome. No log
-  line per hello (`docs/HARDENING.md`: a client-driven log line is throttled
-  or absent).
-- `Tick`: before `FlushBroadcast`, one `PREDICT_ACK` per `Predicting`
-  client.
-- `[Server] ClientPrediction`, default 1, in `ServerSettings.All`, so an
-  operator can turn it off. Off, the hello is ignored as it would be on GM8.
-- The recorder is unaffected: it tees the broadcast only.
+A repeated hello does nothing, so a client cannot make the server send more
+than one welcome, and no hello is logged (`docs/HARDENING.md`: a client-driven
+log line is throttled or absent).
 
-Gates:
+### Gates
 
-- A socket client that never says hello receives the same bytes, tick for
-  tick, as it does today, with prediction on. This is the stock-client claim.
-- After N INPUTSTATEs and a hello, the welcome says N.
-- Every state update a welcomed client receives is preceded by exactly one ack.
-  When two INPUTSTATEs arrive in one tick, the ack moves by 1 on that tick and
-  1 on the next, and the broadcast keys follow the two inputs in turn. When none
-  arrive, the ack does not move.
-- The queue cap holds: a burst of five inputs leaves the depth at the cap, with
-  the ack counting the merged ones. A press and release merged into one tick
-  still reaches `PressedKeys`. A standing depth of one drains after
-  `QueueDrainTicks`.
-- The ack equals the input count that actually reached `ApplyInput`. This test
-  should go red if the capture moves below `WriteStateUpdate`.
-- An unwelcomed connection's coalescing is unchanged.
-  `NetworkInputSource.TakeEdges`'s existing gates stay green untouched.
+All in `PredictionTests`.
+
+| Claim | Test |
+|---|---|
+| A client that never says hello is sent no prediction message, and otherwise the same messages as one that did | `AClientThatNeverSaysHelloSeesNoDifference` |
+| After N inputs and a hello, the welcome says N at version 1, and a second hello sends nothing | `TheWelcomeCountsTheInputsSentBeforeTheHello` |
+| Every update to a welcomed client follows exactly one ack, and the update carries the input that ack names. Two inputs in a tick move the ack by one on that tick and one on the next; none hold it. Goes red if the consume moves below `WriteStateUpdate` (checked by moving it) | `EachUpdateIsPrecededByOneAckNamingTheInputItCarries` |
+| A burst of five folds three into one tick, the ack counting all three, and a tap folded away still taunts | `ABurstMergesDownToTheCapWithoutLosingATap` |
+| An empty queue holds; a standing input drains after the drain ticks; a flood stops at the ring's capacity | `AnEmptyQueueHoldsTheLastInput`, `AStandingInputDrainsAfterTheDrainTicks`, `AFloodCannotGrowTheQueuePastItsCapacity` |
+| Off, the hello is ignored | `WithPredictionOffTheHelloIsIgnored` |
+| An unwelcomed connection coalesces as before | `InputReachesTheWireTests`, unchanged |
 
 ### The input queue: one input per tick for a welcomed client
 
@@ -189,18 +178,18 @@ So a welcomed client's inputs go through a small queue on its connection:
 - **Empty queue: hold.** The tick keeps the last consumed input, as today. A
   late input is a misprediction the ack cannot prevent, only report.
 - **Bounded depth.** Inputs waiting after the consume are capped at
-  `MaxQueuedInputs` (proposed: 2, about 67 ms). Past that, the two oldest merge
+  `PredictionMaxQueuedInputs` (default 2, about 67 ms). Past that, the two oldest merge
   into one tick, and both are counted. The merge keeps the later one's keys and
   ORs both inputs' edges, so a tap is never lost. Without the cap, one stall
   would add permanent latency.
 - **Standing latency drains.** If at least one input has still been waiting
-  after the consume for `QueueDrainTicks` consecutive ticks (proposed: 30, one
+  after the consume for `PredictionQueueDrainTicks` consecutive ticks (default 30, one
   second), the two oldest merge once. A gap followed by a pair of inputs
   otherwise leaves one tick of queueing in place for the rest of the
   connection.
 - **What it costs.** A burst waits up to a tick or two instead of landing at
   once. That is latency only for the opted-in player, and prediction hides it
-  from them. The two knobs are a jitter buffer's knobs. The proposed values are
+  from them. The two knobs are a jitter buffer's knobs. The defaults are
   starting points, to be tuned against gg2-client's measured correction, not
   settled numbers.
 
@@ -311,16 +300,16 @@ compound past a few ticks. The replica's own drift is the existing D12 figure.
 
 ### What the server adds for this
 
-- **A gate that a fork has no hidden state.** Two copies of one state, ticked
-  with the same inputs, stay bit-identical for a whole recorded match. Ticking
-  one copy leaves the other, and the `CollisionWorld`, unchanged. Today this is
-  true by construction: the only `CollisionWorld` writer is `SetCaptureZones`,
-  at load. But nothing goes red if a future change adds a static or a
-  `CollisionWorld` write inside `Tick`. That is the claim this proposal rests on,
-  so it gets a test.
-- **`PlayerInput.HeldBy(in CharacterState)`**, the input a slot's current
-  `KeyState`, `NetAimDirection` and `AimDistance` describe, so the client does
-  not rebuild it field by field.
+- **A gate that a fork has no hidden state**,
+  `PredictionTests.ForkedTicksLeaveTheMatchAndTheWorldUntouched`. A
+  four-soldier `ctf_truefort` match runs 900 ticks with rockets in flight;
+  before every tick a copy is ticked ten times on different inputs and thrown
+  away. The original must be unchanged by that, and must stay bit-identical to
+  a twin that was never forked. A static, a cache or a `CollisionWorld` write
+  inside `Tick` that changes any outcome turns it red.
+- **`CharacterState.HeldInput`**, the input a slot's current `KeyState`,
+  `NetAimDirection` and `AimDistance` describe, so the client does not rebuild
+  it field by field. Reapplied, it creates no edge (`AHeldInputCreatesNoEdge`).
 
 ### The fallback: a one-character step
 
@@ -350,7 +339,7 @@ above the quantisation floor** (more than about 0.1 px of position, regularly,
 on one map), the remedy is version 2 of the ack: the local character's `x`,
 `y`, `hspeed` and `vspeed` as full doubles (32 bytes), on QUICK_UPDATE ticks or
 every tick, to the welcomed client only. Every byte goes only to that one
-client, so it costs a stock player nothing. It is not proposed now because
+client, so it costs a stock player nothing. It is not built because
 nothing measured asks for it.
 
 ## 4. Lag compensation
@@ -407,9 +396,5 @@ said it.
 
 ## Decisions
 
-Approved by Kyle on 2026-11-18:
-
-- The wire as specified: `0xC0` hello and welcome, `0xC1` ack, implicit
-  numbering.
-- `[Server] ClientPrediction=1` by default.
-- No lag compensation.
+Kyle's, 2026-11-18: the wire as specified, `ClientPrediction` on by default,
+and no lag compensation.
