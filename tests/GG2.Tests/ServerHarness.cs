@@ -46,9 +46,9 @@ public sealed class ServerHarness : IDisposable
     public int Port => Server.BoundPort;
 
     /// <summary>Connects a client and returns it. Disposed with the harness.</summary>
-    public LoopbackClient Connect()
+    public LoopbackClient Connect(System.Net.IPAddress? address = null)
     {
-        var client = new LoopbackClient(Port);
+        var client = new LoopbackClient(Port, address);
         _clients.Add(client);
         return client;
     }
@@ -85,9 +85,9 @@ public sealed class ServerHarness : IDisposable
     /// <summary>Roster entries that are neither a bot nor the server's own slot 0.</summary>
     private int HumanRosterCount => Server.RosterCount - Server.BotSlots.Count - 1;
 
-    public LoopbackClient JoinClient(string name)
+    public LoopbackClient JoinClient(string name, System.Net.IPAddress? address = null)
     {
-        var client = Connect();
+        var client = Connect(address);
 
         client.SendHello();
         TickUntil(() => client.Received.Count > 0, "the server greeting");

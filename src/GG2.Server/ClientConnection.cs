@@ -34,7 +34,11 @@ public sealed class ClientConnection : IDisposable
         _limits = limits ?? ConnectionLimits.Default;
         _socket.Blocking = false;
         _socket.NoDelay = true;
-        RemoteAddress = (socket.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None;
+        // The game listener is dual-stack, so an IPv4 peer arrives as
+        // ::ffff:a.b.c.d. Mapped down here, once, so bans, limits, logs and
+        // plugins all keep seeing IPv4 — see GameListener.
+        var address = (socket.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None;
+        RemoteAddress = address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address;
 
         ConfigureKeepAlive();
         ConfigureUnacknowledgedTimeout();

@@ -866,9 +866,7 @@ public sealed partial class GameServer : IDisposable, IPluginHost
             ? new ConnectionRateLimiter(_limits.ConnectionBurstPerAddress, _limits.ConnectionBurstWindow)
             : null;
 
-        _listener = new TcpListener(IPAddress.Any, _options.Port);
-        _listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, false);
-        _listener.Start();
+        _listener = GameListener.Start(_options.Port, _log);
         BoundPort = ((IPEndPoint)_listener.LocalEndpoint).Port;
 
         _log.Info(

@@ -20,7 +20,7 @@ second list and it is the more useful one.
 
 | Surface | Exposure | Auth |
 |---|---|---|
-| **the game port** (`--port`, default 8190) | `0.0.0.0`. This is the one that has to be open. | optional `--password`, checked before anything but the protocol handshake |
+| **the game port** (`--port`, default 8190) | `[::]` dual-stack, plus `0.0.0.0` through it (IPv4-only where the host cannot bind IPv6), as the stock server listens. An IPv4 peer's `::ffff:` address is mapped down at capture, so bans and limits see plain IPv4 (`GameListener`). This is the one that has to be open. | optional `--password`, checked before anything but the protocol handshake |
 | **the web panel** (`--web`) | off unless asked for; `127.0.0.1` unless `--web-bind` | mandatory password, generated if unset |
 | **the control port** (`--control-port`) | off unless asked for; **`IPAddress.Loopback`, never `Any`** | none — reaching it means already being on the machine |
 | **the lobby** (`--lobby`) | outbound only, off unless asked for | publishes the server's address to a third party |

@@ -22,10 +22,11 @@ public sealed class LoopbackClient : IDisposable
     private readonly Socket _socket;
     private readonly List<byte> _received = [];
 
-    public LoopbackClient(int port)
+    public LoopbackClient(int port, IPAddress? address = null)
     {
-        _socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
-        _socket.Connect(new IPEndPoint(IPAddress.Loopback, port));
+        address ??= IPAddress.Loopback;
+        _socket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+        _socket.Connect(new IPEndPoint(address, port));
         _socket.Blocking = false;
     }
 

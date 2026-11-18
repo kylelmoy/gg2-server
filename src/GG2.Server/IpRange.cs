@@ -17,11 +17,12 @@ namespace GG2.Server;
 /// make and not something to do automatically.
 /// </para>
 /// <para>
-/// <b>Both families, even though the server binds IPv4.</b>
-/// <c>TcpListener(IPAddress.Any)</c> is IPv4-only today, so every
-/// <c>RemoteAddress</c> is an IPv4 one — but a ban file is written by hand and
-/// outlives that decision, and a parser that rejected an IPv6 entry would make
-/// the file wrong the day the bind changes rather than the day it is written.
+/// <b>Both families, because the game port listens on both.</b>
+/// <see cref="GameListener"/> binds dual-stack, so a <c>RemoteAddress</c> is
+/// IPv6 for an IPv6 peer — and plain IPv4 for an IPv4 one, because
+/// <see cref="ClientConnection"/> maps <c>::ffff:a.b.c.d</c> down at capture.
+/// That normalisation is what keeps an IPv4 entry matching, since
+/// <see cref="Contains"/> deliberately never maps across families.
 /// </para>
 /// </remarks>
 public readonly struct IpRange : IEquatable<IpRange>

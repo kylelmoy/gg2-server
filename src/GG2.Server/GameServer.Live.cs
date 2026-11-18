@@ -81,9 +81,7 @@ public sealed partial class GameServer
             return;
         }
 
-        _listener = new TcpListener(IPAddress.Any, BoundPort);
-        _listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, false);
-        _listener.Start();
+        _listener = GameListener.Start(BoundPort, _log);
 
         _offline = false;
         AnnounceToLobby();
