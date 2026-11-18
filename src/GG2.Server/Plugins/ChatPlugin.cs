@@ -95,7 +95,7 @@ public enum ChatWire
 /// </para>
 /// <list type="table">
 /// <item><term>a player's line</term><description>chat2026 LINE with the server's flags; v6 roster index, audience (0, or 1 + team) and raw text. v6 has no field for DEAD or SPEC.</description></item>
-/// <item><term>/me</term><description>LINE with the action flag; v6 <c>chr(13)</c> + <c>W</c> + text, because the v6 renderer reads the character after <c>chr(13)</c> as a colour code.</description></item>
+/// <item><term>/me</term><description>LINE with the action flag; v6 <c>chr(13)</c> + text, the form v6's own <c>/me</c> sends; <c>doColorCode</c> draws it as <c>*Name text</c>.</description></item>
 /// <item><term>a notice</term><description>NOTICE with its category; v6 254 for join, leave, rename and team change (a client may hide those), 255 for everything else, as <c>O</c> + text with <c>#</c> escaped.</description></item>
 /// <item><term>the MOTD</term><description>WELCOME's motd; v6 a 255 on hello, where <c>#</c> stays GM8's line break.</description></item>
 /// <item><term>a vote</term><description>VOTE_START + VOTE_TALLY, VOTE_TALLY, VOTE_END; v6 204, one 203 per new answer, 201 then the result as a 255.</description></item>
@@ -729,8 +729,11 @@ public sealed partial class ChatPlugin(ChatWire wire = ChatWire.Bridged, ChatSet
         _out.WriteString1(text);
 
         // v6 names and colours the line itself from the roster index, so it gets
-        // the raw text. The action form is chr(13), a colour code, then the text.
-        var v6Text = (flags & FlagAction) != 0 ? "\rW" + text : text;
+        // the raw text. The action form is chr(13) then the text, as v6's own
+        // /me sends it (commands.gml:65-76). doColorCode runs sanitiseNewlines
+        // first, which turns the chr(13) into a space, so nothing after it is
+        // read as a colour code; a stock client draws "*Name text". Measured live.
+        var v6Text = (flags & FlagAction) != 0 ? "\r" + text : text;
         var v6Audience = teamOnly ? 1 + (int)senderTeam : 0;
 
         for (var slot = 0; slot < Host.PlayerCount && _chatters.Has(slot); slot++)

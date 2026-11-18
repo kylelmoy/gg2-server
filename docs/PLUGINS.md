@@ -318,7 +318,7 @@ falls back to v6, so a WELCOME that is merely late still leaves both ends on v6.
 | The core does | chat2026 player | v6 player |
 |---|---|---|
 | a player's line | LINE: index, flags (team, dead, spectating, action), team, name, text | roster index, audience (0, or `1 + team`), raw text. v6 has no field for dead or spectating |
-| `/me` | LINE with the action flag | `chr(13)` + `W` + the text: v6 draws the character after `chr(13)` as a colour code. v6's own `/me` arrives as `chr(13)` + text and becomes the action flag |
+| `/me` | LINE with the action flag | `chr(13)` + the text, which is v6's own `/me` form; a stock client draws `*Name text`. v6's `/me` arrives that way and becomes the action flag |
 | join, leave, rename, team change | NOTICE 1-4 | 254, which a v6 client can hide ("Display player info") |
 | a reply, a server message, a vote announcement | NOTICE 0, 5 or 6 | 255, never hidden |
 | the MOTD (`[Server] ChatJoinMessage`) | WELCOME's motd | a 255 on hello |
@@ -760,13 +760,28 @@ after any change to the wire fields or to a plugin implementation.
 `docs/TRAPS-LIVEGAME.md` and the `gg2-playtest` skill are the general rules —
 **exactly one session holds the live game**, and the bridge serves one TCP client.
 
-**The two `chat` runs below were against the v6 server half the chat core
-replaced.** What they establish about the client — that a stock GM8 client
-parses each v6 shape — still holds, because the core sends the same shapes. What
-they do not establish is the core itself: its join and leave lines, its vote
-encoding (204 for a fresh vote, 203 catch-up), and a v6 client and a chat2026
-client in one room. Until a run covers those, the core's v6 side is gated only by
-`ChatBridgeTests` and `PluginWireTests`.
+**The chat core was driven on 2026-11-18** (`--plugins chat`), with one stock
+GM8 client speaking v6 and a scratch socket client speaking chat2026 behind the
+envelope, read back from the GM8 client's `global.chatLog` and `global.voter` and
+from the decoded frames the socket client received:
+
+| Verified | How it was read back |
+|---|---|
+| v6 hello, the MOTD as a 255 | `chatLog` ended `OWelcome!#Second line` |
+| enveloped HELLO, WELCOME | `WELCOME v1 flags=3 burst=3 secs=2 motd='Welcome!#Second line'` |
+| join and leave notices to v6 | `Odesk26 has joined the game.`, `Odesk26 has left the game.` |
+| chat2026 to v6 | `Wdesk26: <CR>Whello from chat2026`, coloured by the client from the roster index |
+| v6 to chat2026 | `LINE #1 flags=4 team=2 stockv6: hi from stock v6 a#b` |
+| `/me` from chat2026 to v6 | `W *desk26 waves`. Sent first as `chr(13)` + `W` + text, it drew `*desk26 Wwaves`: `doColorCode` runs `sanitiseNewlines`, which turns the `chr(13)` into a space, so nothing after it is a colour code |
+| a vote called from chat2026 | the v6 dialog opened from a 204 with the question, both options and the clock, and counted the caller's Yes from a 203 |
+| a v6 answer | chat2026 got `VOTE_TALLY 2 2,0` then `VOTE_END 2 winner=1 Teams scrambled (2 yes, 0 no).`; the v6 dialog showed `win` 1 with `total` 2, and `chatLog` ended with the result as a 255 |
+
+Not covered: a mid-vote 204 resync to a v6 client that greets late, a v6 kick
+target, two stock clients, and the 255-byte chunking.
+
+The two `chat` runs below were against the v6 server half the core replaced.
+What they establish about the client — that a stock client parses each v6
+shape — still holds, because the core sends the same shapes.
 
 **`chat` was driven this way on 2026-09-12**, against three stock GM8 clients on
 `--plugins chat --bots 2`. Every packet shape in both directions was exercised

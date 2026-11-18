@@ -192,6 +192,23 @@ public sealed class ChatBridgeTests
         Assert.Equal(["WELCOME v1 motd=Hi#Type /help"], To(host, bob));
     }
 
+    /// <summary>
+    /// On a real server the hello can arrive before the plugin's first tick for
+    /// that player, so a chat2026 client hears its own join. Once.
+    /// </summary>
+    [Fact]
+    public void AHelloBeforeTheFirstTickHearsItsOwnJoinOnce()
+    {
+        var (host, plugin) = Fresh();
+        var bob = host.Add("bob", Team.Spectator, "10.0.0.2");
+        plugin.PlayerAdded(bob);
+        plugin.Receive(bob, [E, 0, ChatPlugin.ProtocolVersion, 0]);
+        plugin.Tick();
+        plugin.Tick();
+
+        Assert.Equal(["WELCOME v1 motd=", "NOTICE 1 bob has joined the game."], To(host, bob));
+    }
+
     [Fact]
     public void AHelloRepeatedInTheSameFormatIsIgnored()
     {
@@ -277,9 +294,9 @@ public sealed class ChatBridgeTests
 
     /// <summary>
     /// Team chat reaches one team in both formats, with v6's audience of
-    /// <c>1 + team</c>. An action becomes <c>chr(13)</c> + a colour code for v6,
-    /// because v6's renderer eats the character after <c>chr(13)</c>; v6's own
-    /// <c>chr(13)</c> form becomes the action flag.
+    /// <c>1 + team</c>. An action becomes <c>chr(13)</c> + text for v6, which is
+    /// v6's own <c>/me</c> form and which a stock client was seen to draw as
+    /// <c>*Name text</c>; v6's <c>chr(13)</c> form becomes the action flag.
     /// </summary>
     [Fact]
     public void TeamChatAndActionsTranslate()
@@ -293,7 +310,7 @@ public sealed class ChatBridgeTests
         SayV6(plugin, alice, "\rwaves", team: true);
         SayChat2026(plugin, dave, "/me dances");
 
-        Assert.Equal(["v6 #1 audience=1 \rWwaves", "v6 #3 audience=0 \rWdances"], To(host, alice));
+        Assert.Equal(["v6 #1 audience=1 \rwaves", "v6 #3 audience=0 \rdances"], To(host, alice));
         Assert.Equal(["LINE #1 flags=9 team=0 alice: waves", "LINE #3 flags=8 team=0 dave: dances"], To(host, dave));
         Assert.Equal(["LINE #3 flags=8 team=0 dave: dances"], To(host, bob));
     }
