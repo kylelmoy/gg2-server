@@ -368,11 +368,12 @@ are finished with the game.
 
 ## Soaking a stock client against the port
 
-The instrumentation is in the live-game bridge's payload, not a fork of the game:
-`agentRate`, `agentSnap` and `agentSoak`, all off by default, plus
-`agentRateArm()` and `agentSnapReport()` to read back over `gg2_evalx`. That
-repo's `docs/CLIENTDEBUG.md` has the patch sites. What belongs here is what a
-soak measures and what ends one early.
+The soak instrumentation (`agentRate`, `agentSnap`, `agentSoak`) was in the
+live-game bridge's payload and is no longer: gg2-agent `c1fe346` dropped it,
+and `767632a` there is where to recover it from. A one-off snap log needs no
+bridge support, only a throwaway clone of the client tree; "Corrections in a
+soldier duel" below says how. What belongs here is what a soak measures and
+what ends one early.
 
 `tools/soak-transitions.js --keep-teamed <name>` keeps a human slot on a team
 for the length of a run. Without it a soak measures a spectator from its first
@@ -548,6 +549,74 @@ physics change is made on the strength of these numbers.
 In the 60 arm the simulation advances at `room_speed / ticks_per_virtual`, so
 matching a boosted client to a boosted server means matching virtual ticks, not
 frames.
+
+### Corrections in a soldier duel: the client's clock and rockets, not the physics
+
+Measured 2026-11-18 because a stock client on barbara's duel server showed
+noticeable snaps against soldier bots even on the LAN. A GM8 client's
+prediction, logged at each `QUICK_UPDATE` just before the authoritative values
+overwrite it, was paired with the C# replica's prediction for the same update
+from the server's own recording of the session (local duel server, `duel_05`,
+soldier against the duel soldier net, about four minutes, 2,209 updates).
+The pairing is exact because the stock client never writes its own `keyState`
+(`Character.events/User Event 13.xml:18` is the only client-side write): it
+predicts every character, its own included, from the keys the server echoes,
+which is the computation the replica makes from the same bytes.
+
+| Window before the update | Updates | GM8 == C# in every wire field | Largest difference |
+|---|---|---|---|
+| client stepped exactly 7 times, one update per frame | 2,086 | 2,047 (98.1%) | 3 wire units (0.6 px) |
+| a frame in the window handled 0 or 2+ updates | 121 | most differ | 429 wire units (86 px) of vertical position |
+
+So the physics agree, and the large snaps come from two things the wire cannot
+reconcile:
+
+- **The client's frame clock is not the server's tick.** `ClientBeginStep`
+  handles every message that has arrived and the client then steps once, on
+  its own clock. On Windows a GM8 frame alternates 31 ms and 47 ms (the timer's
+  15.6 ms granularity) and drifts in phase against the server's 33.3 ms, so
+  some frames handle no update and the next handles two. That window is
+  stepped 6 or 8 times instead of 7: one tick of motion, 4-6 px running and
+  more falling. 2% of frames were irregular on loopback, clustered where the
+  two clocks lined up near a frame boundary.
+- **Rockets resolve independently on every client.** A client creates a rocket
+  from `WEAPON_FIRE` (`Rocketlauncher.events/User Event 1.xml` fires only when
+  `global.isHost`) and never hears where it exploded. Whether it hits, and how
+  far its knockback throws people, is decided against that client's own estimate
+  of everyone's position, so a sub-pixel or one-tick difference can flip a hit
+  and become a 15-70 px vertical snap at the next update. This is stock GG2's
+  protocol (upstream issue #68), the same against a GM8 server. The two
+  worst snaps in the run (65 and 68 px) were rocket hits inside irregular
+  windows.
+
+**The expectation, for comparison with a report.** Replaying the recorded duel
+sessions as a same-physics, zero-latency client (open-loop, `gg2-parity
+replay`) gives, per player in a soldier duel, about 1% of updates snapping 1 px
+or more, 0.5-0.8% 5 px or more, and a maximum of 30-50 px, almost all vertical
+and within 40 ticks of a rocket. The live GM8 client in a soldier duel
+corrected by a mean of 0.36-0.40 px, with 6-18 updates of 5 px or more per
+player in four minutes and a maximum of 68 px. Snaps of that size and
+frequency in a rocket fight are what the protocol produces with no physics
+mismatch and no latency.
+
+What would show this wrong: a run where the client stepped exactly 7 times,
+every frame handled exactly one update, and the GM8 and C# predictions still
+differ by more than a few wire units. That is the signature of a real physics
+mismatch, and it did not occur here. The replica fires on its own decision
+with the recorded seed while the client fires on the message; that matched
+here (591 of 591 rockets on one recorded duel, 556 of 558 on another) but is
+an assumption of the replay baseline.
+
+How it was taken, for a re-run: clone the client tree to a short path (its
+sprite paths exceed `MAX_PATH` under the scratchpad), point `gg2_checkout` at
+the clone, and in Character `User Event 13` save `x`, `y`, `hspeed` and
+`vspeed` before the authoritative block and write both to a file opened by
+`gg2_eval`. Count updates per frame in `ClientBeginStep`. Launch it with
+`launcher.js ... -server 127.0.0.1 -port <n>` against a recording server, join
+with `ClientPlayerChangeteam`/`ClientPlayerChangeclass` and destroy the select
+overlays, and drive movement with a `gg2_watch` expression that sets
+`AgentBridge.heldMask`. Mouse fire does not work without window focus, so only
+the bot fires. Never modify the reference client tree itself.
 
 ### What ends a soak early
 
