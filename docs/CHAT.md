@@ -174,7 +174,28 @@ gg2-client then confirmed two of its desktop clients settling on the native form
 against this server and chatting both ways, and its no-hello client staying
 connected on a server that requires `chat`.
 
-Not covered: a mid-vote 204 resync to a v6 client that greets late, a v6 kick
-target, two stock clients, the 255-byte chunking, and the default-on
-advertisement against a stock client (the download prompt). How to drive a client
+**Three real clients in one room, 2026-11-18**, on `6e4f7b2` with chat on by
+default and no `ServerPluginList` at all (barbara, a scratch process on :8290):
+a stock GM8 client with `chat` v6 (`stockv6`, Nahida, driven through the bridge),
+gg2-client's desktop build on Windows (`win26`, Nahida) and on macOS (`mac26`),
+both run with gg2-client's `--chat-script` / `--chat-log` (`8e07d5e`). Read back
+from the GM8 client's `chatLog` and `global.voter`, both desktop logs, and the
+server log, which agreed line for line:
+
+| Verified | How it was read back |
+|---|---|
+| default-on advertisement | the stock client loaded `chat` with no plugin list configured (its download prompt was off in its ini) |
+| native negotiation | both desktop clients: `mode Negotiating`, then `mode Chat2026` 0.1 s later, then the MOTD and their own team notice |
+| native to v6, and native to native | `Rmac26: <CR>Whello from mac`, `Bwin26: <CR>Whello from win` on GM8; each desktop client logged the other's line with slot, team and name |
+| `/me` both ways | GM8 drew `W *mac26 waves from mac` and `W *win26 waves from win`; the desktop clients logged GM8's `chr(13)` line as `flags=SA` |
+| v6 to native | `line slot=1 team=Spectator flags=S name="stockv6" "hello from stock gm8 a#b"` on both, `#` intact |
+| team chat | each team line reached only its own team; the spectator GM8 client got none |
+| a vote called from native | GM8's dialog opened with the caller's Yes counted; win26's answer reached mac26 as `counts=[2,0]`; the scramble's two team-change notices and the result reached all three |
+| a vote called from v6 | `/votenextround` from GM8 reached both desktop clients as `vote_start ... counts=[1,0]`, and its timeout result reached GM8 |
+| leaving | both departures reached the other clients as leave notices |
+
+Not covered: an answer from the stock dialog in the three-client run (it was
+covered in the 2026-11-18 single-client run above), the download prompt itself,
+a mid-vote 204 resync to a v6 client that greets late, a v6 kick target, two
+stock clients, and the 255-byte chunking. How to drive a client
 is `docs/PLUGINS.md`, "Verifying against a real client".
