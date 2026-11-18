@@ -1,7 +1,7 @@
 # Proposal: server support for client-side prediction
 
-**Status: proposal. Nothing here is implemented, and nothing should be until
-Kyle approves it.** Asked for by gg2-client (its `docs/DECISIONS.md`, D12 item
+**Status: approved 2026-11-18, not yet implemented.** Kyle approved the wire
+as specified, `ClientPrediction` on by default, and lag compensation out. Asked for by gg2-client (its `docs/DECISIONS.md`, D12 item
 2): predict the local character only, rewind to the replica's state on each
 server tick, and replay the inputs the server has not applied yet. Remote
 players stay as they are. This document is the server half: what the wire
@@ -405,11 +405,11 @@ said it.
 - A future GM8 or upstream release assigns `0xC0` or `0xC1`, or makes an
   unknown in-game byte fatal.
 
-## For Kyle to decide
+## Decisions
 
-- Approve the wire as specified (`0xC0` hello and welcome, `0xC1` ack, implicit
-  numbering), or name changes.
-- Default on (`[Server] ClientPrediction=1`) or off. On is proposed: a stock
-  client cannot tell, and the fleet would serve gg2-client without a config
-  push.
-- Lag compensation stays out. Confirm.
+Approved by Kyle on 2026-11-18:
+
+- The wire as specified: `0xC0` hello and welcome, `0xC1` ack, implicit
+  numbering.
+- `[Server] ClientPrediction=1` by default.
+- No lag compensation.
