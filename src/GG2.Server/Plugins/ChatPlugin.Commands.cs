@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using GG2.Protocol;
 
@@ -13,7 +13,7 @@ namespace GG2.Server.Plugins;
 /// relayed as chat. Every reply string is the GML's, byte for byte: a client
 /// cannot tell which host it is talking to.
 /// </remarks>
-public sealed partial class Chat2026Plugin
+public sealed partial class ChatPlugin
 {
     private delegate void Command(int sender, List<string> args, string rest);
 
@@ -46,6 +46,7 @@ public sealed partial class Chat2026Plugin
         ["votemap"] = "/votemap [map]: vote on the next map. With no name, pick one.",
         ["ignore"] = "/ignore [name]: hide a player's chat on your screen, or list who you ignore.",
         ["unignore"] = "/unignore <name>: show a player's chat again.",
+        ["bots"] = "/bots [off|on]: how many bots are playing, or turn them off for a while.",
     };
 
     private Dictionary<string, CommandEntry> Commands => _commands ??= new(StringComparer.Ordinal)
@@ -66,6 +67,7 @@ public sealed partial class Chat2026Plugin
         ["votescramble"] = new(VoteScrambleCommand, false),
         ["votenextround"] = new(VoteNextRoundCommand, false),
         ["votemap"] = new(VoteMapCommand, false),
+        ["bots"] = new(BotsCommand, false),
     };
 
     /// <summary><c>host/command.gml</c>: <paramref name="text"/> starts with <c>/</c>.</summary>
@@ -426,5 +428,97 @@ public sealed partial class Chat2026Plugin
 
         SendNotice(Notice.Server, Host.NameOf(sender) + " changed the map to " + map + ".");
         Host.EndRound();
+    }
+
+    // --- /bots: this port's own -------------------------------------------
+
+    /// <summary>
+    /// <c>/bots</c>, <c>/bots off</c>, <c>/bots on</c>: report the bot population,
+    /// or hold it at zero for <c>[Bots] SuspendMinutes</c>. No GML behind it:
+    /// stock GG2 ships no bots. <c>docs/PLUGINS.md</c>, "The bot suspension".
+    /// </summary>
+    /// <remarks>
+    /// <b>"This server does not let bots be turned off", "not running bots" and
+    /// "already off" are different replies</b>: collapsed, a player suspends bots
+    /// on a server that has none and watches bots appear when the next person
+    /// joins. A second <c>/bots off</c> does not re-arm the window, or one player
+    /// typing it every few minutes would be an indefinite switch.
+    /// </remarks>
+    private void BotsCommand(int sender, List<string> args, string rest)
+    {
+        var bots = Host.Bots;
+
+        if (!bots.CommandAllowed)
+        {
+            Reply(sender, "This server does not let bots be turned off from chat.");
+            return;
+        }
+
+        switch (args.Count > 0 ? args[0].ToLowerInvariant() : string.Empty)
+        {
+            case "":
+                Reply(sender, BotReport(bots));
+                break;
+
+            case "off":
+                if (bots.Suspended)
+                {
+                    Reply(sender, "Bots are already off for another " + BotMinutes(bots.SecondsLeft) + ".");
+                    return;
+                }
+
+                if (!bots.Managed)
+                {
+                    Reply(sender, "This server is not running bots.");
+                    return;
+                }
+
+                if (!Host.SuspendBots())
+                {
+                    Reply(sender, "The bots could not be turned off.");
+                    return;
+                }
+
+                SendNotice(Notice.Server, Host.NameOf(sender) + " turned the bots off for "
+                    + bots.SuspendMinutes + " minutes. /bots on brings them back.");
+                break;
+
+            case "on":
+                if (!Host.ResumeBots())
+                {
+                    Reply(sender, "The bots are not turned off.");
+                    return;
+                }
+
+                SendNotice(Notice.Server, Host.NameOf(sender) + " turned the bots back on.");
+                break;
+
+            default:
+                Reply(sender, "Use /bots, /bots off or /bots on.");
+                break;
+        }
+    }
+
+    private static string BotReport(BotStatus bots)
+    {
+        if (bots.Suspended)
+            return "Bots are off for another " + BotMinutes(bots.SecondsLeft) + ". /bots on brings them back.";
+
+        if (!bots.Managed)
+            return "This server is not running bots.";
+
+        return bots.Count == 1
+            ? "1 bot is playing. /bots off takes the bots away for " + bots.SuspendMinutes + " minutes."
+            : bots.Count + " bots are playing. /bots off takes them away for " + bots.SuspendMinutes + " minutes.";
+    }
+
+    /// <summary>A remaining suspension, rounded up to the minute so it never reads "0 minutes".</summary>
+    private static string BotMinutes(int seconds)
+    {
+        if (seconds < 60)
+            return seconds == 1 ? "1 second" : seconds + " seconds";
+
+        var minutes = (seconds + 59) / 60;
+        return minutes == 1 ? "1 minute" : minutes + " minutes";
     }
 }

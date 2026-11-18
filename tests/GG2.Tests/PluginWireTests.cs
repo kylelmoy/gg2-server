@@ -220,16 +220,61 @@ public sealed class PluginWireTests
     public void TheOtherChatPluginsAnnouncementCarriesItsSenderByte()
     {
         using var harness = new ServerHarness(options => options.ServerPluginList = ChatV6Plugin);
-        var client = harness.JoinClient("alice");
-        Drain(client);
+        var alice = harness.JoinClient("alice");
+        SendPluginPacket(alice, packetId: 0, [0]);
+        harness.Tick(3);
+        Drain(alice);
 
-        SendPluginPacket(client, packetId: 0, [0]);
+        harness.JoinClient("bob");
         harness.Tick(3);
 
-        Assert.False(client.IsClosed);
+        Assert.False(alice.IsClosed);
 
-        var text = GG2Text.Encode("Oalice has joined chat!");
-        AssertReceivedPluginData(client, 0, [254, (byte)text.Length, .. text]);
+        var text = GG2Text.Encode("Obob has joined the game.");
+        AssertReceivedPluginData(alice, 0, [254, (byte)text.Length, .. text]);
+    }
+
+    /// <summary>
+    /// One room over a real socket: a v6 client, a chat2026 client speaking
+    /// behind the <see cref="GG2.Server.Plugins.ChatPlugin.Envelope"/> byte on <c>chat</c>'s packet
+    /// id, and a client that joined without ever saying hello.
+    /// </summary>
+    /// <remarks>
+    /// The silent client is gg2-client's no-chat join. A GM8 client without the
+    /// plugin raises a fatal error on any plugin packet, so the stream it receives
+    /// must hold none of what the other two were sent.
+    /// </remarks>
+    [Fact]
+    public void AV6AndAChat2026ClientShareOneRoomAndASilentClientHearsNothing()
+    {
+        using var harness = new ServerHarness(options => options.ServerPluginList = ChatV6Plugin);
+        var alice = harness.JoinClient("alice");
+        var bob = harness.JoinClient("bob");
+        var carol = harness.JoinClient("carol");
+
+        SendPluginPacket(alice, 0, [0]);
+        SendPluginPacket(bob, 0, [GG2.Server.Plugins.ChatPlugin.Envelope, 0, GG2.Server.Plugins.ChatPlugin.ProtocolVersion, 0]);
+        harness.Tick(3);
+
+        // WELCOME: version 1, gravetalk and votes on, a burst of 3, 2 seconds, no motd.
+        AssertReceivedPluginData(bob, 0, [GG2.Server.Plugins.ChatPlugin.Envelope, 0, 1, 3, 3, 2, 0]);
+
+        SendPluginPacket(alice, 0, [1, 5, .. GG2Text.Encode("hello")]);
+        SendPluginPacket(bob, 0, [GG2.Server.Plugins.ChatPlugin.Envelope, 1, 0, 2, .. GG2Text.Encode("hi")]);
+        harness.Tick(3);
+
+        // alice (slot 1) to bob as a chat2026 LINE: envelope, kind, sender, then
+        // flags and team, which depend on the round; the name and text are fixed.
+        var aliceLine = GG2Text.Encode("\u0005alice\u0005hello");
+        Assert.True(FindSubsequence(bob.Received, [GG2.Server.Plugins.ChatPlugin.Envelope, 1, 1]));
+        Assert.True(FindSubsequence(bob.Received, aliceLine));
+
+        // bob (slot 2) to alice as a v6 line: roster index, audience 0, raw text.
+        AssertReceivedPluginData(alice, 0, [2, 0, 2, .. GG2Text.Encode("hi")]);
+
+        Assert.False(FindSubsequence(carol.Received, GG2Text.Encode("hello")));
+        Assert.False(FindSubsequence(carol.Received, GG2Text.Encode("\u0002hi")));
+        Assert.False(alice.IsClosed || bob.IsClosed || carol.IsClosed);
     }
 
     /// <summary>

@@ -86,7 +86,7 @@ public sealed class FakePluginHost : IPluginHost
     public string ChatJoinMessage { get; set; } = string.Empty;
 
     /// <summary><c>[Plugins] chat_*</c>.</summary>
-    public Chat2026Settings Chat2026 { get; set; } = new();
+    public ChatSettings ChatSettings { get; set; } = new();
 
     /// <summary><c>[Bots] SuspendMinutes</c>. Zero, the default, is "no such command".</summary>
     public int SuspendMinutes { get; set; }

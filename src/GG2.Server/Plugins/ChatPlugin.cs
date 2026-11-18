@@ -1,301 +1,442 @@
-﻿using GG2.Protocol;
+﻿using System.Text;
+using GG2.Protocol;
 
 namespace GG2.Server.Plugins;
 
 /// <summary>
-/// The server half of <c>chat</c> — "Lorgan3's chat plugin v6" — text chat, a
-/// slash-command console and the in-game vote dialog.
+/// What an operator can change about <see cref="ChatPlugin"/>. The defaults
+/// are chat2026's GML defaults for the same <c>[Plugins]</c> keys.
 /// </summary>
 /// <remarks>
-/// Transcribed from <c>plugin.gml</c>, <c>chat_api.gml</c>, <c>vote_api.gml</c>
-/// and <c>commands.gml</c> inside
-/// <c>chat@bad8081d64f0b808a2bb3a6d88978fb5.zip</c>. Only the
-/// <c>global.isHost</c> branches are here: the client half — the window, the
-/// console font, the key bindings, the colour codes, the wrapping, the options
-/// menu, the <c>cheatycheat</c> typing lock and the vote dialog's drawing — is
-/// still the plugin's own GML, downloaded and executed by the client exactly as
-/// before.
+/// Set from <c>[Plugins]</c> in <c>--config</c> as <see cref="ServerOptions.Chat"/>
+/// and handed to the plugin by <see cref="IPluginHost.ChatSettings"/> when it attaches.
+/// </remarks>
+public sealed record ChatSettings
+{
+    /// <summary><c>chat_gravetalk</c>: whether the living hear the dead and spectators.</summary>
+    public bool Gravetalk { get; init; } = true;
+
+    /// <summary><c>chat_unique_names</c>: suffix a duplicate name with the lowest free number.</summary>
+    public bool UniqueNames { get; init; }
+
+    /// <summary><c>chat_mute_minutes</c>: a vote mute, and <c>/mute</c> with no minutes.</summary>
+    public int MuteMinutes { get; init; } = 10;
+
+    /// <summary><c>chat_votes</c>.</summary>
+    public bool VotesEnabled { get; init; } = true;
+
+    /// <summary><c>chat_vote_kick_percent</c>: the Yes share a kick needs, inclusive.</summary>
+    public int VoteKickPercent { get; init; } = 60;
+
+    /// <summary><c>chat_vote_mute_percent</c>: the Yes share a mute needs, inclusive.</summary>
+    public int VoteMutePercent { get; init; } = 60;
+
+    /// <summary><c>chat_kickban_minutes</c>: how long a vote-kicked address is refused.</summary>
+    public int KickBanMinutes { get; init; } = 10;
+
+    /// <summary><c>chat_admin_password</c>; empty disables <c>/login</c>.</summary>
+    public string AdminPassword { get; init; } = string.Empty;
+
+    /// <summary>The ranges the GML clamps to, refused up front here.</summary>
+    public void Validate()
+    {
+        if (MuteMinutes is < 1 or > 1440)
+            throw new ArgumentOutOfRangeException(nameof(MuteMinutes), MuteMinutes, "chat_mute_minutes must be 1..1440");
+
+        if (KickBanMinutes is < 0 or > 1440)
+            throw new ArgumentOutOfRangeException(nameof(KickBanMinutes), KickBanMinutes, "chat_kickban_minutes must be 0..1440");
+
+        if (VoteKickPercent is < 1 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(VoteKickPercent), VoteKickPercent, "chat_vote_kick_percent must be 1..100");
+
+        if (VoteMutePercent is < 1 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(VoteMutePercent), VoteMutePercent, "chat_vote_mute_percent must be 1..100");
+    }
+}
+
+/// <summary>Which wire a <see cref="ChatPlugin"/> speaks, and so which name it is advertised under.</summary>
+public enum ChatWire
+{
+    /// <summary>
+    /// <c>chat</c>: Lorgan3's v6 for a stock client, and chat2026 inside it,
+    /// each message behind a <see cref="ChatPlugin.Envelope"/> byte, for a client
+    /// that greets with it.
+    /// </summary>
+    Bridged,
+
+    /// <summary><c>chat2026</c>: chat2026 alone, with no envelope.</summary>
+    Plain,
+}
+
+/// <summary>
+/// The chat core: one room, one rate limit, one mute and ban list, one command
+/// console and one vote engine, spoken to each player in the format that player
+/// greeted with.
+/// </summary>
+/// <remarks>
 /// <para>
-/// <b>This is a different protocol from <see cref="ChatV2Plugin"/>, not a newer
-/// one.</b> The two are separate plugins with separate hashes and neither's
-/// packets mean anything to the other's client half. The differences that matter
-/// to a reader: this one sends the speaker's <em>roster index</em> and the raw
-/// text and lets the client colour it, has a real vote dialog rather than lines
-/// of text, has no anti-spam mute and no name de-duplication, and does not strip
-/// <c>#</c> (the client's <c>sanitiseNewlines</c> escapes it at draw time).
+/// <b>Advertised as <c>chat</c></b> (<see cref="ChatWire.Bridged"/>), because
+/// <c>chat@bad8081d64f0b808a2bb3a6d88978fb5</c> is on ganggarrison.com and every
+/// stock client can fetch it. A stock client speaks Lorgan3's v6
+/// (<c>plugin.gml</c>, <c>chat_api.gml</c>, <c>vote_api.gml</c> in that zip). A
+/// client that knows chat2026 (gg2-client's desktop build) sends
+/// <see cref="Envelope"/> followed by a chat2026 HELLO, and from then on every
+/// message to and from it is one chat2026 message (<c>gg2-chat2026/PROTOCOL.md</c>,
+/// version 1) behind that byte. v6's kinds are 0-3 and its host ignores any other
+/// first byte (<c>plugin.gml</c> user event 0 has no <c>default</c>), so the
+/// envelope is safe at any <c>chat</c> server. Advertised as <c>chat2026</c>
+/// (<see cref="ChatWire.Plain"/>) it is chat2026 with no envelope and no v6.
 /// </para>
 /// <para>
-/// <b>The wire format, both directions.</b> There is no version field anywhere
-/// in it, which is why <see cref="ServerPluginCatalogue"/> pins the zip.
+/// <b>The behaviour is chat2026's for everybody</b>: its routing (TF2 gravetalk,
+/// spectator team chat), its token-bucket rate limit, its timed address mutes and
+/// kick bans, commands in team chat too, and its vote thresholds and quorum.
+/// Only the encoding differs, per recipient:
 /// </para>
-/// <para>
-/// Client to server (<c>plugin.gml:436-522</c>, the host's <c>event_user 0</c>):
-/// a kind byte, then
 /// <list type="table">
-/// <item><term>0</term><description>hello. No body.</description></item>
-/// <item><term>1</term><description>global chat: <c>ubyte</c> length, that many bytes.</description></item>
-/// <item><term>2</term><description>team chat: the same.</description></item>
-/// <item><term>3</term><description>a vote answer: <c>ubyte</c>, the 1-based option.</description></item>
+/// <item><term>a player's line</term><description>chat2026 LINE with the server's flags; v6 roster index, audience (0, or 1 + team) and raw text. v6 has no field for DEAD or SPEC.</description></item>
+/// <item><term>/me</term><description>LINE with the action flag; v6 <c>chr(13)</c> + <c>W</c> + text, because the v6 renderer reads the character after <c>chr(13)</c> as a colour code.</description></item>
+/// <item><term>a notice</term><description>NOTICE with its category; v6 254 for join, leave, rename and team change (a client may hide those), 255 for everything else, as <c>O</c> + text with <c>#</c> escaped.</description></item>
+/// <item><term>the MOTD</term><description>WELCOME's motd; v6 a 255 on hello, where <c>#</c> stays GM8's line break.</description></item>
+/// <item><term>a vote</term><description>VOTE_START + VOTE_TALLY, VOTE_TALLY, VOTE_END; v6 204, one 203 per new answer, 201 then the result as a 255.</description></item>
 /// </list>
+/// <para>
+/// ⛔ <b>Nothing is sent to a player who has not greeted</b>, in either format. A
+/// GM8 client without the plugin raises a fatal error on a plugin packet it has no
+/// queue for, and a client that joined without chat (gg2-client on iOS) must stay
+/// silent. And <b>a chat2026 frame never reaches a v6 player</b>: v6 would read
+/// <see cref="Envelope"/> as player 128.
 /// </para>
 /// <para>
-/// Server to client (<c>plugin.gml:525-592</c>, the client's
-/// <c>event_user 1</c>): a <c>ubyte</c> that is either a roster index or a code.
-/// <list type="table">
-/// <item><term>&lt; 200</term><description>
-/// the speaker's roster index, then a <c>ubyte</c> audience and a
-/// <c>ubyte</c>-prefixed string. <b>The text is raw</b> — the client's
-/// <c>doColorCode</c> prefixes the name and picks the colour from the speaker's
-/// team, which is why nothing here formats a player's line.
-/// </description></item>
-/// <item><term>200</term><description>
-/// a poll: question, option count, each option, then a <c>ushort</c> of steps
-/// remaining (<c>vote_api.gml:240-250</c>).
-/// </description></item>
-/// <item><term>201</term><description>the result: a <c>ubyte</c> 1-based winner, or 0 to just close the dialog.</description></item>
-/// <item><term>203</term><description>somebody voted: a <c>ubyte</c> 0-based option, which the dialog's bar chart adds to.</description></item>
-/// <item><term>204</term><description>200's fields plus one <c>ubyte</c> tally per option, for a client that joined mid-vote.</description></item>
-/// <item><term>254</term><description>a <c>ubyte</c>-prefixed pre-coloured line. <b>Suppressible</b>: a client with "Display player info" off drops these, so nothing a player needs may go out as 254.</description></item>
-/// <item><term>255</term><description>the same, and never suppressed. Command replies and vote results.</description></item>
-/// </list>
-/// </para>
-/// <para>
-/// Strings here are GM8 byte strings, not UTF-8 — see <see cref="GG2Text"/>. A
-/// char is a byte, which is what makes the 255-byte chunking below a plain
-/// <c>string</c> slice.
+/// <b>The most recent hello sets the format.</b> A repeat in the same format is
+/// ignored, as both protocols say; a hello in the other format switches the
+/// player and greets them again in it, with the running vote re-offered without
+/// clearing their answer. A desktop client that gave up waiting for WELCOME and
+/// fell back to v6 therefore ends up v6 at both ends.
 /// </para>
 /// </remarks>
-public sealed partial class ChatPlugin : ServerPlugin, IServerChat
+public sealed partial class ChatPlugin(ChatWire wire = ChatWire.Bridged, ChatSettings? settings = null)
+    : ServerPlugin, IServerChat
 {
-    /// <summary>Per-player state; the reference keeps these on the <c>Player</c> instance.</summary>
-    /// <remarks>
-    /// <c>plugin.gml:117-129</c> declares four more — <c>lastChatTime</c>,
-    /// <c>chatCount</c>, <c>mute</c> and <c>gid</c>. The first two are dead in
-    /// this version (v6 has no anti-spam; <see cref="ChatV2Plugin"/> does),
-    /// <c>mute</c> is the client's own render-time filter, and <c>gid</c> is
-    /// <see cref="IPluginHost.StableIdOf"/>.
-    /// </remarks>
-    private sealed class Chatter
+    /// <summary>PROTOCOL.md, "Protocol version".</summary>
+    public const byte ProtocolVersion = 1;
+
+    /// <summary>
+    /// The first byte of a chat2026 message on <see cref="ChatWire.Bridged"/>, in
+    /// both directions. Outside v6's client kinds (0-3), and never sent to a v6 player.
+    /// </summary>
+    public const byte Envelope = 0x80;
+
+    // chat2026, client to host.
+    private const byte KindHello = 0;
+    private const byte KindSay = 1;
+    private const byte KindVote = 2;
+
+    // chat2026, host to client.
+    private const byte KindWelcome = 0;
+    private const byte KindLine = 1;
+    private const byte KindNotice = 2;
+    private const byte KindVoteStart = 3;
+    private const byte KindVoteTally = 4;
+    private const byte KindVoteEnd = 5;
+
+    // v6, client to host (plugin.gml:436-522).
+    private const byte V6Hello = 0;
+    private const byte V6GlobalChat = 1;
+    private const byte V6TeamChat = 2;
+    private const byte V6Vote = 3;
+
+    // v6, host to client (plugin.gml:525-592). Below 200 the first byte is a roster index.
+    private const byte V6Poll = 200;
+    private const byte V6VoteResult = 201;
+    private const byte V6VoteTally = 203;
+    private const byte V6PollResync = 204;
+    private const byte V6PlayerInfo = 254;
+    private const byte V6Notice = 255;
+
+    /// <summary>
+    /// The colour code a v6 server line starts with. Not decoration: the v6 draw
+    /// loop eats the first character of every line as a colour code
+    /// (<c>plugin.gml</c>, the window's Draw), so without it the first letter is lost.
+    /// </summary>
+    private const string V6Orange = "O";
+
+    // LINE flags.
+    private const byte FlagTeam = 1;
+    private const byte FlagDead = 2;
+    private const byte FlagSpectator = 4;
+    private const byte FlagAction = 8;
+
+    // WELCOME serverFlags.
+    private const byte ServerFlagGravetalk = 1;
+    private const byte ServerFlagVotes = 2;
+    private const byte ServerFlagUniqueNames = 4;
+
+    /// <summary>NOTICE categories, PROTOCOL.md; the client filters on these.</summary>
+    private enum Notice : byte
     {
-        /// <summary>Whether this player has announced the plugin and is not muted.</summary>
-        public bool HasChat;
-
-        /// <summary>
-        /// The name last announced. <c>""</c> until the first tick, which is what
-        /// stops a join being announced as a rename.
-        /// </summary>
-        public string NameBackup = string.Empty;
-
-        /// <summary>
-        /// <c>current_time</c> of the last vote this player called. Zero means
-        /// never — see <see cref="VoteCallCooldownMilliseconds"/> for why that is
-        /// not the same as "may call one now".
-        /// </summary>
-        public long LastVoteCall;
-
-        /// <summary>A vote is open and this player has not answered it yet.</summary>
-        public bool CanVote;
-
-        /// <summary>
-        /// <c>mayVote</c>: false takes a player out of the current vote
-        /// entirely — no dialog, no answer accepted, and not counted in the
-        /// quorum. Reset for everybody when the vote ends
-        /// (<c>plugin.gml:239-242</c>).
-        /// </summary>
-        public bool MayVote = true;
+        Server = 0,
+        Join = 1,
+        Leave = 2,
+        Rename = 3,
+        TeamChange = 4,
+        Reply = 5,
+        Vote = 6,
     }
 
-    /// <summary>Client-to-server packet kinds. The first byte of the body.</summary>
-    private const byte KindHello = 0;
-    private const byte KindGlobalChat = 1;
-    private const byte KindTeamChat = 2;
-    private const byte KindVote = 3;
+    /// <summary>What a player greeted with, and so how everything sent to them is encoded.</summary>
+    private enum Format : byte
+    {
+        /// <summary>No hello yet: sent nothing.</summary>
+        None,
+        V6,
+        Chat2026,
+    }
 
-    /// <summary>
-    /// Server-to-client first bytes that are codes rather than roster indices.
-    /// </summary>
-    /// <remarks>
-    /// The boundary is 200: <c>plugin.gml:530</c> reads an audience byte only
-    /// below it. 202 and 205-253 are unused and reach the client as ordinary
-    /// pre-coloured lines.
-    /// </remarks>
-    private const byte SenderPoll = 200;
-    private const byte SenderVoteResult = 201;
-    private const byte SenderVoteTally = 203;
-    private const byte SenderPollResync = 204;
+    /// <summary>chat2026's SAY cap. A v6 line may be a whole 255-byte string.</summary>
+    private const int MaxSayLength = 127;
+    private const int MaxStringLength = 255;
 
-    /// <summary>
-    /// A server announcement about players — joins, leaves, renames.
-    /// </summary>
-    /// <remarks>
-    /// ⚠️ <b>A client can switch these off</b> ("Display player info",
-    /// <c>chat_api.gml:50-52</c>), so anything a player must see — a command
-    /// reply, a vote result — goes out as <see cref="SenderNotice"/> instead.
-    /// </remarks>
-    private const byte SenderPlayerInfo = 254;
+    /// <summary>The token bucket: a burst of three, then one message per two seconds.</summary>
+    private const int RateBurst = 3;
+    private const int RateSeconds = 2;
 
-    /// <summary>A server line no client setting suppresses.</summary>
-    private const byte SenderNotice = 255;
+    /// <summary>Refusals inside the window that turn into a timed mute.</summary>
+    private const int RefusalLimit = 10;
+    private const long RefusalWindowMilliseconds = 30000;
+    private const long SpamMuteMilliseconds = 60000;
 
-    /// <summary>
-    /// The audience a message is for: 0 is everyone, otherwise <c>team + 1</c>.
-    /// </summary>
-    /// <remarks>
-    /// Off by one on purpose. The client sends a packet <em>kind</em> of 1 for
-    /// global and 2 for team (<c>chat_api.gml:33</c> writes a boolean plus one);
-    /// the host re-derives 0-for-global / <c>1 + team</c> from that kind
-    /// (<c>plugin.gml:495</c>) and routes on <c>team == audience - 1</c>
-    /// (<c>chat_api.gml:22</c>). The two numbers are not the same quantity even
-    /// though the GML calls both <c>_team</c>.
-    /// </remarks>
-    private const int AudienceEveryone = 0;
+    /// <summary>Per-player state; the GML keeps these on the <c>Player</c> instance.</summary>
+    private sealed class Chatter
+    {
+        public Format Format;
 
-    /// <summary>Colour codes the client half understands (<c>plugin.gml:595-618</c>).</summary>
-    private const string ColourOrange = "O";
+        /// <summary>Greeted in either format, so may be sent anything in that format.</summary>
+        public bool Hello => Format != Format.None;
 
-    /// <summary>The longest chunk the length prefix can carry.</summary>
-    /// <remarks>
-    /// Not the longest message: <c>chat_api.gml:7-28</c> loops, sending a
-    /// message longer than this as several packets that the client's window
-    /// shows as several lines.
-    /// </remarks>
-    private const int MaxChunkLength = 255;
+        /// <summary>The chat2026 protocol version the player greeted with.</summary>
+        public int Version;
 
-    /// <summary>
-    /// <c>voteTimeout</c>: how long after calling a vote a player may call
-    /// another (<c>plugin.gml:224</c>).
-    /// </summary>
-    /// <remarks>
-    /// ⚠️ <b>It also gates the first minute of the server's life</b>, because
-    /// <c>lastVoteCall</c> starts at 0 and the test is
-    /// <c>current_time - voteTimeout &gt; lastVoteCall</c> against a clock that
-    /// starts at 0 too (<c>chat_api.gml:175</c>). Nobody can call a vote until
-    /// the process has been up for a minute. Transcribed: it is what a player on
-    /// a reference server sees, and the refusal message says how long is left.
-    /// </remarks>
-    private const long VoteCallCooldownMilliseconds = 60000;
+        /// <summary><c>chatSeen</c>: announced, and name- and team-tracked from now on.</summary>
+        public bool Seen;
+
+        public string NameBackup = string.Empty;
+
+        public Team TeamBackup = Team.Any;
+
+        public int Tokens = RateBurst;
+
+        public long TokenTime;
+
+        public int Refusals;
+
+        public long RefusalWindow;
+
+        public long MutedUntil;
+
+        /// <summary>The vote this player may answer, or -1.</summary>
+        public int VoteId = -1;
+
+        /// <summary>The option answered in <see cref="VoteId"/>, 0 for not yet.</summary>
+        public int VoteChoice;
+
+        /// <summary>Starts a minute in the past, so nobody waits at server start (GML fix A5).</summary>
+        public long LastVoteCall = -60000;
+
+        public bool Admin;
+
+        /// <summary>A v6 player has the running vote's dialog open.</summary>
+        public bool V6Dialog;
+
+        /// <summary>
+        /// What a v6 player's dialog has counted, per option. v6 can only add one
+        /// vote at a time (203), so a count that falls is never shown to it.
+        /// </summary>
+        public readonly int[] V6Counted = new int[9];
+    }
+
+    private readonly ChatWire _wire = wire;
+
+    private ChatSettings _settings = settings ?? new ChatSettings();
 
     private readonly PluginPlayerTable<Chatter> _chatters = new(() => new Chatter());
 
-    /// <summary>
-    /// <c>chatBanlist</c>: the addresses of players voted out of chat.
-    /// </summary>
-    /// <remarks>
-    /// Keyed on the remote address, not the roster slot, so a mute survives a
-    /// reconnect — which is the point — and catches everyone behind the same NAT,
-    /// which is not. Transcribed rather than improved: a client sees a mute the
-    /// reference would have given it.
-    /// </remarks>
-    private readonly List<string> _banlist = [];
+    /// <summary><c>global.chatMutes</c>: remote address to mute expiry.</summary>
+    private readonly Dictionary<string, long> _mutes = new(StringComparer.Ordinal);
 
-    /// <summary>
-    /// A scratch buffer for the one packet being built. Never re-entered.
-    /// </summary>
-    /// <remarks>
-    /// Sized for the largest packet the plugin can produce: a 204 resync with a
-    /// 255-byte question, nine 255-byte options, the clock and nine tallies.
-    /// </remarks>
+    /// <summary><c>global.chatKickBans</c>: remote address to kick-ban expiry.</summary>
+    private readonly Dictionary<string, long> _kickBans = new(StringComparer.Ordinal);
+
+    /// <summary>The chat2026 frame being built, envelope included on the bridged wire.</summary>
     private readonly NetWriter _out = new(4096);
 
-    public override string Name => "chat";
+    /// <summary>The v6 frame being built. Separate, so one send can carry both.</summary>
+    private readonly NetWriter _v6 = new(4096);
 
-    public override void PlayerAdded(int slot) => _chatters.Add(slot);
+    private string _currentMap = string.Empty;
 
-    /// <summary>
-    /// <c>Player</c>'s Destroy event (<c>plugin.gml:186-195</c>): tell the chat
-    /// somebody left.
-    /// </summary>
-    /// <remarks>
-    /// Runs <b>before</b> the roster removal, so <see cref="IPluginHost"/> still
-    /// answers for the departing player and the announcement carries their name.
-    /// They are still in the roster and still in chat, so the line goes to them
-    /// as well — the reference's <c>with(Player)</c> includes the instance whose
-    /// Destroy event is running, and their socket is closing anyway.
-    /// </remarks>
-    public override void PlayerRemoving(int slot)
+    public override string Name => _wire == ChatWire.Bridged ? "chat" : "chat2026";
+
+    /// <summary>Settings passed to the constructor win; otherwise the server's.</summary>
+    public override void Attach(PluginChannel channel)
     {
-        if (_chatters.Has(slot) && _chatters[slot].HasChat)
-            Announce($"{ColourOrange}{Sanitise(Host.NameOf(slot))} has left the game.");
+        base.Attach(channel);
+        _settings = settings ?? channel.Host.ChatSettings;
+    }
 
-        _chatters.RemoveAt(slot);
+    /// <summary>Players dropped on arrival by a kick-ban, for tests and the log.</summary>
+    public int KickBanDrops { get; private set; }
+
+    private long Now => Host.CurrentTimeMilliseconds;
+
+    public override void PlayerAdded(int slot)
+    {
+        _chatters.Add(slot);
+        _chatters[slot].TokenTime = Now;
     }
 
     /// <summary>
-    /// <c>Player</c>'s Begin Step, host branch (<c>plugin.gml:148-182</c>):
-    /// notice a rename, replace an empty name, and tell the chat about it. Then
-    /// the vote clock.
+    /// <c>Player</c>'s Destroy event: "X has left the game.", to everyone else.
     /// </summary>
-    /// <remarks>
-    /// <b>The empty-name branch is the one thing here a client without the
-    /// plugin still sees</b>, because it goes out as an ordinary
-    /// <c>PLAYER_CHANGENAME</c>. <b>There is no name de-duplication in this
-    /// plugin</b> — that is <see cref="ChatV2Plugin"/>'s, and looking for it here
-    /// is how a reader convinces themselves this port dropped something.
-    /// <para>
-    /// A rename by a player who never sent hello leaves <c>nameBkp</c> stale for
-    /// ever, so this branch is re-evaluated for them every tick from then on.
-    /// Harmless, and transcribed rather than fixed, because the fix would change
-    /// what a stock client sees.
-    /// </para>
-    /// <para>
-    /// Placed after the tick's client commands rather than before, so a
-    /// <c>PLAYER_CHANGENAME</c> that arrived this tick is announced in the same
-    /// tick. GM8 gave the reference no such choice and nothing observable turns
-    /// on it.
-    /// </para>
-    /// </remarks>
-    public override void Tick()
+    public override void PlayerRemoving(int slot)
     {
-        TickVote();
-
-        // Ascending, and re-reading PlayerCount each time: Rename below changes
-        // a name but never the roster's shape, so the bound is stable.
-        for (var slot = 0; slot < Host.PlayerCount && _chatters.Has(slot); slot++)
+        if (_chatters.Has(slot))
         {
             var chatter = _chatters[slot];
-            var name = Host.NameOf(slot);
-
-            if (name == chatter.NameBackup && name.Length != 0)
-                continue;
-
-            if (name.Length == 0)
+            if (chatter.Seen && slot != 0)
             {
-                name = "Nameless";
-                Host.Rename(slot, name);
+                chatter.Format = Format.None;
+                SendNotice(Notice.Leave, Host.NameOf(slot) + " has left the game.");
             }
 
-            // First sight of this player: adopt the name silently. The reference
-            // exits here, which is why a join never announces a rename.
-            if (chatter.NameBackup.Length == 0)
-            {
-                chatter.NameBackup = name;
-                continue;
-            }
-
-            if (!chatter.HasChat)
-                continue;
-
-            Announce(
-                $"{ColourOrange}{Sanitise(chatter.NameBackup)} has changed their name to "
-                + $"{Sanitise(name)}.");
-
-            chatter.NameBackup = name;
+            _chatters.RemoveAt(slot);
         }
     }
 
+    public override void MapChanged(string map)
+    {
+        _currentMap = map;
+        _mapVoteUsed = false;
+    }
+
     /// <summary>
-    /// <c>event_user 0</c> (<c>plugin.gml:436-522</c>): a packet from a client,
-    /// dispatched on its kind byte.
+    /// <c>Player</c>'s Begin Step for every player (<c>host/player_begin_step.gml</c>),
+    /// then the vote clock (<c>host/vote_clock.gml</c>), in the GML's order.
     /// </summary>
-    /// <remarks>
-    /// The reference reads past the end of a short buffer and GM8 hands it
-    /// zeroes; this clamps instead. Both refuse the packet in the end, but a
-    /// truncated read here would be an exception on the tick thread rather than
-    /// a message nobody sees.
-    /// </remarks>
+    public override void Tick()
+    {
+        for (var slot = 0; slot < Host.PlayerCount && _chatters.Has(slot); slot++)
+            TrackPlayer(slot);
+
+        TickVote();
+    }
+
+    private void TrackPlayer(int slot)
+    {
+        var chatter = _chatters[slot];
+
+        // The one thing a client without the plugin sees.
+        if (Host.NameOf(slot).Length == 0)
+            Host.Rename(slot, "Nameless");
+
+        // Only for the player who just arrived or just renamed: whoever had the
+        // name first keeps it. (The first GML build suffixed both, found live.)
+        if (_settings.UniqueNames && (!chatter.Seen || Host.NameOf(slot) != chatter.NameBackup))
+            MakeUnique(slot);
+
+        var name = Host.NameOf(slot);
+        var team = Host.TeamOf(slot);
+
+        if (!chatter.Seen)
+        {
+            chatter.Seen = true;
+            chatter.NameBackup = name;
+            chatter.TeamBackup = team;
+
+            if (ExpiryOf(_kickBans, Host.RemoteAddressOf(slot)) > Now)
+            {
+                KickBanDrops++;
+                Host.Kick(slot, "You were vote-kicked from this server; try again later.");
+                return;
+            }
+
+            if (slot != 0)
+                SendNotice(Notice.Join, name + " has joined the game.");
+
+            return;
+        }
+
+        if (name != chatter.NameBackup)
+        {
+            SendNotice(Notice.Rename, chatter.NameBackup + " changed name to " + name + ".");
+            chatter.NameBackup = name;
+        }
+
+        if (team != chatter.TeamBackup)
+        {
+            chatter.TeamBackup = team;
+            var teamName = team switch
+            {
+                Team.Red => "team RED",
+                Team.Blue => "team BLU",
+                _ => "the spectators",
+            };
+            SendNotice(Notice.TeamChange, name + " joined " + teamName + ".");
+        }
+    }
+
+    /// <summary><c>host/fn_make_unique.gml</c>: append the lowest number that makes the name unique.</summary>
+    private void MakeUnique(int slot)
+    {
+        var name = Host.NameOf(slot);
+        if (!NameTaken(slot, name))
+            return;
+
+        for (var n = 2; ; n++)
+        {
+            var suffix = n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var candidate = name[..Math.Min(name.Length, GameConstants.MaxPlayerNameLength - suffix.Length)] + suffix;
+            if (!NameTaken(slot, candidate))
+            {
+                Host.Rename(slot, candidate);
+                return;
+            }
+        }
+    }
+
+    private bool NameTaken(int slot, string name)
+    {
+        for (var other = 0; other < Host.PlayerCount; other++)
+            if (other != slot && string.Equals(Host.NameOf(other), name, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+        return false;
+    }
+
+    // --- receiving ----------------------------------------------------------
+
+    /// <summary>
+    /// One client-to-host packet. On the bridged wire a leading
+    /// <see cref="Envelope"/> means chat2026 and anything else is v6. A short
+    /// packet is dropped, never read past, and an unknown kind is ignored.
+    /// </summary>
     public override void Receive(int slot, ReadOnlySpan<byte> data)
     {
-        if (data.Length == 0)
+        if (!_chatters.Has(slot) || data.Length < 1)
+            return;
+
+        if (_wire == ChatWire.Plain)
+            ReceiveChat2026(slot, data);
+        else if (data[0] == Envelope)
+            ReceiveChat2026(slot, data[1..]);
+        else
+            ReceiveV6(slot, data);
+    }
+
+    /// <summary><c>host/receive.gml</c>: one chat2026 message, without its envelope.</summary>
+    private void ReceiveChat2026(int slot, ReadOnlySpan<byte> data)
+    {
+        if (data.Length < 1)
             return;
 
         var chatter = _chatters[slot];
@@ -303,240 +444,461 @@ public sealed partial class ChatPlugin : ServerPlugin, IServerChat
         switch (data[0])
         {
             case KindHello:
-                // The mute check is here and nowhere else: a muted player who
-                // reconnects re-sends hello and is refused, silently, which is
-                // what makes the address-keyed ban list work at all.
-                if (_banlist.Contains(Host.RemoteAddressOf(slot)) || chatter.HasChat)
-                    break;
+                if (data.Length < 3 || chatter.Format == Format.Chat2026)
+                    return;
 
-                chatter.HasChat = true;
-                chatter.NameBackup = Host.NameOf(slot);
+                chatter.Version = data[1];
+                Greet(slot, Format.Chat2026);
+                return;
 
-                Announce($"{ColourOrange}{Sanitise(chatter.NameBackup)} has joined chat!");
-
-                // plugin.gml:455-482: a client that arrives mid-vote is given
-                // the question, the clock and the tallies so far.
-                SendPollResync(slot);
-
-                // This port's own, and HERE rather than in PlayerAdded: before
-                // the hello there is no chat window on the other end to draw it
-                // into. Reply, not Announce — a 254 is suppressible by the
-                // client, and this is the line that tells a player which commands
-                // the server has.
-                //
-                // ⛔ THE COLOUR CODE IS NOT DECORATION. plugin.gml's draw loop
-                // ends `msg = string_copy(msg, 2, 255)`, so character 1 of every
-                // line is consumed as a colour code whether or not one is there —
-                // without this the operator's first letter is eaten and never
-                // drawn. Measured against a stock client: "Welcome!" rendered as
-                // "elcome!". Orange, like every other line this server composes.
-                //
-                // ⚠️ The message itself is NOT Sanitise'd. That escapes `#`, and
-                // `#` is GM8's own line break: an operator writing "Bots in the
-                // way?#Type /bots off" means two lines and gets them. Only the
-                // characters GM8 does not draw at all are replaced. ⛔ It is
-                // composed by the operator, not by a player — a player's own text
-                // never passes through here.
-                if (Host.ChatJoinMessage.Length != 0)
-                {
-                    Reply(slot, ColourOrange
-                        + Host.ChatJoinMessage.Replace('\n', ' ').Replace('\r', ' '));
-                }
-
-                break;
-
-            case KindGlobalChat:
-                if (chatter.HasChat)
-                    ExecuteChat(slot, ReadMessage(data), AudienceEveryone);
-
-                break;
-
-            case KindTeamChat:
+            case KindSay:
             {
-                var team = Host.TeamOf(slot);
-                if (team == Team.Spectator || !chatter.HasChat)
-                    break;
+                if (data.Length < 3)
+                    return;
 
-                // ⚠️ Team chat does NOT go through executeChat
-                // (plugin.gml:493-505), so a slash command typed into team chat
-                // is relayed as text rather than run. Transcribed: a player who
-                // sees "/votekick bob" appear as a team message has learnt
-                // something true about the server they are on.
-                var teamMessage = ReadMessage(data);
-                SendChatMessage(teamMessage, slot, 1 + (int)team);
-                Host.ChatHeard(slot, teamMessage, teamOnly: true);
-                break;
+                var audience = data[1];
+                int length = data[2];
+                if (data.Length - 3 < length)
+                    return;
+
+                if (chatter.Format != Format.Chat2026 || chatter.Version != ProtocolVersion)
+                    return;
+
+                var text = Cap(StripControl(GG2Text.Decode(data.Slice(3, length)), " "), MaxSayLength);
+                if (IsBlank(text))
+                    return;
+
+                Say(slot, audience == 1 ? 1 : 0, text, action: false);
+                return;
             }
 
             case KindVote:
-            {
-                if (data.Length < 2 || !chatter.CanVote || !chatter.MayVote)
-                    break;
+                if (data.Length < 3 || chatter.Format != Format.Chat2026)
+                    return;
 
-                chatter.CanVote = false;
-
-                // The reference's guard is `vote <= 9`, which lets a 0 through
-                // and indexes optionVotes[-1]. Bounded here instead: a client
-                // is not a trusted source and an out-of-range answer must not
-                // be an exception on the tick thread. See docs/HARDENING.md.
-                HandleVote(slot, data[1]);
-                break;
-            }
-
-            // Any other kind byte is ignored, as the reference's switch is.
+                ReceiveVote(slot, data[1], data[2]);
+                return;
         }
     }
 
-    /// <summary>The <c>ubyte</c> length and its bytes, clamped to what arrived.</summary>
-    private static string ReadMessage(ReadOnlySpan<byte> data)
+    /// <summary>
+    /// <c>plugin.gml:436-522</c>, v6's host receive: hello, global chat, team chat,
+    /// a vote answer. What happens next is the core's, not v6's.
+    /// </summary>
+    private void ReceiveV6(int slot, ReadOnlySpan<byte> data)
     {
-        if (data.Length < 2)
-            return string.Empty;
+        var chatter = _chatters[slot];
 
-        var length = Math.Min(data[1], data.Length - 2);
-        return GG2Text.Decode(data.Slice(2, length));
+        switch (data[0])
+        {
+            case V6Hello:
+                if (chatter.Format != Format.V6)
+                    Greet(slot, Format.V6);
+
+                return;
+
+            case V6GlobalChat:
+            case V6TeamChat:
+            {
+                if (chatter.Format != Format.V6 || data.Length < 2)
+                    return;
+
+                var text = GG2Text.Decode(data.Slice(2, Math.Min(data[1], data.Length - 2)));
+
+                // v6's client sends /me as chr(13) + the action (commands.gml:65-76).
+                var action = text.Length > 0 && text[0] == '\r';
+                if (action)
+                    text = text[1..];
+
+                text = Cap(StripControl(text, " "), MaxStringLength);
+                if (IsBlank(text))
+                    return;
+
+                Say(slot, data[0] == V6TeamChat ? 1 : 0, text, action);
+                return;
+            }
+
+            case V6Vote:
+                // v6 carries no vote id, so an answer is for whatever vote is running.
+                if (chatter.Format != Format.V6 || data.Length < 2)
+                    return;
+
+                ReceiveVote(slot, _voteId, data[1]);
+                return;
+        }
     }
 
-    // --- sending -------------------------------------------------------------
+    /// <summary>
+    /// A hello in a format this player is not already in: switch to it, carry an
+    /// address mute over, send the format's greeting, and offer the running vote.
+    /// </summary>
+    private void Greet(int slot, Format format)
+    {
+        var chatter = _chatters[slot];
+        chatter.Format = format;
+        chatter.V6Dialog = false;
+
+        // A mute follows the address across a reconnect until it runs out.
+        var expiry = ExpiryOf(_mutes, Host.RemoteAddressOf(slot));
+        if (expiry > chatter.MutedUntil)
+            chatter.MutedUntil = expiry;
+
+        if (format == Format.Chat2026)
+            SendWelcome(slot);
+        else if (Host.ChatJoinMessage.Length != 0)
+            SendV6(slot, V6Notice, 0, V6Orange + Host.ChatJoinMessage.Replace('\n', ' ').Replace('\r', ' '));
+
+        // Greeting mid-vote: VOTE_START (or v6's 204) doubles as the resync.
+        if (_voteActive && ShownTo(slot))
+            OfferVote(slot);
+    }
+
+    /// <summary><c>host/say.gml</c>: route one line, whichever format it came in.</summary>
+    private void Say(int slot, int audience, string text, bool action)
+    {
+        var chatter = _chatters[slot];
+
+        // /me is a chat line, not a command: muted and rate limited like one.
+        if (!action && text.Length >= 4 && text[..4].Equals("/me ", StringComparison.OrdinalIgnoreCase))
+        {
+            action = true;
+            text = text[4..].TrimStart(' ');
+            if (text.Length == 0)
+                return;
+        }
+
+        // Commands run whatever the audience, cost no token, and are never relayed.
+        if (!action && text[0] == '/')
+        {
+            RunCommand(slot, text);
+            return;
+        }
+
+        // Checked after dispatch, so a mute never silences a command's reply.
+        if (chatter.MutedUntil > Now)
+        {
+            Reply(slot, "You are muted for another " + CeilSeconds(chatter.MutedUntil - Now) + " seconds.");
+            return;
+        }
+
+        if (!TakeToken(slot))
+            return;
+
+        var spectating = Host.TeamOf(slot) == Team.Spectator;
+        var dead = !spectating && !Host.IsAlive(slot);
+
+        var flags = (byte)audience;
+        if (dead)
+            flags |= FlagDead;
+        if (spectating)
+            flags |= FlagSpectator;
+        if (action)
+            flags |= FlagAction;
+
+        SendLine(slot, flags, text);
+    }
 
     /// <summary>
-    /// <c>global.sendChatMessage</c> (<c>chat_api.gml:2-29</c>): one line to
-    /// everybody entitled to see it, or to one player.
+    /// The token bucket (DESIGN.md 6.7). False, with the refusal already sent,
+    /// when the player must wait.
     /// </summary>
-    /// <param name="message">
-    /// For a player's line this is the <b>raw</b> text they typed: the client
-    /// adds the name and the colour. For a server line it is already coloured.
-    /// </param>
-    /// <param name="sender">A roster index, or one of the codes above.</param>
-    /// <param name="audience">
-    /// <see cref="AudienceEveryone"/>, or <c>team + 1</c> for one team. Only
-    /// written to the wire when <paramref name="sender"/> is a roster index.
-    /// </param>
-    /// <param name="target">One slot, or -1 for everybody in chat.</param>
-    /// <remarks>
-    /// Player by player rather than as a broadcast, because a team message must
-    /// not reach the other team's clients — a client cannot be trusted to hide
-    /// what it has been sent. Global chat goes the same way rather than through
-    /// <c>PluginPacketSend</c>, so a player who never sent hello never receives.
-    /// <para>
-    /// <b>A message longer than 255 bytes becomes several packets</b>, not a
-    /// truncation: the reference's loop re-sends the remainder until it is
-    /// empty. An empty message sends nothing at all, which is the same loop.
-    /// </para>
-    /// </remarks>
-    private void SendChatMessage(string message, int sender, int audience, int target = -1)
+    private bool TakeToken(int slot)
     {
-        var remaining = message;
+        var chatter = _chatters[slot];
+        var refillMilliseconds = RateSeconds * 1000L;
 
+        if (chatter.Tokens >= RateBurst)
+        {
+            chatter.TokenTime = Now;
+        }
+        else
+        {
+            var add = (Now - chatter.TokenTime) / refillMilliseconds;
+            if (add > 0)
+            {
+                chatter.Tokens = (int)Math.Min(RateBurst, chatter.Tokens + add);
+                chatter.TokenTime += add * refillMilliseconds;
+            }
+        }
+
+        if (chatter.Tokens >= 1)
+        {
+            chatter.Tokens--;
+            return true;
+        }
+
+        if (Now - chatter.RefusalWindow > RefusalWindowMilliseconds)
+        {
+            chatter.RefusalWindow = Now;
+            chatter.Refusals = 0;
+        }
+
+        chatter.Refusals++;
+        if (chatter.Refusals >= RefusalLimit)
+        {
+            chatter.Refusals = 0;
+            chatter.MutedUntil = Now + SpamMuteMilliseconds;
+            SendNotice(Notice.Server, Host.NameOf(slot) + " has been muted for 1 minute for spamming.");
+        }
+        else
+        {
+            var wait = Math.Max(1, CeilSeconds(refillMilliseconds - (Now - chatter.TokenTime)));
+            Reply(slot, wait == 1
+                ? "Please wait 1 second before chatting again."
+                : "Please wait " + wait + " seconds before chatting again.");
+        }
+
+        return false;
+    }
+
+    // --- sending ------------------------------------------------------------
+
+    /// <summary>Starts a chat2026 frame in <see cref="_out"/>, behind the envelope on the bridged wire.</summary>
+    private void Begin(byte kind)
+    {
+        _out.Reset();
+        if (_wire == ChatWire.Bridged)
+            _out.WriteUByte(Envelope);
+
+        _out.WriteUByte(kind);
+    }
+
+    /// <summary>
+    /// <c>global.sendChatMessage</c> (<c>chat_api.gml:2-29</c>) for one v6 player:
+    /// a text longer than 255 bytes goes as several packets, and an empty one as
+    /// none. <paramref name="code"/> below 200 is the speaker's roster index and
+    /// carries <paramref name="audience"/>.
+    /// </summary>
+    private void SendV6(int slot, int code, int audience, string text)
+    {
+        var remaining = text;
         while (remaining.Length != 0)
         {
-            var chunk = remaining.Length > MaxChunkLength ? remaining[..MaxChunkLength] : remaining;
-            remaining = remaining.Length > MaxChunkLength ? remaining[MaxChunkLength..] : string.Empty;
+            var chunk = remaining.Length > MaxStringLength ? remaining[..MaxStringLength] : remaining;
+            remaining = remaining.Length > MaxStringLength ? remaining[MaxStringLength..] : string.Empty;
 
-            _out.Reset();
-            _out.WriteUByte((byte)sender);
+            _v6.Reset();
+            _v6.WriteUByte((byte)code);
+            if (code < V6Poll)
+                _v6.WriteUByte((byte)audience);
 
-            if (sender < SenderPoll)
-                _out.WriteUByte((byte)audience);
-
-            _out.WriteString1(chunk);
-
-            var payload = _out.WrittenSpan;
-
-            if (target >= 0)
-            {
-                if (MayReceive(target, audience))
-                    Channel.SendTo(target, payload);
-
-                continue;
-            }
-
-            for (var slot = 0; slot < Host.PlayerCount && _chatters.Has(slot); slot++)
-                if (MayReceive(slot, audience))
-                    Channel.SendTo(slot, payload);
+            _v6.WriteString1(chunk);
+            Channel.SendTo(slot, _v6.WrittenSpan);
         }
     }
 
-    /// <summary>
-    /// <c>chat_api.gml:21-22</c>: in chat, and on the right team if this is a
-    /// team message.
-    /// </summary>
-    private bool MayReceive(int slot, int audience) =>
-        _chatters.Has(slot)
-        && _chatters[slot].HasChat
-        && (audience == AudienceEveryone || (int)Host.TeamOf(slot) == audience - 1);
-
-    /// <summary>
-    /// A pre-coloured line about players, to everybody in chat. Suppressible by
-    /// the client — see <see cref="SenderPlayerInfo"/>.
-    /// </summary>
-    private void Announce(string message)
+    /// <summary><c>host/fn_send_welcome.gml</c>.</summary>
+    private void SendWelcome(int slot)
     {
-        SendChatMessage(message, SenderPlayerInfo, AudienceEveryone);
-        Host.Log($"[chat] {LogText.Safe(message)}");
-    }
+        byte flags = 0;
+        if (_settings.Gravetalk)
+            flags |= ServerFlagGravetalk;
+        if (_settings.VotesEnabled)
+            flags |= ServerFlagVotes;
+        if (_settings.UniqueNames)
+            flags |= ServerFlagUniqueNames;
 
-    /// <summary>A line to everybody in chat that no client setting hides.</summary>
-    private void Notice(string message)
-    {
-        SendChatMessage(message, SenderNotice, AudienceEveryone);
-        Host.Log($"[chat] {LogText.Safe(message)}");
-    }
-
-    /// <summary>One line to one player, for a command's reply.</summary>
-    private void Reply(int slot, string message) =>
-        SendChatMessage(message, SenderNotice, AudienceEveryone, slot);
-
-    /// <summary>
-    /// A player's own line: the raw text, their roster index, and the audience.
-    /// </summary>
-    private void Relay(int slot, string message, int audience)
-    {
-        SendChatMessage(message, slot, audience);
-
-        // The reference adds the line to the host's own window here. A headless
-        // server has no window, so it goes where an operator will see it —
-        // reconstructing what the client will draw, since the wire carries only
-        // an index and the raw text.
-        var scope = audience == AudienceEveryone ? string.Empty : $"({Host.TeamOf(slot)}) ";
-        Host.Log($"[chat] {scope}{LogText.Safe(Host.NameOf(slot))}: {LogText.Safe(message)}");
-        Host.ChatHeard(slot, message, audience != AudienceEveryone);
+        Begin(KindWelcome);
+        _out.WriteUByte(ProtocolVersion);
+        _out.WriteUByte(flags);
+        _out.WriteUByte(RateBurst);
+        _out.WriteUByte(RateSeconds);
+        _out.WriteString1(Cap(StripControl(Host.ChatJoinMessage, " "), MaxStringLength));
+        Channel.SendTo(slot, _out.WrittenSpan);
     }
 
     /// <summary>
-    /// A line from the server's own slot 0, sent exactly as a player's is: the
-    /// raw text and index 0, so the client names and colours it from its own
-    /// roster entry for slot 0 — the reserved spectator.
+    /// <c>host/fn_send_line.gml</c>: a player's line to everyone who should see it.
+    /// Team chat reaches the sender's team (spectators reach spectators). Public
+    /// chat reaches everyone, except that with gravetalk off a dead or spectating
+    /// sender reaches only dead and spectating players.
+    /// </summary>
+    private void SendLine(int sender, byte flags, string text)
+    {
+        text = Cap(StripControl(text, " "), MaxStringLength);
+        var name = Cap(StripControl(Host.NameOf(sender), " "), MaxStringLength);
+        var senderTeam = Host.TeamOf(sender);
+        var teamOnly = (flags & FlagTeam) != 0;
+        var graveOnly = !teamOnly && !_settings.Gravetalk && (flags & (FlagDead | FlagSpectator)) != 0;
+
+        Begin(KindLine);
+        _out.WriteUByte((byte)(sender > 254 ? 255 : sender));
+        _out.WriteUByte(flags);
+        _out.WriteUByte((byte)senderTeam);
+        _out.WriteString1(name);
+        _out.WriteString1(text);
+
+        // v6 names and colours the line itself from the roster index, so it gets
+        // the raw text. The action form is chr(13), a colour code, then the text.
+        var v6Text = (flags & FlagAction) != 0 ? "\rW" + text : text;
+        var v6Audience = teamOnly ? 1 + (int)senderTeam : 0;
+
+        for (var slot = 0; slot < Host.PlayerCount && _chatters.Has(slot); slot++)
+        {
+            var format = _chatters[slot].Format;
+            if (format == Format.None)
+                continue;
+
+            if (teamOnly && Host.TeamOf(slot) != senderTeam)
+                continue;
+
+            if (graveOnly && Host.TeamOf(slot) != Team.Spectator && Host.IsAlive(slot))
+                continue;
+
+            // A roster index of 200 or more would read as a v6 code. No roster
+            // is that large; drop rather than mislabel.
+            if (format == Format.Chat2026)
+                Channel.SendTo(slot, _out.WrittenSpan);
+            else if (sender < V6Poll)
+                SendV6(slot, sender, v6Audience, v6Text);
+        }
+
+        Host.Log($"[chat] {(teamOnly ? "(TEAM) " : string.Empty)}{LogText.Safe(name)}: {LogText.Safe(text)}");
+        Host.ChatHeard(sender, text, teamOnly);
+    }
+
+    /// <summary>
+    /// The admin panel's chat box: a line from slot 0, through the same path as
+    /// a player's, so each client names and colours it from its own roster entry.
     /// </summary>
     /// <remarks>
-    /// The reference's host did this from its chat window, as <c>global.myself</c>.
-    /// Not through <see cref="ExecuteChat"/>: a leading <c>/</c> from the
-    /// operator is text, not a vote the server's own player could start.
+    /// Not through the command console, and not rate limited: a leading <c>/</c>
+    /// from the operator is text.
     /// </remarks>
     public void SayAsServer(string message)
     {
-        if (message.Length != 0)
-            Relay(0, message, AudienceEveryone);
+        message = Cap(StripControl(message, " "), MaxStringLength);
+        if (!IsBlank(message))
+            SendLine(0, 0, message);
+    }
+
+    /// <summary><c>host/fn_notice.gml</c>: a notice to every greeted player.</summary>
+    private void SendNotice(Notice category, string text)
+    {
+        text = Cap(StripControl(text, " "), MaxStringLength);
+        WriteNotice(category, text);
+
+        var v6Code = category is Notice.Join or Notice.Leave or Notice.Rename or Notice.TeamChange
+            ? V6PlayerInfo
+            : V6Notice;
+
+        for (var slot = 0; slot < Host.PlayerCount && _chatters.Has(slot); slot++)
+            SendNoticeTo(slot, v6Code, text);
+
+        Host.Log($"[chat] {LogText.Safe(text)}");
+    }
+
+    /// <summary><c>host/fn_notice_to.gml</c> with category 5: a private reply.</summary>
+    private void Reply(int slot, string text)
+    {
+        if (!_chatters.Has(slot) || !_chatters[slot].Hello)
+            return;
+
+        text = Cap(StripControl(text, " "), MaxStringLength);
+        WriteNotice(Notice.Reply, text);
+        SendNoticeTo(slot, V6Notice, text);
+    }
+
+    /// <summary>The notice in <see cref="_out"/> to one player, or its v6 form.</summary>
+    private void SendNoticeTo(int slot, byte v6Code, string text)
+    {
+        switch (_chatters[slot].Format)
+        {
+            case Format.Chat2026:
+                Channel.SendTo(slot, _out.WrittenSpan);
+                break;
+
+            case Format.V6:
+                SendV6(slot, v6Code, 0, V6Orange + Sanitise(text));
+                break;
+        }
+    }
+
+    private void WriteNotice(Notice category, string text)
+    {
+        Begin(KindNotice);
+        _out.WriteUByte((byte)category);
+        _out.WriteString1(text);
+    }
+
+    // --- helpers ------------------------------------------------------------
+
+    /// <summary>
+    /// <c>shared/fn_strip_control.gml</c>: every byte below 32 becomes
+    /// <paramref name="replacement"/>, so the client's segment separator
+    /// (<c>chr(1)</c>) cannot occur inside text.
+    /// </summary>
+    internal static string StripControl(string text, string replacement)
+    {
+        var needs = false;
+        foreach (var c in text)
+            if (c < ' ')
+            {
+                needs = true;
+                break;
+            }
+
+        if (!needs)
+            return text;
+
+        var builder = new StringBuilder(text.Length);
+        foreach (var c in text)
+        {
+            if (c < ' ')
+                builder.Append(replacement);
+            else
+                builder.Append(c);
+        }
+
+        return builder.ToString();
     }
 
     /// <summary>
-    /// <c>sanitiseNewlines</c>
-    /// (<c>Scripts/Misc/Strings/sanitiseNewlines.gml</c>), which the host applies
-    /// to every name it puts inside a line it builds.
+    /// <c>sanitiseNewlines</c>, for a server-composed v6 line: GM8 draws <c>#</c>
+    /// as a line break, so a player called <c>a#b</c> could otherwise split an
+    /// announcement and forge its second half. A player's own line is not passed
+    /// through this: the v6 client escapes it at draw time (<c>chat_api.gml:99</c>).
     /// </summary>
-    /// <remarks>
-    /// GM8 draws <c>#</c> as a line break and <c>\#</c> as a <c>#</c>, so a
-    /// player called <c>"a#b"</c> would otherwise split a server announcement
-    /// across two lines and could forge the second one. CR and LF become spaces.
-    /// <para>
-    /// ⛔ <b>Applied only to text the SERVER composes.</b> A player's own message
-    /// is relayed raw and sanitised by the client at draw time
-    /// (<c>chat_api.gml:99</c>); doing it here as well would double the
-    /// backslashes.
-    /// </para>
-    /// </remarks>
-    private static string Sanitise(string text) =>
-        text.Replace("#", "\\#", StringComparison.Ordinal)
-            .Replace('\n', ' ')
-            .Replace('\r', ' ');
+    private static string Sanitise(string text) => text.Replace("#", "\\#", StringComparison.Ordinal);
+
+    private static string Cap(string text, int length) => text.Length > length ? text[..length] : text;
+
+    private static bool IsBlank(string text)
+    {
+        foreach (var c in text)
+            if (c != ' ')
+                return false;
+
+        return true;
+    }
+
+    /// <summary>GML's <c>ceil(ms / 1000)</c>.</summary>
+    private static long CeilSeconds(long milliseconds) => (long)Math.Ceiling(milliseconds / 1000.0);
+
+    /// <summary><c>host/fn_ip_expiry.gml</c>: an address's expiry, 0 if none; expired entries are removed.</summary>
+    private long ExpiryOf(Dictionary<string, long> map, string address)
+    {
+        if (address.Length == 0 || !map.TryGetValue(address, out var expiry))
+            return 0;
+
+        if (expiry <= Now)
+        {
+            map.Remove(address);
+            return 0;
+        }
+
+        return expiry;
+    }
+
+    /// <summary><c>host/fn_ip_set.gml</c>; an expiry of 0 or less removes the entry.</summary>
+    private static void SetExpiry(Dictionary<string, long> map, string address, long expiry)
+    {
+        if (address.Length == 0)
+            return;
+
+        if (expiry > 0)
+            map[address] = expiry;
+        else
+            map.Remove(address);
+    }
 }

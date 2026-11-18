@@ -249,35 +249,175 @@ reference produces, even though it calls `socket_send` immediately.
 
 ---
 
-## The two chat plugins
+## The chat plugins
 
-Both are ported and both are advertised by name. **They are different plugins,
-not two versions of one**: separate zips, separate hashes, separate packet
-formats, and neither one's packets mean anything to the other's client half.
-Advertise one.
+Three names, two implementations. **Advertise one.**
 
-| | `chat` | `chat_v2_pr` |
-|---|---|---|
-| implementation | `ChatPlugin.cs` + `ChatCommands.cs` | `ChatV2Plugin.cs` + `ChatV2Commands.cs` |
-| zip | `chat@bad8081d64f0b808a2bb3a6d88978fb5.zip` | `chat_v2_pr@46d0937c9206dcf27e036100d1ea8685.zip` |
-| who colours a line | the client, from the sender's roster index | the server, before it sends |
-| votes | a real dialog, answered with a number key | chat lines, answered by typing |
-| anti-spam mute | none | a sixth message inside two seconds |
-| name de-duplication | none | first 18 bytes, case-insensitively |
-| `/me`, `/host` | client-side, and the server relays the result | absent |
+| | `chat` | `chat2026` | `chat_v2_pr` |
+|---|---|---|---|
+| implementation | the chat core (`ChatPlugin`, bridged wire) | the chat core (`ChatPlugin`, plain wire) | `ChatV2Plugin.cs` + `ChatV2Commands.cs` |
+| zip | `chat@bad8081d64f0b808a2bb3a6d88978fb5.zip`, on ganggarrison.com | `chat2026.zip` from gg2-chat2026, not published | `chat_v2_pr@46d0937c9206dcf27e036100d1ea8685.zip` |
+| a stock client speaks | Lorgan3's v6 | chat2026, if it has the debug zip | chat_v2 |
+| a chat2026 client speaks | chat2026 behind a `0x80` byte | chat2026 | — |
+| behaviour | chat2026's | chat2026's | the reference's, transcribed |
+| votes | a real dialog, answered with a number key | the same | chat lines, answered by typing |
 
-**`chat` is the one to reach for.** It is Lorgan3's chat plugin v6, the commonly
-deployed one, and the five vote commands below were written against *its* API —
-`global.sendVote`, `global.commandMap`, `Player.gid`. On `chat` they are a
-transcription; on `chat_v2_pr` they are a reconstruction with the dialog
-replaced by text.
+**`chat` is the one to reach for.** Every stock client can download it, and a
+chat2026 client (gg2-client's desktop build) gets the full chat2026 protocol
+inside it. `chat2026` is for a server whose players all have the debug zip.
 
 ---
 
-## `chat` — Lorgan3's chat plugin v6
+## The chat core: `chat` and `chat2026`
 
-`ChatPlugin`, from `plugin.gml`, `chat_api.gml`, `vote_api.gml` and
-`commands.gml` inside `chat@bad8081d64f0b808a2bb3a6d88978fb5.zip`.
+`ChatPlugin` (`ChatPlugin.cs`, `ChatPlugin.Commands.cs`, `ChatPlugin.Votes.cs`)
+is one room: one rate limit, one mute and kick-ban list, one command console
+and one vote engine. **Its behaviour is chat2026's** — transcribed from the
+`src/host/`, `src/commands/` and `src/votes/` GML of
+`github.com/kylelmoy/gg2-chat2026`, whose `PROTOCOL.md` (version 1) is the wire
+both halves cite and whose `DESIGN.md` is the why. Only the encoding is chosen
+per player, by the format that player greeted with. `Chat2026PluginTests` holds
+the core to the reply strings the GML half produced in a live run against a GM8
+host; `ChatBridgeTests` holds every v6 translation and the mixed room.
+
+### The wire
+
+On `chat` (`ChatWire.Bridged`) the plugin's packet id carries two formats:
+
+| First byte | Meaning |
+|---|---|
+| `0x80` (`ChatPlugin.Envelope`) | the rest is exactly one chat2026 message, in either direction |
+| anything else | Lorgan3's v6 (below) |
+
+On `chat2026` (`ChatWire.Plain`) every packet is a chat2026 message with no
+envelope, and v6 is not spoken.
+
+**The envelope cannot collide.** v6's client kinds are 0-3, and both v6's host
+(`plugin.gml` user event 0, a `switch` with no `default`) and the core ignore any
+other first byte, so a chat2026 client may send an enveloped HELLO to any `chat`
+server. Server to client, v6 reads a first byte below 200 as a roster index, so
+`0x80` would read as player 128: **an enveloped frame is only ever sent to a
+player who greeted with one.**
+
+**Nothing is sent to a player who has not greeted**, in either format. A GM8
+client without the plugin raises a fatal error on a plugin packet it has no
+queue for, and gg2-client on iOS joins a server that requires `chat` without
+ever saying hello. `ChatBridgeTests.APlayerWhoNeverGreetsIsSentNothingWhateverHappens`
+and `PluginWireTests.AV6AndAChat2026ClientShareOneRoomAndASilentClientHearsNothing`
+are the gates.
+
+**The most recent hello sets the format.** A repeat hello in the same format is
+ignored, as both protocols say. A hello in the other format switches the
+player: an enveloped HELLO is answered with WELCOME, a v6 hello with the MOTD,
+and either re-offers a running vote without clearing an answer already given.
+gg2-client sends an enveloped HELLO, waits two seconds for WELCOME and then
+falls back to v6, so a WELCOME that is merely late still leaves both ends on v6.
+
+### What a v6 player is sent
+
+| The core does | chat2026 player | v6 player |
+|---|---|---|
+| a player's line | LINE: index, flags (team, dead, spectating, action), team, name, text | roster index, audience (0, or `1 + team`), raw text. v6 has no field for dead or spectating |
+| `/me` | LINE with the action flag | `chr(13)` + `W` + the text: v6 draws the character after `chr(13)` as a colour code. v6's own `/me` arrives as `chr(13)` + text and becomes the action flag |
+| join, leave, rename, team change | NOTICE 1-4 | 254, which a v6 client can hide ("Display player info") |
+| a reply, a server message, a vote announcement | NOTICE 0, 5 or 6 | 255, never hidden |
+| the MOTD (`[Server] ChatJoinMessage`) | WELCOME's motd | a 255 on hello |
+| a vote | VOTE_START + VOTE_TALLY | 204 (a 200 with the counts so far) |
+| an answer | VOTE_TALLY | one 203 per vote the dialog has not counted |
+| the end | VOTE_END with the result text | 201 with the winner (0 when cancelled or when there is no text, which closes the dialog), then the text as a 255 |
+
+- **Every server-composed v6 line is `O` + the text with `#` escaped.** `O` is
+  orange, and it is not optional: v6's draw loop eats the first character of
+  every line as a colour code. `#` is GM8's line break, so a player called `a#b`
+  could split an announcement and forge its second half. The MOTD is the
+  exception: `#` there is the operator's own line break and is left alone. A
+  player's own text is relayed raw; the v6 client escapes it at draw time
+  (`chat_api.gml:99`).
+- **A v6 dialog can only add.** 203 increments one option, so when a voter
+  leaves and a count falls, a v6 dialog keeps the higher number. A player who
+  greets mid-vote gets the exact counts in the 204.
+- **A v6 kick or mute target gets no dialog**, only the result line: v6 has no
+  dialog a player may see and not answer. An answer it sends anyway is not
+  counted.
+- **v6 answers carry no vote id**, so an answer counts towards whatever vote is
+  running. A chat2026 VOTE whose id is not the running vote's is dropped.
+- A chat2026 SAY is capped at 127 bytes; a v6 line may be a whole 255-byte
+  string, and goes to chat2026 players as one LINE.
+
+### Where it differs from stock v6, for a player on a stock client
+
+All of these are chat2026's behaviour, which the core applies to everyone. A
+stock player on a `chat` server notices them.
+
+| | a GM8 host with v6 and Lorgan3's vote plugins | the core |
+|---|---|---|
+| kick vote | 90% | `chat_vote_kick_percent`, default 60, inclusive |
+| mute vote | 70% | `chat_vote_mute_percent`, default 60 |
+| quorum | half the roster | `ceil(voters / 2)` and at least two, of the players offered the vote |
+| a vote kick | one disconnection | refuses the address for `chat_kickban_minutes` (default 10) |
+| a mute | permanent, and the muted address's hello is refused, so it reads nothing either | timed (`chat_mute_minutes`), and a muted player still reads chat |
+| spam | no limit | a burst of 3, then one line per 2 seconds; ten refusals in 30 seconds mute for a minute |
+| team chat | no commands (`plugin.gml:493-505` skips the console), and spectators cannot use it | commands run whatever the audience; spectators reach spectators |
+| gravetalk | none | off (`chat_gravetalk=0`), the dead and spectators are heard only by each other |
+| joining | "X has joined chat!" on hello | "X has joined the game." on arrival, and leave, rename and team-change lines |
+| the first minute | nobody can call a vote (`chat_api.gml:175`) | no wait |
+| `/party` | yes | no |
+| the player picker | everybody, slot 0 and bots included | never slot 0 or the caller |
+
+### Commands
+
+chat2026's set, for both formats: `/help`, `/players`, `/maplist`, `/login`,
+`/votekick`, `/votemute`, `/votescramble`, `/votenextround`, `/votemap`, and for
+an admin who has used `/login` (`chat_admin_password`) `/say`, `/kick`, `/mute`,
+`/unmute`, `/nextround` and `/map`. `/me`, `/ignore` and `/unignore` are listed
+in `/help` and run in the client. A vote command with no name opens a private
+picker vote, which remembers stable ids, never slots. **`/bots` is this
+server's own**, as on `chat_v2_pr`: "The bot suspension and the join line" below.
+
+### Where it differs from the chat2026 GML host
+
+- **Slot 0 never greets**, so it never receives, votes, or counts towards a
+  quorum. On a dedicated GM8 host the GML does the same (`chat_vote_host`
+  defaults off there). "The host" in a reply means slot 0.
+- **A map vote calls `SetNextMap`**, and map votes and the map picker offer
+  `VotableMaps`, so a single-map server can vote on a map. `/map` is one path.
+  The GML points `GameServer.currentMapIndex` at the slot before the map.
+- **Scramble uses `SetTeam`**, the server's own team switch.
+- **`/bots` and the admin panel's chat box** (`IServerChat.SayAsServer`, a line
+  from slot 0 that is never a command and never rate limited) have no GML.
+  `/help` lists `/bots` first, so its text differs from the GML host's.
+
+### What it needed from `IPluginHost`
+
+Two reads beyond what `chat_v2_pr`'s commands use:
+
+| Member | GML | Why |
+|---|---|---|
+| `IsAlive(slot)` | `player.object != -1` | a dead sender's line is flagged dead and routed by gravetalk |
+| `RoundOver` | `global.mapchanging` | a running vote is cancelled when the round ends, and none can start |
+
+### Configuration
+
+`[Plugins] chat_*` in `--config`, the same keys and defaults chat2026's GML half
+reads, so one `gg2.ini` configures either host: `docs/CONFIG.md`, `[Plugins]`.
+They are `ServerOptions.Chat` and reach the plugin through
+`IPluginHost.ChatSettings` when it attaches. There are no command-line flags.
+`chat_vote_host` has no row: slot 0 never votes here.
+
+`chat2026` is not on ganggarrison.com. A server advertising it must have
+`ServerPluginsDebug/chat2026.zip`, as must its clients; this server then
+advertises the local file's hash and warns if it differs from the pin, which is
+`dist/chat2026.zip` from gg2-chat2026 commit `4e62b8f`. A change to the GML
+moves the pin; move it in the same change and re-run `Chat2026PluginTests`.
+
+---
+
+## `chat` on the wire: Lorgan3's v6
+
+The client half a stock client downloads, from `plugin.gml`, `chat_api.gml`,
+`vote_api.gml` and `commands.gml` inside
+`chat@bad8081d64f0b808a2bb3a6d88978fb5.zip`. The core speaks this to a player who
+greeted with v6.
 
 ### The wire
 
@@ -325,54 +465,6 @@ client sends a packet *kind* of 1 for global and 2 for team (`chat_api.gml:33`
 writes a boolean plus one); the host re-derives 0-for-global and `1 + team`
 (`plugin.gml:495`) and routes on `team == audience - 1` (`chat_api.gml:22`). The
 two numbers meet only at the kind byte.
-
-### What the server half does
-
-- **Routing is player by player, never a broadcast** (`chat_api.gml:20-26`).
-  Global chat reaches only players who sent hello, team chat only that team's. A
-  client cannot be trusted to hide what it has been sent.
-- **Team chat has no console.** `plugin.gml:493-505` calls `sendChatMessage`
-  directly rather than `executeChat`, so `/votekick bob` typed into team chat is
-  relayed as a sentence. Transcribed.
-- **Names the server writes into a line are `sanitiseNewlines`d** — `#` becomes
-  `\#`, CR and LF become spaces. GM8 draws a bare `#` as a line break, so a
-  player called `a#b` could otherwise forge the second half of an announcement.
-  ⛔ Not applied to what a player typed: the client does that at draw time, and
-  doing it twice doubles the backslashes.
-- **An empty name becomes "Nameless"** and goes out as an ordinary
-  `PLAYER_CHANGENAME` (`plugin.gml:159-165`). That is the one thing this plugin
-  does which a client without it still sees.
-- **A rename is announced, a join is not** — `nameBkp` starts empty and the
-  reference adopts it and exits. A rename by a player who never sent hello leaves
-  `nameBkp` stale for ever, so that branch is re-evaluated every tick from then
-  on. Harmless, and transcribed rather than fixed.
-- **A muted address cannot rejoin chat.** The hello is refused silently when the
-  remote address is on the ban list (`plugin.gml:447`), which is what makes a
-  vote mute survive a reconnect — and what makes it catch everyone behind one
-  NAT.
-- **A client that says hello mid-vote is caught up** with a 204 carrying the
-  question, the clock as it stands and the votes so far (`plugin.gml:455-482`).
-
-**Not ported, because it is client-only:** the window, the console font, the key
-bindings, the colour rendering, the wrapping, the options menu, the
-`cheatycheat` object that stops you moving while typing, the vote dialog's
-drawing, and the host's own chat window — a headless server has no window, so
-lines go to the server log, and the admin panel's Chat card stands in for the
-host's input: `SayAsServer` relays its line under index 0, as the reference's
-host spoke as `global.myself`.
-
-**Not ported, and a deliberate gap:**
-
-- **Blocked commands.** `plugin.gml:48-62` reads one `[Plugins] chat_blocked_<cmd>`
-  ini key per command and `chat_api.gml:183-189` refuses those. The only thing
-  that sets them is `/block`, a host-only *client* command a headless server has
-  no player to run, and the ini shape is one free-form key per command, which
-  `ServerSettings.All` does not model. The reference's own dispatch also puts the
-  vote-command branch first, so its `/block` cannot block any command that starts
-  a vote — the feature's whole reach there is `/maplist`.
-- **`chatKicklist`.** `plugin.gml:149-156` refuses a connection whose address a
-  previous vote kick recorded; nothing in the zip ever adds to that list, and the
-  decision not to keep one is in "Where this deliberately differs" below.
 
 ---
 
@@ -444,52 +536,36 @@ message), outside the command parser and the anti-spam count.
 
 ---
 
-## The chat commands — `/votekick` and friends
+## `chat_v2_pr`'s commands: `/votekick` and friends
 
 Ported from Lorgan3's five **local** server plugins — `party.gml`,
 `votekick.gml`, `votemap.gml`, `votemute.gml`, `votescramble.gml` (forum topic
 33773). Those are dropped in a server's own `Plugins/` directory and loaded by
 `loadplugins.gml`, so only the machine running the server ever has them; nothing
-is sent to a client.
+is sent to a client. They were written against v6's API (`global.sendVote`,
+`global.commandMap`, `Player.gid`); on `chat_v2_pr` they are a reconstruction
+with v6's dialog replaced by text. **The chat core does not use them**: `chat`
+and `chat2026` run chat2026's commands and votes ("The chat core" above).
 
 **This works because the client half does not know commands exist.** It sends
 `/votekick bob` as an ordinary chat message; the server sees the leading slash,
 acts, and never echoes it — not even when the command is refused. Nothing on the
 wire changed, and a client with no plugin at all is unaffected.
 
-**The five were written against `chat`'s API** — `global.commandMap`,
-`global.voteCommandMap`, `global.sendVote`, `global.sendVoteResults`,
-`global.findPlayer`, `Player.gid`. So:
-
-| | on `chat` (`ChatCommands.cs`) | on `chat_v2_pr` (`ChatV2Commands.cs`) |
-|---|---|---|
-| a vote appears as | the client's own dialog, with a live bar chart and a clock | chat lines |
-| answering | a number key, 1-9 | `/yes`, `/no`, `/vote <n>` |
-| answering twice | refused: `canVote` is cleared by the first answer | the later answer replaces the earlier |
-| a vote called with no name | an interactive player picker | refused |
-| extra commands | `/maplist` | `/yes`, `/no`, `/vote`, `/kick`, `/nextround` |
-
 ### The commands
 
-| Command | What it does | `chat` | `chat_v2_pr` |
-|---|---|---|---|
-| `/help [command]` | lists them, or explains one | yes | yes |
-| `/maplist [offset]` | ten maps from the rotation | yes | — |
-| `/party` | Party hard. | yes | yes |
-| `/votekick [name]` | vote to disconnect somebody | yes | name required |
-| `/votemute [name]` | vote to take somebody out of chat | yes | name required |
-| `/votescramble` | vote to reshuffle the teams | yes | yes |
-| `/votenextround` | vote to end the round now | yes | yes |
-| `/votemap [name]` | vote for the next map | yes | yes |
-| `/yes`, `/no`, `/vote <n>` | answer a vote | — | yes |
-| `/kick`, `/nextround` | host only — see below | — | yes |
-| `/bots [off|on]` | **this port's own** — see below | yes | yes |
-
-`/host`, `/me` and `/block` are **client** commands (`commands.gml:58-126`): the
-client runs them locally and the server never parses them. `/me` is the one with
-a server-visible effect, and it arrives as an ordinary chat message whose first
-byte is `chr(13)`, relayed like any other and rendered in the third person by
-the client.
+| Command | What it does |
+|---|---|
+| `/help [command]` | lists them, or explains one |
+| `/party` | Party hard. |
+| `/votekick <name>` | vote to disconnect somebody |
+| `/votemute <name>` | vote to take somebody out of chat |
+| `/votescramble` | vote to reshuffle the teams |
+| `/votenextround` | vote to end the round now |
+| `/votemap [name]` | vote for the next map |
+| `/yes`, `/no`, `/vote <n>` | answer a vote; a later answer replaces an earlier one |
+| `/kick`, `/nextround` | host only — see below |
+| `/bots [off|on]` | **this port's own** — see below |
 
 ### The rules, and where they come from
 
@@ -497,7 +573,6 @@ the client.
 |---|---|---|
 | vote length | 30 seconds | `sendVote(30 * 30, ...)`, all five |
 | one vote at a time | — | `global.chatWindow.alarm[0] > 0`, all five |
-| one vote per player | 60 seconds | `voteTimeout`, `plugin.gml:224` (`chat` only) |
 | kick | **90%** | `votekick.gml:89` |
 | mute | **70%** | `votemute.gml:92` |
 | scramble, next round | **> 50%** | `votescramble.gml:68`, `votemap.gml:280` |
@@ -507,37 +582,12 @@ the client.
 | map vote per round | once | `selectedmap`, `votemap.gml:42` |
 | the target may not vote | — | `target.mayVote = false`, `votekick.gml:40` |
 
-**`global.chatWindow.alarm[0]` is the VOTE TIMER, not the chat window's fade.**
-In `chat_v2_pr` that same alarm is the four-second fade, so the expression reads
-as "wait four seconds after anybody speaks" — which is not what it means in the
-plugin these extend: the refusal message divides it by 30 and calls the result
+**`global.chatWindow.alarm[0]` is the VOTE TIMER in v6, which these extend, not
+a chat window's fade.** In `chat_v2_pr` that same alarm is the four-second fade,
+so the expression reads as "wait four seconds after anybody speaks" — which is
+not what it means: the refusal message divides it by 30 and calls the result
 seconds, and `sendVote` is given `30 * 30`. Reading it the other way would have
 shipped a cooldown nobody asked for.
-
-⚠️ **On `chat`, nobody can call a vote for the first minute the server is up.**
-`chat_api.gml:175` tests `current_time - voteTimeout > lastVoteCall`, and both
-`current_time` and `lastVoteCall` start at zero. Transcribed — the refusal says
-how long is left, so a player sees the same thing they would on a reference
-server.
-
-### The player picker — `chat` only
-
-A vote command with no name opens a numbered list of players, as a vote only its
-caller sees and answers (`vote_api.gml:370-481`). Picking one re-runs the command
-against that player.
-
-- **It remembers stable ids, not slots.** A vote runs for thirty seconds, which
-  is long enough for two people to disconnect, and a slot index means something
-  different after each one. `IPluginHost.StableIdOf` is the reference's
-  `Player.gid`, and the picker hands its answer back as `chr(13) + id` so the
-  typed and the picked paths meet in one `findPlayer`.
-- **Everybody is listed**, slot 0 and the bots included, which is the reference's
-  `with(Player)`. Picking one of those is then refused by the command that asked
-  — an extra round trip, and what a player on a reference server sees.
-- ⚠️ **"Next page" is offered on a page that has none**, because the test is on
-  the roster size rather than on whether anybody is left (`vote_api.gml:400`).
-  The reference ships a message for exactly that case, which is evidence it
-  happens there too. Transcribed.
 
 ### The bot suspension and the join line
 
@@ -589,10 +639,11 @@ neither can be checked against the reference.
 the plugin's hello, not on the roster entry: before the hello there is nothing on
 the other end to draw it into. It goes out as a 255 rather than a 254, because a
 client with "Display player info" off drops every 254 and this is the line that
-tells a player what the server's commands are. ⚠️ `#` is **not** the same
-character on the two plugins — on `chat` it is GM8's line break and is left
-alone, on `chat_v2_pr` it is the colour-continuation marker its client half looks
-for and is replaced with a space.
+tells a player what the server's commands are; on the chat core it is also
+chat2026's WELCOME motd. ⚠️ `#` is **not** the same character everywhere — to a
+v6 client on `chat` it is GM8's line break and is left alone, to a chat2026
+client it is a literal `#`, and on `chat_v2_pr` it is the colour-continuation
+marker its client half looks for and is replaced with a space.
 
 ⛔ **Both settings do nothing at all without a chat plugin, and
 `ServerPluginList` is empty by default** — so the obvious way to configure either
@@ -606,7 +657,7 @@ a GML surface. They are there rather than inside a plugin because both are
 **server** state — one server, one bot population, one configured line — and a
 plugin holding either would give two loaded chat plugins two different answers.
 
-### Where this deliberately differs
+### Where `chat_v2_pr`'s commands deliberately differ
 
 **The quorum counts players who could vote, not the roster.** The reference is
 `yes + no < floor(ds_list_size(global.players) / 2)` — the whole roster, host and
@@ -643,18 +694,16 @@ is not a trusted source and an answer no dialog could have produced must not be
 an exception on the tick thread. See `docs/HARDENING.md`.
 
 **`/kick` and `/nextround` answer "You can only use this command as host."** and
-nothing else, on `chat_v2_pr`. That *is* the reference's behaviour for a client,
-and a headless server has no host player, so it is the only reachable branch.
-`chat` does not carry them at all, because in that plugin they are client
-commands. The operator's equivalent is the control port.
+nothing else. That *is* the reference's behaviour for a client, and a headless
+server has no host player, so it is the only reachable branch. The operator's
+equivalent is the control port.
 
 **A vote still running when the map changes is dropped, not resolved.** A
 scramble or a round-end vote landing in the round *after* the one it was called
-in would act on a world nobody voted about. On `chat` the open dialogs are closed
-with a 201 carrying 0.
+in would act on a world nobody voted about.
 
-**On `chat_v2_pr` only, commands count towards the anti-spam limit**, like any
-other message. Six of anything in two seconds is a mute. `chat` has no anti-spam.
+**Commands count towards the anti-spam limit**, like any other message. Six of
+anything in two seconds is a mute.
 
 ### What the plugin needed from the server, and why it is safe
 
@@ -686,7 +735,8 @@ and that is not negotiable.
 
 ### Testing this
 
-`ChatCommandTests` and `ChatV2CommandTests`, against `FakePluginHost`. **A
+`ChatV2CommandTests`, `Chat2026PluginTests` and `ChatBridgeTests`, against
+`FakePluginHost`. **A
 threshold needs a row on each side of it, and an effect under test has to be one
 that cannot happen by luck.** A test that votes unanimously on a threshold passes
 at every threshold; a scramble test needs more than two players or "moved
@@ -699,68 +749,6 @@ offset was added and the mutation finally went red.
 
 ---
 
-## `chat2026` — a new plugin, with a versioned wire
-
-A third chat plugin, written for this project rather than inherited, whose GML
-lives at `D:\Code\gg2-chat2026` (`DESIGN.md` is the why, `PROTOCOL.md` the wire,
-and both halves cite the latter). TF2-style chat: `*DEAD*` / `*SPEC*` / `(TEAM)`,
-join/leave/rename/team-change lines the client filters by category, a token-bucket
-spam limit, a command console and a numbered vote dialog.
-
-**It differs from the two above in the one way that matters here: HELLO and
-WELCOME carry a protocol version.** A client on a different version stops sending
-and says so; this server ignores SAY and VOTE from a client that greeted with
-another version. So a re-release is detectable at this end rather than "chat
-sometimes doesn't work". The catalogue still pins the zip, because the version
-byte only moves when the wire does.
-
-`Chat2026Plugin` (`Chat2026Commands.cs`, `Chat2026Votes.cs`) is transcribed from
-the GML's `src/host/`, `src/commands/` and `src/votes/`, file by file — each
-method names the GML file it stands for. `Chat2026PluginTests` holds it to the
-reply strings the GML half produced in its own live run against a GM8 host.
-
-### What it needed from `IPluginHost`
-
-Two reads, both reference capabilities (`DESIGN.md` section 9 named the first):
-
-| Member | GML | Why |
-|---|---|---|
-| `IsAlive(slot)` | `player.object != -1` | a dead sender's line is tagged `*DEAD*` and routed by gravetalk |
-| `RoundOver` | `global.mapchanging` | a running vote is cancelled when the round ends, and none can start |
-
-### Where it differs from the GML host
-
-- **Slot 0 never greets**, so it never receives, votes, or counts towards a
-  quorum. On a dedicated GM8 host the GML does the same (`chat_vote_host`
-  defaults off there). "The host" in a reply (`The host cannot be kicked.`) means
-  slot 0.
-- **A map vote calls `SetNextMap`.** The GML points `GameServer.currentMapIndex`
-  at the slot before the map so the game's own rotation lands on it; the outcome
-  is the same. Map votes and the map picker offer `VotableMaps`, not only the
-  rotation, so a single-map server can vote on a map.
-- **`/map` is one path.** The GML reaches rotation maps and other maps
-  differently; `SetNextMap` covers both.
-- **Scramble uses `SetTeam`**, which is the server's own team switch; the GML
-  reproduces those steps by hand.
-
-### Open
-
-- **Its settings are `[Plugins] chat_*` in `--config`**, the same keys and defaults
-  the GML half reads (`chat_gravetalk`, `chat_unique_names`, `chat_mute_minutes`,
-  `chat_votes`, `chat_vote_kick_percent`, `chat_vote_mute_percent`,
-  `chat_kickban_minutes`, `chat_admin_password`), so one `gg2.ini` configures both
-  halves. They are `ServerOptions.Chat2026`, rows in `ServerSettings.All`, and reach
-  the plugin through `IPluginHost.Chat2026` when it attaches. There are no
-  command-line flags for them. `chat_vote_host` has no row: slot 0 never votes here.
-- **The MOTD is `[Server] ChatJoinMessage`**, sent in WELCOME. The GML reads
-  `chat_motd` and falls back to `WelcomeMessage`.
-- **Not on ganggarrison.com.** Until it is, clients and this server must both
-  have `ServerPluginsDebug/chat2026.zip`; with it present this server advertises
-  the local file's hash and warns if it differs from the pin.
-- The pin is `dist/chat2026.zip` from gg2-chat2026 commit `4e62b8f`. A change to
-  the GML moves it; move the pin in the same breath and re-run
-  `Chat2026PluginTests`.
-
 ## Verifying against a real client
 
 **The test suite cannot do this and it is the half that matters.** Everything
@@ -771,6 +759,14 @@ after any change to the wire fields or to a plugin implementation.
 
 `docs/TRAPS-LIVEGAME.md` and the `gg2-playtest` skill are the general rules —
 **exactly one session holds the live game**, and the bridge serves one TCP client.
+
+**The two `chat` runs below were against the v6 server half the chat core
+replaced.** What they establish about the client — that a stock GM8 client
+parses each v6 shape — still holds, because the core sends the same shapes. What
+they do not establish is the core itself: its join and leave lines, its vote
+encoding (204 for a fresh vote, 203 catch-up), and a v6 client and a chat2026
+client in one room. Until a run covers those, the core's v6 side is gated only by
+`ChatBridgeTests` and `PluginWireTests`.
 
 **`chat` was driven this way on 2026-09-12**, against three stock GM8 clients on
 `--plugins chat --bots 2`. Every packet shape in both directions was exercised

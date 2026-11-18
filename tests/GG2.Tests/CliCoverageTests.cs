@@ -43,9 +43,9 @@ public sealed class CliCoverageTests
     /// </remarks>
     private static readonly Dictionary<string, string> NotOnTheCommandLine = new()
     {
-        ["Chat2026"] =
-            "is one plugin's eight [Plugins] chat_* settings, which do nothing unless chat2026 "
-            + "is in ServerPluginList. They keep the GML half's own ini keys so that one "
+        ["Chat"] =
+            "is the chat core's eight [Plugins] chat_* settings, which do nothing unless chat "
+            + "or chat2026 is in ServerPluginList. They keep the GML half's own ini keys so that one "
             + "gg2.ini configures a chat2026 server whichever half hosts it, and eight flags "
             + "spelled differently from those keys would be a second vocabulary for the same "
             + "thing. --config reaches every one; ConfigFileCoverageTests gates that.",

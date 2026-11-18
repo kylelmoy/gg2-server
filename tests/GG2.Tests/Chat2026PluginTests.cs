@@ -20,10 +20,10 @@ public sealed class Chat2026PluginTests
     private const byte Say = 1;
     private const byte VoteKind = 2;
 
-    private static (FakePluginHost Host, Chat2026Plugin Plugin) Fresh(Chat2026Settings? settings = null)
+    private static (FakePluginHost Host, ChatPlugin Plugin) Fresh(ChatSettings? settings = null)
     {
         var host = new FakePluginHost();
-        var plugin = new Chat2026Plugin(settings);
+        var plugin = new ChatPlugin(ChatWire.Plain, settings);
         plugin.Attach(new PluginChannel(host, 0));
 
         host.Add("Server", Team.Spectator, address: string.Empty, client: false);
@@ -34,24 +34,24 @@ public sealed class Chat2026PluginTests
     }
 
     /// <summary>A roster entry, its first Begin Step, then its HELLO — the order a join takes.</summary>
-    private static int Join(FakePluginHost host, Chat2026Plugin plugin, string name, Team team, string address = "10.0.0.1", bool greet = true)
+    private static int Join(FakePluginHost host, ChatPlugin plugin, string name, Team team, string address = "10.0.0.1", bool greet = true)
     {
         var slot = host.Add(name, team, address);
         plugin.PlayerAdded(slot);
         plugin.Tick();
         if (greet)
-            plugin.Receive(slot, [Hello, Chat2026Plugin.ProtocolVersion, 0]);
+            plugin.Receive(slot, [Hello, ChatPlugin.ProtocolVersion, 0]);
 
         return slot;
     }
 
-    private static void Leave(FakePluginHost host, Chat2026Plugin plugin, int slot)
+    private static void Leave(FakePluginHost host, ChatPlugin plugin, int slot)
     {
         plugin.PlayerRemoving(slot);
         host.RemoveAt(slot);
     }
 
-    private static void Speak(Chat2026Plugin plugin, int slot, string text, int audience = 0)
+    private static void Speak(ChatPlugin plugin, int slot, string text, int audience = 0)
     {
         var bytes = GG2Text.Encode(text);
         var body = new byte[3 + bytes.Length];
@@ -62,7 +62,7 @@ public sealed class Chat2026PluginTests
         plugin.Receive(slot, body);
     }
 
-    private static void Answer(Chat2026Plugin plugin, int slot, int voteId, int option) =>
+    private static void Answer(ChatPlugin plugin, int slot, int voteId, int option) =>
         plugin.Receive(slot, [VoteKind, (byte)voteId, (byte)option]);
 
     /// <summary>Every packet sent to <paramref name="slot"/>, decoded to one readable line each.</summary>
@@ -171,7 +171,7 @@ public sealed class Chat2026PluginTests
         var alice = Join(host, plugin, "alice", Team.Red);
         host.Sent.Clear();
 
-        plugin.Receive(alice, [Hello, Chat2026Plugin.ProtocolVersion, 0]);
+        plugin.Receive(alice, [Hello, ChatPlugin.ProtocolVersion, 0]);
 
         Assert.Empty(host.Sent);
     }
@@ -264,7 +264,7 @@ public sealed class Chat2026PluginTests
     {
         foreach (var gravetalk in new[] { true, false })
         {
-            var (host, plugin) = Fresh(new Chat2026Settings { Gravetalk = gravetalk });
+            var (host, plugin) = Fresh(new ChatSettings { Gravetalk = gravetalk });
             var alice = Join(host, plugin, "alice", Team.Red);
             var bob = Join(host, plugin, "bob", Team.Blue);
             var spec = Join(host, plugin, "spec", Team.Spectator);
@@ -395,7 +395,7 @@ public sealed class Chat2026PluginTests
     [Fact]
     public void UniqueNamesSuffixTheNewcomerWithTheLowestFreeNumber()
     {
-        var (host, plugin) = Fresh(new Chat2026Settings { UniqueNames = true });
+        var (host, plugin) = Fresh(new ChatSettings { UniqueNames = true });
         Join(host, plugin, "alice", Team.Red);
         Join(host, plugin, "alice3", Team.Red);
         host.Renames.Clear();
@@ -409,7 +409,7 @@ public sealed class Chat2026PluginTests
     [Fact]
     public void AMuteStaysWithItsPlayerWhenTheRosterCompacts()
     {
-        var (host, plugin) = Fresh(new Chat2026Settings { AdminPassword = "pw" });
+        var (host, plugin) = Fresh(new ChatSettings { AdminPassword = "pw" });
         var alice = Join(host, plugin, "alice", Team.Red);
         var bob = Join(host, plugin, "bob", Team.Blue, address: "10.0.0.2");
         var carol = Join(host, plugin, "carol", Team.Red, address: "10.0.0.3");
@@ -430,7 +430,7 @@ public sealed class Chat2026PluginTests
     [Fact]
     public void AMuteFollowsTheAddressAcrossAReconnect()
     {
-        var (host, plugin) = Fresh(new Chat2026Settings { AdminPassword = "pw" });
+        var (host, plugin) = Fresh(new ChatSettings { AdminPassword = "pw" });
         var admin = Join(host, plugin, "admin", Team.Red);
         var bob = Join(host, plugin, "bob", Team.Blue, address: "10.0.0.2");
         Speak(plugin, admin, "/login pw");
@@ -450,7 +450,7 @@ public sealed class Chat2026PluginTests
     [Fact]
     public void HelpListsCommandsAndAdminCommandsOnlyForAdmins()
     {
-        var (host, plugin) = Fresh(new Chat2026Settings { AdminPassword = "pw" });
+        var (host, plugin) = Fresh(new ChatSettings { AdminPassword = "pw" });
         var alice = Join(host, plugin, "alice", Team.Red);
         host.Sent.Clear();
 
@@ -460,9 +460,9 @@ public sealed class Chat2026PluginTests
 
         Assert.Equal(
             [
-                "Commands: /help /ignore /login /maplist /me /players /unignore /votekick /votemap /votemute /votenextround /votescramble. /help <command> for more.",
+                "Commands: /bots /help /ignore /login /maplist /me /players /unignore /votekick /votemap /votemute /votenextround /votescramble. /help <command> for more.",
                 "You are now an admin for this session.",
-                "Commands: /help /ignore /login /maplist /me /players /unignore /votekick /votemap /votemute /votenextround /votescramble. /help <command> for more.",
+                "Commands: /bots /help /ignore /login /maplist /me /players /unignore /votekick /votemap /votemute /votenextround /votescramble. /help <command> for more.",
                 "Admin: /kick /map /mute /nextround /say /unmute.",
             ],
             Log(host, alice));
@@ -478,7 +478,7 @@ public sealed class Chat2026PluginTests
         Speak(plugin, alice, "/say hi");
         Speak(plugin, alice, "/login anything");
 
-        (host, plugin) = Fresh(new Chat2026Settings { AdminPassword = "hunter2" });
+        (host, plugin) = Fresh(new ChatSettings { AdminPassword = "hunter2" });
         var bob = Join(host, plugin, "bob", Team.Red);
         host.Sent.Clear();
         Speak(plugin, bob, "/login nope");
@@ -491,7 +491,7 @@ public sealed class Chat2026PluginTests
     [Fact]
     public void PlayersListsIndicesAndTeamsAndNamesResolveByNumberOrUniqueSubstring()
     {
-        var (host, plugin) = Fresh(new Chat2026Settings { AdminPassword = "pw" });
+        var (host, plugin) = Fresh(new ChatSettings { AdminPassword = "pw" });
         var alice = Join(host, plugin, "Player", Team.Red);
         Join(host, plugin, "Player", Team.Blue);
         Speak(plugin, alice, "/login pw");
@@ -541,7 +541,7 @@ public sealed class Chat2026PluginTests
     [Fact]
     public void KickNextRoundAndMapGoThroughTheHost()
     {
-        var (host, plugin) = Fresh(new Chat2026Settings { AdminPassword = "pw" });
+        var (host, plugin) = Fresh(new ChatSettings { AdminPassword = "pw" });
         host.VotableMaps = ["koth_valley"];
         var alice = Join(host, plugin, "alice", Team.Red);
         Join(host, plugin, "bob", Team.Blue);
@@ -606,7 +606,7 @@ public sealed class Chat2026PluginTests
     [Fact]
     public void ThresholdsQuorumAndTheCooldown()
     {
-        var (host, plugin) = Fresh(new Chat2026Settings { VoteMutePercent = 51 });
+        var (host, plugin) = Fresh(new ChatSettings { VoteMutePercent = 51 });
         var alice = Join(host, plugin, "alice", Team.Red);
         var bob = Join(host, plugin, "bob", Team.Blue);
         var carol = Join(host, plugin, "carol", Team.Red);
@@ -805,8 +805,8 @@ public sealed class Chat2026PluginTests
     [Fact]
     public void ACataloguePluginTakesTheServersChatSettings()
     {
-        var host = new FakePluginHost { Chat2026 = new Chat2026Settings { AdminPassword = "from-config", VotesEnabled = false } };
-        var plugin = (Chat2026Plugin)ServerPluginCatalogue.Create("chat2026")!;
+        var host = new FakePluginHost { ChatSettings = new ChatSettings { AdminPassword = "from-config", VotesEnabled = false } };
+        var plugin = (ChatPlugin)ServerPluginCatalogue.Create("chat2026")!;
         plugin.Attach(new PluginChannel(host, 0));
         host.Add("Server", Team.Spectator, address: string.Empty, client: false);
         plugin.PlayerAdded(0);
@@ -839,12 +839,12 @@ public sealed class Chat2026PluginTests
         }
 
         Assert.Equal(
-            new Chat2026Settings
+            new ChatSettings
             {
                 Gravetalk = false, UniqueNames = true, MuteMinutes = 5, VotesEnabled = false,
                 VoteKickPercent = 75, VoteMutePercent = 70, KickBanMinutes = 30, AdminPassword = "pw",
             },
-            options.Chat2026);
+            options.Chat);
         Assert.All(GG2.Server.ServerSettings.All.Where(s => s.Key.StartsWith("chat_", StringComparison.Ordinal)),
             s => Assert.Equal("Plugins", s.Section));
     }
@@ -852,7 +852,7 @@ public sealed class Chat2026PluginTests
     [Fact]
     public void TheCatalogueServesChat2026WithItsPin()
     {
-        Assert.IsType<Chat2026Plugin>(ServerPluginCatalogue.Create("chat2026"));
+        Assert.IsType<ChatPlugin>(ServerPluginCatalogue.Create("chat2026"));
         Assert.Equal("ff37fbcb3c4f1a86099cea524e2eba8a", ServerPluginCatalogue.PinnedMd5("chat2026"));
         Assert.True(ServerPluginCatalogue.ListHasChatConsole("chat2026"));
     }

@@ -887,11 +887,11 @@ public sealed class ServerOptions
     public int BotSuspendMinutes { get; set; }
 
     /// <summary>
-    /// The <c>chat2026</c> plugin's own settings: <c>[Plugins] chat_*</c>, the same
-    /// keys and defaults its GML half reads, so one <c>gg2.ini</c> configures both.
+    /// The chat core's settings: <c>[Plugins] chat_*</c>, the same keys and
+    /// defaults chat2026's GML half reads, so one <c>gg2.ini</c> configures both.
     /// </summary>
-    /// <remarks>Read only when <c>chat2026</c> is in <see cref="ServerPluginList"/>.</remarks>
-    public Plugins.Chat2026Settings Chat2026 { get; set; } = new();
+    /// <remarks>Read only when <c>chat</c> or <c>chat2026</c> is in <see cref="ServerPluginList"/>.</remarks>
+    public Plugins.ChatSettings Chat { get; set; } = new();
 
     /// <summary>
     /// Drop to a slow tick when nobody is connected and no bots are running.
@@ -1158,7 +1158,7 @@ public sealed class ServerOptions
         // thing a player asked for — "no bots for a while" — is better spelled
         // as a server with Bots.Enabled off, which survives a restart and this
         // does not.
-        Chat2026.Validate();
+        Chat.Validate();
 
         if (BotSuspendMinutes is < 0 or > 1440)
         {

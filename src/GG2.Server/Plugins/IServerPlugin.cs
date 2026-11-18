@@ -203,14 +203,14 @@ public interface IPluginHost
     string ChatJoinMessage { get; }
 
     /// <summary>
-    /// <c>[Plugins] chat_*</c>: the <c>chat2026</c> plugin's settings.
+    /// <c>[Plugins] chat_*</c>: the chat core's settings (<c>chat</c> and <c>chat2026</c>).
     /// </summary>
     /// <remarks>
     /// A plain read of configuration, and here for the same reason as
     /// <see cref="ChatJoinMessage"/>: the catalogue builds a plugin with no
     /// arguments, and the settings are the server's.
     /// </remarks>
-    Chat2026Settings Chat2026 { get; }
+    ChatSettings ChatSettings { get; }
 
     /// <summary>What <c>/bots</c> may do, and what the population is doing.</summary>
     BotStatus Bots { get; }

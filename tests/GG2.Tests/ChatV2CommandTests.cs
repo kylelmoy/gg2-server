@@ -847,7 +847,7 @@ public sealed class ChatV2CommandTests
     // --- /bots ---------------------------------------------------------------
     //
     // ⚠️ This port's own command, so there is no GML to compare against. The same
-    // four outcomes as ChatCommandTests' copy, against this plugin's own wire.
+    // four outcomes as ChatBridgeTests' copy, against this plugin's own wire.
 
     /// <summary>Off until the server sets <c>[Bots] SuspendMinutes</c>.</summary>
     [Fact]

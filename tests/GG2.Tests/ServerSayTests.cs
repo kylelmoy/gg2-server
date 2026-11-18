@@ -8,7 +8,7 @@ namespace GG2.Tests;
 /// The panel's chat box: <see cref="GameServer.Say"/> and the <c>say</c> verb.
 /// </summary>
 /// <remarks>
-/// The plugin paths are in <c>ChatPluginTests</c> and <c>ChatV2PluginTests</c>;
+/// The plugin paths are in <c>ChatBridgeTests</c> and <c>ChatV2PluginTests</c>;
 /// this is the server with no chat plugin, which is the default, and where the
 /// line has to go out as a <c>MESSAGE_STRING</c> or reach nobody at all.
 /// </remarks>

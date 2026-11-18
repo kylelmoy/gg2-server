@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using GG2.Protocol;
 
 namespace GG2.Server.Plugins;
@@ -14,7 +14,7 @@ namespace GG2.Server.Plugins;
 /// and everybody else a vote refers to by stable id, never by slot: a vote runs
 /// long enough for the roster to compact under it.
 /// </remarks>
-public sealed partial class Chat2026Plugin
+public sealed partial class ChatPlugin
 {
     private enum VoteHandler
     {
@@ -83,6 +83,7 @@ public sealed partial class Chat2026Plugin
         {
             _chatters[slot].VoteId = -1;
             _chatters[slot].VoteChoice = 0;
+            _chatters[slot].V6Dialog = false;
         }
 
         for (var slot = 0; slot < Host.PlayerCount && _chatters.Has(slot); slot++)
@@ -93,35 +94,73 @@ public sealed partial class Chat2026Plugin
     }
 
     /// <summary>
-    /// <c>host/fn_vote_offer.gml</c>: VOTE_START and the current tally to one
-    /// greeted player, making it a voter unless it is the excluded player.
+    /// <c>host/fn_vote_offer.gml</c>: the running vote and its tally to one greeted
+    /// player, making it a voter unless it is the excluded player.
     /// </summary>
+    /// <remarks>
+    /// A player offered the same vote again (a hello in the other format) keeps
+    /// the answer it already gave, so switching format is not a second vote.
+    /// <para>
+    /// v6 gets a 204, which is a 200 with the counts so far (<c>plugin.gml:455-482</c>),
+    /// so a fresh vote and a mid-vote resync are one packet. v6 has no "shown but
+    /// may not answer": its kick target gets no dialog at all (<c>mayVote</c>),
+    /// only the result line.
+    /// </para>
+    /// </remarks>
     private void OfferVote(int slot)
     {
         if (!_voteActive)
             return;
 
         var chatter = _chatters[slot];
-        if (_voteExcluded != Host.StableIdOf(slot))
+        var excluded = _voteExcluded == Host.StableIdOf(slot);
+        if (!excluded && chatter.VoteId != _voteId)
         {
             chatter.VoteId = _voteId;
             chatter.VoteChoice = 0;
         }
 
-        _out.Reset();
-        _out.WriteUByte(KindVoteStart);
-        _out.WriteUByte((byte)_voteId);
-        _out.WriteString1(_voteQuestion);
-        _out.WriteUByte((byte)_voteOptions.Count);
-        foreach (var option in _voteOptions)
-            _out.WriteString1(option);
-
         var ticks = (long)Math.Ceiling((_voteEndsAt - Now) * 30 / 1000.0);
-        _out.WriteUShort((ushort)Math.Clamp(ticks, 0, ushort.MaxValue));
-        _out.WriteUByte(chatter.VoteId == _voteId ? (byte)1 : (byte)0);
-        Channel.SendTo(slot, _out.WrittenSpan);
+        var ticksLeft = (ushort)Math.Clamp(ticks, 0, ushort.MaxValue);
 
-        SendTally(slot);
+        if (chatter.Format == Format.Chat2026)
+        {
+            Begin(KindVoteStart);
+            _out.WriteUByte((byte)_voteId);
+            _out.WriteString1(_voteQuestion);
+            _out.WriteUByte((byte)_voteOptions.Count);
+            foreach (var option in _voteOptions)
+                _out.WriteString1(option);
+
+            _out.WriteUShort(ticksLeft);
+            _out.WriteUByte(chatter.VoteId == _voteId ? (byte)1 : (byte)0);
+            Channel.SendTo(slot, _out.WrittenSpan);
+
+            SendTally(slot);
+            return;
+        }
+
+        if (chatter.Format != Format.V6 || excluded)
+            return;
+
+        CountVotes();
+        _v6.Reset();
+        _v6.WriteUByte(V6PollResync);
+        _v6.WriteString1(_voteQuestion);
+        _v6.WriteUByte((byte)_voteOptions.Count);
+        foreach (var option in _voteOptions)
+            _v6.WriteString1(option);
+
+        _v6.WriteUShort(ticksLeft);
+        for (var i = 0; i < _voteCounts.Count; i++)
+        {
+            var count = Math.Min(255, _voteCounts[i]);
+            _v6.WriteUByte((byte)count);
+            chatter.V6Counted[i] = count;
+        }
+
+        Channel.SendTo(slot, _v6.WrittenSpan);
+        chatter.V6Dialog = true;
     }
 
     /// <summary>
@@ -163,8 +202,7 @@ public sealed partial class Chat2026Plugin
 
         CountVotes();
 
-        _out.Reset();
-        _out.WriteUByte(KindVoteTally);
+        Begin(KindVoteTally);
         _out.WriteUByte((byte)_voteId);
         _out.WriteUByte((byte)_voteCounts.Count);
         foreach (var count in _voteCounts)
@@ -172,13 +210,43 @@ public sealed partial class Chat2026Plugin
 
         if (slot >= 0)
         {
-            Channel.SendTo(slot, _out.WrittenSpan);
+            SendTallyTo(slot);
             return;
         }
 
         for (var other = 0; other < Host.PlayerCount && _chatters.Has(other); other++)
             if (_chatters[other].Hello && ShownTo(other))
-                Channel.SendTo(other, _out.WrittenSpan);
+                SendTallyTo(other);
+    }
+
+    /// <summary>
+    /// The tally in <see cref="_out"/> to one player, or to a v6 dialog as one 203
+    /// per vote it has not counted yet. v6 can only add, so a count that falls
+    /// (a voter who left) stays where the dialog has it.
+    /// </summary>
+    private void SendTallyTo(int slot)
+    {
+        var chatter = _chatters[slot];
+        if (chatter.Format == Format.Chat2026)
+        {
+            Channel.SendTo(slot, _out.WrittenSpan);
+            return;
+        }
+
+        if (chatter.Format != Format.V6 || !chatter.V6Dialog)
+            return;
+
+        for (var i = 0; i < _voteCounts.Count; i++)
+        {
+            while (chatter.V6Counted[i] < Math.Min(255, _voteCounts[i]))
+            {
+                _v6.Reset();
+                _v6.WriteUByte(V6VoteTally);
+                _v6.WriteUByte((byte)i);
+                Channel.SendTo(slot, _v6.WrittenSpan);
+                chatter.V6Counted[i]++;
+            }
+        }
     }
 
     private bool ShownTo(int slot) => _voteOnly is null || _voteOnly == Host.StableIdOf(slot);
@@ -263,23 +331,29 @@ public sealed partial class Chat2026Plugin
 
         text = Cap(StripControl(text, " "), MaxStringLength);
 
-        _out.Reset();
-        _out.WriteUByte(KindVoteEnd);
+        Begin(KindVoteEnd);
         _out.WriteUByte((byte)_voteId);
         _out.WriteUByte((byte)winner);
         _out.WriteString1(text);
 
         for (var slot = 0; slot < Host.PlayerCount && _chatters.Has(slot); slot++)
         {
-            if (_chatters[slot].Hello && ShownTo(slot))
-                Channel.SendTo(slot, _out.WrittenSpan);
+            var chatter = _chatters[slot];
+            if (chatter.Hello && ShownTo(slot))
+            {
+                if (chatter.Format == Format.Chat2026)
+                    Channel.SendTo(slot, _out.WrittenSpan);
+                else
+                    EndV6Vote(slot, winner, text);
+            }
 
-            _chatters[slot].VoteId = -1;
-            _chatters[slot].VoteChoice = 0;
+            chatter.VoteId = -1;
+            chatter.VoteChoice = 0;
+            chatter.V6Dialog = false;
         }
 
         if (text.Length != 0)
-            Host.Log($"[chat] vote: {text}");
+            Host.Log($"[chat] vote: {LogText.Safe(text)}");
 
         _voteActive = false;
         _voteOnly = null;
@@ -291,6 +365,25 @@ public sealed partial class Chat2026Plugin
         _followUpFrom = null;
         if (followUp.Length != 0 && from >= 0)
             RunCommand(from, followUp);
+    }
+
+    /// <summary>
+    /// VOTE_END for v6: 201 with the winner, which shows the result in the dialog
+    /// (<c>displayVoteResults</c>), or 0 to close it when there is no result to
+    /// show; then the result text as a 255, since 201 carries none.
+    /// </summary>
+    private void EndV6Vote(int slot, int winner, string text)
+    {
+        if (_chatters[slot].V6Dialog)
+        {
+            _v6.Reset();
+            _v6.WriteUByte(V6VoteResult);
+            _v6.WriteUByte((byte)(text.Length == 0 ? 0 : winner));
+            Channel.SendTo(slot, _v6.WrittenSpan);
+        }
+
+        if (text.Length != 0)
+            SendV6(slot, V6Notice, 0, V6Orange + Sanitise(text));
     }
 
     private string RunHandler() => _voteHandler switch

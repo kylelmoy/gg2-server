@@ -37,8 +37,10 @@ public static class ServerPluginCatalogue
         // (md5 of the zip confirmed to equal the hash in its own filename).
         // Re-check http://www.ganggarrison.com/plugins/chat.md5 before changing
         // this implementation; a difference means the client half has moved and
-        // nobody has read the new GML.
-        ["chat"] = new("bad8081d64f0b808a2bb3a6d88978fb5", true, () => new ChatPlugin()),
+        // nobody has read the new GML. The server half is the chat core on its
+        // bridged wire: v6 to a stock client, chat2026 behind 0x80 to one that
+        // greets that way (ChatPlugin, docs/PLUGINS.md "The chat core").
+        ["chat"] = new("bad8081d64f0b808a2bb3a6d88978fb5", true, () => new ChatPlugin(ChatWire.Bridged)),
 
         // chat_v2_pr — "chat_v2 by Lorgan, various fixes by PrOF", plugin.gml
         // dated 2017-04-10, from
@@ -52,10 +54,10 @@ public static class ServerPluginCatalogue
         // chat2026 — not on ganggarrison.com yet. The pin is the md5 of
         // dist/chat2026.zip built by `node tools/build.js` at gg2-chat2026 commit
         // 4e62b8f (D:\Code\gg2-chat2026), whose PROTOCOL.md version 1 is what
-        // Chat2026Plugin speaks. Until it is published, clients load it from
+        // ChatPlugin speaks on its plain wire. Until it is published, clients load it from
         // ServerPluginsDebug/chat2026.zip, and so must this server
         // (PluginHashes.Resolve's second choice), or they will disagree on the hash.
-        ["chat2026"] = new("ff37fbcb3c4f1a86099cea524e2eba8a", true, () => new Chat2026Plugin()),
+        ["chat2026"] = new("ff37fbcb3c4f1a86099cea524e2eba8a", true, () => new ChatPlugin(ChatWire.Plain)),
     };
 
     /// <summary>Every plugin name this port can serve, ascending.</summary>
