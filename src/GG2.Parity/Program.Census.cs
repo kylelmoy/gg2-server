@@ -70,6 +70,8 @@ internal static partial class Program
         var counts = new SortedDictionary<string, int>(StringComparer.Ordinal);
         var reader = new GG2.Protocol.NetReader(stream);
         var messages = 0;
+        var ticks = 0;
+        var events = args.Contains("--events");
         GG2.Protocol.ServerMessage? firstFull = null;
         string? stopped = null;
 
@@ -97,6 +99,14 @@ internal static partial class Program
 
             messages++;
             counts[message.Type.ToString()] = counts.GetValueOrDefault(message.Type.ToString()) + 1;
+
+            // --events: every message that is not a per-tick state update, on
+            // the tick it arrived in (one state update per tick), so a death or
+            // a round end can be placed against the stream.
+            if (message.Type is GG2.Protocol.MessageType.InputState or GG2.Protocol.MessageType.QuickUpdate)
+                ticks++;
+            else if (events)
+                Console.WriteLine($"  tick {ticks,6}  {message.Type,-20} {Convert.ToHexString(message.Payload)}");
 
             // ⚠️ Follow a rotation onto another gamemode's map, or the HUD block
             // changes length underneath this loop. Only FULL_UPDATE and

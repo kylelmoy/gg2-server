@@ -135,7 +135,7 @@ internal static partial class Program
 
           record --host <h> --port <n> --seconds <s> --name <n> --out <file>
                  [--source <text>] [--maps <path>]
-          census <trace> [--map <name>] [--maps <path>]
+          census <trace> [--map <name>] [--maps <path>] [--events]
           recover <file.trace.part> [--map <name>] [--source <text>]
           diff   <a> <b>
           replay <trace> [--maps <path>] [--no-stop] [--all-fields]
