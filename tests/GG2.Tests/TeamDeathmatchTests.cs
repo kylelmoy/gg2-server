@@ -104,6 +104,40 @@ public sealed class TeamDeathmatchTests
     }
 
     /// <summary>
+    /// A client's replica never decides a death (<c>End Step.xml:34</c>, the
+    /// <c>global.isHost</c> guard): a character at hp 0 stays alive, scores
+    /// nobody and reports no death, and the rest of End Step still runs on it.
+    /// The server's world, the control, kills it on the same tick.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AClientReplicaLeavesTheDeathToTheServer(bool replica)
+    {
+        var (state, world) = Started(invulnerabilityTicks: 0);
+        state.ClientReplica = replica;
+        Spawn(ref state, world, 1, Team.Red);
+        Spawn(ref state, world, 2, Team.Blue);
+
+        state.Characters[2].LastDamageDealer = 1;
+        state.Characters[2].LastDamageSource = DamageSource.Scattergun;
+        state.Characters[2].Hp = 0;
+        state.Characters[2].NetAimDirection = 0;
+        state.Characters[2].Facing = -1;
+
+        var events = default(TickEvents);
+        MatchSimulation.Tick(world, ref state, [], ref events);
+
+        Assert.Equal(replica, state.IsAlive(2));
+        Assert.Equal(!replica, events.Died[2]);
+        Assert.Equal(replica ? 0 : 1, state.RedCaps);
+
+        // End Step's tail: facing follows the aim only past the death exit.
+        if (replica)
+            Assert.Equal(1, state.Characters[2].Facing);
+    }
+
+    /// <summary>
     /// Three guards, and each of them excludes a case that really happens.
     /// </summary>
     [Theory]

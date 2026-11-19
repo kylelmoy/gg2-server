@@ -381,7 +381,8 @@ public static class MatchSimulation
             if (!state.Alive[slot])
                 continue;
 
-            if (!CharacterPhysics.EndStep(world, ref state.Characters[slot], ref state.Weapons[slot]))
+            // A client's replica never decides a death: WorldState.ClientReplica.
+            if (!CharacterPhysics.EndStep(world, ref state.Characters[slot], ref state.Weapons[slot], host: !state.ClientReplica))
                 continue;
 
             Deaths.Kill(ref state, slot, ref events, world);

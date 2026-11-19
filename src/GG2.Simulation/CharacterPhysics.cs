@@ -584,7 +584,17 @@ public static class CharacterPhysics
     /// slot from the world, and this function is handed one character and a
     /// collision world — see <see cref="Deaths"/>.
     /// </remarks>
-    public static bool EndStep(CollisionWorld world, ref CharacterState character, ref WeaponState weapon)
+    public static bool EndStep(CollisionWorld world, ref CharacterState character, ref WeaponState weapon) =>
+        EndStep(world, ref character, ref weapon, host: true);
+
+    /// <inheritdoc cref="EndStep(CollisionWorld, ref CharacterState, ref WeaponState)"/>
+    /// <param name="host">
+    /// False for a client's replica (<see cref="WorldState.ClientReplica"/>):
+    /// the death check is the host's alone (<c>End Step.xml:34</c>), so a
+    /// character at hp 0 or below carries on through the rest of End Step and
+    /// this never returns true.
+    /// </param>
+    public static bool EndStep(CollisionWorld world, ref CharacterState character, ref WeaponState weapon, bool host)
     {
         var box = character.Box;
         var filter = character.Filter;
@@ -625,7 +635,7 @@ public static class CharacterPhysics
         // this tick never updates its facing, never drags its weapon along and
         // is never clamped into the map. The last thing it did was walk down a
         // step.
-        if (Deaths.IsDead(character))
+        if (host && Deaths.IsDead(character))
             return true;
 
         if (Gml.Greater(character.Hp, character.Stats.MaxHp))

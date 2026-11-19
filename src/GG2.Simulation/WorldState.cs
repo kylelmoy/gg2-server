@@ -495,6 +495,23 @@ public struct WorldState
     public bool Autobalance;
 
     /// <summary>
+    /// Whether this world is a client's replica rather than the server's: the
+    /// stock client's <c>global.isHost</c> false.
+    /// </summary>
+    /// <remarks>
+    /// Covers the character death check only (<c>Character.events/End
+    /// Step.xml:34</c>, <c>if(global.isHost &amp;&amp; hp&lt;=0)</c>). A replica's
+    /// character at hp 0 or below stays alive and runs the rest of End Step, as
+    /// on the stock client, until the server's <c>PLAYER_DEATH</c> removes it. A
+    /// replica that decided deaths itself would kill a character a tick before
+    /// the server did, see it revived by the next position update, and kill it
+    /// again: two bodies, two kill-log entries and a Team Deathmatch count that
+    /// runs ahead of the server's. Every other <c>isHost</c> guard in the
+    /// reference is not covered. A server never sets it.
+    /// </remarks>
+    public bool ClientReplica;
+
+    /// <summary>
     /// <c>GameServer.serverbalance</c>: a balance notice is outstanding and the
     /// fuse is burning.
     /// </summary>
