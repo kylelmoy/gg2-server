@@ -163,6 +163,9 @@ public sealed partial class GameServer
     /// </summary>
     internal ref WorldState WorldForTests => ref _world;
 
+    /// <summary>The current map's collision world. Test hook.</summary>
+    internal CollisionWorld CollisionForTests => _collision;
+
     /// <summary>The bot opponents table every bot view carries. Test hook.</summary>
     internal ReadOnlySpan<byte> OpponentsForTests => _opponents;
 

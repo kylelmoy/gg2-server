@@ -334,6 +334,8 @@ and it is described above.
 | `ClientPrediction` | boolean | `1` | Port's own. Answers a client's `PREDICT_HELLO`: a welcome, one input per tick through a short queue, and an ack every tick, to that client only. A stock client never sends the hello and is sent the same bytes either way. `docs/PREDICTION.md`. |
 | `PredictionMaxQueuedInputs` | integer | `2` | Port's own. Inputs a predicting client may have waiting after a tick before the oldest fold into that tick. Clamped 1-4. `docs/PREDICTION.md`, "The input queue". |
 | `PredictionQueueDrainTicks` | integer | `30` | Port's own. Ticks a predicting client's queue may stand non-empty before two inputs fold together. Clamped 1-3600. |
+| `QuickUpdateInterval` | integer | `7` | Port's own. Ticks between position updates (`QUICK_UPDATE`); the rest are `INPUTSTATE`. 7 is the reference's cadence. Lower corrects every client's mispredictions sooner, stock clients included, for more bytes. Clamped 1-7. `docs/PREDICTION.md`, "Position update cadence". |
+| `ExplosionUpdateTicks` | integer | `0` | Port's own. Position updates on this many ticks after each rocket or mine explosion, starting with the first update that can show it; 0 is off. Bounds how long a client's own resolution of an explosion (upstream issue #68) can stand. Clamped 0-30. |
 | `CapLimit` | integer | `5` | Captures that win a round, 1..255. **0 is clamped to 1, not to unlimited.** |
 | `Time Limit` | integer | `15` | Round length in minutes, 1..255. 0 is clamped to 1. |
 | `Deathmatch Kill Limit` | integer | `30` | Kills that win a team-deathmatch round, 1..65535. |

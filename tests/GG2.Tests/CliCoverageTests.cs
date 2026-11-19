@@ -109,6 +109,8 @@ public sealed class CliCoverageTests
         ("ClientPrediction", ["--no-client-prediction"], o => o.ClientPrediction),
         ("PredictionMaxQueuedInputs", ["--prediction-max-queued", "3"], o => o.PredictionMaxQueuedInputs),
         ("PredictionQueueDrainTicks", ["--prediction-drain-ticks", "45"], o => o.PredictionQueueDrainTicks),
+        ("QuickUpdateInterval", ["--quick-update-interval", "3"], o => o.QuickUpdateInterval),
+        ("ExplosionUpdateTicks", ["--explosion-update-ticks", "3"], o => o.ExplosionUpdateTicks),
         ("BotEngagesBotsToo", ["--bot-engages-bots"], o => o.BotEngagesBotsToo),
         ("BotHandoverRule", ["--bot-handover-rule", "distance"], o => o.BotHandoverRule),
         ("BotHandoverRange", ["--bot-handover-range", "400"], o => o.BotHandoverRange),

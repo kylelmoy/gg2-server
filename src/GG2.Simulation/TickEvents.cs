@@ -459,6 +459,18 @@ public struct TickEvents
     /// </summary>
     public bool ArenaWaitingForPlayers;
 
+    /// <summary>
+    /// Whether a rocket or a mine exploded during the tick just run.
+    /// </summary>
+    /// <remarks>
+    /// Nothing on the wire says so: a client creates every rocket from
+    /// <c>WEAPON_FIRE</c> and resolves its explosion against its own estimate
+    /// of where everyone is (upstream issue #68). The server reads this to send
+    /// position updates sooner after one, which is how a client that resolved
+    /// a hit differently is corrected (<c>ServerOptions.ExplosionUpdateTicks</c>).
+    /// </remarks>
+    public bool Exploded;
+
     /// <summary>Forces the seed a slot's next shot uses.</summary>
     public void ForceFireSeed(int slot, ushort seed)
     {
@@ -509,5 +521,6 @@ public struct TickEvents
         ArenaRoundStarted = false;
         ArenaRoundEnded = false;
         ArenaWaitingForPlayers = false;
+        Exploded = false;
     }
 }

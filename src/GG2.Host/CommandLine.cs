@@ -420,6 +420,14 @@ internal static class CommandLine
                     options.PredictionQueueDrainTicks = Math.Clamp(cursor.TakeInt(), 1, 3600);
                     break;
 
+                case "--quick-update-interval":
+                    options.QuickUpdateInterval = Math.Clamp(cursor.TakeInt(), 1, 7);
+                    break;
+
+                case "--explosion-update-ticks":
+                    options.ExplosionUpdateTicks = Math.Clamp(cursor.TakeInt(), 0, 30);
+                    break;
+
                 case "--multi-client-limit":
                     options.MultiClientLimit = cursor.TakeInt();
                     break;
@@ -1167,6 +1175,13 @@ internal static class CommandLine
           --prediction-drain-ticks <n>
                             ticks a predicting client's queue may stand before
                             two inputs merge (default 30)
+          --quick-update-interval <1-7>
+                            ticks between position updates (default 7, the
+                            reference's). Lower corrects clients sooner for
+                            more bandwidth
+          --explosion-update-ticks <0-30>
+                            send position updates for n ticks from each rocket
+                            or mine explosion (default 0, off)
           --bots <n>        fill the server to n players with bots (0 = off)
           --bot-difficulty <1-5>
                             how good they are (default 5, the top tier). The

@@ -172,6 +172,108 @@ public sealed class JoinAndBroadcastTests
     }
 
     /// <summary>
+    /// <c>QuickUpdateInterval</c> lowers the cadence and nothing else: still one
+    /// state update per tick, positions on every nth.
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    public void AConfiguredIntervalSendsPositionsEveryNthTick(int interval)
+    {
+        using var harness = new ServerHarness(o => o.QuickUpdateInterval = interval);
+        var client = harness.JoinClient("watcher");
+        harness.Tick();
+        client.Take(client.Received.Count);
+
+        var startFrame = harness.Server.Frame;
+        for (var i = 0; i < 21; i++)
+        {
+            harness.Tick();
+            var expected = (startFrame + 1 + i) % interval == 0 ? MessageType.QuickUpdate : MessageType.InputState;
+            Assert.Equal(expected, ReadStateUpdate(client, playerCount: 2));
+            Assert.Empty(client.Received);
+        }
+    }
+
+    /// <summary>
+    /// A rocket going off makes the next <c>ExplosionUpdateTicks</c> state
+    /// updates position updates, on top of the cadence; with the setting at 0
+    /// the same explosion changes nothing. The first is the tick AFTER the
+    /// explosion, because a tick's update is written before its simulation runs
+    /// (<c>GameServerBeginStep.gml</c>), so that is the first that can show it.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(3)]
+    public void AnExplosionSendsPositionsForTheConfiguredTicks(int window)
+    {
+        using var harness = new ServerHarness(o => o.ExplosionUpdateTicks = window);
+        var client = harness.JoinClient("watcher");
+
+        // Land just after a scheduled quick update, so the window cannot hide
+        // inside the cadence.
+        harness.TickUntil(() => harness.Server.Frame % 7 == 1, "a frame just past the cadence");
+        client.Take(client.Received.Count);
+
+        // A rocket placed inside the map's solid explodes on its first move.
+        var collision = harness.Server.CollisionForTests;
+        var (x, y) = FindSolid(collision);
+        ref var world = ref harness.Server.WorldForTests;
+        var rocket = new GG2.Simulation.ProjectileState
+        {
+            Kind = GG2.Simulation.ProjectileKind.Rocket,
+            X = x,
+            Y = y,
+            OwnerSlot = GG2.Simulation.ProjectileState.NoOwner,
+            Team = Team.Red,
+            Source = DamageSource.Rocketlauncher,
+            HitDamage = 25,
+            Knockback = 8,
+            DistanceToTravel = 800,
+            LastKnownX = x,
+            LastKnownY = y,
+        };
+        rocket.Motion.Direction = 0;
+        rocket.Motion.Speed = 13;
+        world.SpawnProjectile(rocket);
+
+        var startFrame = harness.Server.Frame;
+        var tiers = new List<MessageType>();
+        for (var i = 0; i < 6; i++)
+        {
+            harness.Tick();
+            tiers.Add(ReadStateUpdate(client, playerCount: 2));
+            Assert.Empty(client.Received);
+        }
+
+        Assert.Equal(0, harness.Server.WorldForTests.LiveProjectileCount);
+        for (var i = 0; i < tiers.Count; i++)
+        {
+            var quick = (startFrame + 1 + i) % 7 == 0 || (i >= 1 && i <= window);
+            Assert.Equal(quick ? MessageType.QuickUpdate : MessageType.InputState, tiers[i]);
+        }
+    }
+
+    private static (double X, double Y) FindSolid(GG2.Simulation.CollisionWorld collision)
+    {
+        // Deep inside the solid: every point of a 40 px grid around it is wall,
+        // so the rocket's first step cannot leave.
+        bool Solid(int px, int py) => !collision.PlaceFreeInMask(new GG2.Simulation.Aabb(px, py, px, py));
+        for (var y = 40; y < collision.Height - 40; y += 10)
+            for (var x = 40; x < collision.Width - 40; x += 10)
+            {
+                var all = true;
+                for (var dy = -20; dy <= 20 && all; dy += 10)
+                    for (var dx = -20; dx <= 20 && all; dx += 10)
+                        all = Solid(x + dx, y + dy);
+                if (all)
+                    return (x, y);
+            }
+
+        throw new InvalidOperationException("no solid ground on the harness map");
+    }
+
+    /// <summary>
     /// Every client gets the same bytes: one serialisation, N sends
     /// (docs/PROTOCOL.md, "Transport").
     /// </summary>

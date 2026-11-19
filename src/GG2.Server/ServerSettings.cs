@@ -378,6 +378,20 @@ public static class ServerSettings
             (o, v) => o.PredictionQueueDrainTicks = Math.Clamp(v, 1, 3600),
             "45"));
 
+        // docs/PREDICTION.md, "Position update cadence". An interval above the
+        // reference's 7 would only make a stock client worse, so 7 is the ceiling.
+        settings.Add(IntRow(
+            "Server", "QuickUpdateInterval", nameof(ServerOptions.QuickUpdateInterval),
+            o => o.QuickUpdateInterval,
+            (o, v) => o.QuickUpdateInterval = Math.Clamp(v, 1, 7),
+            "3"));
+
+        settings.Add(IntRow(
+            "Server", "ExplosionUpdateTicks", nameof(ServerOptions.ExplosionUpdateTicks),
+            o => o.ExplosionUpdateTicks,
+            (o, v) => o.ExplosionUpdateTicks = Math.Clamp(v, 0, 30),
+            "3"));
+
         // The same max/min clamps game_init.gml applies, and they are not
         // decoration: `CapLimit=0` in the reference is a ONE-capture round, not an
         // endless one, because the floor is applied before anything sees it.

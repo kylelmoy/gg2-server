@@ -352,6 +352,45 @@ every tick, to the welcomed client only. Every byte goes only to that one
 client, so it costs a stock player nothing. It is not built because
 nothing measured asks for it.
 
+### Position update cadence
+
+Two settings send `QUICK_UPDATE` more often than the reference, for every
+client, stock clients included. Both default to the reference's behaviour.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `QuickUpdateInterval` | 7 | Ticks between position updates, 1-7. |
+| `ExplosionUpdateTicks` | 0 (off) | After a rocket or mine explodes, the next this-many updates are position updates, starting with the next tick's (an update is written before its tick's simulation runs, so that is the first that can show the blast). A later explosion restarts the window. |
+
+**Why a stock client accepts any cadence.** A position update is a pure
+overwrite: `Character.events/User Event 13.xml` sets `x`, `y`, `hspeed`,
+`vspeed`, both previouses, hp, ammo, cloak and `moveStatus`; sentries, mines
+and moving platforms do the same in their own User Event 13 or 11, and
+`deserializeState` has no side effect that depends on how often it runs. The
+message is the same bytes on any tick, so nothing new reaches the wire, only
+more of a message the client already handles.
+
+**What it is for.** The two sources of visible correction in a stock client
+are its frame clock, which steps a 7-tick window 6 or 8 times, and rockets
+resolved on each client separately (upstream issue #68; `TRAPS-LIVEGAME.md`,
+"Corrections in a soldier duel"). Both corrections grow with the ticks since
+the last position update, so a shorter interval bounds them, and the explosion
+window bounds the second where it occurs at no cost elsewhere.
+
+**Costs.** Bandwidth: a character's position block is 9 bytes more than its
+`INPUTSTATE` block, per player per update, sent to every client. Quantisation:
+each update snaps a client to positions in fifths of a pixel and velocities in
+1/8.5ths, so a predicting client that anchors its local replica on
+`QUICK_UPDATE` (section 3 above) takes up to 0.1 px of that noise each time
+instead of once in seven. A stock client already takes it once per update, and
+re-anchoring stops it accumulating, so for a stock client this is not a cost.
+
+**Not yet measured.** Whether the visible snaps actually shrink. The re-run
+method in `TRAPS-LIVEGAME.md`, "Corrections in a soldier duel", measures it:
+the same duel with the setting on and off, comparing the GM8 client's
+correction distribution. Until that is done, neither setting is turned on in
+the fleet's configs.
+
 ## 4. Lag compensation
 
 No, and not as a per-server option either.

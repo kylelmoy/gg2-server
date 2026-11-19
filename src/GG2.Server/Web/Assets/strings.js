@@ -735,6 +735,8 @@ const STRINGS = {
       "ClientPrediction": "Give clients that ask for it (gg2-client) input acks for client-side prediction. A stock client never asks and is unaffected.",
       "PredictionMaxQueuedInputs": "Inputs a predicting client may have waiting before the oldest merge into one tick.",
       "PredictionQueueDrainTicks": "Ticks a predicting client's input queue may stand before two inputs merge.",
+      "QuickUpdateInterval": "Ticks between position updates, 1..7. 7 is stock; lower corrects clients sooner for more bandwidth.",
+      "ExplosionUpdateTicks": "Send position updates for this many ticks from each rocket or mine explosion. 0 is off (stock).",
       "CapLimit": "Captures to win a round, 1..255. 0 clamps to 1, not unlimited.",
       "Time Limit": "Round length in minutes, 1..255. 0 clamps to 1.",
       "Deathmatch Kill Limit": "Kills to win a team-deathmatch round, 1..65535.",

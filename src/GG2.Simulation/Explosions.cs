@@ -117,6 +117,7 @@ public static class Explosions
         PopBubblesByBox(ref state, rocket.Box, BlastRadiusFor(rocket.Kind) * RocketBubblePopFactor);
 
         state.FreeProjectile(handle);
+        events.Exploded = true;
         return true;
     }
 
@@ -159,6 +160,7 @@ public static class Explosions
         PopBubblesByBox(ref state, rocket.Box, BlastRadiusFor(rocket.Kind) * RocketBubblePopFactor);
 
         state.FreeProjectile(handle);
+        events.Exploded = true;
         return true;
     }
 
@@ -632,6 +634,7 @@ public static class Explosions
                 continue;
 
             state.Projectiles[current.Index].Exploded = true;
+            events.Exploded = true;
 
             SplashCharactersFromMine(world, ref state, in mine, ref events);
             SplashSentriesFromMine(ref state, in mine);

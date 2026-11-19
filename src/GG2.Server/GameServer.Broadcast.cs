@@ -36,6 +36,10 @@ public sealed partial class GameServer
         // reasoning, opposite answer.
         RequestSetupScoreboardSync();
 
+        // See WriteStateUpdate. A second explosion restarts the window.
+        if (_events.Exploded)
+            _explosionUpdatesLeft = Math.Clamp(_options.ExplosionUpdateTicks, 0, 30);
+
         // Fires before deaths, because a weapon fires in a character's Begin
         // Step and a character dies in its End Step — so within one tick the
         // reference appends the WEAPON_FIRE messages first. A sentry's landing
@@ -794,6 +798,9 @@ public sealed partial class GameServer
             _capsSyncPending = true;
     }
 
+    /// <summary>Position updates still owed to the last explosion. See WriteStateUpdate.</summary>
+    private int _explosionUpdatesLeft;
+
     private void WriteStateUpdate()
     {
         // Cadence is part of the contract: the client dead-reckons between the
@@ -820,7 +827,22 @@ public sealed partial class GameServer
             _capsSyncPending = false;
         }
 
-        var tier = _frame % 7 == 0 ? MessageType.QuickUpdate : MessageType.InputState;
+        // The cadence is the reference's 7 unless configured lower, and an
+        // explosion can add updates on top of it. Both are safe for a stock
+        // client because a position update is a pure overwrite of state it
+        // already predicts (Character.events/User Event 13.xml); what they
+        // change is how long a misprediction stands. docs/PREDICTION.md,
+        // "Position update cadence". The explosion window is armed in
+        // AdvanceSimulation, after the tick that exploded, so a frozen server
+        // that keeps writing updates cannot re-arm it.
+        var quick = _frame % Math.Clamp(_options.QuickUpdateInterval, 1, 7) == 0;
+        if (_explosionUpdatesLeft > 0)
+        {
+            quick = true;
+            _explosionUpdatesLeft--;
+        }
+
+        var tier = quick ? MessageType.QuickUpdate : MessageType.InputState;
         _stateWriter.Write(_broadcast, tier);
     }
 

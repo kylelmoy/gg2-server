@@ -103,7 +103,10 @@ observable simulation; owe GM8 nothing else. Concretely:
 
 **Contract — must be reproduced:**
 
-- Every byte layout and message cadence in `PROTOCOL.md`.
+- Every byte layout and message cadence in `PROTOCOL.md`, by default. The
+  one configurable exception is more frequent `QUICK_UPDATE`s
+  (`QuickUpdateInterval`, `ExplosionUpdateTicks`; `PREDICTION.md`, "Position
+  update cadence"), which a client takes as overwrites of state it already has.
 - The numeric result of the character update: position and velocity per tick,
   to the precision the wire and the client's own prediction can distinguish.
 - The *order of operations within* that update, where it changes the number —

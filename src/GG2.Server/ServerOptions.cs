@@ -416,6 +416,28 @@ public sealed class ServerOptions
     public const int PredictionQueueCeiling = 4;
 
     /// <summary>
+    /// Ticks between position updates (<c>QUICK_UPDATE</c>); every other tick
+    /// is an <c>INPUTSTATE</c>. 7 is the reference's cadence
+    /// (<c>GameServerBeginStep.gml</c>). Lower corrects a stock client's
+    /// mispredictions sooner for more bytes: a position update is a pure
+    /// overwrite on the client (<c>Character.events/User Event 13.xml</c>), so
+    /// any cadence is safe to receive. Clamped 1-7. Read at use time.
+    /// docs/PREDICTION.md, "Position update cadence".
+    /// </summary>
+    public int QuickUpdateInterval { get; set; } = 7;
+
+    /// <summary>
+    /// Make the next this-many state updates after a rocket or mine explodes
+    /// position updates, starting with the first that can show the blast (the
+    /// next tick's: an update is written before its tick's simulation). 0 is
+    /// off, as in the reference. A
+    /// client resolves explosions on its own (upstream issue #68), so its
+    /// knockback can be wrong until the next position update; this bounds how
+    /// long. Clamped 0-30. Read at use time.
+    /// </summary>
+    public int ExplosionUpdateTicks { get; set; }
+
+    /// <summary>
     /// Announce this server to the public lobby at
     /// <c>ganggarrison.com:29944</c>, so it appears in the client's server list.
     /// </summary>
