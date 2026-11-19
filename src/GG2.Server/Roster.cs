@@ -84,6 +84,18 @@ public sealed class RosterEntry
     internal int DuelMoveIn { get; set; }
 
     /// <summary>
+    /// The class a duel human was when last looked at: a death that changed it
+    /// was a class change, not a lost duel.
+    /// </summary>
+    internal PlayerClass DuelClass { get; set; }
+
+    /// <summary>
+    /// Who a duel human is to <see cref="DuelLadder"/>: their address, or their
+    /// stable id when they have none. Made once, at pairing.
+    /// </summary>
+    internal string? DuelLadderKey { get; set; }
+
+    /// <summary>
     /// Where this player's per-tick input comes from.
     /// </summary>
     /// <remarks>

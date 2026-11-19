@@ -15,6 +15,7 @@ always red and bots always blue, so the team score reads as humans against bots.
 | Pairing: one bot per human, opposite team, same class, same cell | **Built**: `--duel` / `[Bots] Duel`, `BotPopulationService.Duel.cs`, gated by `DuelServerTests`. A human who picks blue is moved to red; autobalance is held off |
 | A human's death kills their bot, after the kill cam, and both respawn in a new cell on the same tick | **Built**: the bot dies by an ordinary class change with its damage credit cleared (`GameServer.RespawnBotUncredited`), so a human's death never scores for red; its respawn countdown is then set to the human's (`GameServer.ArmBotRespawn`) |
 | A bot's death respawns its human, with no death, in a new cell | **Built**: `GameServer.RelocateDuelist`, gated by `DuelServerTests.TheBotsDeathHealsAndMovesTheHumanWithTheBot` |
+| A difficulty ladder: each human's bot follows their wins and losses, per class | **Built**: `[Bots] DuelLadder`, on by default. See "The difficulty ladder". Gated by `DuelLadderTests` |
 | A bot targets only its partner | **Built**: every bot view carries an opponents table (`WorldView.MayOppose`) that the duel service fills each tick, and every place the bot layer picks an enemy asks it. Gated by `OpponentFilterTests` and `DuelServerTests` |
 
 Run it with `gg2-server --duel --maps maps/duel --botnav nav/duel --map duel_01`.
@@ -84,6 +85,65 @@ that reaches the new character, carrying TDM spawn protection still running,
 is mirrored on the server. No death is scored. The sentry goes by
 `DESTROY_SENTRY`'s body, seen through the subobject bit. Mines and projectiles
 already in flight stay in the old cell.
+
+## The difficulty ladder
+
+On by default (`[Bots] DuelLadder`, `--no-duel-ladder` turns it off). Each
+human's bot plays at a rating that follows their results, kept per human and
+per class, and the bot is named for it: `Soldier 3 (Normal)`. `[Bots]
+Difficulty` is not read for duel bots while it is on. `DuelLadder` in
+`src/GG2.Server/` is the whole of the arithmetic; `BotPopulationService.Duel.cs`
+applies it.
+
+**Levels.** Eight, over the server's five tiers. Tiers 1-4 sit on levels 1, 3,
+5 and 7; levels 2, 4 and 6 interpolate the skill between their neighbours; tier
+5 is level 8. The tiers are tuned to be evenly spaced in play
+(`BotSkill.TierSkills`), so they sit on every other level rather than at even
+skill steps. Tier 5 differs from tier 4 only by human-like aim, an on/off
+switch, so the 7-8 step is not split.
+
+| Level | Skill | Tier | Label |
+|---|---|---|---|
+| 1 | 0.20 | 1 | Easy |
+| 2 | 0.285 | | Easy |
+| 3 | 0.37 | 2 | Normal (a new player's start) |
+| 4 | 0.49 | | Normal |
+| 5 | 0.61 | 3 | Hard |
+| 6 | 0.78 | | Hard |
+| 7 | 0.95, human aim | 4 | Expert |
+| 8 | 0.95 | 5 | Max |
+
+The rating is continuous and the bot plays it exactly; the name shows it
+rounded. On this server the nets always drive, so a level reaches them only
+through `HybridBot`'s handicap (the delay before the first shot, a held aim
+error, the hold-fire roll) and human-like aim. A net's movement and dodging are
+the same at every level, so level 1 is not as weak against a new player as tier
+1 is on the main servers. That has not been measured against a person.
+
+**The staircase.**
+
+| Rule | Value |
+|---|---|
+| A result | The bot dying while its human is alive is a win. The human dying, with the bot alive, is a loss, including a death by the human's own hand. A death that changed the human's class or side, a trade, or a death while the bot is already down counts for nobody |
+| Margin | 0.5 + 0.5 × the winner's health left, so a clean result moves twice what a scrape does |
+| A win | up `step × margin` |
+| A loss | down `step × margin × p / (1 − p)`, with `p` the target (`DuelLadderWinPercent`, 60%: 1.5 times a win). Up and down balance where the human wins `p` of their duels |
+| The step | 1 level to start; halved at each change of direction, to no less than 0.25; back to 0.5 after three losses in a row or after a run of wins as unlikely at `p` (six at 60%). One run length for both would land the restored step on the way up more often, and the rating settled at 55% for a 60% target |
+| When it shows | A beaten bot takes its new skill and name at once. A winning bot takes the new skill at once (it has nobody to fight) and the new name when it is killed after the kill cam, which shows the name it won with |
+| Who | Address and name, per class, in memory, forgotten an hour after the last duel. A stock client reconnects at every change to a map it does not have, and every duel map is one, so a rating kept on the connection would reset each map |
+
+A player who wins every duel cleanly climbs a level a duel. Against a
+simulated player whose chance falls one logistic level wide with the bot's level
+(`DuelLadderTests.ItSettlesAPlayerAtTheTargetWinRate`) the ladder holds the
+target to within a point or two above it, and comes within a level of a player
+who improves by four levels in 9-29 duels. That model is not a person. What would
+show the heuristic wrong: live players' win rates on the duel server sitting
+far from 60% after their first ten duels, or the level a player holds
+swinging by more than two from duel to duel.
+
+The admin panel's `bot-difficulty` sets every bot's skill, duel bots included;
+on a duel server with the ladder on, each bot returns to its human's rating at
+the next result or class change.
 
 ## The duel nets
 

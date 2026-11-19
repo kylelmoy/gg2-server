@@ -674,6 +674,23 @@ public static class ServerSettings
             "Bots", "Duel", nameof(ServerOptions.Duel),
             o => o.Duel, (o, v) => o.Duel = v));
 
+        // DuelLadder, docs/DUEL.md "The difficulty ladder".
+        settings.Add(BoolRow(
+            "Bots", "DuelLadder", nameof(ServerOptions.DuelLadder),
+            o => o.DuelLadder, (o, v) => o.DuelLadder = v));
+
+        settings.Add(IntRow(
+            "Bots", "DuelLadderStartLevel", nameof(ServerOptions.DuelLadderStartLevel),
+            o => o.DuelLadderStartLevel,
+            (o, v) => o.DuelLadderStartLevel = Math.Clamp(v, DuelLadder.MinLevel, DuelLadder.MaxLevel),
+            "5"));
+
+        settings.Add(IntRow(
+            "Bots", "DuelLadderWinPercent", nameof(ServerOptions.DuelLadderWinPercent),
+            o => o.DuelLadderWinPercent,
+            (o, v) => o.DuelLadderWinPercent = Math.Clamp(v, 50, 90),
+            "70"));
+
         // A BEHAVIOUR switch: it changes what a bot does, not what it costs.
         settings.Add(BoolRow(
             "Bots", "Humanize", nameof(ServerOptions.BotHumanize),

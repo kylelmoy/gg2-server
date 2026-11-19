@@ -881,6 +881,27 @@ public sealed class ServerOptions
     public bool Duel { get; set; }
 
     /// <summary>
+    /// On a duel server, each human's bot plays at a level that rises when they
+    /// win and falls when they lose, one per human and class, and is named for
+    /// it ("Soldier 3 (Normal)"); <c>[Bots] Difficulty</c> is not read. Off, every
+    /// duel bot plays <c>Difficulty</c>. <see cref="DuelLadder"/>,
+    /// <c>docs/DUEL.md</c>, "The difficulty ladder". Read every tick.
+    /// </summary>
+    public bool DuelLadder { get; set; } = true;
+
+    /// <summary>
+    /// The ladder level a human starts each class at, 1-8. 3 is tier 2's skill.
+    /// Read when a rating is first made.
+    /// </summary>
+    public int DuelLadderStartLevel { get; set; } = 3;
+
+    /// <summary>
+    /// The percentage of duels the ladder settles a human at winning, 50-90.
+    /// Read at each result.
+    /// </summary>
+    public int DuelLadderWinPercent { get; set; } = 60;
+
+    /// <summary>
     /// Whether every bot puts up a chat bubble when its brain changes hands.
     /// </summary>
     /// <remarks>

@@ -1,0 +1,217 @@
+using GG2.Bots;
+using GG2.Protocol;
+
+namespace GG2.Server;
+
+/// <summary>
+/// The duel server's difficulty ladder: each human's bot plays at a rating that
+/// rises when the human wins and falls when they lose, one rating per human and
+/// class. <c>docs/DUEL.md</c>, "The difficulty ladder".
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Eight levels over the server's five tiers.</b> Tiers 1-4 sit on levels 1,
+/// 3, 5 and 7 and the levels between interpolate their skill; tier 5 is level 8.
+/// Tier 5 differs from tier 4 only by <see cref="BotSkill.HumanAim"/>, a switch
+/// with nothing between, so the 7-8 step is not split. The tiers were tuned to
+/// be evenly spaced in play (<see cref="BotSkill.TierSkills"/>), which is why
+/// they sit on every other level rather than at even skill intervals.
+/// </para>
+/// <para>
+/// <b>The rating is continuous and the bot plays it exactly</b>; the name shows
+/// it rounded. A weighted up-down staircase: a win moves the rating up by
+/// <c>step × margin</c> and a loss down by <c>step × margin × p / (1 − p)</c>, so
+/// it stands still where the human wins a fraction <c>p</c> of their duels. The
+/// margin is <c>0.5 + 0.5 × the winner's health left</c>, so a clean win counts
+/// for twice a scrape. The step starts at a whole level, halves at each change of
+/// direction down to a quarter, and goes back up to a half after three losses
+/// in a row or a run of wins as unlikely (six at 60%), so a new player settles in a few duels and a player who warms
+/// up or tilts moves again.
+/// </para>
+/// <para>
+/// <b>Remembered by address, for an hour, in memory only.</b> A stock client
+/// reconnects at every change to a map it does not have, and every duel map is
+/// one, so a rating kept on the connection would reset each map.
+/// </para>
+/// </remarks>
+public sealed class DuelLadder
+{
+    /// <summary>The lowest level.</summary>
+    public const int MinLevel = 1;
+
+    /// <summary>The highest level: tier 5, the nets as trained.</summary>
+    public const int MaxLevel = 8;
+
+    /// <summary>The step a new rating starts with, in levels.</summary>
+    public const double FirstStep = 1.0;
+
+    /// <summary>The smallest step, in levels.</summary>
+    public const double MinStep = 0.25;
+
+    /// <summary>The step a run of <see cref="RunLength"/> same-way results restores.</summary>
+    public const double RunStep = 0.5;
+
+    /// <summary>
+    /// Losses in a row that restore <see cref="RunStep"/>. Wins need a run as
+    /// unlikely at the target rate (<see cref="WinRunLength"/>): with one length
+    /// for both, runs of wins are the commoner at any target over a half, the
+    /// restored step lands on the way up more often than down, and the rating
+    /// settles above the target (measured: 55% for a 60% target).
+    /// </summary>
+    public const int RunLength = 3;
+
+    /// <summary>How long a rating outlives its last duel: an hour of ticks.</summary>
+    public const long ForgetTicks = 60L * 60 * GameConstants.TickRate;
+
+    // Levels 1, 3, 5, 7 are tiers 1-4 (BotSkill.TierSkills); 8 is tier 5.
+    private static ReadOnlySpan<double> AnchorSkills => [0.20, 0.37, 0.61, 0.95];
+
+    private readonly Dictionary<(string Player, PlayerClass Class), Rating> _ratings = [];
+
+    /// <summary>One human's standing with one class.</summary>
+    public sealed class Rating
+    {
+        /// <summary>Continuous, in levels, <see cref="MinLevel"/> to <see cref="MaxLevel"/>.</summary>
+        public double Value { get; internal set; }
+
+        /// <summary>The next result's step, in levels.</summary>
+        public double Step { get; internal set; } = FirstStep;
+
+        /// <summary>+1 after a win, -1 after a loss, 0 before either.</summary>
+        public int LastDirection { get; internal set; }
+
+        /// <summary>Results in a row the same way as <see cref="LastDirection"/>.</summary>
+        public int Run { get; internal set; }
+
+        /// <summary>Duels counted.</summary>
+        public int Duels { get; internal set; }
+
+        internal long LastSeen { get; set; }
+    }
+
+    /// <summary>Ratings held, live or not yet forgotten.</summary>
+    public int Count => _ratings.Count;
+
+    /// <summary>
+    /// The rating for a human and class, made at <paramref name="startLevel"/>
+    /// if there is none, and marked seen at <paramref name="tick"/>.
+    /// </summary>
+    public Rating For(string player, PlayerClass playerClass, int startLevel, long tick)
+    {
+        if (!_ratings.TryGetValue((player, playerClass), out var rating))
+        {
+            rating = new Rating { Value = Math.Clamp(startLevel, MinLevel, MaxLevel) };
+            _ratings[(player, playerClass)] = rating;
+        }
+
+        rating.LastSeen = tick;
+        return rating;
+    }
+
+    /// <summary>Forgets every rating not seen for <see cref="ForgetTicks"/>.</summary>
+    public void Forget(long tick)
+    {
+        List<(string, PlayerClass)>? stale = null;
+        foreach (var (key, rating) in _ratings)
+        {
+            if (tick - rating.LastSeen > ForgetTicks)
+                (stale ??= []).Add(key);
+        }
+
+        if (stale is null)
+            return;
+
+        foreach (var key in stale)
+            _ratings.Remove(key);
+    }
+
+    /// <summary>
+    /// Moves <paramref name="rating"/> for one duel.
+    /// </summary>
+    /// <param name="rating">The human's rating for the class they fought as.</param>
+    /// <param name="won">Whether the human won.</param>
+    /// <param name="winnerHealth">The winner's health left, as a fraction of their maximum.</param>
+    /// <param name="targetWinRate">The share of duels the rating settles the human at winning, 0.5-0.9.</param>
+    public static void Record(Rating rating, bool won, double winnerHealth, double targetWinRate)
+    {
+        var p = Math.Clamp(targetWinRate, 0.5, 0.9);
+        var margin = 0.5 + (0.5 * Math.Clamp(winnerHealth, 0, 1));
+        var direction = won ? 1 : -1;
+
+        if (rating.LastDirection == direction)
+        {
+            rating.Run++;
+            if (rating.Run >= (won ? WinRunLength(p) : RunLength) && rating.Step < RunStep)
+                rating.Step = RunStep;
+        }
+        else
+        {
+            if (rating.LastDirection != 0)
+                rating.Step = Math.Max(MinStep, rating.Step / 2);
+
+            rating.Run = 1;
+        }
+
+        var move = rating.Step * margin * (won ? 1 : p / (1 - p));
+        rating.Value = Math.Clamp(rating.Value + (direction * move), MinLevel, MaxLevel);
+        rating.LastDirection = direction;
+        rating.Duels++;
+    }
+
+    /// <summary>
+    /// The wins in a row as likely at <paramref name="targetWinRate"/> as
+    /// <see cref="RunLength"/> losses: 3 at a half, 6 at 60%, 11 at 70%.
+    /// </summary>
+    public static int WinRunLength(double targetWinRate)
+    {
+        var p = Math.Clamp(targetWinRate, 0.5, 0.9);
+        return (int)Math.Ceiling((RunLength * Math.Log(1 - p) / Math.Log(p)) - 1e-9);
+    }
+
+    /// <summary>The level a rating shows as.</summary>
+    public static int LevelOf(double rating) =>
+        Math.Clamp((int)Math.Floor(rating + 0.5), MinLevel, MaxLevel);
+
+    /// <summary>The skill a rating plays at: the tiers' skills, interpolated between their levels.</summary>
+    public static BotSkill SkillOf(double rating)
+    {
+        var r = Math.Clamp(rating, MinLevel, MaxLevel);
+
+        double skill;
+        if (r >= 7)
+        {
+            skill = AnchorSkills[3];
+        }
+        else
+        {
+            // Anchors on levels 1, 3, 5, 7.
+            var segment = Math.Min(2, (int)((r - 1) / 2));
+            var t = (r - 1 - (2 * segment)) / 2;
+            skill = AnchorSkills[segment] + ((AnchorSkills[segment + 1] - AnchorSkills[segment]) * t);
+        }
+
+        // Tier 5 is the one without human aim, and it is level 8: the switch
+        // flips at the rounding boundary so the name and the aim agree.
+        return BotSkill.For(skill) with { HumanAim = LevelOf(r) < MaxLevel };
+    }
+
+    /// <summary>The word a level is shown with.</summary>
+    public static string LabelOf(int level) => level switch
+    {
+        <= 2 => "Easy",
+        <= 4 => "Normal",
+        <= 6 => "Hard",
+        7 => "Expert",
+        _ => "Max",
+    };
+
+    /// <summary>
+    /// A duel bot's name: its class, level and label, "Soldier 3 (Normal)". The
+    /// longest, "Engineer 7 (Expert)", is 19 bytes of the 20 a name may have.
+    /// </summary>
+    public static string NameOf(PlayerClass playerClass, double rating)
+    {
+        var level = LevelOf(rating);
+        return $"{playerClass} {level} ({LabelOf(level)})";
+    }
+}

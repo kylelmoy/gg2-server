@@ -27,6 +27,10 @@ public sealed class DuelServerTests
             o.NavCacheDirectory = Path.Combine(ReferenceTree.RepositoryRoot, "nav", "duel");
             o.Duel = true;
             o.RespawnTimeSeconds = respawnSeconds;
+
+            // These are about the pairing, at the server's Difficulty;
+            // DuelLadderTests has the ladder.
+            o.DuelLadder = false;
         });
 
     private static int HumanSlot(GameServer server)
@@ -369,6 +373,7 @@ public sealed class DuelServerTests
             o.MapDirectory = Path.Combine(ReferenceTree.MapsDirectory, "duel");
             o.NavCacheDirectory = Path.Combine(ReferenceTree.RepositoryRoot, "nav", "duel");
             o.Duel = true;
+            o.DuelLadder = false;
         });
 
         JoinAndPlay(harness, Team.Red, playerClass);

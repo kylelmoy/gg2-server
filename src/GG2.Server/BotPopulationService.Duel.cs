@@ -50,9 +50,21 @@ public sealed partial class BotPopulationService
     /// </summary>
     internal const int WinMoveTicks = 45;
 
+    /// <summary>How often forgotten ladder ratings are swept out: once a minute.</summary>
+    private const int LadderSweepTicks = 60 * GameConstants.TickRate;
+
+    /// <summary>Every duel human's rating, by address, name and class. <see cref="DuelLadder"/>.</summary>
+    internal DuelLadder Ladder { get; } = new();
+
+    private long _duelTick;
+
     private void ServiceDuel(in BotPopulationOptions options)
     {
         var cells = Spawns is null ? 0 : Math.Min(Spawns.Count(Team.Red, 0), Spawns.Count(Team.Blue, 0));
+        var ladder = _server.Options.DuelLadder;
+
+        if (++_duelTick % LadderSweepTicks == 0)
+            Ladder.Forget(_duelTick);
 
         // Humans first: team, cell, bot, death. Indexed, and re-read through the
         // entry after anything that can move the roster (adding a bot appends, so
@@ -65,8 +77,10 @@ public sealed partial class BotPopulationService
 
             // Humans are red: the score is humans against bots. Forced rather than
             // requested — the balance guard would refuse red, the bigger team,
-            // whenever a pair is already waiting on a bot.
-            if (human.Team == Team.Blue)
+            // whenever a pair is already waiting on a bot. The death a team
+            // change costs is not a lost duel.
+            var changedSide = human.Team == Team.Blue;
+            if (changedSide)
                 _server.ForceTeam(slot, Team.Red);
 
             if (human.Team != Team.Red || cells == 0)
@@ -99,6 +113,9 @@ public sealed partial class BotPopulationService
                 human.DuelBotKillIn = 0;
                 human.DuelMoveIn = 0;
                 Retarget();
+
+                if (ladder)
+                    ApplyLadder(slot, human, bot, rename: true);
             }
 
             // Every death scores one (PlayerCommands.BidFarewell included), and a
@@ -120,6 +137,33 @@ public sealed partial class BotPopulationService
 
             if (died || won)
                 human.DuelCell = PickFreeCell(cells, human);
+
+            if (ladder)
+            {
+                // A loss is a death that was not a class or team change, with the
+                // bot alive to have won it: a trade, or a death while the bot is
+                // already down, counts for nobody. A death by the human's own hand
+                // is a loss, so it is no way out of one.
+                var lost = died
+                    && !changedSide
+                    && human.DuelClass == human.Class
+                    && _server.IsAlive(bot);
+
+                if (won || lost)
+                {
+                    var rating = Ladder.For(LadderKey(slot, human), human.Class, _server.Options.DuelLadderStartLevel, _duelTick);
+                    DuelLadder.Record(
+                        rating,
+                        won,
+                        _server.HealthFractionOf(won ? slot : bot),
+                        _server.Options.DuelLadderWinPercent / 100.0);
+
+                    // A beaten bot is renamed at once; a winning one keeps its
+                    // name through the kill cam, which shows it, and is renamed
+                    // when it is killed below.
+                    ApplyLadder(slot, human, bot, rename: won);
+                }
+            }
 
             _server.PinSpawn(slot, human.DuelCell);
             _server.PinSpawn(bot, human.DuelCell);
@@ -163,7 +207,11 @@ public sealed partial class BotPopulationService
                     // Spawn on the human's tick, not a whole respawn time after
                     // this late kill.
                     _server.ArmBotRespawn(bot, alive ? 1 : Math.Max(1, respawn));
-                    _server.RenameBot(bot, options.NamePrefix + human.Class.ToString());
+
+                    if (ladder)
+                        ApplyLadder(slot, human, bot, rename: true);
+                    else
+                        _server.RenameBot(bot, options.NamePrefix + human.Class.ToString());
                 }
             }
             else if (won)
@@ -188,10 +236,15 @@ public sealed partial class BotPopulationService
                 // it kills a live bot, which is the point — the duel restarts as
                 // the matching class.
                 _server.RequestBotClass(bot, human.Class);
-                _server.RenameBot(bot, options.NamePrefix + human.Class.ToString());
+
+                if (ladder)
+                    ApplyLadder(slot, human, bot, rename: true);
+                else
+                    _server.RenameBot(bot, options.NamePrefix + human.Class.ToString());
             }
 
             human.DuelBotDeaths = _server.DeathsOf(bot);
+            human.DuelClass = human.Class;
         }
 
         RemoveUnpairedBots();
@@ -211,6 +264,35 @@ public sealed partial class BotPopulationService
 
         _server.SetOpponents(opponents);
     }
+
+    /// <summary>
+    /// Sets a duel bot's skill to its human's rating for the human's class and,
+    /// when asked, names it for the level.
+    /// </summary>
+    private void ApplyLadder(int slot, RosterEntry human, int bot, bool rename)
+    {
+        var rating = Ladder.For(LadderKey(slot, human), human.Class, _server.Options.DuelLadderStartLevel, _duelTick);
+
+        if (ScriptedBot.Of(_server.SourceOf(bot)) is { } scripted)
+            scripted.Skill = DuelLadder.SkillOf(rating.Value);
+
+        if (rename)
+        {
+            var name = DuelLadder.NameOf(human.Class, rating.Value);
+            if (_server.NameOf(bot) != name)
+                _server.RenameBot(bot, name);
+        }
+    }
+
+    /// <summary>
+    /// Who a human is to the ladder: address and name, so two people behind one
+    /// address keep their own ratings, and a stock client reconnecting at a map
+    /// change keeps its. Made once per roster entry.
+    /// </summary>
+    private string LadderKey(int slot, RosterEntry human) =>
+        human.DuelLadderKey ??= _server.AddressOf(slot) is { Length: > 0 } address
+            ? address + "/" + human.Name
+            : "#" + human.StableId;
 
     /// <summary>
     /// A random cell no other duelling human holds, and not the human's own when

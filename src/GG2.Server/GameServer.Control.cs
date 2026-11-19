@@ -639,6 +639,16 @@ public sealed partial class GameServer
     /// <summary>The scoreboard's death count for <paramref name="slot"/> this map.</summary>
     public double DeathsOf(int slot) => Scoring.Get(in _world, slot, StatIndex.Deaths);
 
+    /// <summary>A live character's health as a fraction of its class's maximum, 0-1; 0 when dead.</summary>
+    public double HealthFractionOf(int slot)
+    {
+        if (!_world.IsAlive(slot))
+            return 0;
+
+        ref readonly var character = ref _world.Characters[slot];
+        return Math.Clamp(character.Hp / character.Stats.MaxHp, 0, 1);
+    }
+
     /// <summary>The roster slot <paramref name="entry"/> is in now, or -1 if it has left.</summary>
     public int SlotOf(RosterEntry entry) => _roster.IndexOf(entry);
 

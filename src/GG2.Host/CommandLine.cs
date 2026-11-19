@@ -605,6 +605,18 @@ internal static class CommandLine
                     options.Duel = true;
                     break;
 
+                case "--no-duel-ladder":
+                    options.DuelLadder = false;
+                    break;
+
+                case "--duel-ladder-start":
+                    options.DuelLadderStartLevel = Math.Clamp(cursor.TakeInt(), DuelLadder.MinLevel, DuelLadder.MaxLevel);
+                    break;
+
+                case "--duel-ladder-win-percent":
+                    options.DuelLadderWinPercent = Math.Clamp(cursor.TakeInt(), 50, 90);
+                    break;
+
                 // The [Bots] section. `--bots N` is the fill target, which is what
                 // the reference calls FillToPlayers — ⚠️ a total including humans,
                 // not a bot count, so a server filling to 8 drops a bot every time
@@ -1322,6 +1334,14 @@ internal static class CommandLine
                             Replaces the --bots fill and holds autobalance off.
                             Serve --maps maps/duel --botnav nav/duel.
                             docs/DUEL.md
+          --no-duel-ladder  every duel bot plays --bot-difficulty instead of
+                            a level that follows its human's wins and losses
+          --duel-ladder-start <1-8>
+                            the ladder level a human starts each class at
+                            (default 3, tier 2's skill)
+          --duel-ladder-win-percent <50-90>
+                            the share of duels the ladder settles a human at
+                            winning (default 60)
           --no-nav-distances
                             do not give A* the exact precomputed distances. Bots
                             fall back to the weighted straight-line heuristic,
