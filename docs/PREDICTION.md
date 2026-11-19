@@ -385,11 +385,45 @@ each update snaps a client to positions in fifths of a pixel and velocities in
 instead of once in seven. A stock client already takes it once per update, and
 re-anchoring stops it accumulating, so for a stock client this is not a cost.
 
-**Not yet measured.** Whether the visible snaps actually shrink. The re-run
-method in `TRAPS-LIVEGAME.md`, "Corrections in a soldier duel", measures it:
-the same duel with the setting on and off, comparing the GM8 client's
-correction distribution. Until that is done, neither setting is turned on in
-the fleet's configs.
+**Measured against a stock GM8 client** (2026-11-19, `565a7f9`): the
+instrumented client from `TRAPS-LIVEGAME.md`, "Corrections in a soldier
+duel", against a local duel server on `duel_05`, the client a moving soldier
+and the duel soldier net firing at it. Five runs of 4-6 minutes. The fighting
+was the same in every run: the client was hurt 10.5-11 times a minute and the
+bot fired 17-19 rockets a minute. Corrections are counted per minute rather
+than per update, because more updates means more, smaller corrections.
+
+| Run | Interval | Explosion ticks | Corrections of 3 px or more (client + bot, per min) | of which at a respawn | Largest (px) | Total snapped (client + bot, px/min) |
+|---|---|---|---|---|---|---|
+| A, stock | 7 | 0 | 9.9 | 4.4 | 36 | 122 |
+| A2, stock | 7 | 0 | 7.4 | 2.6 | 22 | 110 |
+| B | 7 | 4 | 5.4 | 2.6 | 12 | 108 |
+| C | 3 | 0 | 1.6 | 0 | 12 | 110 |
+| D | 3 | 4 | 2.3 | 0 | 13 | 119 |
+
+- **Interval 3 takes the corrections of 3 px or more down by a factor of
+  4-5**, and the 4 px vertical correction a stock client takes at every
+  respawn falls below 3 px. The 22-36 px snaps of the stock runs did not
+  occur in B, C or D.
+- **The total distance snapped does not change.** The same misprediction is
+  corrected, in steps of a third the size. That is what a player sees as
+  smoother; it is not less error.
+- **Explosion updates alone showed no clear benefit** in this sample: B sits
+  between the two stock runs, and adding them to interval 3 (D) did not
+  improve on C. Only the bot fired, so the client's own rocket jumps were not
+  exercised.
+- **Caveats.** Loopback, so 0.2-2% of frames handled 0 or 2 updates where a
+  LAN or the internet has more; one map; minutes, not hours. A 22-36 px snap is
+  a rare event, and its absence from three runs is suggestive, not proven.
+
+**Bandwidth at interval 3**: a position update is 9 bytes per player more than
+an `INPUTSTATE`, so a 24-player server sends each client about
+`24 x 9 x 30 x (1/3 - 1/7)` = 1.2 KB/s more. A duel's two players, about
+0.1 KB/s.
+
+What would change the recommendation: a predicting client (gg2-client) whose
+own character's correction rises above the quantisation floor at interval 3,
+or a re-run over a real network where interval 3 does not beat stock.
 
 ## 4. Lag compensation
 
