@@ -163,6 +163,12 @@ if (Environment.GetEnvironmentVariable("BENCH_TURNS") is { } turnMatches)
     return;
 }
 
+if (Environment.GetEnvironmentVariable("BENCH_VERSUS") is { } versusMatches)
+{
+    Bench.Versus.Run(maps, Beside(maps, "nav", "GG2_NAV"), Beside(maps, "checkpoints", "CHECKPOINTS"), int.Parse(versusMatches));
+    return;
+}
+
 if (Environment.GetEnvironmentVariable("BENCH_TIERS") is { } tierMatches)
 {
     Bench.Tiers.RunMatches(maps, Beside(maps, "nav", "GG2_NAV"), Beside(maps, "checkpoints", "CHECKPOINTS"), int.Parse(tierMatches));

@@ -33,6 +33,12 @@ namespace GG2.Bots;
 /// two batches compared after the fact.
 /// </param>
 /// <param name="BlueDifficulty">Blue's, as <paramref name="RedDifficulty"/>.</param>
+/// <param name="RedBrain">
+/// Red's brain in place of <see cref="Brain"/>, or null for the shared one. The
+/// per-team form is what makes "one controller against another" one match rather
+/// than two batches each compared to the all-scripted arm.
+/// </param>
+/// <param name="BlueBrain">Blue's, as <paramref name="RedBrain"/>.</param>
 /// <param name="HandicapOnly">
 /// A team's own tier reaches only <see cref="HybridBot.HandicapSkill"/>, and every
 /// scripted layer plays at <see cref="Difficulty"/>. Isolates how much of a tier
@@ -79,7 +85,9 @@ public readonly record struct HeadlessMatchOptions(
     Team? HumanizeTeam = null,
     HumanizeOptions? HumanizeWith = null,
     bool HumanAimByTier = false,
-    HumanizeOptions? HumanAimWith = null)
+    HumanizeOptions? HumanAimWith = null,
+    BotBrainSpec? RedBrain = null,
+    BotBrainSpec? BlueBrain = null)
 {
     /// <summary>
     /// A short match on <c>ctf_truefort</c> with twelve bots. ⚠️ The values are
@@ -123,6 +131,14 @@ public readonly record struct HeadlessMatchOptions(
     /// codebase's own rule is that a zeroed field meaning "off" is a trap.
     /// </remarks>
     public bool HasExplicitTeams => RedBots is not null || BlueBots is not null;
+
+    /// <summary>The brain <paramref name="team"/>'s bots get, or null for all-scripted.</summary>
+    public BotBrainSpec? BrainOf(Team team) => team switch
+    {
+        Team.Red => RedBrain ?? Brain,
+        Team.Blue => BlueBrain ?? Brain,
+        _ => Brain,
+    };
 
     /// <summary>The tier <paramref name="team"/> plays at.</summary>
     public int DifficultyOf(Team team) => team switch

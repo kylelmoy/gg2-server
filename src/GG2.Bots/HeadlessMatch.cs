@@ -465,15 +465,16 @@ public sealed class HeadlessMatch : DrivenWorld
     /// </remarks>
     private void WrapInBrain()
     {
-        if (Options.Brain is not { } brain)
-            return;
-
         for (var slot = 1; slot < SlotCount; slot++)
         {
             if (SourceOf(slot) is not ScriptedBot scripted)
                 continue;
 
             if (Options.HybridTeam is { } team && State.Players[slot].Team != team)
+                continue;
+
+            // Per team, so two controllers can meet in one match (RedBrain, BlueBrain).
+            if (Options.BrainOf(State.Players[slot].Team) is not { } brain)
                 continue;
 
             var hybrid = brain.Wrap(scripted);
