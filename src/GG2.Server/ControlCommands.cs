@@ -1004,6 +1004,10 @@ public static class ControlCommands
             json.Append(",\"assists\":").Append(stats.Assists);
             json.Append(",\"points\":").Append(stats.Points);
 
+            // Auto difficulty's rating, continuous, 1-8; absent while it is off.
+            if (server.Population?.AutoRatingOf(slot) is > 0 and var level)
+                json.Append(",\"autoLevel\":").Append(Number(level));
+
             if (server.TryGetExactPosition(slot, out var x, out var y, out var hp))
             {
                 json.Append(",\"x\":").Append(Number(x));

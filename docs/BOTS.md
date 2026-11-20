@@ -59,6 +59,7 @@ near them", has the state rules that apply to everyone, bot work included.
 | the next-hop route table (CPD-Search) and the exact A\* heuristic — **ON by default**, `--no-nav-distances` | `NavDistances.cs`, `NavDistanceSet.cs`, `NavSearch.cs` | `NavDistancesTests`, `NavDistanceSetTests`, `NavSearchTests` |
 | the tables **on disk** — `nav/<key>.dist.gz`, next-hop only, cost rebuilt on load | `NavDistanceFile.cs`, `NavDistances.FromNextHops` | `NavDistanceFileTests` |
 | difficulty 1-4 aim like people, tier 5 untouched, `--no-bot-human-aim` to turn off (on) | `HumanizedBot.ByTier`, `BotSkill.HumanAim` | `HumanizedBotTests`, `BotCombatTests` |
+| auto difficulty: each bot plays the rating of the human it is shooting at, `[Bots] AutoDifficulty` (off) | `BotPopulationService.Auto.cs`, `OpponentSkills.cs`, `ScriptedBot.Skill` | `AutoDifficultyTests` |
 | human-like output inside a fight, `--bot-humanize` (off) | `HumanizedBot.cs` | `HumanizedBotTests` |
 | route dispersion: occupancy (on) and static lanes (measured, not adopted), `--no-bot-occupancy` | `BotLanes.cs`, `BotRoles.cs`, `ScriptedBot.cs` | `BotLanesTests`, `BotOccupancyFlagTests`, `RouteDiversityTests` |
 | the training environment seam | `gg2-rl/env/GG2.Env/`, in the `gg2-rl` repo | `EnvProtocolTests`, in `gg2-rl` |
@@ -73,6 +74,36 @@ deleted; see `CLAUDE.md`, "Except the bot layer".
 
 **So the only judge of a bot change is measurement.** That is what "Measuring a
 bot change" below is for.
+
+### Auto difficulty
+
+`[Bots] AutoDifficulty` (`--auto-difficulty`, off by default, not read on a duel
+server) gives every human a rating and makes every bot play at the rating of the
+human it is shooting at. **Per target, not per team**: a team-wide level would
+make the bots a strong human faces strong for a new player on the other side
+too, and with mostly-bot teams it reduces to per-human anyway.
+
+| | |
+|---|---|
+| The rating | `DuelLadder`'s staircase and its eight levels (`docs/DUEL.md`, "The difficulty ladder"), one per human across every class, by address and name, forgotten an hour after it was last used |
+| A result | A kill between a human and a bot, whoever `PlayerDeathEvent.Killer` credits: the bot dying is a win, the human dying a loss, with the margin the winner's health left. Human against human, a suicide and a death with no killer count for nobody |
+| The target | `AutoDifficultyWinPercent`, 60%: the rating stands still where a human wins 60% of their fights with bots |
+| The start | A new human starts on `Difficulty`'s level (`DuelLadder.LevelOfTier`: tiers 1-4 on levels 1, 3, 5, 7, tier 5 on 8), where a bot plays exactly the tier, so turning it on changes nothing until results come in |
+| Against a bot, a generator, nothing | The bot's own `Difficulty` |
+| Where it is read | `ScriptedBot.Skill` resolves the current target's row in `OpponentSkills`, which the population service rewrites every tick; every reader of a bot's skill goes through it (the combat step, which re-reads it once the target is settled so a fresh target's acquire hold is already its player's, the reflex dodge, `HumanizedBot`, and `HybridBot`'s handicap over a net). A bot is never renamed for it |
+| Where it shows | The admin panel's player list, an `LV` tag on each human (`autoLevel` in `state`) |
+
+Results are scored in `BotPopulationService.ObserveDeaths`, straight after the
+simulation ticks. `AutoDifficultyTests.ALiveDeathToABotLowersTheRating` is the
+end-to-end gate and goes red if that call is removed.
+
+What it cannot change: under a policy net a level reaches only the handicap and
+the aim, as on the duel server, so level 1 against a new player may still be
+too hard; the target the handicap follows is the scripted layer's, which can
+differ from the one the net is shooting at; and three bots on one weak human
+are each easy but still three. What would show it wrong: humans' kill:death
+ratios against bots, after ten minutes of play, sitting far from 1.5 (60%), or
+spread widely between players.
 
 ### The hybrid, and the result that decides how to use it
 

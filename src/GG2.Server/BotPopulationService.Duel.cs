@@ -300,7 +300,7 @@ public sealed partial class BotPopulationService
     /// change keeps its. Made once per roster entry.
     /// </summary>
     private string LadderKey(int slot, RosterEntry human) =>
-        human.DuelLadderKey ??= _server.AddressOf(slot) is { Length: > 0 } address
+        human.RatingKey ??= _server.AddressOf(slot) is { Length: > 0 } address
             ? address + "/" + human.Name
             : "#" + human.StableId;
 

@@ -72,13 +72,19 @@ public static class BotCombat
         in WorldView world,
         int slot,
         int tick,
-        in BotSkill skill,
+        in BotSkill ownSkill,
         ref GmlRandom random,
         NavGraph? graph,
         out double aim,
-        out double aimDistance)
+        out double aimDistance,
+        OpponentSkills? opponents = null)
     {
         ArgumentNullException.ThrowIfNull(state);
+
+        // Auto difficulty: the skill is the target's row, re-read once the target
+        // is settled below, so the acquire hold of a fresh target is already the
+        // one its player is rated for.
+        var skill = opponents is null ? ownSkill : opponents.Against(state.Target, ownSkill);
 
         aim = state.AimDir;
         aimDistance = 0;
@@ -100,6 +106,9 @@ public static class BotCombat
 
         KeepOrDropTarget(state, in world, slot, tick, range, in skill);
         LookForOne(state, in world, slot, tick, range, ref random);
+
+        if (opponents is not null)
+            skill = opponents.Against(state.Target, ownSkill);
 
         // --- the medic exception: a hurt team-mate outranks an enemy ---------
         //

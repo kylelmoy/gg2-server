@@ -691,6 +691,17 @@ public static class ServerSettings
             (o, v) => o.DuelLadderWinPercent = Math.Clamp(v, 50, 90),
             "70"));
 
+        // AutoDifficulty, docs/BOTS.md "Auto difficulty".
+        settings.Add(BoolRow(
+            "Bots", "AutoDifficulty", nameof(ServerOptions.AutoDifficulty),
+            o => o.AutoDifficulty, (o, v) => o.AutoDifficulty = v));
+
+        settings.Add(IntRow(
+            "Bots", "AutoDifficultyWinPercent", nameof(ServerOptions.AutoDifficultyWinPercent),
+            o => o.AutoDifficultyWinPercent,
+            (o, v) => o.AutoDifficultyWinPercent = Math.Clamp(v, 50, 90),
+            "70"));
+
         // A BEHAVIOUR switch: it changes what a bot does, not what it costs.
         settings.Add(BoolRow(
             "Bots", "Humanize", nameof(ServerOptions.BotHumanize),

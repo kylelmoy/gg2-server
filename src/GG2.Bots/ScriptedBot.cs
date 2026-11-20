@@ -124,8 +124,32 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     /// </remarks>
     public bool SpotsReachableOnly { get; init; } = true;
 
-    /// <summary>How good it is.</summary>
-    public BotSkill Skill { get; set; }
+    /// <summary>
+    /// How good it is: against its current target, the target's row in
+    /// <see cref="OpponentSkills"/> where there is one, and its own skill
+    /// otherwise. Setting it sets its own.
+    /// </summary>
+    /// <remarks>
+    /// Every reader — the combat step, the reflex dodge, <c>HumanizedBot</c>'s
+    /// aim and legs, <c>HybridBot</c>'s handicap over a policy net — goes through
+    /// here, so a per-target skill reaches all of them at once.
+    /// </remarks>
+    public BotSkill Skill
+    {
+        get => OpponentSkills is { } table ? table.Against(Combat.Target, _skill) : _skill;
+        set => _skill = value;
+    }
+
+    private BotSkill _skill;
+
+    /// <summary>The skill this bot plays at with no rated target.</summary>
+    public BotSkill OwnSkill => _skill;
+
+    /// <summary>
+    /// Per-opponent skills, or null to play <see cref="OwnSkill"/> against
+    /// everybody. Auto difficulty's; <see cref="GG2.Bots.OpponentSkills"/>.
+    /// </summary>
+    public OpponentSkills? OpponentSkills { get; set; }
 
     /// <summary>Its route and the counters that decide when to give up on one.</summary>
     public BotPathState Path { get; }
@@ -762,7 +786,7 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
             : _follower.Step(Path, in self, in world.Weapon(slot), tick, Query, Occupancy);
 
         var fireKeys = BotCombat.Step(
-            Combat, in world, slot, tick, Skill, ref Random, _graph, out var aim, out var aimDistance);
+            Combat, in world, slot, tick, _skill, ref Random, _graph, out var aim, out var aimDistance, OpponentSkills);
 
         // The launch hand-off, and it goes AFTER the combat half because this
         // is the only place that can see both. The follower owns LEFT / RIGHT /

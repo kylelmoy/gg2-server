@@ -617,6 +617,16 @@ internal static class CommandLine
                     options.DuelLadderWinPercent = Math.Clamp(cursor.TakeInt(), 50, 90);
                     break;
 
+                // Auto difficulty: each bot plays the rating of the human it
+                // shoots at. ServerOptions.AutoDifficulty, docs/BOTS.md.
+                case "--auto-difficulty":
+                    options.AutoDifficulty = true;
+                    break;
+
+                case "--auto-difficulty-win-percent":
+                    options.AutoDifficultyWinPercent = Math.Clamp(cursor.TakeInt(), 50, 90);
+                    break;
+
                 // The [Bots] section. `--bots N` is the fill target, which is what
                 // the reference calls FillToPlayers — ⚠️ a total including humans,
                 // not a bot count, so a server filling to 8 drops a bot every time
@@ -1342,6 +1352,14 @@ internal static class CommandLine
           --duel-ladder-win-percent <50-90>
                             the share of duels the ladder settles a human at
                             winning (default 60)
+          --auto-difficulty each human gets a rating from their kills of and
+                            deaths to bots, and every bot plays the rating of
+                            the human it is shooting at; bot against bot, and a
+                            new human's start, stay --bot-difficulty. Not on a
+                            duel server
+          --auto-difficulty-win-percent <50-90>
+                            the share of fights with bots auto difficulty
+                            settles a human at winning (default 60)
           --no-nav-distances
                             do not give A* the exact precomputed distances. Bots
                             fall back to the weighted straight-line heuristic,

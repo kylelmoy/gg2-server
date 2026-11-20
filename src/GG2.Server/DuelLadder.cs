@@ -66,7 +66,8 @@ public sealed class DuelLadder
     // Levels 1, 3, 5, 7 are tiers 1-4 (BotSkill.TierSkills); 8 is tier 5.
     private static ReadOnlySpan<double> AnchorSkills => [0.20, 0.37, 0.61, 0.95];
 
-    private readonly Dictionary<(string Player, PlayerClass Class), Rating> _ratings = [];
+    // A null class is one rating for every class: auto difficulty's.
+    private readonly Dictionary<(string Player, PlayerClass? Class), Rating> _ratings = [];
 
     /// <summary>One human's standing with one class.</summary>
     public sealed class Rating
@@ -94,9 +95,10 @@ public sealed class DuelLadder
 
     /// <summary>
     /// The rating for a human and class, made at <paramref name="startLevel"/>
-    /// if there is none, and marked seen at <paramref name="tick"/>.
+    /// if there is none, and marked seen at <paramref name="tick"/>. A null class
+    /// is one rating across every class, which is what auto difficulty keeps.
     /// </summary>
-    public Rating For(string player, PlayerClass playerClass, int startLevel, long tick)
+    public Rating For(string player, PlayerClass? playerClass, int startLevel, long tick)
     {
         if (!_ratings.TryGetValue((player, playerClass), out var rating))
         {
@@ -108,10 +110,14 @@ public sealed class DuelLadder
         return rating;
     }
 
+    /// <summary>The rating for a human and class if there is one, without marking it seen.</summary>
+    public bool TryGet(string player, PlayerClass? playerClass, out Rating rating) =>
+        _ratings.TryGetValue((player, playerClass), out rating!);
+
     /// <summary>Forgets every rating not seen for <see cref="ForgetTicks"/>.</summary>
     public void Forget(long tick)
     {
-        List<(string, PlayerClass)>? stale = null;
+        List<(string, PlayerClass?)>? stale = null;
         foreach (var (key, rating) in _ratings)
         {
             if (tick - rating.LastSeen > ForgetTicks)
@@ -166,6 +172,17 @@ public sealed class DuelLadder
     {
         var p = Math.Clamp(targetWinRate, 0.5, 0.9);
         return (int)Math.Ceiling((RunLength * Math.Log(1 - p) / Math.Log(p)) - 1e-9);
+    }
+
+    /// <summary>
+    /// The level a server difficulty tier sits on: tiers 1-4 on levels 1, 3, 5
+    /// and 7, tier 5 on level 8.
+    /// </summary>
+    public static int LevelOfTier(int tier)
+    {
+        var tiers = BotSkill.TierSkills.Length;
+        var clamped = Math.Clamp(tier, 1, tiers);
+        return clamped == tiers ? MaxLevel : (2 * clamped) - 1;
     }
 
     /// <summary>The level a rating shows as.</summary>

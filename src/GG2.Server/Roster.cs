@@ -99,10 +99,11 @@ public sealed class RosterEntry
     internal PlayerClass DuelClass { get; set; }
 
     /// <summary>
-    /// Who a duel human is to <see cref="DuelLadder"/>: their address, or their
-    /// stable id when they have none. Made once, at pairing.
+    /// Who a human is to a <see cref="DuelLadder"/>, the duel's or auto
+    /// difficulty's: their address and name, or their stable id when they have no
+    /// address. Made once, at first use.
     /// </summary>
-    internal string? DuelLadderKey { get; set; }
+    internal string? RatingKey { get; set; }
 
     /// <summary>
     /// Where this player's per-tick input comes from.

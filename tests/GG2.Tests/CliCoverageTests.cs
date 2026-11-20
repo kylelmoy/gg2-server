@@ -142,6 +142,8 @@ public sealed class CliCoverageTests
         ("DuelLadder", ["--no-duel-ladder"], o => o.DuelLadder),
         ("DuelLadderStartLevel", ["--duel-ladder-start", "5"], o => o.DuelLadderStartLevel),
         ("DuelLadderWinPercent", ["--duel-ladder-win-percent", "70"], o => o.DuelLadderWinPercent),
+        ("AutoDifficulty", ["--auto-difficulty"], o => o.AutoDifficulty),
+        ("AutoDifficultyWinPercent", ["--auto-difficulty-win-percent", "70"], o => o.AutoDifficultyWinPercent),
         ("SpeedMultiplier", ["--speed", "max"], o => o.SpeedMultiplier),
         ("RecordingDirectory", ["--record", "some/traces"], o => o.RecordingDirectory),
         ("ControlPort", ["--control-port", "9001"], o => o.ControlPort),

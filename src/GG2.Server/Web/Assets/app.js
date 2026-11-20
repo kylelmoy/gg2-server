@@ -493,6 +493,14 @@ function row(player) {
   }
   if (player.intel) name.appendChild(tag(t('app.roster.intelTag'), 'intel'));
 
+  // Auto difficulty's rating: what every bot plays at against this player.
+  if (player.autoLevel) {
+    const level = player.autoLevel.toFixed(1);
+    const badge = tag(t('app.roster.autoLevelTag', { level }), 'brain');
+    badge.title = t('app.roster.autoLevel', { level });
+    name.appendChild(badge);
+  }
+
   wrap.appendChild(name);
   who.appendChild(wrap);
   if (player.address) who.title = player.address;

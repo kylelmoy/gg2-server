@@ -32,6 +32,9 @@ public sealed partial class GameServer
 
         MatchSimulation.Tick(_collision, ref _world, _inputs.AsSpan(0, count), ref _events, _spawnPoints);
 
+        // Straight after the tick, while the events' slots are the roster's.
+        _population?.ObserveDeaths(in _events, count);
+
         // ⚠️ And this one after it, equally deliberately. Same method-level
         // reasoning, opposite answer.
         RequestSetupScoreboardSync();

@@ -902,6 +902,22 @@ public sealed class ServerOptions
     public int DuelLadderWinPercent { get; set; } = 60;
 
     /// <summary>
+    /// Auto difficulty, off a duel server: each human has a rating that rises
+    /// when they kill a bot and falls when a bot kills them, and every bot plays
+    /// at the rating of the human it is shooting at. Bot-against-bot fights, and
+    /// a new human's start, are <c>[Bots] Difficulty</c>. Not read on a duel
+    /// server, which has <see cref="DuelLadder"/>. <c>docs/BOTS.md</c>, "Auto
+    /// difficulty". Read every tick.
+    /// </summary>
+    public bool AutoDifficulty { get; set; }
+
+    /// <summary>
+    /// The percentage of their fights with bots auto difficulty settles a human
+    /// at winning, 50-90. Read at each result.
+    /// </summary>
+    public int AutoDifficultyWinPercent { get; set; } = 60;
+
+    /// <summary>
     /// Whether every bot puts up a chat bubble when its brain changes hands.
     /// </summary>
     /// <remarks>

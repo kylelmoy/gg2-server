@@ -420,6 +420,10 @@ public sealed partial class BotPopulationService
     {
         var options = _server.Options.Bots;
 
+        // First, ahead of every early return: the table has to name this tick's
+        // slots whether or not the fill does anything. Auto difficulty.
+        ServiceAuto(in options);
+
         // Above the Enabled check: a duel server's bots are one per human, not a
         // fill, and the [Bots] fill settings are not read. docs/DUEL.md.
         if (_server.Options.Duel)
@@ -699,6 +703,10 @@ public sealed partial class BotPopulationService
 
             // A duel bot has nobody to regroup with; ScriptedBot.SpawnsReady.
             SpawnsReady = _server.Options.Duel,
+
+            // Always the table, which is empty with auto difficulty off, so
+            // turning it on live reaches the bots already playing.
+            OpponentSkills = Opponents,
         };
 
         // Null where the map has no cache, which leaves the bot fighting whatever

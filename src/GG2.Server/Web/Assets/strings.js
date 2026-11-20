@@ -350,6 +350,8 @@ const STRINGS = {
       "botTag": "BOT",
       "brainShare": "{brain}: {share}% of ticks ({micro}/{polls})",
       "intelTag": "INTEL",
+      "autoLevelTag": "LV {level}",
+      "autoLevel": "Auto difficulty: bots fighting this player play level {level} of 8",
       "actionsFor": "Actions for {name}"
     },
     "objective": {
@@ -807,6 +809,8 @@ const STRINGS = {
       "DuelLadder": "Duel server: each human's bot plays a level 1..8 that rises when they win and falls when they lose, one per class, and is named for it (Soldier 3 (Normal)). Difficulty is not read. Off: every duel bot plays Difficulty.",
       "DuelLadderStartLevel": "Ladder level a duel human starts each class at, 1..8. 3 is difficulty 2's skill.",
       "DuelLadderWinPercent": "Share of duels the ladder settles a human at winning, 50..90.",
+      "AutoDifficulty": "Each human gets a level 1..8 from their kills of and deaths to bots, and every bot plays the level of the human it is shooting at. Bot against bot, and a new human's start, stay at Difficulty. Not used on a duel server.",
+      "AutoDifficultyWinPercent": "Share of their fights with bots auto difficulty settles a human at winning, 50..90.",
       "Humanize": "Inside a fight, hold movement keys a few ticks at a time and make aim flick and correct like a person's. Behavioural: also weaker.",
       "HumanizePreset": "Which measured humanize preset Humanize uses: v3 (default), strokes (v4), lazy (v5, lazy aim between shots), hold (D2, aim held while no target), tracking (D3) tracking2 (D4-D5) tracking3 (D6, with the policy's legs filtered) tracking4 (D7, the policy's legs kept running) tracking5 (D8, the aim's timing refitted) tracking6 (D9, D8 with a slower pursuit) tracking7 (D10, tracking6 with legs and jumps thinned to the people's airtime) tracking8 (D11, tracking7 with a faster pursuit) or tracking9 (D12, tracking7 with a reversal cooldown in place of the averaged legs; what tiers 1-4 use).",
       "HumanAim": "Difficulty 1-4 aim like people: they lag a target and sit off it. Tier 5 is untouched. Behavioural: the lower tiers are weaker for it.",
