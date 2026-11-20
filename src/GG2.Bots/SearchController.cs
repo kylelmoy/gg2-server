@@ -169,17 +169,16 @@ public sealed class SearchController : IMicroController
     public void OnHandoverIn(in WorldView world, int slot) => _search.ResyncAim(in world, slot);
 
     /// <summary>
-    /// Nothing. <c>RolloutSearch</c> keeps its own cadence across a gap, so a
-    /// re-entry waits for the search's next boundary rather than starting one.
+    /// Drops the decision in progress, as <see cref="SimPolicyController.OnHandoverOut"/> does.
     /// </summary>
     /// <remarks>
-    /// <b>Deliberately unlike <see cref="SimPolicyController.OnHandoverOut"/></b>,
-    /// and inherited verbatim from <c>SearchBot</c>, which zeroed nothing here.
-    /// The arms were measured with this asymmetry.
+    /// <see cref="HybridBot"/> releases off a boundary when its bot dies or takes
+    /// the intel, and the search's countdown runs only while it is polled. Kept,
+    /// the decision never ended and the search never took that bot again: after
+    /// its first death mid-decision a search bot was scripted for the rest of the
+    /// match. <c>docs/BOTS.md</c>' arm-3 numbers were measured with that defect.
     /// </remarks>
-    public void OnHandoverOut()
-    {
-    }
+    public void OnHandoverOut() => _search.AbandonDecision();
 
     public PlayerInput Poll(in WorldView world, int slot, int tick)
     {

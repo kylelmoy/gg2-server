@@ -400,6 +400,16 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     public bool AtDecisionBoundary(int slot) => slot != _currentSlot || _ticksLeftInDecision <= 0;
 
     /// <summary>
+    /// Drops the decision in progress, so the next poll starts a new one.
+    /// </summary>
+    /// <remarks>
+    /// For a release off a decision boundary. The countdown only runs while this
+    /// is polled, so a decision left open while another controller drives is
+    /// never finished, and <see cref="AtDecisionBoundary"/> would stay false.
+    /// </remarks>
+    public void AbandonDecision() => _ticksLeftInDecision = 0;
+
+    /// <summary>
     /// Points this search's decoder at where the character is ACTUALLY aiming.
     /// </summary>
     /// <remarks>

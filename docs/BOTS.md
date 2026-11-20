@@ -119,6 +119,15 @@ read 72.37, 98.31 and 97.47ms serially (`Threads.cs`) — so a pass at 6
 matches/map does not mean 40 would; widening coverage can only make the max
 worse.
 
+**Every arm-3 number below understates the search.** They were measured while
+`SearchController.OnHandoverOut` kept a decision open across a release off a
+decision boundary (a death, an intel pickup). The search's countdown runs only
+while it drives, so the decision never ended and a search bot stayed scripted
+after its first such release. On `ctf_truefort` that held the search side's
+wheel share at 3% against the policy's 36%; with the release fixed it is 21%
+(`BENCH_VERSUS`, 4 matches). `SearchBotTests.AReleaseMidDecisionLeavesTheSearchReady`
+gates the fix. Re-measure before quoting the figures below as the search's.
+
 **Death share.** Pooled over ~34,000 deaths (`BENCH_ARMS`, 8 bots, 21 maps, 40
 matches/arm, 2026-09-01): arm 1 49.82%, arm 2 46.17%, arm 3 44.55%. Arm 3 beats
 arm 2 by 1.62 points (z = −4.26) and beats arm 1 (z = −13.82). At the match

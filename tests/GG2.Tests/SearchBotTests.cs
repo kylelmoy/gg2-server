@@ -52,6 +52,32 @@ public sealed class SearchBotTests
     }
 
     /// <summary>
+    /// A release mid-decision leaves the search ready to take the wheel again.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="HybridBot"/> releases off a decision boundary when its bot dies
+    /// or picks up the intel, and the search is polled only while it drives, so a
+    /// countdown kept across the release never runs out: that bot stayed scripted
+    /// for the rest of the match. <c>BENCH_VERSUS</c> read it as the search side
+    /// holding the wheel 3% of its polls against the policy's 36%.
+    /// </remarks>
+    [Fact]
+    public void AReleaseMidDecisionLeavesTheSearchReady()
+    {
+        var world = World();
+        var red = Duel(world, 80);
+        var search = new SearchController(new RolloutOptions(HorizonTicks: 8));
+        var view = new WorldView(in world.State, world.Collision);
+
+        search.Poll(in view, red, 0);
+        Assert.False(search.AtDecisionBoundary(red), "one poll into a four-tick decision is mid-decision");
+
+        search.OnHandoverOut();
+
+        Assert.True(search.AtDecisionBoundary(red));
+    }
+
+    /// <summary>
     /// Far apart, the scripted layer drives and the search never runs.
     /// </summary>
     /// <remarks>
