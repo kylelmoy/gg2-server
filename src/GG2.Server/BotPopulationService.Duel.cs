@@ -93,6 +93,7 @@ public sealed partial class BotPopulationService
                 human.DuelBotDeaths = -1;
                 human.DuelBotKillIn = 0;
                 human.DuelMoveIn = 0;
+                human.DuelEngaged = false;
                 _server.PinSpawn(slot, null);
                 continue;
             }
@@ -243,6 +244,12 @@ public sealed partial class BotPopulationService
                     _server.RenameBot(bot, options.NamePrefix + human.Class.ToString());
             }
 
+            // Once per stay on red: the class menu a join opens sends no keys, so
+            // the first key is the human ready to fight. Reopening the menu later
+            // is indistinguishable from standing still and does not re-arm it.
+            if (!human.DuelEngaged && _server.IsAlive(slot) && _server.KeysOf(slot) != PlayerKeys.None)
+                human.DuelEngaged = true;
+
             human.DuelBotDeaths = _server.DeathsOf(bot);
             human.DuelClass = human.Class;
         }
@@ -252,14 +259,17 @@ public sealed partial class BotPopulationService
         // Last, after the removals have compacted the roster: each bot may fight
         // its own human and nobody else. The bot layer picks targets by distance,
         // and a human in the next cell can be nearer than a partner across a big
-        // one; walls do not stop that choice, only the shot.
+        // one; walls do not stop that choice, only the shot. Until its human has
+        // pressed a key, a bot's only allowed opponent is itself, which is
+        // nobody: it stands still and holds fire while the class menu is open.
         Span<byte> opponents = stackalloc byte[WorldState.MaxSlots];
         opponents.Fill(WorldView.AnyOpponent);
 
         for (var slot = 1; slot < _server.RosterCount; slot++)
         {
-            if (_server.EntryOf(slot).DuelPartner is { } partner && _server.SlotOf(partner) is var bot and > 0)
-                opponents[bot] = (byte)slot;
+            var human = _server.EntryOf(slot);
+            if (human.DuelPartner is { } partner && _server.SlotOf(partner) is var bot and > 0)
+                opponents[bot] = human.DuelEngaged ? (byte)slot : (byte)bot;
         }
 
         _server.SetOpponents(opponents);

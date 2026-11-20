@@ -84,6 +84,15 @@ public sealed class RosterEntry
     internal int DuelMoveIn { get; set; }
 
     /// <summary>
+    /// Whether a duel human has pressed any key since joining red. Until then
+    /// their bot has nobody to fight: a stock client sends a key byte of zero
+    /// while the team or class menu is open (<c>PlayerControl.events/Begin
+    /// Step.xml</c>, <c>if(!menuOpen)</c>), and joining red spawns them as the
+    /// default class with the class menu still up.
+    /// </summary>
+    internal bool DuelEngaged { get; set; }
+
+    /// <summary>
     /// The class a duel human was when last looked at: a death that changed it
     /// was a class change, not a lost duel.
     /// </summary>

@@ -59,7 +59,68 @@ public sealed class DuelServerTests
             "the human and its bot to be alive",
             maxTicks: 300);
 
+        Engage(harness, client);
         return client;
+    }
+
+    /// <summary>
+    /// Presses Down for a tick, which is the human closing the class menu: until
+    /// then their bot has no opponent. Down rather than a direction, so the
+    /// human stays on their spawn, and it does not end spawn protection.
+    /// </summary>
+    internal static void Engage(ServerHarness harness, LoopbackClient client)
+    {
+        client.SendInputState(new PlayerInput(PlayerKeys.Down, 0, 0));
+        harness.TickUntil(
+            () => HumanSlot(harness.Server) is var h and > 0 && harness.Server.EntryOf(h).DuelEngaged,
+            "the human's key to engage its bot",
+            maxTicks: 30);
+        client.SendInputState(new PlayerInput(PlayerKeys.None, 0, 0));
+        harness.Tick();
+    }
+
+    /// <summary>
+    /// A human who has pressed nothing since joining — the stock client's class
+    /// menu sends a key byte of zero — is not fought: the bot neither fires nor
+    /// walks, past the end of spawn protection, until the human's first key.
+    /// </summary>
+    [Fact]
+    public void ADuelBotWaitsForItsHumansFirstKey()
+    {
+        using var harness = Duel();
+        var client = harness.JoinClient("duellist");
+        client.SendChangeTeam(Team.Red);
+        client.SendChangeClass(PlayerClass.Soldier);
+
+        var server = harness.Server;
+        harness.TickUntil(
+            () => HumanSlot(server) is var h and > 0 && server.IsAlive(h)
+                && server.BotSlots.Count == 1 && server.IsAlive(BotSlot(server)),
+            "the human and its bot to be alive",
+            maxTicks: 300);
+
+        var human = HumanSlot(server);
+        var bot = BotSlot(server);
+        var start = server.WorldForTests.Characters[bot].X;
+
+        // Twice the 150 ticks of spawn protection, so the hold is not the
+        // protection's.
+        for (var t = 0; t < 300; t++)
+        {
+            harness.Tick();
+            Assert.Equal(PlayerKeys.None, server.WorldForTests.Characters[bot].KeyState);
+        }
+
+        Assert.False(server.EntryOf(human).DuelEngaged);
+        Assert.Equal(start, server.WorldForTests.Characters[bot].X);
+        Assert.True(Gml.Equal(server.WorldForTests.Characters[human].DeathmatchInvulnerable, 0));
+
+        Engage(harness, client);
+
+        harness.TickUntil(
+            () => (server.WorldForTests.Characters[bot].KeyState & (PlayerKeys.Left | PlayerKeys.Right | PlayerKeys.Attack)) != 0,
+            "the bot to move or fire once its human has pressed a key",
+            maxTicks: 30);
     }
 
     private static SpawnPoints Spawns(ServerHarness harness)
@@ -167,6 +228,24 @@ public sealed class DuelServerTests
         var server = harness.Server;
         harness.TickUntil(() => server.BotSlots.Count == 2, "two bots", maxTicks: 300);
         harness.Tick(2);
+
+        // Before either human has pressed a key, neither bot may oppose anybody.
+        foreach (var bot in server.BotSlots)
+        {
+            for (var other = 1; other < server.RosterCount; other++)
+            {
+                if (other != bot)
+                    Assert.False(server.OpponentsForTests[bot] == other, $"bot {bot} may oppose {other} before any key");
+            }
+        }
+
+        first.SendInputState(new PlayerInput(PlayerKeys.Down, 0, 0));
+        second.SendInputState(new PlayerInput(PlayerKeys.Down, 0, 0));
+        harness.TickUntil(
+            () => Enumerable.Range(1, server.RosterCount - 1).All(s => server.EntryOf(s).IsBot || server.EntryOf(s).DuelEngaged),
+            "both humans' keys to engage their bots",
+            maxTicks: 30);
+        harness.Tick();
 
         var view = new WorldView(in server.WorldForTests, new CollisionWorld(
             LevelMap.FromPng(harness.Options.Map, File.ReadAllBytes(Path.Combine(harness.Options.MapDirectory, harness.Options.Map + ".png")))),
@@ -312,6 +391,7 @@ public sealed class DuelServerTests
 
         var server = harness.Server;
         harness.TickUntil(() => server.BotSlots.Count == 1 && server.IsAlive(BotSlot(server)), "the bot to spawn", maxTicks: 300);
+        Engage(harness, client);
 
         var bot = BotSlot(server);
         var still = 0;
@@ -321,8 +401,10 @@ public sealed class DuelServerTests
             still++;
         }
 
-        // Measured 3 ticks for each; the hold alone used to be up to 90.
-        Assert.InRange(still, 0, 10);
+        // From the human's first key, which is when a duel bot is given its
+        // target: measured 18 for each, the default skill's 15-tick AcquireTicks
+        // plus the engage. The regroup hold this guards against was up to 90.
+        Assert.InRange(still, 0, 25);
     }
 
     /// <summary>

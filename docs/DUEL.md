@@ -31,6 +31,7 @@ Run it with `gg2-server --duel --maps maps/duel --botnav nav/duel --map duel_01`
 | The human dies (any death: their death count rose) | A new free cell, never the one just left while another is free, and the human's sentry is destroyed. The bot stays alive for `KillCamTicks` (90, three seconds), or until the human is one tick from respawning, then is re-classed to the human's class with no credit, which kills it, and its respawn countdown is set to the human's so both appear in the new cell on the same tick |
 | The bot dies while its human is alive | The human won: a new free cell is picked and pinned at once. After `WinMoveTicks` (45, a second and a half) the human is respawned there with no death (a fresh character: hp, ammo, reload, motion, burning and spawn protection all as a respawn leaves them) and loses their sentry; the bot's respawn countdown is set so it appears there on the same tick. A death during the wait cancels the move, and the death's own rules apply |
 | The bot dies while its human is dead | No win; nothing moves beyond the human's death above |
+| The human has pressed no key since joining red | The bot has no opponent, so it stands still and holds fire. Joining red spawns the human as the default class with the class menu up, and a stock client sends a key byte of 0 while any menu is open (`PlayerControl.events/Begin Step.xml`, `if(!menuOpen)`). The first nonzero key byte from a live human lets the bot go, once per stay on red: reopening the menu later reads as standing still and does not re-arm it. Gated by `DuelServerTests.ADuelBotWaitsForItsHumansFirstKey` |
 | Every tick | Each bot's only allowed opponent is its own human (`GameServer.SetOpponents`). The bot layer picks targets by distance and walls do not stop that choice, so without it a bot could pick a human in the next cell, 420 px of wall away. While the human waits to respawn the bot has nobody to fight and stands still |
 | The human changes class while dead | The bot follows by the ordinary class change |
 | The human spectates or leaves | The bot is removed |
@@ -56,9 +57,10 @@ ticks after spawning until a team-mate is near (`BotConstants.RegroupTicks`),
 and picks its first objective at the next 30-tick `ObjectivePeriod`; in a duel
 there is no team-mate, so that was up to four seconds stood in front of its
 human. `ScriptedBot.SpawnsReady`, set only on a duel server, skips the hold and
-decides on the life's first tick: measured on `duel_01`, a soldier, scout and
-heavy each press a direction within 3 ticks of spawning (it was 20 for the
-first soldier). Gated by `DuelServerTests.ADuelBotMovesOffItsSpawnAtOnce`.
+decides on the life's first tick. Measured on `duel_01` from the human's first
+key, a soldier, scout and heavy each press a direction within 18 ticks: the
+default skill's 15-tick `AcquireTicks` for a newly given target, plus the
+engage. Gated by `DuelServerTests.ADuelBotMovesOffItsSpawnAtOnce`.
 
 **A bot holds fire at a spawn-protected target.** Pressing `Attack` or
 `Special` ends a character's own protection whether or not anything fires

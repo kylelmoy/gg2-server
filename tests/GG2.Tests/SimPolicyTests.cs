@@ -756,6 +756,7 @@ public sealed class SimPolicyTests : IDisposable
             () => server.BotSlots.Count == 1 && server.IsAlive(server.BotSlots[0]),
             "the Quote human's bot to be alive",
             maxTicks: 300);
+        DuelServerTests.Engage(harness, client);
 
         var bot = server.BotSlots[0];
         var driven = 0;

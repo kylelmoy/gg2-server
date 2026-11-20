@@ -636,6 +636,12 @@ public sealed partial class GameServer
         opponents.CopyTo(_opponents);
     }
 
+    /// <summary>
+    /// The keys <paramref name="slot"/> held at the last input gather: for a
+    /// client, its last INPUTSTATE's key byte.
+    /// </summary>
+    public PlayerKeys KeysOf(int slot) => (uint)slot < (uint)_inputs.Length ? _inputs[slot].Keys : PlayerKeys.None;
+
     /// <summary>The scoreboard's death count for <paramref name="slot"/> this map.</summary>
     public double DeathsOf(int slot) => Scoring.Get(in _world, slot, StatIndex.Deaths);
 

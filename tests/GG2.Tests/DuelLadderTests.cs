@@ -206,6 +206,7 @@ public sealed class DuelLadderTests
         client.SendChangeTeam(Team.Red);
         client.SendChangeClass(playerClass);
         WaitForBoth(harness);
+        DuelServerTests.Engage(harness, client);
         return client;
     }
 
