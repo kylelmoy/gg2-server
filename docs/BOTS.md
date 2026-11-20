@@ -128,6 +128,18 @@ wheel share at 3% against the policy's 36%; with the release fixed it is 21%
 (`BENCH_VERSUS`, 4 matches). `SearchBotTests.AReleaseMidDecisionLeavesTheSearchReady`
 gates the fix. Re-measure before quoting the figures below as the search's.
 
+**Head to head, the policy wins the fights and the search wins more matches.**
+`BENCH_VERSUS=10` at `39cdd24`: 21 maps, 210 matches, 12 bots, both tier 5,
+`Distance` rule, all nine classes, the nine shipped nets against the search
+with no arbiter. The search team takes 0.519 ± 0.017 of a match's deaths (pooled
+7,105 of 13,870, 0.512), so the policy is ahead in the fighting by about two
+points, and four maps lean the other way (`tdm_mantic` 0.443 ± 0.037). Of the 85
+decided matches the search won 52 and the policy 33. The wheel shares differ
+(policy 0.27, search 0.17 of polls), so the two controllers were not asked
+equally often; one candidate cause is that a medic net takes a beaming medic and
+the search does not (`IBeamController`). Not measured: why the search wins more
+objectives while dying more, and either controller under a live arbiter.
+
 **Death share.** Pooled over ~34,000 deaths (`BENCH_ARMS`, 8 bots, 21 maps, 40
 matches/arm, 2026-09-01): arm 1 49.82%, arm 2 46.17%, arm 3 44.55%. Arm 3 beats
 arm 2 by 1.62 points (z = −4.26) and beats arm 1 (z = −13.82). At the match
