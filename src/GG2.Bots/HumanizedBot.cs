@@ -99,6 +99,10 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
     private bool _jumpOut;
     private int _jumpAt = int.MinValue / 2;
 
+    // D12, the reversal cooldown: the last direction the legs moved, and since when.
+    private int _lastDirection;
+    private int _directionSince = int.MinValue / 2;
+
     public HumanizedBot(IInputSource inner, HumanizeOptions options, uint seed)
     {
         _inner = inner;
@@ -132,14 +136,14 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
     /// <summary>
     /// The difficulty knob: every bot is wrapped, and the filter runs only while the
     /// bot's current <see cref="BotSkill.HumanAim"/> asks for it, with
-    /// <see cref="HumanizeOptions.Tracking7"/> (D10; <see cref="HumanizeOptions.Tracking6"/> was D9, <see cref="HumanizeOptions.Tracking2"/> D4-D5 and <see cref="HumanizeOptions.Tracking"/> D3). Otherwise it is an exact pass-through
+    /// <see cref="HumanizeOptions.Tracking9"/> (D12; <see cref="HumanizeOptions.Tracking7"/> was D10, <see cref="HumanizeOptions.Tracking6"/> D9, <see cref="HumanizeOptions.Tracking2"/> D4-D5 and <see cref="HumanizeOptions.Tracking"/> D3). Otherwise it is an exact pass-through
     /// that draws nothing, so tier 5 plays exactly as it would unwrapped.
     /// </summary>
     /// <param name="inner">The brain.</param>
     /// <param name="seed">The filter's own stream.</param>
-    /// <param name="options">The preset, or null for <see cref="HumanizeOptions.Tracking7"/>; a bench arm sets it.</param>
+    /// <param name="options">The preset, or null for <see cref="HumanizeOptions.Tracking9"/>; a bench arm sets it.</param>
     public static HumanizedBot ByTier(IInputSource inner, uint seed, HumanizeOptions? options = null) =>
-        new(inner, options ?? HumanizeOptions.Tracking7, seed) { OnlyWhenSkillAsks = true };
+        new(inner, options ?? HumanizeOptions.Tracking9, seed) { OnlyWhenSkillAsks = true };
 
     /// <summary>Run only while the scripted layer's skill has <see cref="BotSkill.HumanAim"/>.</summary>
     public bool OnlyWhenSkillAsks { get; init; }
@@ -148,7 +152,7 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
     {
         var input = PollAim(in world, slot, tick);
 
-        return Options.FiltersLegs ? Legs(input, in world, slot, tick) : input;
+        return Options.FiltersLegs || Options.ReversalCooldown ? Legs(input, in world, slot, tick) : input;
     }
 
     private PlayerInput PollAim(in WorldView world, int slot, int tick)
@@ -238,6 +242,20 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
             _intent = wanted;
             _activity = Math.Abs(wanted);
             _heading = wanted;
+            _lastDirection = wanted;
+            _directionSince = int.MinValue / 2;
+        }
+        else if (Options.ReversalCooldown)
+        {
+            // D12: the brain's keys pass, except that a reversal waits until the
+            // legs have held their direction for the skill's cooldown. Holding the
+            // old direction meanwhile is the overshoot a person's turn-around has;
+            // a run reverses at once, so the bot never coasts past its target.
+            if (!policy || wanted != -_lastDirection || wanted == 0
+                || tick - _directionSince >= _scripted.Skill.ReversalCooldownTicks)
+            {
+                _heading = wanted;
+            }
         }
         else
         {
@@ -290,6 +308,16 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
                 if (_jumpDecision == true)
                     _jumpAt = tick;
             }
+        }
+
+        // Bookkept on every tick, the scripted layer's included, so a handover
+        // starts from the direction the bot was really moving.
+        var moved = policy ? _heading : wanted;
+
+        if (moved != 0 && moved != _lastDirection)
+        {
+            _lastDirection = moved;
+            _directionSince = tick;
         }
 
         if (!policy)
@@ -530,6 +558,12 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
 /// <param name="LegIdleActivity">D7. Moving, the legs stop once the brain's activity falls below this.</param>
 /// <param name="JumpKeep">The chance a policy jump press passes.</param>
 /// <param name="JumpRefractoryTicks">No policy jump passes within this many ticks of the last one that did.</param>
+/// <param name="ReversalCooldown">
+/// D12. On ticks the policy drives, the brain's left/right passes as it is, except
+/// that a reversal waits until the legs have moved one way for the scripted
+/// layer's <see cref="BotSkill.ReversalCooldownTicks"/>. Replaces D6/D7's
+/// averaging, and <paramref name="LegMemory"/> must then be NaN.
+/// </param>
 /// <param name="HoldWithoutTarget">
 /// While the scripted layer has no target and an enemy is within <paramref name="Range"/>,
 /// hold the aim rather than following the walk. D2.
@@ -562,7 +596,8 @@ public sealed record HumanizeOptions(
     double JumpKeep = 1.0,
     int JumpRefractoryTicks = 0,
     double LegReverseIntent = double.NaN,
-    double LegIdleActivity = 0.2)
+    double LegIdleActivity = 0.2,
+    bool ReversalCooldown = false)
 {
     /// <summary>Whether D6's leg filter is on.</summary>
     public bool FiltersLegs => !double.IsNaN(LegMemory);
@@ -723,11 +758,11 @@ public sealed record HumanizeOptions(
     public static HumanizeOptions Tracking6 { get; } = Tracking5 with { PursuitGain = 0.10 };
 
     /// <summary>
-    /// D10's candidate: <see cref="Tracking6"/>'s aim with <see cref="Tracking4"/>'s
+    /// D10: <see cref="Tracking6"/>'s aim with <see cref="Tracking4"/>'s
     /// legs, and the policy's jumps thinned to the people's grounded share rather
     /// than their take-off count: half the presses pass, with no refractory window.
     /// Fitted with <c>BENCH_TURNS</c>'s grounded share at tier 4 (<c>gg2-rl</c>
-    /// <c>docs/PLAN.md</c> phase 5, D10). <b>What tiers 1-4 use</b>, through
+    /// <c>docs/PLAN.md</c> phase 5, D10). <b>What tiers 1-4 used until D12</b>, through
     /// <see cref="HumanizedBot.ByTier"/>, adopted by the user on 2026-10-11 over its
     /// bars, with <see cref="BotSkill.TierSkills"/> respread: at tier 4 against D9, O2
     /// 0.753 to 0.712 and the fleet discriminator better at 150px (−0.020, −0.011 on
@@ -750,15 +785,32 @@ public sealed record HumanizeOptions(
     /// </summary>
     public static HumanizeOptions Tracking8 { get; } = Tracking7 with { PursuitGain = 0.12 };
 
+    /// <summary>
+    /// D12, <b>what tiers 1-4 use</b> through <see cref="HumanizedBot.ByTier"/>:
+    /// <see cref="Tracking7"/>'s aim and jumps, with D7's averaged legs replaced by a
+    /// reversal cooldown that lengthens as the skill falls
+    /// (<see cref="BotSkill.ReversalCooldownTicks"/>, 2 ticks at tier 4 to 9 at
+    /// level 1). D7's legs needed the average 0.75 against the heading to reverse,
+    /// at least 41 ticks of sustained opposite keys, and a dance never reversed
+    /// them at all: in a duel the bot ran past its opponent, or into a wall, for
+    /// a second or more. <c>docs/TRAPS-BOTS.md</c>, the difficulty chain, D12.
+    /// </summary>
+    public static HumanizeOptions Tracking9 { get; } = Tracking7 with
+    {
+        LegMemory = double.NaN,
+        LegReverseIntent = double.NaN,
+        ReversalCooldown = true,
+    };
+
     /// <summary>The preset names a setting can carry.</summary>
-    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy", "hold", "tracking", "tracking2", "tracking3", "tracking4", "tracking5", "tracking6", "tracking7", "tracking8"];
+    public static IReadOnlyList<string> PresetNames { get; } = ["v3", "strokes", "lazy", "hold", "tracking", "tracking2", "tracking3", "tracking4", "tracking5", "tracking6", "tracking7", "tracking8", "tracking9"];
 
     /// <summary>A preset's canonical name in <see cref="PresetNames"/>, refusing anything else.</summary>
     /// <exception cref="FormatException">The name is not a preset.</exception>
     public static string PresetName(string name)
     {
         var options = ForPreset(name);
-        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : options == Hold ? "hold" : options == Tracking ? "tracking" : options == Tracking2 ? "tracking2" : options == Tracking3 ? "tracking3" : options == Tracking4 ? "tracking4" : options == Tracking5 ? "tracking5" : options == Tracking6 ? "tracking6" : options == Tracking7 ? "tracking7" : options == Tracking8 ? "tracking8" : "v3";
+        return options == Strokes ? "strokes" : options == Lazy ? "lazy" : options == Hold ? "hold" : options == Tracking ? "tracking" : options == Tracking2 ? "tracking2" : options == Tracking3 ? "tracking3" : options == Tracking4 ? "tracking4" : options == Tracking5 ? "tracking5" : options == Tracking6 ? "tracking6" : options == Tracking7 ? "tracking7" : options == Tracking8 ? "tracking8" : options == Tracking9 ? "tracking9" : "v3";
     }
 
     /// <summary>A preset by name, case-insensitive.</summary>
@@ -778,6 +830,7 @@ public sealed record HumanizeOptions(
         "tracking6" or "d9" => Tracking6,
         "tracking7" or "d10" => Tracking7,
         "tracking8" or "d11" => Tracking8,
-        _ => throw new FormatException($"humanize preset '{name}': v3, strokes, lazy, hold, tracking, tracking2, tracking3, tracking4, tracking5, tracking6, tracking7 or tracking8"),
+        "tracking9" or "d12" => Tracking9,
+        _ => throw new FormatException($"humanize preset '{name}': v3, strokes, lazy, hold, tracking, tracking2, tracking3, tracking4, tracking5, tracking6, tracking7, tracking8 or tracking9"),
     };
 }

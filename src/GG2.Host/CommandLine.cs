@@ -1272,7 +1272,7 @@ internal static class CommandLine
                             let difficulty 1-4 track targets exactly, as tier
                             5 does. ON by default, the lower tiers aim like
                             people: they lag a target and sit off it.
-          --bot-humanize-preset v3|strokes|lazy|hold|tracking|tracking2|tracking3|tracking4|tracking5|tracking6|tracking7|tracking8
+          --bot-humanize-preset v3|strokes|lazy|hold|tracking|tracking2|tracking3|tracking4|tracking5|tracking6|tracking7|tracking8|tracking9
                             which measured HumanizedBot preset --bot-humanize
                             uses. v3 by default.
           --bot-engages-bots

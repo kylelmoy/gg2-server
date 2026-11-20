@@ -14,9 +14,9 @@ namespace GG2.Tests;
 /// </remarks>
 public sealed class HumanizedLegsTests
 {
-    private sealed class Dancer : IMicroController
+    private class Dancer : IMicroController
     {
-        public string Name => "dancer";
+        public virtual string Name => "dancer";
 
         public int DecisionCost => 1;
 
@@ -36,12 +36,23 @@ public sealed class HumanizedLegsTests
         {
         }
 
-        public PlayerInput Poll(in WorldView world, int slot, int tick) => new(Keys(tick), 0, 0);
+        public virtual PlayerInput Poll(in WorldView world, int slot, int tick) => new(Keys(tick), 0, 0);
 
         // Two ticks each way, and a one-tick jump press every six ticks.
         internal static PlayerKeys Keys(int tick) =>
             ((tick / 2) % 2 == 0 ? PlayerKeys.Left : PlayerKeys.Right)
             | (tick % 6 == 0 ? PlayerKeys.Jump : PlayerKeys.None);
+    }
+
+    /// <summary>Right until <see cref="SwitchAt"/>, then left: one clean reversal.</summary>
+    private sealed class Switcher : Dancer
+    {
+        public const int SwitchAt = 60;
+
+        public override string Name => "switcher";
+
+        public override PlayerInput Poll(in WorldView world, int slot, int tick) =>
+            new(tick < SwitchAt ? PlayerKeys.Right : PlayerKeys.Left, 0, 0);
     }
 
     private static HumanizeOptions Legs { get; } = HumanizeOptions.Tracking2 with
@@ -55,15 +66,20 @@ public sealed class HumanizedLegsTests
 
     private static HumanizeOptions Running { get; } = Legs with { LegReverseIntent = 0.5, LegIdleActivity = 0.2 };
 
-    private static (int Changes, int Presses, int PolicyTicks, int Moving) Run(HumanizeOptions options, int ticks)
+    private static (int Changes, int Presses, int PolicyTicks, int Moving) Run(HumanizeOptions options, int ticks) =>
+        Run(options, ticks, new Dancer(), 4, null);
+
+    /// <summary>Runs the filter over <paramref name="controller"/>; <paramref name="leftAt"/> gets the first tick the output pressed left.</summary>
+    private static (int Changes, int Presses, int PolicyTicks, int Moving) Run(
+        HumanizeOptions options, int ticks, IMicroController controller, int tier, int[]? leftAt)
     {
         var world = ScenarioWorld.Load("ctf_truefort", 1, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
         var red = world.Place(PlayerClass.Soldier, Team.Red, 600, 850);
         world.Place(PlayerClass.Soldier, Team.Blue, 680, 850);
         world.Step(20);
 
-        var scripted = new ScriptedBot(world.Nav, new NavQuery(Team.Red), BotSkill.ForTier(4), stagger: 0);
-        var hybrid = new HybridBot(new Dancer(), scripted) { Rule = HandoverRule.Distance };
+        var scripted = new ScriptedBot(world.Nav, new NavQuery(Team.Red), BotSkill.ForTier(tier), stagger: 0);
+        var hybrid = new HybridBot(controller, scripted) { Rule = HandoverRule.Distance };
         var bot = new HumanizedBot(hybrid, options, 3);
         var changes = 0;
         var presses = 0;
@@ -75,6 +91,9 @@ public sealed class HumanizedLegsTests
         {
             var view = new WorldView(in world.State, world.Collision);
             var keys = bot.Poll(in view, red, tick).Keys;
+
+            if (leftAt is { } first && first[0] < 0 && hybrid.MicroDrove && (keys & PlayerKeys.Left) != 0)
+                first[0] = tick;
 
             if (hybrid.MicroDrove)
             {
@@ -124,6 +143,44 @@ public sealed class HumanizedLegsTests
         Assert.True(run.Changes < off.Changes / 5, $"running: {run.Changes} changes against {off.Changes}");
         Assert.True(run.Moving > run.PolicyTicks * 9 / 10, $"running: moving {run.Moving} of {run.PolicyTicks} policy ticks");
         Assert.True(stand.Moving < stand.PolicyTicks / 2, $"standing: moving {stand.Moving} of {stand.PolicyTicks}, so the contrast proves little");
+    }
+
+    /// <summary>
+    /// D12: a held reversal passes within the cooldown of the switch, at the
+    /// lowest tier too. D10's averaged legs (<see cref="HumanizeOptions.Tracking7"/>)
+    /// take at least 41 ticks, which is the duel server's joust.
+    /// </summary>
+    [Fact]
+    public void AHeldReversalPassesAtOnce()
+    {
+        var cooldown = BotSkill.ForTier(1).ReversalCooldownTicks;
+        var nine = new[] { -1 };
+        var seven = new[] { -1 };
+
+        Run(HumanizeOptions.Tracking9, 150, new Switcher(), 1, nine);
+        Run(HumanizeOptions.Tracking7, 150, new Switcher(), 1, seven);
+
+        Assert.InRange(nine[0], Switcher.SwitchAt, Switcher.SwitchAt + cooldown);
+        Assert.True(seven[0] < 0 || seven[0] >= Switcher.SwitchAt + 40, $"tracking7 reversed at {seven[0]}, so the contrast proves little");
+    }
+
+    /// <summary>
+    /// D12: the cooldown lengthens as the skill falls, so a two-tick dance passes
+    /// near intact at tier 4 and is slowed at tier 1, while the legs keep moving.
+    /// </summary>
+    [Fact]
+    public void TheCooldownSlowsADanceMoreAtLowerTiers()
+    {
+        Assert.True(BotSkill.ForTier(1).ReversalCooldownTicks > BotSkill.ForTier(3).ReversalCooldownTicks);
+        Assert.True(BotSkill.ForTier(3).ReversalCooldownTicks > BotSkill.ForTier(4).ReversalCooldownTicks);
+
+        var off = Run(HumanizeOptions.Tracking2, 300);
+        var top = Run(HumanizeOptions.Tracking9, 300, new Dancer(), 4, null);
+        var bottom = Run(HumanizeOptions.Tracking9, 300, new Dancer(), 1, null);
+
+        Assert.True(top.Changes > off.Changes * 2 / 3, $"tier 4: {top.Changes} changes against {off.Changes}");
+        Assert.True(bottom.Changes < off.Changes / 3, $"tier 1: {bottom.Changes} changes against {off.Changes}");
+        Assert.True(bottom.Moving > bottom.PolicyTicks * 9 / 10, $"tier 1: moving {bottom.Moving} of {bottom.PolicyTicks}");
     }
 
     /// <summary>Tier 5 passes through exactly, legs and all.</summary>

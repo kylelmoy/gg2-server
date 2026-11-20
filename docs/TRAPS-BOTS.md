@@ -960,6 +960,23 @@ model.** Four gates, all off `BotSkill`:
   be bought back there. Instead tiers 1-3 were spaced further apart, and the
   ladder reads −0.091 / −0.153 / −0.225 / −0.292. Easy got easier.
 
+  **D12 (`tracking9`) replaces D10's legs with a reversal cooldown, and is what
+  tiers 1-4 use.** D10's averaged legs (memory 0.95, reverse at 0.75 against the
+  heading) need at least `ln(0.125)/ln(0.95)` = 41 ticks of held opposite keys
+  to reverse, and a dance never reverses them while its activity stays over 0.3.
+  In a duel that is the joust: the bot runs a second or more past its opponent,
+  or into a wall. D12 passes the net's left/right as it is, except that a
+  reversal waits until the legs have moved one way for
+  `BotSkill.ReversalCooldownTicks` (`Lerp(skill, 10, 6, 4, 2)`: 9, 7, 5, 2 ticks
+  at tiers 1-4); the aim and the jump thinning are D10's. Tier 5 still skips the
+  filter. `HumanizedLegsTests.AHeldReversalPassesAtOnce` gates the reversal.
+  `BENCH_TIERS=4 BENCH_HUMAN_AIM=1`, 21 maps, same seeds: D10 −0.103 / −0.180 /
+  −0.253 / −0.321, D12 −0.087 / −0.148 / −0.232 / −0.304 (±0.016-0.026). Every
+  tier is a little stronger, and the steps are still within half a step of one
+  another, so `TierSkills` was left alone. Not measured: the fleet
+  discriminator or O2 under D12. What would show it wrong: a duel bot still
+  carrying a second past its opponent at level 1-7.
+
 - ⚠️ **Aim error is UNIFORM on [-1, 1], not Gaussian** (Quake III's
   `crandom()`), with two multipliers: moving-target scale, and **Quake
   III's close-range penalty** (every tier worse at point blank — an

@@ -44,7 +44,7 @@ namespace GG2.Bots;
 /// </param>
 /// <param name="HumanAim">
 /// Whether this bot's aim, scripted or policy, goes through
-/// <see cref="HumanizeOptions.Tracking7"/>: lagging its target the way people do.
+/// <see cref="HumanizeOptions.Tracking9"/>: lagging its target the way people do.
 /// True for tiers 1-4 and false for tier 5, which stays the strongest bot there is
 /// (<c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, D3). Applied by
 /// <see cref="HumanizedBot.ByTier"/>, so a live difficulty change takes at once.
@@ -54,6 +54,11 @@ namespace GG2.Bots;
 /// controller's aim, redrawn every <see cref="AimInterval"/> ticks. The policy
 /// has no cone of its own to widen, so this is the one knob that exists only
 /// for it; see <see cref="HybridBot"/>, "difficulty inside the window".
+/// </param>
+/// <param name="ReversalCooldownTicks">
+/// How long, on ticks the policy drives, a bot's legs keep their direction before
+/// a reversal passes — the turn-around time of <see cref="HumanizeOptions.ReversalCooldown"/>.
+/// Applies only where <see cref="HumanAim"/> does, so tier 5 runs the net's keys exactly.
 /// </param>
 public readonly record struct BotSkill(
     int AcquireTicks,
@@ -70,7 +75,8 @@ public readonly record struct BotSkill(
     int ReflexTicks = 0,
     double ReflexMissChance = 0,
     double PolicyAimErrorDeg = 0,
-    bool HumanAim = false)
+    bool HumanAim = false,
+    int ReversalCooldownTicks = 0)
 {
     /// <summary>
     /// The knobs for a skill in <c>[0, 1]</c> — <c>botSkillApply.gml</c>.
@@ -111,7 +117,12 @@ public readonly record struct BotSkill(
 
             // Zero at the top, like every other knob the policy is handicapped
             // by: tier 5 runs the checkpoint exactly as it was trained.
-            PolicyAimErrorDeg: Lerp(skill, 12, 6, 2, 0));
+            PolicyAimErrorDeg: Lerp(skill, 12, 6, 2, 0),
+
+            // 300ms at the bottom to 67ms at the top: a slower player turns round
+            // later. Floored at 2 rather than 0 because the top skill is tier 4's
+            // too, and tier 4 moves like a person; tier 5 skips the filter.
+            ReversalCooldownTicks: (int)Math.Floor(Lerp(skill, 10, 6, 4, 2) + 0.5));
     }
 
     /// <summary>Whether <paramref name="tier"/> is one of the server's difficulty tiers.</summary>
@@ -142,6 +153,12 @@ public readonly record struct BotSkill(
     /// skill, so the legs' cost widened the 4-to-5 step and no skill could close it;
     /// tiers 1-3 were spaced further apart (from 0.30, 0.42, 0.67) so every step is
     /// within half a step of the others. Easy got easier.
+    /// </para>
+    /// <para>
+    /// <b>D12 replaced those legs with a reversal cooldown</b>
+    /// (<see cref="HumanizeOptions.Tracking9"/>, <see cref="ReversalCooldownTicks"/>),
+    /// because D10's averaging made a bot run a second or more past its opponent.
+    /// <c>docs/TRAPS-BOTS.md</c>, the difficulty chain, has the ladder it measured.
     /// </para>
     /// </remarks>
     public static ReadOnlySpan<double> TierSkills => [0.20, 0.37, 0.61, 0.95, 0.95];

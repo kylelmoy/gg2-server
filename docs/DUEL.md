@@ -116,9 +116,12 @@ switch, so the 7-8 step is not split.
 The rating is continuous and the bot plays it exactly; the name shows it
 rounded. On this server the nets always drive, so a level reaches them only
 through `HybridBot`'s handicap (the delay before the first shot, a held aim
-error, the hold-fire roll) and human-like aim. A net's movement and dodging are
-the same at every level, so level 1 is not as weak against a new player as tier
-1 is on the main servers. That has not been measured against a person.
+error, the hold-fire roll), human-like aim, and at levels 1-7 a reversal
+cooldown on the net's legs (`BotSkill.ReversalCooldownTicks`, 9 ticks at level 1
+to 2 at level 7; `HumanizeOptions.Tracking9`). Apart from that cooldown a net's
+movement and dodging are the same at every level, so level 1 is not as weak
+against a new player as tier 1 is on the main servers. That has not been
+measured against a person.
 
 **The staircase.**
 
