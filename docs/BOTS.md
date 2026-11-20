@@ -140,6 +140,18 @@ equally often; one candidate cause is that a medic net takes a beaming medic and
 the search does not (`IBeamController`). Not measured: why the search wins more
 objectives while dying more, and either controller under a live arbiter.
 
+**In a 1v1 duel with the controller always driving, the duel nets beat the
+search 0.712 ± 0.023** (`BENCH_VERSUS_DUEL=180`: 1,440 duels on `duel_01`-`duel_08`,
+every class and side, both tier 5, wheel share 1.00 both sides; 990 policy kills,
+364 search). By class it is far from uniform: the search wins Engineer (0.403)
+and Spy (0.424), Scout is close (0.530), and it almost never wins Demoman (0 of
+160), Sniper (4) or, with special off as the server runs it, Medic (0). Letting
+it press special (`BENCH_VERSUS_SPECIAL=1`) moves Medic to 0.656 and Pyro 0.730
+to 0.616, and the whole to 0.661 ± 0.023; Demoman and Sniper do not move. Not
+measured: why. A sticky's damage lands only on a detonation and a sniper's
+charge pays out late, and both may sit past the 20-tick horizon, but that is a
+guess.
+
 **Death share.** Pooled over ~34,000 deaths (`BENCH_ARMS`, 8 bots, 21 maps, 40
 matches/arm, 2026-09-01): arm 1 49.82%, arm 2 46.17%, arm 3 44.55%. Arm 3 beats
 arm 2 by 1.62 points (z = −4.26) and beats arm 1 (z = −13.82). At the match

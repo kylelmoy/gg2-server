@@ -192,7 +192,7 @@ public static class Tiers
     /// the world from the next seed, so a duel is still a pure function of its own
     /// seed.
     /// </remarks>
-    private static (ScenarioWorld World, int Red, int Blue) PlaceInSight(
+    internal static (ScenarioWorld World, int Red, int Blue) PlaceInSight(
         string maps, string nav, string map, uint seed, PlayerClass playerClass)
     {
         for (var attempt = 0u; attempt < 64; attempt++)

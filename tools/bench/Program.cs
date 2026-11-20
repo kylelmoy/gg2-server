@@ -163,6 +163,12 @@ if (Environment.GetEnvironmentVariable("BENCH_TURNS") is { } turnMatches)
     return;
 }
 
+if (Environment.GetEnvironmentVariable("BENCH_VERSUS_DUEL") is { } versusDuels)
+{
+    Bench.Versus.RunDuels(maps, Beside(maps, "nav", "GG2_NAV"), Beside(maps, "checkpoints", "CHECKPOINTS"), int.Parse(versusDuels));
+    return;
+}
+
 if (Environment.GetEnvironmentVariable("BENCH_VERSUS") is { } versusMatches)
 {
     Bench.Versus.Run(maps, Beside(maps, "nav", "GG2_NAV"), Beside(maps, "checkpoints", "CHECKPOINTS"), int.Parse(versusMatches));

@@ -55,6 +55,21 @@ internal static class Nets
     public static MicroControllerSpec[] Shipped(string checkpoints) =>
         [.. ShippedSet.Select(entry => (MicroControllerSpec)Load(Path.Combine(checkpoints, entry.File)))];
 
+    /// <summary>
+    /// Every duel net in <paramref name="directory"/>, one tier each, sampled as the
+    /// duel server runs them. A duel net's class is the third dash-separated part
+    /// of its file name (<c>ppo-duel2-soldier-s1.gg2p</c>).
+    /// </summary>
+    public static MicroControllerSpec[] Duel(string directory) =>
+    [
+        .. Directory.GetFiles(directory, "*.gg2p").Order().Select(path =>
+        {
+            var name = Path.GetFileNameWithoutExtension(path);
+            var drives = Enum.Parse<PlayerClass>(name.Split('-')[2], ignoreCase: true);
+            return (MicroControllerSpec)new SimPolicyMicroSpec(SimPolicyNetwork.Load(path), [drives], name, Sampled: true);
+        }),
+    ];
+
     /// <summary>Every class a tier list drives.</summary>
     public static PlayerClass[] Classes(IEnumerable<MicroControllerSpec> tiers) =>
         [.. tiers.OfType<SimPolicyMicroSpec>().SelectMany(t => t.Drives).Distinct().Order()];
