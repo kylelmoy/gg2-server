@@ -47,6 +47,31 @@ public sealed class DuelLadderTests
         }
     }
 
+    /// <summary>
+    /// Between duel levels 7 and 8 the bot fades from playing like a person to
+    /// not, with each part of that moving the right way and the ends exact.
+    /// </summary>
+    [Fact]
+    public void TheTopDuelLevelIsASlope()
+    {
+        Assert.Equal(BotSkill.ForTier(4), DuelLadder.SkillOf(7));
+        Assert.Equal(BotSkill.ForTier(5), DuelLadder.SkillOf(8));
+
+        var previous = DuelLadder.SkillOf(7);
+        for (var r = 7.25; r < 8; r += 0.25)
+        {
+            var here = DuelLadder.SkillOf(r);
+            Assert.True(here.HumanAim, $"rating {r} stopped aiming like a person before 8");
+            Assert.True(here.HumanAimStrength < previous.HumanAimStrength, $"human aim did not fall at {r}");
+            Assert.True(here.PolicyReflex < previous.PolicyReflex, $"the rocket lag did not fall at {r}");
+            Assert.True(here.ReflexTicks <= previous.ReflexTicks, $"the reflex rose at {r}");
+            Assert.True(here.ReversalCooldownTicks <= previous.ReversalCooldownTicks, $"the turn-around rose at {r}");
+            previous = here;
+        }
+
+        Assert.Equal(1.5, DuelLadder.SkillOf(7.5).PolicyReflex, 9);
+    }
+
     [Fact]
     public void EveryNameFitsTheWire()
     {

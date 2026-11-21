@@ -841,37 +841,51 @@ model.** Four gates, all off `BotSkill`:
   slots, and with them exact it reacted inside two ticks at every tier.
   `HybridBot` hands each controller the bot's skill (`IMicroController.ApplySkill`)
   and `SimPolicyController` turns it into a `RocketPerception`: an enemy rocket
-  is left out of the slots until `BotReflex.Noticed` passes it (the scripted
-  dodge's `ReflexTicks` and per-rocket `ReflexMissChance`), then written
-  `ReflexTicks` back along its own straight line. Own rockets, mines, flares and
-  blades are exact. Tier 5 is `RocketPerception.None`, so no pin moves.
+  is left out of the slots for `BotSkill.PolicyReflex` ticks of flight, then
+  written that many ticks back along its own straight line, and a share
+  (`RocketPerception.NetMissShare`, 0.3) of the scripted dodge's per-rocket
+  `ReflexMissChance` is never shown. Own rockets, mines, flares and blades are
+  exact. Tier 5 is `RocketPerception.None`, so no pin moves.
   `BotReflexTests`, "APolicySeesAnEnemyRocketLate…".
-  Tiers 1-4 also take `BotSkill.HumanReflexFloorTicks` (3): tier 4 plays skill
-  0.95, where `ReflexTicks` is 0, so without it the best person's tier dodged
-  like tier 5. `BotSkill.Human` applies it for both `ForTier` and the duel ladder.
+  - **The net's delay is its own curve** (`BotSkill.PolicyReflexAnchors`,
+    5.1/4.3/3.8 ticks at skills 0.15/0.45/0.75, 0 at 0.95), not the scripted
+    dodge's 9/6/3/0. At `ReflexTicks`' 7-9 ticks a rocket with the usual 5-8
+    ticks of warning was never seen in time, and tiers 1-2 took 0.69-0.74 of
+    them, worse than either person.
+  - **The share is steep in the delay**: about 0.24 at 3 ticks, 0.29 at 4, 0.55
+    at 5 and 0.66 at 6. A projectile moves a whole tick at a time, so the
+    fractional delay is dithered per rocket (a second hash in `BotReflex.Noticed`,
+    no match RNG) and the rewind uses the fraction exactly; without that, a
+    delay only mattered when it passed a whole number.
+  - **Tiers 1-4 take `BotSkill.HumanReflexFloorTicks` (3)**: tier 4 plays skill
+    0.95, where every delay is 0, so without it the best person's tier dodged
+    like tier 5. `BotSkill.Human(strength)` applies it; the duel ladder fades it,
+    the turn-around and `HumanizedBot`'s aim lag (`HumanAimStrength`) out between
+    levels 7 and 8, so the top level is a slope rather than a cliff at 7.5.
 
   Direct-hit share of on-target rockets with 5-8 ticks of warning
   (`tools/dodgescan` on the duel server's soldier traces, 2026-11-17 to -21;
   `BENCH_DODGE=60`, 480 duels a tier, the subject's tier against a tier-5 shooter):
 
-  | target | before | after | duel score after (before) |
+  | target | without the perception | with it | duel score with (without) |
   |---|---|---|---|
   | tier 5 | 0.18 | 0.18 | 0.473 (0.473) |
   | tier 4 | 0.18 | 0.24 | 0.414 (0.473) |
-  | tier 3 | 0.19 | 0.34 | 0.313 (0.418) |
-  | tier 2 | 0.17 | 0.69 | 0.065 (0.328) |
-  | tier 1 | 0.17 | 0.74 | 0.034 (0.226) |
+  | tier 3 | 0.19 | 0.28 | 0.311 (0.418) |
+  | tier 2 | 0.17 | 0.45 | 0.122 (0.328) |
+  | tier 1 | 0.17 | 0.58 | 0.044 (0.226) |
   | the two people recorded | | 0.19 and 0.56 (n=21, 16) | |
-  | ladder bots on the server, pre-change | 0.23 (n=60) | | |
+  | ladder bots on the server, without | 0.23 (n=60) | | |
 
   People also showed no reaction above their ordinary key-change rate until
   about five ticks, where the bots changed keys within two ticks 39-58% of the
   time. **Two people is not a distribution**: the human row bounds the range,
-  it does not fit a tier. **Tiers 1-2 now dodge worse than either person**, and
-  most of that is the miss chance (0.40 and 0.56 of rockets never seen at all);
-  `BotSkill.TierSkills` was tuned for even steps before this and has not been
-  re-measured since (`BENCH_TIERS`, `BENCH_TIERDUEL`). What would show the
-  table stale: a retrained net, or any change to `BotReflex.Noticed`.
+  and the curve was fitted to put tier 1 at the weaker and tiers 4-5 at the
+  stronger, nothing finer. `BotSkill.TierSkills` was tuned for even steps
+  before this and has not been re-measured since (`BENCH_TIERS`,
+  `BENCH_TIERDUEL`); the duel scores above say the 3-to-2 step is now the
+  widest. What would show the table stale: a retrained net, or any change to
+  `BotReflex.Noticed` or the anchors.
 - **The tiers are tuned to be evenly apart in a match**, through
   `BotSkill.TierSkills` (0.15, 0.30, 0.42, 0.67, 0.95 until 2026-10-10, ⚠️ now
   shifted: see the next item; evenly spaced skills cost

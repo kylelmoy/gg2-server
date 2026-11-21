@@ -12,8 +12,9 @@ namespace GG2.Server;
 /// <para>
 /// <b>Eight levels over the server's five tiers.</b> Tiers 1-4 sit on levels 1,
 /// 3, 5 and 7 and the levels between interpolate their skill; tier 5 is level 8.
-/// Tier 5 differs from tier 4 only by <see cref="BotSkill.HumanAim"/>, a switch
-/// with nothing between, so the 7-8 step is not split. The tiers were tuned to
+/// Tier 5 differs from tier 4 only in playing like a person, and
+/// <see cref="BotSkill.Human(double)"/> fades that out between levels 7 and 8, so
+/// that step is a slope too rather than a cliff at 7.5. The tiers were tuned to
 /// be evenly spaced in play (<see cref="BotSkill.TierSkills"/>), which is why
 /// they sit on every other level rather than at even skill intervals.
 /// </para>
@@ -207,9 +208,9 @@ public sealed class DuelLadder
             skill = AnchorSkills[segment] + ((AnchorSkills[segment + 1] - AnchorSkills[segment]) * t);
         }
 
-        // Tier 5 is the one without human aim, and it is level 8: the switch
-        // flips at the rounding boundary so the name and the aim agree.
-        return BotSkill.For(skill).Human(LevelOf(r) < MaxLevel);
+        // Tier 5 is tier 4's skill without playing like a person, so the top
+        // level fades that out: fully human at 7, not at all at 8.
+        return BotSkill.For(skill).Human(MaxLevel - r);
     }
 
     /// <summary>The word a level is shown with.</summary>

@@ -60,6 +60,16 @@ namespace GG2.Bots;
 /// a reversal passes — the turn-around time of <see cref="HumanizeOptions.ReversalCooldown"/>.
 /// Applies only where <see cref="HumanAim"/> does, so tier 5 runs the net's keys exactly.
 /// </param>
+/// <param name="PolicyReflexTicks">
+/// The policy's reaction to an enemy rocket, in ticks, fractional
+/// (<see cref="RocketPerception"/>); NaN means "the same as <see cref="ReflexTicks"/>".
+/// Read it through <see cref="PolicyReflex"/>.
+/// </param>
+/// <param name="HumanAimStrength">
+/// Where <see cref="HumanAim"/> is set, the share of <see cref="HumanizedBot"/>'s aim
+/// lag that reaches the wire: 1 is all of it (tiers 1-4), and the duel ladder
+/// fades it to nothing between levels 7 and 8 (<see cref="Human(double)"/>).
+/// </param>
 public readonly record struct BotSkill(
     int AcquireTicks,
     int FireDelayTicks,
@@ -76,8 +86,21 @@ public readonly record struct BotSkill(
     double ReflexMissChance = 0,
     double PolicyAimErrorDeg = 0,
     bool HumanAim = false,
-    int ReversalCooldownTicks = 0)
+    int ReversalCooldownTicks = 0,
+    double PolicyReflexTicks = double.NaN,
+    double HumanAimStrength = 1)
 {
+    /// <summary>
+    /// How late a policy sees an enemy rocket, in ticks: <see cref="PolicyReflexTicks"/>,
+    /// or <see cref="ReflexTicks"/> where that is not set.
+    /// </summary>
+    /// <remarks>
+    /// Fractional, because a rocket's line is exact at any delay
+    /// (<see cref="RocketPerception"/>): a level between two tiers sees a rocket
+    /// between their delays rather than at one of them.
+    /// </remarks>
+    public double PolicyReflex => double.IsNaN(PolicyReflexTicks) ? ReflexTicks : PolicyReflexTicks;
+
     /// <summary>
     /// The knobs for a skill in <c>[0, 1]</c> — <c>botSkillApply.gml</c>.
     /// </summary>
@@ -122,7 +145,13 @@ public readonly record struct BotSkill(
             // 300ms at the bottom to 67ms at the top: a slower player turns round
             // later. Floored at 2 rather than 0 because the top skill is tier 4's
             // too, and tier 4 moves like a person; tier 5 skips the filter.
-            ReversalCooldownTicks: (int)Math.Floor(Lerp(skill, 10, 6, 4, 2) + 0.5));
+            ReversalCooldownTicks: (int)Math.Floor(Lerp(skill, 10, 6, 4, 2) + 0.5),
+
+            // Shorter than the scripted dodge's at the bottom: a net's dodge is
+            // its whole movement, and at ReflexTicks' 7-9 ticks a rocket with the
+            // usual 5-8 ticks of warning was never seen in time, so tiers 1-2 were
+            // hit more often than any person on the duel server (RocketPerception).
+            PolicyReflexTicks: Lerp(skill, PolicyReflexAnchors[0], PolicyReflexAnchors[1], PolicyReflexAnchors[2], 0));
     }
 
     /// <summary>Whether <paramref name="tier"/> is one of the server's difficulty tiers.</summary>
@@ -188,14 +217,55 @@ public readonly record struct BotSkill(
     /// </remarks>
     public const int HumanReflexFloorTicks = 3;
 
+    /// <summary>The policy's rocket reaction at skills 0.15, 0.45 and 0.75, in ticks; 0 at 0.95.</summary>
+    /// <remarks>
+    /// <b>Fitted, by <c>BENCH_DODGE</c>, to the duel server's people.</b> At 5-8 ticks of
+    /// warning they took 0.19 and 0.56 of the rockets that were going to hit them;
+    /// these put tier 1 at 0.58, tier 4 at 0.24 and tier 5 at 0.18
+    /// (<c>docs/TRAPS-BOTS.md</c>, "The policy's rocket dodge"). The share is steep
+    /// in the delay — about 0.29 at 4 ticks and 0.55 at 5 — so a change of a few
+    /// tenths here moves a tier a long way.
+    /// </remarks>
+    internal static ReadOnlySpan<double> PolicyReflexAnchors => [5.1, 4.3, 3.8];
+
     /// <summary>
     /// This skill with <see cref="HumanAim"/> set as <paramref name="human"/> says, and
     /// a human's reflex floor (<see cref="HumanReflexFloorTicks"/>) when it is set.
     /// </summary>
     /// <remarks>The one way a ladder (tiers, duel levels) marks the levels that play like people.</remarks>
-    public BotSkill Human(bool human) => human
-        ? this with { HumanAim = true, ReflexTicks = Math.Max(ReflexTicks, HumanReflexFloorTicks) }
-        : this with { HumanAim = false };
+    public BotSkill Human(bool human) => Human(human ? 1.0 : 0.0);
+
+    /// <summary>
+    /// This skill played that much like a person, from 0 (not at all: tier 5) to 1
+    /// (fully: tiers 1-4).
+    /// </summary>
+    /// <remarks>
+    /// <b>What lets the duel ladder's top level be a slope rather than a cliff.</b>
+    /// Tier 4 is tier 5's skill played like a person, so between them only these
+    /// three differ, and each scales with <paramref name="strength"/>: the reflex
+    /// floor (<see cref="HumanReflexFloorTicks"/>), the turn-around
+    /// (<see cref="ReversalCooldownTicks"/>) and the share of
+    /// <see cref="HumanizedBot"/>'s aim lag that reaches the wire
+    /// (<see cref="HumanAimStrength"/>). At 1 this is exactly tiers 1-4; at 0 or
+    /// below, exactly tier 5.
+    /// </remarks>
+    public BotSkill Human(double strength)
+    {
+        if (strength <= 0)
+            return this with { HumanAim = false };
+
+        var s = Math.Min(1.0, strength);
+        var floor = HumanReflexFloorTicks * s;
+
+        return this with
+        {
+            HumanAim = true,
+            HumanAimStrength = s,
+            ReflexTicks = Math.Max(ReflexTicks, (int)Math.Floor(floor + 0.5)),
+            PolicyReflexTicks = Math.Max(PolicyReflex, floor),
+            ReversalCooldownTicks = (int)Math.Floor((ReversalCooldownTicks * s) + 0.5),
+        };
+    }
 
     /// <summary>
     /// A four-anchor piecewise ramp — <c>botSkillLerp.gml</c>.

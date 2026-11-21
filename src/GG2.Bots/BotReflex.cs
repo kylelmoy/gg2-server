@@ -323,10 +323,36 @@ public static class BotReflex
         return missChance <= 0 || Roll(handle, slot) >= missChance;
     }
 
-    /// <summary>A uniform <c>[0, 1)</c> fixed by the projectile and the bot — SplitMix64's finaliser.</summary>
-    private static double Roll(ProjectileHandle handle, int slot)
+    /// <summary>
+    /// <see cref="Noticed(in WorldView, in ProjectileState, ProjectileHandle, int, int, double)"/>
+    /// at a fractional reaction: each projectile is given the whole tick below
+    /// <paramref name="reflexTicks"/> or the one above, the fraction of them above
+    /// being its fractional part.
+    /// </summary>
+    /// <remarks>
+    /// <b>A projectile moves a whole tick at a time</b>, so a reaction of 4.5 ticks
+    /// is crossed on the same tick as one of 5: without the dither a reaction only
+    /// changes anything when it passes a whole number, and the ladder between two
+    /// levels plays one of them. The choice is a second hash of the projectile and
+    /// the bot, independent of the miss's, so it is decided once per projectile and
+    /// draws nothing from the match.
+    /// </remarks>
+    internal static bool Noticed(
+        in WorldView world, in ProjectileState projectile, ProjectileHandle handle, int slot,
+        double reflexTicks, double missChance)
     {
-        var z = (((ulong)(uint)handle.Index << 32) | handle.Generation) ^ ((ulong)(slot + 1) * 0x9E3779B97F4A7C15UL);
+        var whole = Math.Floor(reflexTicks);
+        var ticks = (int)whole + (Roll(handle, slot, DitherSalt) < reflexTicks - whole ? 1 : 0);
+
+        return Noticed(in world, in projectile, handle, slot, ticks, missChance);
+    }
+
+    private const ulong DitherSalt = 0xD1B54A32D192ED03UL;
+
+    /// <summary>A uniform <c>[0, 1)</c> fixed by the projectile and the bot — SplitMix64's finaliser.</summary>
+    private static double Roll(ProjectileHandle handle, int slot, ulong salt = 0)
+    {
+        var z = (((ulong)(uint)handle.Index << 32) | handle.Generation) ^ ((ulong)(slot + 1) * 0x9E3779B97F4A7C15UL) ^ salt;
         z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
         z = (z ^ (z >> 27)) * 0x94D049BB133111EBUL;
         z ^= z >> 31;

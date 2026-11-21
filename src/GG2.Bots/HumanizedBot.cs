@@ -203,7 +203,16 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
             _strokeTicks = 0;
         }
 
-        var aim = FollowAim(Degrees(input.NetAimDirection), firing: (input.Keys & (PlayerKeys.Attack | PlayerKeys.Special)) != 0);
+        var wanted = Degrees(input.NetAimDirection);
+        var aim = FollowAim(wanted, firing: (input.Keys & (PlayerKeys.Attack | PlayerKeys.Special)) != 0);
+
+        // A partial strength (the duel ladder between levels 7 and 8) shows that
+        // share of the lag. The filter itself runs as it always does, so its state
+        // is the same at every strength; at 1 the aim passes untouched.
+        var strength = _scripted.Skill.HumanAimStrength;
+        if (OnlyWhenSkillAsks && strength < 1)
+            aim = wanted + (Math.Max(0, strength) * Wrap(aim - wanted));
+
         _shown = aim;
 
         return new PlayerInput(input.Keys, Wire(aim), input.AimDistance);

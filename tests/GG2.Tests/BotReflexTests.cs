@@ -572,7 +572,7 @@ public sealed class BotReflexTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// A policy sees an enemy rocket as late as the scripted dodge notices one, and
+    /// A policy sees an enemy rocket as late as its reaction says, and
     /// where it was that many ticks ago.
     /// </summary>
     /// <remarks>
@@ -582,10 +582,9 @@ public sealed class BotReflexTests(ITestOutputHelper output)
     [Fact]
     public void APolicySeesAnEnemyRocketLateAndWhereItWas()
     {
-        var skill = BotSkill.ForTier(1);
-        var perception = RocketPerception.Of(in skill);
-        var lag = perception.LagTicks;
-        Assert.True(lag > 0);
+        // A whole number of ticks, so the dither has nothing to decide.
+        const int lag = 4;
+        var perception = new RocketPerception(lag, MissChance: 0);
 
         // The miss is a hash of the handle and slot, so take a rocket it lets through:
         // what is under test here is the delay.
@@ -614,6 +613,13 @@ public sealed class BotReflexTests(ITestOutputHelper output)
         Assert.Equal(1, late[Present]);
         Assert.Equal((float)((120.0 + (12 * lag)) / 500), late[14], 6);
 
+        // A fractional delay is seen by the whole tick above it at the latest, and
+        // rewound by exactly the fraction.
+        var half = Row((lag + 1) * 12, Team.Blue, new RocketPerception(lag + 0.5, 0));
+        Assert.Equal(1, half[Present]);
+        Assert.Equal((float)((120.0 + (12 * (lag + 0.5))) / 500), half[14], 6);
+        Assert.Equal(0, Row((lag - 1) * 12, Team.Blue, new RocketPerception(lag + 0.5, 0))[Present]);
+
         // A team-mate's rocket is not the difficulty's.
         var friendly = Row(0, Team.Red, perception);
         Assert.Equal(1, friendly[Present]);
@@ -636,8 +642,14 @@ public sealed class BotReflexTests(ITestOutputHelper output)
         for (var tier = BotConstants.TierMin; tier < BotConstants.TierMax; tier++)
         {
             var skill = BotSkill.ForTier(tier);
-            Assert.Equal(new RocketPerception(skill.ReflexTicks, skill.ReflexMissChance), RocketPerception.Of(in skill));
+            Assert.Equal(
+                new RocketPerception(skill.PolicyReflex, skill.ReflexMissChance * RocketPerception.NetMissShare),
+                RocketPerception.Of(in skill));
             Assert.True(skill.ReflexTicks >= BotSkill.HumanReflexFloorTicks, $"tier {tier} reacts faster than a person");
+            Assert.True(skill.PolicyReflex >= BotSkill.HumanReflexFloorTicks, $"tier {tier}'s policy reacts faster than a person");
+
+            if (tier > BotConstants.TierMin)
+                Assert.True(skill.PolicyReflex < BotSkill.ForTier(tier - 1).PolicyReflex, $"tier {tier}'s policy reacts no faster than {tier - 1}");
         }
     }
 
