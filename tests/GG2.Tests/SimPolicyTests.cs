@@ -491,6 +491,37 @@ public sealed class SimPolicyTests : IDisposable
     }
 
     /// <summary>
+    /// An enemy in slot 0 is listed. A server's slot 0 is its own player and never
+    /// alive, but a client's offline match puts the local human there, and a net
+    /// that skipped it would fight blind.
+    /// </summary>
+    [Fact]
+    public void AnEnemyInSlotZeroIsListed()
+    {
+        var match = SoldiersInView(out var me, out var enemy);
+        ref var state = ref match.State;
+
+        // The enemy moved to slot 0, and every other enemy gone.
+        state.Characters[0] = state.Characters[enemy];
+        state.Alive[0] = true;
+        for (var s = 1; s < WorldState.MaxSlots; s++)
+        {
+            if (state.Alive[s] && state.Characters[s].Team != state.Characters[me].Team)
+                state.Alive[s] = false;
+        }
+
+        var view = new WorldView(in state, match.Collision);
+        Span<int> one = stackalloc int[1];
+        Assert.Equal(1, SimPolicyObservation.Nearest(in view, me, mates: false, one));
+        Assert.Equal(0, one[0]);
+
+        var o = new float[SimPolicyObservation.TeamSize + SimPolicyObservation.SentryColumns];
+        var listed = new int[3];
+        SimPolicyObservation.Team(in view, me, o, listed, memory: new SimPolicyMemory(), tick: match.Tick);
+        Assert.Equal(0, listed[0]);
+    }
+
+    /// <summary>
     /// A cloaked enemy is listed from the body's last sighting: there, still, at
     /// its hp then, present fading as 1 - age/60, and gone at 60 ticks. The
     /// relative aim at it points at the remembered spot.

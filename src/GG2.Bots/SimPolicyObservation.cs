@@ -512,7 +512,9 @@ public static class SimPolicyObservation
     // gg2-sim env/env.h, NearestSeen: each live enemy the body can see recorded as
     // sighted at tick and a dead slot forgotten; then the output.Length nearest of
     // those it can see and those it remembers within SimPolicyMemory.Ticks (at the
-    // sighting), nearest first, ties to the lower slot.
+    // sighting), nearest first, ties to the lower slot. Both this and Nearest
+    // start at slot 0 where gg2-sim starts at 1: its slot 0, like a server's, is
+    // reserved and never alive, but a client's offline match puts the human there.
     private static int NearestSeen(in WorldView world, int slot, SimPolicyMemory m, int tick, Span<int> output, Span<bool> hidden)
     {
         ref readonly var me = ref world.Character(slot);
@@ -520,7 +522,7 @@ public static class SimPolicyObservation
         Span<double> distances = stackalloc double[count];
         var found = 0;
 
-        for (var s = 1; s < WorldState.MaxSlots; s++)
+        for (var s = 0; s < WorldState.MaxSlots; s++)
         {
             if (s == slot)
                 continue;
@@ -702,7 +704,7 @@ public static class SimPolicyObservation
         Span<double> distances = stackalloc double[count];
         var found = 0;
 
-        for (var s = 1; s < WorldState.MaxSlots; s++)
+        for (var s = 0; s < WorldState.MaxSlots; s++)
         {
             if (s == slot || !world.IsAlive(s) || (world.Character(s).Team == me.Team) != mates)
                 continue;
