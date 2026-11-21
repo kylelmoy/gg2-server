@@ -313,7 +313,7 @@ public static class BotReflex
     /// which costs nothing.
     /// </para>
     /// </remarks>
-    private static bool Noticed(
+    internal static bool Noticed(
         in WorldView world, in ProjectileState projectile, ProjectileHandle handle, int slot,
         int reflexTicks, double missChance)
     {

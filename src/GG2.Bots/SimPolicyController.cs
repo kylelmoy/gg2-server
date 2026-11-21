@@ -142,6 +142,16 @@ public sealed class SimPolicyController
     /// <summary>Whether each decision is drawn from the heads' softmax (gg2-sim's <c>sampled:</c> driver).</summary>
     public bool Sampled { get; }
 
+    /// <summary>
+    /// How late and how reliably this controller sees enemy rockets; see
+    /// <see cref="RocketPerception"/>. <see cref="RocketPerception.None"/> until a
+    /// caller sets it, which is the observation the net was trained on.
+    /// </summary>
+    public RocketPerception Perception { get; set; }
+
+    /// <inheritdoc/>
+    public void ApplySkill(in BotSkill skill) => Perception = RocketPerception.Of(in skill);
+
     public void SetRoute(NavGraph? graph, NavDistanceSet? tables)
     {
         _graph = graph;
@@ -292,9 +302,9 @@ public sealed class SimPolicyController
             SimPolicyObservation.Team(
                 in world, me, _observation, _listed, _network.IsZoom, _network.IsDemo, _network.IsPyro, _network.IsMedic, _listedAllies,
                 _network.IsEngineer, _network.IsSpy, _memory is null ? null : Memory(me), tick, _network.IsTerrain, _graph, _tables,
-                _network.IsQuote);
+                _network.IsQuote, Perception);
         else
-            SimPolicyObservation.Duel(in world, me, op, _observation, _network.InputSize);
+            SimPolicyObservation.Duel(in world, me, op, _observation, _network.InputSize, Perception);
 
         // Seeded once, by the first slot decided for, so a headless match is
         // reproducible and two bots on one server do not share a stream.

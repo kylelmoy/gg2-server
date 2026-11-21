@@ -717,6 +717,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
         MicroDrove = true;
         MicroTicks++;
 
+        _tiers[tier].ApplySkill(HandicapSkill ?? _scripted.Skill);
         var input = Handicap(_tiers[tier].Poll(in world, slot, tick), tick);
 
         // The policy never saw spawn protection (every rollout runs with it off),
@@ -769,8 +770,14 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// </list>
     /// <b>Only <c>Attack</c> is withheld</b>, never <c>Special</c>, for the reason
     /// the scripted chain gives: a pyro's airblast or a demoman's detonation cannot
-    /// be a second and a half late. Movement is left alone — a policy's dodge is a
-    /// learnt behaviour with no knob to turn down.
+    /// be a second and a half late.
+    /// <para>
+    /// <b>The dodge is handicapped on the way IN, not here.</b> Movement keys are
+    /// left alone, because which presses were a dodge cannot be told from the
+    /// output; instead <see cref="IMicroController.ApplySkill"/> hands the controller
+    /// the same skill, and a policy sees enemy rockets late and sometimes not at all
+    /// (<see cref="RocketPerception"/>). Also zero at tier 5.
+    /// </para>
     /// </remarks>
     private PlayerInput Handicap(PlayerInput input, int tick)
     {

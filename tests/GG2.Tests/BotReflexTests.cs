@@ -551,8 +551,8 @@ public sealed class BotReflexTests(ITestOutputHelper output)
         Assert.Equal(0, top.ReflexTicks);
         Assert.Equal(0, top.ReflexMissChance);
 
-        // Since D3 tier 4 plays tier 5's skill and differs only in aiming like a
-        // person (BotSkill.TierSkills), so its reflexes equal tier 5's: strictly
+        // Since D3 tier 4 plays tier 5's skill and differs in aiming like a person
+        // and in the human reflex floor (BotSkill.HumanReflexFloorTicks): strictly
         // weaker down from tier 4, and never better than the tier above.
         for (var tier = BotConstants.TierMin; tier < BotConstants.TierMax; tier++)
         {
@@ -568,6 +568,76 @@ public sealed class BotReflexTests(ITestOutputHelper output)
 
             Assert.True(lower.ReflexTicks > upper.ReflexTicks, $"tier {tier} reacts no slower than {tier + 1}");
             Assert.True(lower.ReflexMissChance > upper.ReflexMissChance, $"tier {tier} misses no more than {tier + 1}");
+        }
+    }
+
+    /// <summary>
+    /// A policy sees an enemy rocket as late as the scripted dodge notices one, and
+    /// where it was that many ticks ago.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="RocketPerception"/>. The duel row's first rocket slot is columns
+    /// 14-19 (x, y, hspeed, vspeed, own, present), and the bot's own rockets stay exact.
+    /// </remarks>
+    [Fact]
+    public void APolicySeesAnEnemyRocketLateAndWhereItWas()
+    {
+        var skill = BotSkill.ForTier(1);
+        var perception = RocketPerception.Of(in skill);
+        var lag = perception.LagTicks;
+        Assert.True(lag > 0);
+
+        // The miss is a hash of the handle and slot, so take a rocket it lets through:
+        // what is under test here is the delay.
+        float[] Row(double travelled, Team team, RocketPerception seen)
+        {
+            var world = Load();
+            var me = world.Place(PlayerClass.Soldier, Team.Red, StandX, StandY);
+            var op = world.Place(PlayerClass.Soldier, Team.Blue, StandX + 300, StandY);
+            Rocket(world, StandX + 120, StandY, -12, 0, team: team, travelled: travelled);
+
+            var o = new float[SimPolicyObservation.DuelSize];
+            SimPolicyObservation.Duel(View(world), me, op, o, o.Length, seen with { MissChance = 0 });
+            return o;
+        }
+
+        const int Present = 14 + 5;
+
+        // Exact without it, as trained.
+        var exact = Row((lag - 1) * 12, Team.Blue, RocketPerception.None);
+        Assert.Equal(1, exact[Present]);
+        Assert.Equal((float)(120.0 / 500), exact[14], 6);
+
+        // Unseen one tick short of the reaction, seen at it, and rewound along its line.
+        Assert.Equal(0, Row((lag - 1) * 12, Team.Blue, perception)[Present]);
+        var late = Row(lag * 12, Team.Blue, perception);
+        Assert.Equal(1, late[Present]);
+        Assert.Equal((float)((120.0 + (12 * lag)) / 500), late[14], 6);
+
+        // A team-mate's rocket is not the difficulty's.
+        var friendly = Row(0, Team.Red, perception);
+        Assert.Equal(1, friendly[Present]);
+        Assert.Equal((float)(120.0 / 500), friendly[14], 6);
+    }
+
+    /// <summary>
+    /// The perception is the skill's reflexes, and none at all at tier 5.
+    /// </summary>
+    /// <remarks>
+    /// Tier 5 having none is what keeps every pinned policy measurement where it
+    /// was; tier 4 having the human floor is what stops it dodging like tier 5.
+    /// </remarks>
+    [Fact]
+    public void ThePerceptionIsTheSkillsReflexes()
+    {
+        Assert.True(RocketPerception.Of(BotSkill.ForTier(5)).IsNone);
+        Assert.Equal(BotSkill.HumanReflexFloorTicks, RocketPerception.Of(BotSkill.ForTier(4)).LagTicks);
+
+        for (var tier = BotConstants.TierMin; tier < BotConstants.TierMax; tier++)
+        {
+            var skill = BotSkill.ForTier(tier);
+            Assert.Equal(new RocketPerception(skill.ReflexTicks, skill.ReflexMissChance), RocketPerception.Of(in skill));
+            Assert.True(skill.ReflexTicks >= BotSkill.HumanReflexFloorTicks, $"tier {tier} reacts faster than a person");
         }
     }
 

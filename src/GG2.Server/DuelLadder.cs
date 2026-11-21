@@ -209,7 +209,7 @@ public sealed class DuelLadder
 
         // Tier 5 is the one without human aim, and it is level 8: the switch
         // flips at the rounding boundary so the name and the aim agree.
-        return BotSkill.For(skill) with { HumanAim = LevelOf(r) < MaxLevel };
+        return BotSkill.For(skill).Human(LevelOf(r) < MaxLevel);
     }
 
     /// <summary>The word a level is shown with.</summary>

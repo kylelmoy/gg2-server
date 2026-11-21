@@ -831,11 +831,47 @@ model.** Four gates, all off `BotSkill`:
   `FireDelayTicks` after the scripted layer's acquisition, `HoldFireChance`, and
   a uniform aim error of `PolicyAimErrorDeg` (12 / 8 / 4.7 / 2 / 0 degrees for
   tiers 1-5), both drawn every `AimInterval` driven ticks. Only `Attack` is
-  withheld, and movement — including the policy's own dodging — is untouched.
+  withheld, and movement is untouched on the way out.
   All three are zero at tier 5 and draw nothing there, so tier 5 is the
   checkpoint as trained and no policy measurement moves.
   `HybridBotSeamTests`, "AtTheTopTier…" and "BelowTheTopTier…"; what would show
   this stale is a new knob that is nonzero at tier 5.
+- **The policy's rocket dodge is handicapped on the way IN.** Neither
+  observation layout shows an enemy's aim, so the net dodges from its rocket
+  slots, and with them exact it reacted inside two ticks at every tier.
+  `HybridBot` hands each controller the bot's skill (`IMicroController.ApplySkill`)
+  and `SimPolicyController` turns it into a `RocketPerception`: an enemy rocket
+  is left out of the slots until `BotReflex.Noticed` passes it (the scripted
+  dodge's `ReflexTicks` and per-rocket `ReflexMissChance`), then written
+  `ReflexTicks` back along its own straight line. Own rockets, mines, flares and
+  blades are exact. Tier 5 is `RocketPerception.None`, so no pin moves.
+  `BotReflexTests`, "APolicySeesAnEnemyRocketLate…".
+  Tiers 1-4 also take `BotSkill.HumanReflexFloorTicks` (3): tier 4 plays skill
+  0.95, where `ReflexTicks` is 0, so without it the best person's tier dodged
+  like tier 5. `BotSkill.Human` applies it for both `ForTier` and the duel ladder.
+
+  Direct-hit share of on-target rockets with 5-8 ticks of warning
+  (`tools/dodgescan` on the duel server's soldier traces, 2026-11-17 to -21;
+  `BENCH_DODGE=60`, 480 duels a tier, the subject's tier against a tier-5 shooter):
+
+  | target | before | after | duel score after (before) |
+  |---|---|---|---|
+  | tier 5 | 0.18 | 0.18 | 0.473 (0.473) |
+  | tier 4 | 0.18 | 0.24 | 0.414 (0.473) |
+  | tier 3 | 0.19 | 0.34 | 0.313 (0.418) |
+  | tier 2 | 0.17 | 0.69 | 0.065 (0.328) |
+  | tier 1 | 0.17 | 0.74 | 0.034 (0.226) |
+  | the two people recorded | | 0.19 and 0.56 (n=21, 16) | |
+  | ladder bots on the server, pre-change | 0.23 (n=60) | | |
+
+  People also showed no reaction above their ordinary key-change rate until
+  about five ticks, where the bots changed keys within two ticks 39-58% of the
+  time. **Two people is not a distribution**: the human row bounds the range,
+  it does not fit a tier. **Tiers 1-2 now dodge worse than either person**, and
+  most of that is the miss chance (0.40 and 0.56 of rockets never seen at all);
+  `BotSkill.TierSkills` was tuned for even steps before this and has not been
+  re-measured since (`BENCH_TIERS`, `BENCH_TIERDUEL`). What would show the
+  table stale: a retrained net, or any change to `BotReflex.Noticed`.
 - **The tiers are tuned to be evenly apart in a match**, through
   `BotSkill.TierSkills` (0.15, 0.30, 0.42, 0.67, 0.95 until 2026-10-10, ⚠️ now
   shifted: see the next item; evenly spaced skills cost

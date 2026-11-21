@@ -48,6 +48,19 @@ public interface IMicroController
     string Name { get; }
 
     /// <summary>
+    /// Told the skill the bot is playing at, before each <see cref="Poll"/> it drives.
+    /// </summary>
+    /// <remarks>
+    /// For the part of difficulty that lives in what a controller <em>sees</em>
+    /// rather than in what <see cref="HybridBot"/> does to its output — a policy's
+    /// rocket perception (<see cref="RocketPerception"/>). A controller with no such
+    /// part ignores it.
+    /// </remarks>
+    void ApplySkill(in BotSkill skill)
+    {
+    }
+
+    /// <summary>
     /// What one DECISION costs, in <b>microseconds</b>.
     /// </summary>
     /// <remarks>

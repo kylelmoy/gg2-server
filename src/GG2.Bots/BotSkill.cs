@@ -172,8 +172,30 @@ public readonly record struct BotSkill(
     {
         var clamped = Math.Clamp(tier, BotConstants.TierMin, BotConstants.TierMax);
 
-        return For(TierSkills[clamped - BotConstants.TierMin]) with { HumanAim = clamped < BotConstants.TierMax };
+        return For(TierSkills[clamped - BotConstants.TierMin]).Human(clamped < BotConstants.TierMax);
     }
+
+    /// <summary>
+    /// The shortest reaction to a projectile a bot that plays like a person has:
+    /// 3 ticks, 100ms.
+    /// </summary>
+    /// <remarks>
+    /// <b>Without it tier 4 dodged like tier 5.</b> Tier 4 plays the top skill, where
+    /// <see cref="ReflexTicks"/> is 0, so the one tier meant to be the best PERSON had
+    /// the reflexes of no person at all. People on the duel server's soldier
+    /// recordings react from about five ticks (<see cref="RocketPerception"/>); a
+    /// policy decides every three on top of this, so 3 lands a fast human's median.
+    /// </remarks>
+    public const int HumanReflexFloorTicks = 3;
+
+    /// <summary>
+    /// This skill with <see cref="HumanAim"/> set as <paramref name="human"/> says, and
+    /// a human's reflex floor (<see cref="HumanReflexFloorTicks"/>) when it is set.
+    /// </summary>
+    /// <remarks>The one way a ladder (tiers, duel levels) marks the levels that play like people.</remarks>
+    public BotSkill Human(bool human) => human
+        ? this with { HumanAim = true, ReflexTicks = Math.Max(ReflexTicks, HumanReflexFloorTicks) }
+        : this with { HumanAim = false };
 
     /// <summary>
     /// A four-anchor piecewise ramp — <c>botSkillLerp.gml</c>.

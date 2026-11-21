@@ -146,12 +146,17 @@ public static class SimPolicyObservation
     /// <paramref name="graph"/> and <paramref name="tables"/>, the ones the body's
     /// scripted layer routes with. Either missing leaves route columns 0.
     /// </para>
+    /// <para>
+    /// <paramref name="perception"/> hides and rewinds enemy rockets the way the
+    /// bot's difficulty says (<see cref="RocketPerception"/>); the default is the
+    /// observation the net was trained on.
+    /// </para>
     /// </summary>
     public static void Team(
         in WorldView world, int meSlot, Span<float> o, Span<int> listed, bool zoom = false, bool demo = false, bool pyro = false,
         bool medic = false, Span<int> listedAllies = default, bool engineer = false, bool spy = false,
         SimPolicyMemory? memory = null, int tick = 0, bool terrain = false, NavGraph? graph = null, NavDistanceSet? tables = null,
-        bool quote = false)
+        bool quote = false, RocketPerception perception = default)
     {
         ref readonly var me = ref world.Character(meSlot);
         ref readonly var gun = ref world.Weapon(meSlot);
@@ -223,15 +228,16 @@ public static class SimPolicyObservation
         }
 
         Span<int> picked = stackalloc int[NearShots];
-        var count = PickShots(in world, in me, picked, enemyHazards: true);
+        var count = PickShots(in world, meSlot, in me, picked, enemyHazards: true, perception);
 
         for (var n = 0; n < NearShots; n++)
         {
             if (n < count)
             {
                 ref readonly var r = ref world.State.Projectiles[picked[n]];
-                o[k++] = Clip((r.X - me.X) / 500, 4);
-                o[k++] = Clip((r.Y - me.Y) / 500, 4);
+                var (rx, ry) = RocketPerception.Applies(in r, me.Team) ? perception.Position(in r) : (r.X, r.Y);
+                o[k++] = Clip((rx - me.X) / 500, 4);
+                o[k++] = Clip((ry - me.Y) / 500, 4);
                 o[k++] = Clip(r.Motion.HSpeed / 15, 2);
                 o[k++] = Clip(r.Motion.VSpeed / 15, 2);
                 o[k++] = r.OwnerSlot == meSlot ? 1 : 0;
@@ -634,8 +640,11 @@ public static class SimPolicyObservation
     /// The duel observation for <paramref name="meSlot"/> against
     /// <paramref name="opSlot"/>, <paramref name="length"/> wide
     /// (<see cref="DuelSize"/> or <see cref="DuelSizeNoClasses"/>).
+    /// <paramref name="perception"/> is the difficulty's share of the enemy
+    /// rockets, as in <see cref="Team"/>; the default is the trained observation.
     /// </summary>
-    public static void Duel(in WorldView world, int meSlot, int opSlot, Span<float> o, int length)
+    public static void Duel(
+        in WorldView world, int meSlot, int opSlot, Span<float> o, int length, RocketPerception perception = default)
     {
         ref readonly var me = ref world.Character(meSlot);
         ref readonly var op = ref world.Character(opSlot);
@@ -660,15 +669,16 @@ public static class SimPolicyObservation
         o[k++] = world.IsAlive(opSlot) ? 1 : 0;
 
         Span<int> picked = stackalloc int[NearRockets];
-        var count = PickShots(in world, in me, picked, enemyHazards: false);
+        var count = PickShots(in world, meSlot, in me, picked, enemyHazards: false, perception);
 
         for (var n = 0; n < NearRockets; n++)
         {
             if (n < count)
             {
                 ref readonly var r = ref world.State.Projectiles[picked[n]];
-                o[k++] = Clip((r.X - me.X) / 500, 4);
-                o[k++] = Clip((r.Y - me.Y) / 500, 4);
+                var (rx, ry) = RocketPerception.Applies(in r, me.Team) ? perception.Position(in r) : (r.X, r.Y);
+                o[k++] = Clip((rx - me.X) / 500, 4);
+                o[k++] = Clip((ry - me.Y) / 500, 4);
                 o[k++] = Clip(r.Motion.HSpeed / 15, 2);
                 o[k++] = Clip(r.Motion.VSpeed / 15, 2);
                 o[k++] = r.OwnerSlot == meSlot ? 1 : 0;
@@ -747,7 +757,10 @@ public static class SimPolicyObservation
     // The nearest rockets and shots (and, for the team layout, enemy mines and flares),
     // nearest first, by repeated selection over the live list in its own order —
     // so an exact tie goes to the earlier live entry, as gg2-sim's picks it.
-    private static int PickShots(in WorldView world, in CharacterState me, Span<int> picked, bool enemyHazards)
+    // An enemy rocket the perception has not noticed is not a candidate at all, so
+    // the slot it would have taken goes to the next shot, as if it were not there.
+    private static int PickShots(
+        in WorldView world, int meSlot, in CharacterState me, Span<int> picked, bool enemyHazards, RocketPerception perception)
     {
         var count = 0;
 
@@ -768,6 +781,12 @@ public static class SimPolicyObservation
 
                 if (!shot || picked[..count].Contains(p))
                     continue;
+
+                if (!perception.IsNone && RocketPerception.Applies(in pr, me.Team)
+                    && !perception.Sees(in world, in pr, world.State.LiveProjectileHandle(i), meSlot))
+                {
+                    continue;
+                }
 
                 double dx = pr.X - me.X, dy = pr.Y - me.Y, d = (dx * dx) + (dy * dy);
 
