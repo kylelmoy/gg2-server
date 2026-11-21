@@ -163,6 +163,12 @@ if (Environment.GetEnvironmentVariable("BENCH_TURNS") is { } turnMatches)
     return;
 }
 
+if (Environment.GetEnvironmentVariable("BENCH_DUEL_LADDER") is { } ladderDuels)
+{
+    Bench.DuelLevels.Run(maps, Beside(maps, "nav", "GG2_NAV"), Beside(maps, "checkpoints", "CHECKPOINTS"), int.Parse(ladderDuels));
+    return;
+}
+
 if (Environment.GetEnvironmentVariable("BENCH_DODGE") is { } dodgeDuels)
 {
     Bench.Dodge.Run(maps, Beside(maps, "nav", "GG2_NAV"), Beside(maps, "checkpoints", "CHECKPOINTS"), int.Parse(dodgeDuels));

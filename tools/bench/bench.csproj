@@ -20,5 +20,6 @@
   <ItemGroup>
     <ProjectReference Include="../../src/GG2.Bots/GG2.Bots.csproj" />
     <ProjectReference Include="../../src/GG2.Simulation/GG2.Simulation.csproj" />
+    <ProjectReference Include="../../src/GG2.Server/GG2.Server.csproj" />
   </ItemGroup>
 </Project>
