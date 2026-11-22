@@ -45,6 +45,8 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     /// pushed by <c>deploy.sh --config</c> once nobody is connected.
     /// </summary>
     private PushedConfigWatcher? _pushedConfig;
+    private EmptyServerExit? _emptyExit;
+    private bool _exitedEmpty;
 
     /// <inheritdoc cref="_pushedConfig"/>
     internal PushedConfigWatcher? PushedConfig => _pushedConfig;
@@ -920,6 +922,9 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         if (_options.ConfigFile.Length != 0)
             _pushedConfig = new PushedConfigWatcher(_options.ConfigFile, _log, Environment.TickCount64);
 
+        if (_options.ExitWhenEmptySeconds > 0)
+            _emptyExit = new EmptyServerExit(_options.ExitWhenEmptySeconds, Environment.TickCount64);
+
         // Last, and after OpenMap: the first segment's preamble is a
         // FULL_UPDATE of the world, so there has to be a world.
         if (_options.RecordingDirectory.Length != 0)
@@ -1169,6 +1174,18 @@ public sealed partial class GameServer : IDisposable, IPluginHost
             && _pushedConfig.ShouldRestart(_nowMs, _clients.Count + _joining.Count != 0))
         {
             RequestRestart();
+        }
+
+        // Same "anybody connected" rule as above, and checked BEFORE this tick
+        // accepts anything, so a connection that arrives on the deciding tick is
+        // the one case it misses. That client sees a closed socket and retries
+        // against a dispatcher that no longer lists the room.
+        if (_emptyExit is not null
+            && !_exitedEmpty
+            && _emptyExit.ShouldExit(_nowMs, _clients.Count + _joining.Count != 0))
+        {
+            _exitedEmpty = true;
+            _log.Info($"exiting: nobody connected for {_emptyExit.Seconds}s (--exit-when-empty)");
         }
 
         AcceptConnections(now);

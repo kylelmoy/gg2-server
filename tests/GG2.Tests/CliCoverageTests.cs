@@ -122,6 +122,7 @@ public sealed class CliCoverageTests
         ("BotHandoverBubbles", ["--bot-handover-bubbles"], o => o.BotHandoverBubbles),
         ("BotSuspendMinutes", ["--bot-suspend-minutes", "15"], o => o.BotSuspendMinutes),
         ("IdleWhenEmpty", ["--no-idle-when-empty"], o => o.IdleWhenEmpty),
+        ("ExitWhenEmptySeconds", ["--exit-when-empty", "120"], o => o.ExitWhenEmptySeconds),
         ("AdaptiveBotBudget", ["--fixed-bot-budget"], o => o.AdaptiveBotBudget),
         ("AnnounceToLobby", ["--lobby"], o => o.AnnounceToLobby),
         ("Rewards", ["--rewards"], o => o.Rewards),

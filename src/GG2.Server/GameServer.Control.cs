@@ -383,6 +383,12 @@ public sealed partial class GameServer
     public bool RestartRequested => _restartRequested;
 
     /// <summary>
+    /// Whether <see cref="ServerOptions.ExitWhenEmptySeconds"/> has run out, so
+    /// <see cref="Run"/> returns and the host exits 0 instead of restarting.
+    /// </summary>
+    public bool ExitedEmpty => _exitedEmpty;
+
+    /// <summary>
     /// Ends <see cref="Run"/> and asks the host to start again from a re-read
     /// configuration.
     /// </summary>

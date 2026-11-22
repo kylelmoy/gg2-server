@@ -742,6 +742,12 @@ internal static class CommandLine
                     options.IdleWhenEmpty = false;
                     break;
 
+                // A private room's lifetime (docs/ROOMS.md). Exits 0, so a
+                // Restart=on-failure unit leaves it stopped.
+                case "--exit-when-empty":
+                    options.ExitWhenEmptySeconds = cursor.TakeInt();
+                    break;
+
                 // ⛔ Pins the controller budget at --bot-arbiter instead of letting
                 // the server walk it down when ticks crowd their deadline. The
                 // budget's units come from a cost measured on ONE machine; this
@@ -1267,6 +1273,11 @@ internal static class CommandLine
                             no bots drops to 2Hz until someone arrives, which
                             also slows its round clock. An explicit --speed
                             always wins over idling.
+          --exit-when-empty <seconds>
+                            stop (exit code 0) after this long with nobody
+                            connected, counted from startup too. Bots do not
+                            count as somebody. For temporary private rooms;
+                            0 (the default) runs for ever.
           --bot-handover-bubbles
                             bots put up a chat bubble whenever their brain
                             changes hands: z1 a policy took the wheel, z3 the

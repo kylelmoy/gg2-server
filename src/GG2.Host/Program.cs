@@ -342,7 +342,9 @@ internal static class Program
                 return 3;
             }
 
-            var restarting = server.RestartRequested;
+            // An empty room exits even if a restart was also asked for: the
+            // restart would only bring it back empty for another interval.
+            var restarting = server.RestartRequested && !server.ExitedEmpty;
 
             // ⛔ Disposed BEFORE the next Start, which is why this is not a
             // `using`: a `using` inside the loop releases at the closing brace,

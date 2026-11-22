@@ -1022,6 +1022,23 @@ public sealed class ServerOptions
     /// </remarks>
     public bool IdleWhenEmpty { get; set; } = true;
 
+    /// <summary>
+    /// Stop the server after this many seconds with nobody connected. Zero, the
+    /// default, keeps it running for ever.
+    /// </summary>
+    /// <remarks>
+    /// For a private room (<c>docs/ROOMS.md</c>): a temporary server that cleans
+    /// up after itself. Bots do not count as somebody; a joining connection and a
+    /// spectator do. The clock starts when the server does, so a room nobody
+    /// joins goes away too. <see cref="EmptyServerExit"/> has the rules.
+    /// <para>
+    /// <b>The process exits 0</b>, which a <c>Restart=on-failure</c> unit leaves
+    /// alone. Under <c>Restart=always</c> it would come straight back, empty, so a
+    /// fleet server's unit must not be given this.
+    /// </para>
+    /// </remarks>
+    public int ExitWhenEmptySeconds { get; set; }
+
     /// <summary>Ticks per second while idle. A fifteenth of the live rate.</summary>
     /// <remarks>
     /// <b>Two rather than one, so a joiner is noticed within half a second.</b>
@@ -1248,6 +1265,14 @@ public sealed class ServerOptions
         {
             throw new ArgumentOutOfRangeException(
                 nameof(LogMaxBytes), LogMaxBytes, "must be at least 1024 bytes; a file that rotates every line is not a log");
+        }
+
+        // A day is the ceiling: past that, "temporary" is the wrong word, and the
+        // room's own unit has a hard lifetime that is the real bound anyway.
+        if (ExitWhenEmptySeconds is < 0 or > 86_400)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(ExitWhenEmptySeconds), ExitWhenEmptySeconds, "must be 0..86400 seconds; 0 means never");
         }
 
         if (LogKeep is < 0 or > 1000)

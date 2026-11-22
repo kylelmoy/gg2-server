@@ -522,6 +522,7 @@ from the network.
 |---|---|---|---|
 | `Speed` | decimal | `1` | Tick pacing. `1` is real time, `max` is unpaced. ⛔ **Must stay at 1 on a server anybody is connected to** — clients pace themselves at 30 Hz and re-simulate between updates, so an unpaced server desynchronises every one at once. |
 | `IdleWhenEmpty` | boolean | `1` | Drop to 2 Hz when nobody is connected and no bots are running. ⚠️ The round clock slows with it, so an idle server's round is not wall-clock `Time Limit`. |
+| `ExitWhenEmptySeconds` | integer | `0` | Stop, exit code 0, after this many seconds with nobody connected, counted from startup too. Bots do not count; a spectator and a half-finished join do. For private rooms (`docs/ROOMS.md`). `0` runs for ever. Never on a fleet server whose unit says `Restart=always`. |
 | `TickStats` | boolean | `0` | Log a histogram of tick intervals every 30 seconds. Pacing only, so it is safe with players on. |
 | `ControlPort` | integer | `0` | The loopback-only JSON control port. Naming it at all turns it **on**; `0` asks the OS for a free one. It executes commands against a live game. |
 | `ControlPortEnabled` | boolean | `0` | Open the control port at all. A `ControlPort` key on its own turns it on; this is how it is turned back off. |

@@ -160,7 +160,7 @@ public sealed partial class GameServer
         // Ctrl-C or a SIGTERM — and cancelling it would make an operator's
         // restart indistinguishable from a shutdown, which is exactly the
         // distinction Program.Main has to make when this returns.
-        while (!cancellation.IsCancellationRequested && !_restartRequested)
+        while (!cancellation.IsCancellationRequested && !_restartRequested && !_exitedEmpty)
         {
             if (stats is not null)
             {
