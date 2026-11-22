@@ -72,6 +72,32 @@ public sealed class DuelLadderTests
         Assert.Equal(1.5, DuelLadder.SkillOf(7.5).PolicyReflex, 9);
     }
 
+    /// <summary>
+    /// The duel server's levels: the top is exactly tier 5, the bottom plays fully
+    /// like a person, and no knob gets weaker going up, a quarter level at a time.
+    /// </summary>
+    [Fact]
+    public void TheDuelLevelsRiseEvenlyToTierFive()
+    {
+        Assert.Equal(BotSkill.ForTier(5), DuelLadder.DuelSkillOf(8));
+        Assert.Equal(BotSkill.For(0.15).Human(true), DuelLadder.DuelSkillOf(1));
+
+        var previous = DuelLadder.DuelSkillOf(1);
+        for (var r = 1.25; r <= 8; r += 0.25)
+        {
+            var here = DuelLadder.DuelSkillOf(r);
+            var human = here.HumanAim ? here.HumanAimStrength : 0;
+            var humanBefore = previous.HumanAim ? previous.HumanAimStrength : 0;
+
+            Assert.True(human < humanBefore || (human == 0 && humanBefore == 0), $"human aim did not fall at {r}");
+            Assert.True(here.PolicyAimErrorDeg <= previous.PolicyAimErrorDeg, $"aim error rose at {r}");
+            Assert.True(here.FireDelayTicks <= previous.FireDelayTicks, $"fire delay rose at {r}");
+            Assert.True(here.PolicyReflex <= previous.PolicyReflex, $"the rocket reaction slowed at {r}");
+            Assert.True(here.ReflexMissChance <= previous.ReflexMissChance, $"the rocket miss rose at {r}");
+            previous = here;
+        }
+    }
+
     [Fact]
     public void EveryNameFitsTheWire()
     {
@@ -258,7 +284,7 @@ public sealed class DuelLadderTests
         JoinAndPlay(harness, PlayerClass.Soldier);
 
         Assert.Equal("Soldier 3 (Normal)", harness.Server.NameOf(BotSlot(harness.Server)));
-        Assert.Equal(BotSkill.ForTier(2), SkillOfBot(harness.Server));
+        Assert.Equal(DuelLadder.DuelSkillOf(3), SkillOfBot(harness.Server));
     }
 
     [Fact]
@@ -283,7 +309,7 @@ public sealed class DuelLadderTests
         server.WorldForTests.Characters[bot].Hp = 0;
         harness.TickUntil(() => server.NameOf(bot) == "Soldier 4 (Normal)", "the bot to be renamed", maxTicks: 3);
 
-        Assert.Equal(DuelLadder.SkillOf(4), SkillOfBot(server));
+        Assert.Equal(DuelLadder.DuelSkillOf(4), SkillOfBot(server));
     }
 
     /// <summary>
@@ -303,7 +329,7 @@ public sealed class DuelLadderTests
 
         server.WorldForTests.Characters[human].Hp = 0;
         // 1.5 to within rounding: 0.6 / 0.4 is not exactly 1.5 in a double.
-        var expected = DuelLadder.SkillOf(1.5).PolicyAimErrorDeg;
+        var expected = DuelLadder.DuelSkillOf(1.5).PolicyAimErrorDeg;
         harness.TickUntil(
             () => Math.Abs(SkillOfBot(server).PolicyAimErrorDeg - expected) < 1e-9,
             "the loss to be counted",
@@ -337,13 +363,13 @@ public sealed class DuelLadderTests
         harness.TickUntil(() => server.ClassOf(BotSlot(server)) == PlayerClass.Heavy, "the bot to follow", maxTicks: 200);
         WaitForBoth(harness);
         Assert.Equal("Heavy 3 (Normal)", server.NameOf(BotSlot(server)));
-        Assert.Equal(BotSkill.ForTier(2), SkillOfBot(server));
+        Assert.Equal(DuelLadder.DuelSkillOf(3), SkillOfBot(server));
 
         WaitOutProtection(harness);
         client.SendChangeClass(PlayerClass.Soldier);
         harness.TickUntil(() => server.ClassOf(BotSlot(server)) == PlayerClass.Soldier, "the bot to follow", maxTicks: 200);
         WaitForBoth(harness);
         Assert.Equal("Soldier 4 (Normal)", server.NameOf(BotSlot(server)));
-        Assert.Equal(DuelLadder.SkillOf(4), SkillOfBot(server));
+        Assert.Equal(DuelLadder.DuelSkillOf(4), SkillOfBot(server));
     }
 }

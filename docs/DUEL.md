@@ -97,31 +97,35 @@ Difficulty` is not read for duel bots while it is on. `DuelLadder` in
 `src/GG2.Server/` is the whole of the arithmetic; `BotPopulationService.Duel.cs`
 applies it.
 
-**Levels.** Eight, over the server's five tiers. Tiers 1-4 sit on levels 1, 3,
-5 and 7; levels 2, 4 and 6 interpolate the skill between their neighbours; tier
-5 is level 8. The tiers are tuned to be evenly spaced in play
-(`BotSkill.TierSkills`), so they sit on every other level rather than at even
-skill steps. Tier 5 differs from tier 4 only by human-like aim, an on/off
-switch, so the 7-8 step is not split.
+**Levels.** Eight, with their own table (`DuelLadder.DuelSkillOf`); only level 8
+is a server tier (5, the nets as trained). Human-like aim costs a duel several
+tiers where it costs a match about one, so on the tiers' own mapping levels 1-7
+bunched far below level 8. Here the human aim fades over the whole ladder
+(`BotSkill.Human(double)`: the aim lag's share, the reflex floor and the
+reversal cooldown together) and the skill under it is refitted, so each level is
+an even step in log-odds against a level-4 bot (`BENCH_DUEL_LADDER`, about 0.6 a
+level; `docs/TRAPS-BOTS.md`, "The duel ladder"). Auto difficulty on team servers
+keeps the tiers' mapping (`DuelLadder.SkillOf`).
 
-| Level | Skill | Tier | Label |
-|---|---|---|---|
-| 1 | 0.20 | 1 | Easy |
-| 2 | 0.285 | | Easy |
-| 3 | 0.37 | 2 | Normal (a new player's start) |
-| 4 | 0.49 | | Normal |
-| 5 | 0.61 | 3 | Hard |
-| 6 | 0.78 | | Hard |
-| 7 | 0.95, human aim | 4 | Expert |
-| 8 | 0.95 | 5 | Max |
+| Level | Skill | Human | Label | Score vs level 4 |
+|---|---|---|---|---|
+| 1 | 0.15 | 1.00 | Easy | 0.15 |
+| 2 | 0.27 | 0.85 | Easy | 0.25 |
+| 3 | 0.40 | 0.68 | Normal (a new player's start) | 0.34 |
+| 4 | 0.55 | 0.50 | Normal | 0.51 |
+| 5 | 0.70 | 0.33 | Hard | 0.65 |
+| 6 | 0.85 | 0.20 | Hard | 0.75 |
+| 7 | 0.95 | 0.08 | Expert | 0.83 |
+| 8 | 0.95 | 0 | Max | 0.90 |
 
 The rating is continuous and the bot plays it exactly; the name shows it
 rounded. On this server the nets always drive, so a level reaches them only
 through `HybridBot`'s handicap (the delay before the first shot, a held aim
 error, the hold-fire roll), human-like aim, and at levels 1-7 a reversal
-cooldown on the net's legs (`BotSkill.ReversalCooldownTicks`, 9 ticks at level 1
-to 2 at level 7; `HumanizeOptions.Tracking9`). Apart from that cooldown a net's
-movement and dodging are the same at every level, so level 1 is not as weak
+cooldown on the net's legs (`BotSkill.ReversalCooldownTicks`, scaled by the
+level's human share; `HumanizeOptions.Tracking9`), and a late view of enemy
+rockets (`RocketPerception`). Apart from those a net's movement is the same at
+every level, so level 1 is not as weak
 against a new player as tier 1 is on the main servers. That has not been
 measured against a person.
 

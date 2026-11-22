@@ -284,7 +284,7 @@ public sealed partial class BotPopulationService
         var rating = Ladder.For(LadderKey(slot, human), human.Class, _server.Options.DuelLadderStartLevel, _duelTick);
 
         if (ScriptedBot.Of(_server.SourceOf(bot)) is { } scripted)
-            scripted.Skill = DuelLadder.SkillOf(rating.Value);
+            scripted.Skill = DuelLadder.DuelSkillOf(rating.Value);
 
         if (rename)
         {

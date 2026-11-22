@@ -886,20 +886,35 @@ model.** Four gates, all off `BotSkill`:
   `BENCH_TIERDUEL`); the duel scores above say the 3-to-2 step is now the
   widest. What would show the table stale: a retrained net, or any change to
   `BotReflex.Noticed` or the anchors.
-- **The duel ladder is not even: human aim costs a duel far more than a match.**
-  `BENCH_DUEL_LADDER=40` (the duel server's setting, every class, 320 duels a
-  level, ±0.05-0.07). Against a level-4 opponent, both wrapped as the server
-  wraps them, levels 1-7 score 0.36 / 0.36 / 0.41 / 0.49 / 0.48 / 0.58 / 0.61
-  and level 8 scores 0.94; against level 8, every level below scores under 0.10.
-  With the wrap off the levels are evenly apart (0.13 / 0.16 / 0.19 / 0.24 /
-  0.32 / 0.37 / 0.50 against 8) and 7 equals 8. Split at level 7 against 8:
-  `HumanizedBot`'s aim alone (`tracking6`, no legs, every jump) scores 0.13, the
-  shipped `tracking9` 0.09, so the aim lag is most of it and the halved jumps
-  about 0.04. The same at 550ae80, before the rocket perception, within noise.
-  The match ladder is still even (`BENCH_TIERS=20 BENCH_HUMAN_AIM=1`, 21 maps,
-  420 matches an arm: −0.086 / −0.153 / −0.235 / −0.303 against 5, ±0.008-0.011,
-  as before the perception), so `TierSkills` stands for team servers. What would
-  show this stale: a retrained duel net or any change to `HumanizeOptions.Tracking9`.
+- **The duel ladder has its own table, because human aim costs a duel far more
+  than a match.** `BENCH_DUEL_LADDER` (the duel server's setting, every class).
+  On the tiers' mapping (`DuelLadder.SkillOf`, which auto difficulty still uses)
+  levels 1-7 scored 0.36 / 0.36 / 0.41 / 0.49 / 0.48 / 0.58 / 0.61 against a
+  level-4 bot and level 8 scored 0.94; against level 8 every level below scored
+  under 0.10. With the wrap off the levels were evenly apart and 7 equalled 8.
+  Split at level 7 against 8: `HumanizedBot`'s aim alone (`tracking6`, no legs,
+  every jump) scored 0.13 and the shipped `tracking9` 0.09, so the aim lag is
+  most of it and the halved jumps about 0.04. It predates the rocket perception
+  (the same at 550ae80, within noise).
+  - **`DuelLadder.DuelSkillOf` fades the human aim over all eight levels**
+    (`BotSkill.Human(double)`: 1, 0.85, 0.68, 0.50, 0.33, 0.20, 0.08, 0) under
+    skills 0.15, 0.27, 0.40, 0.55, 0.70, 0.85, 0.95, 0.95, fitted by
+    `BENCH_DUEL_LADDER=160 BENCH_DUEL_OPPONENT=4` (1,280 duels a level) for even
+    steps in log-odds. Held out (`BENCH_SEED_BASE=500000`): 0.15 / 0.25 / 0.34 /
+    0.51 / 0.65 / 0.75 / 0.83 / 0.90 against level 4, steps 0.46-0.70; against
+    level 8, 0.02 / 0.04 / 0.06 / 0.09 / 0.15 / 0.24 / 0.33 / 0.50, steps
+    0.35-0.70. A linear fade under the tiers' skills read 0.22-0.88 a step, the
+    top half twice the bottom's. Level 1 sits at `BotSkill.Lerp`'s floor (0.15),
+    so the bottom cannot be spread further by skill.
+  - Single-level steps carry about ±0.15 of noise in log-odds even at 1,280
+    duels; read pairs of levels when tuning. **A bot against a bot**: this says
+    the levels are evenly apart, not where a person settles. What would show it
+    stale: a retrained duel net, or a change to `HumanizeOptions.Tracking9` or
+    `BotSkill.For`.
+- The match ladder is still even after the rocket perception
+  (`BENCH_TIERS=20 BENCH_HUMAN_AIM=1`, 21 maps, 420 matches an arm: −0.086 /
+  −0.153 / −0.235 / −0.303 against 5, ±0.008-0.011; −0.085 / −0.149 / −0.231 /
+  −0.300 before it), so `TierSkills` stands for team servers.
 - **The tiers are tuned to be evenly apart in a match**, through
   `BotSkill.TierSkills` (0.15, 0.30, 0.42, 0.67, 0.95 until 2026-10-10, ⚠️ now
   shifted: see the next item; evenly spaced skills cost

@@ -10,8 +10,10 @@ namespace GG2.Server;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Eight levels over the server's five tiers.</b> Tiers 1-4 sit on levels 1,
-/// 3, 5 and 7 and the levels between interpolate their skill; tier 5 is level 8.
+/// <b>Eight levels.</b> On the duel server they are <see cref="DuelSkillOf"/>'s own
+/// table, with only level 8 a tier (5). For auto difficulty, <see cref="SkillOf"/>:
+/// tiers 1-4 sit on levels 1, 3, 5 and 7 and the levels between interpolate their
+/// skill; tier 5 is level 8.
 /// Tier 5 differs from tier 4 only in playing like a person, and
 /// <see cref="BotSkill.Human(double)"/> fades that out between levels 7 and 8, so
 /// that step is a slope too rather than a cliff at 7.5. The tiers were tuned to
@@ -211,6 +213,37 @@ public sealed class DuelLadder
         // Tier 5 is tier 4's skill without playing like a person, so the top
         // level fades that out: fully human at 7, not at all at 8.
         return BotSkill.For(skill).Human(MaxLevel - r);
+    }
+
+    /// <summary>The duel server's skill at levels 1-8 (index 0 is level 1).</summary>
+    private static ReadOnlySpan<double> DuelSkills => [0.15, 0.27, 0.40, 0.55, 0.70, 0.85, 0.95, 0.95];
+
+    /// <summary>How much like a person each duel level plays (<see cref="BotSkill.Human(double)"/>), 1 fully to 0 not at all.</summary>
+    private static ReadOnlySpan<double> DuelHuman => [1, 0.85, 0.68, 0.50, 0.33, 0.20, 0.08, 0];
+
+    /// <summary>The skill a duel bot plays at for its human's rating.</summary>
+    /// <remarks>
+    /// <b>Not <see cref="SkillOf"/>, which auto difficulty plays on team servers.</b>
+    /// Human aim costs about one tier in a match and several in a duel: with the
+    /// tiers' mapping, levels 1-7 scored 0.36-0.61 against level 4 and level 8 0.94.
+    /// So here the human aim fades over the whole ladder, and the skill under it
+    /// was refitted (<c>BENCH_DUEL_LADDER=160 BENCH_DUEL_OPPONENT=4</c>) for even
+    /// steps in log-odds: 0.46-0.71 a level on the tuning seeds and on
+    /// <c>BENCH_SEED_BASE=500000</c>, against 0.22-0.88 before.
+    /// <c>docs/TRAPS-BOTS.md</c>, "The duel ladder". Level 8 is exactly tier 5;
+    /// no level below is a tier. What would show it stale: a retrained duel net,
+    /// a change to <see cref="HumanizeOptions.Tracking9"/> or to <see cref="BotSkill.For"/>.
+    /// </remarks>
+    public static BotSkill DuelSkillOf(double rating)
+    {
+        var r = Math.Clamp(rating, MinLevel, MaxLevel) - MinLevel;
+        var i = Math.Min((int)r, MaxLevel - MinLevel - 1);
+        var t = r - i;
+
+        var skill = DuelSkills[i] + ((DuelSkills[i + 1] - DuelSkills[i]) * t);
+        var human = DuelHuman[i] + ((DuelHuman[i + 1] - DuelHuman[i]) * t);
+
+        return BotSkill.For(skill).Human(human);
     }
 
     /// <summary>The word a level is shown with.</summary>

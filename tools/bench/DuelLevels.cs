@@ -49,6 +49,8 @@ internal static class DuelLevels
             ? HumanizeOptions.ForPreset(named) : HumanizeOptions.Tracking9;
         if (Environment.GetEnvironmentVariable("BENCH_DUEL_JUMPKEEP") is { Length: > 0 } keep)
             preset = preset with { JumpKeep = double.Parse(keep, CultureInfo.InvariantCulture) };
+        // BENCH_SEED_BASE moves every placement, so a tuning can be checked on duels it never saw.
+        var seedBase = int.Parse(Environment.GetEnvironmentVariable("BENCH_SEED_BASE") ?? "9900", CultureInfo.InvariantCulture);
         var mapDirectory = Path.Combine(maps, "duel");
         var navDirectory = Path.Combine(nav, "duel");
         string[] list = [.. Enumerable.Range(1, 8).Select(n => $"duel_{n:00}")];
@@ -77,7 +79,7 @@ internal static class DuelLevels
             var playerClass = classes[i % classes.Length];
             var subjectTeam = (i / classes.Length) % 2 == 0 ? Team.Red : Team.Blue;
             var (world, red, blue) = Tiers.PlaceInSight(
-                mapDirectory, navDirectory, map, (uint)(9900 + (map.Length * 131) + (i * 37)), playerClass);
+                mapDirectory, navDirectory, map, (uint)(seedBase + (map.Length * 131) + (i * 37)), playerClass);
             var graph = world.Nav;
             var distances = tables.GetOrAdd(map, m => new Lazy<NavDistanceSet?>(() =>
                 graph is null ? null : NavDistanceSet.LoadOrDerive(navDirectory, m, 1, graph, out _))).Value;
@@ -89,7 +91,7 @@ internal static class DuelLevels
             IInputSource Bot(Team team, int slot, double rating)
             {
                 IInputSource bot = policy.Value!.Wrap(
-                    new ScriptedBot(world.Nav, new NavQuery(team), DuelLadder.SkillOf(rating), slot) { Distances = distances });
+                    new ScriptedBot(world.Nav, new NavQuery(team), DuelLadder.DuelSkillOf(rating), slot) { Distances = distances });
                 return humanize ? HumanizedBot.ByTier(bot, (uint)slot, preset) : bot;
             }
 
