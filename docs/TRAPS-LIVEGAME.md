@@ -79,6 +79,34 @@ back it up and restore it afterwards rather than trusting the edit to be
 temporary. Turning the prompt off skips a consent dialog, not the gate — a
 required plugin is still downloaded and loaded, so a join still proves the gate.
 
+### Joining a password server without its dialog
+
+A `PASSWORD_REQUEST` makes the client call `get_string`
+(`Scripts/Client/ClientBeginStep.gml:412`), a modal the launcher can only
+close, which sends an empty password. It is skipped when the `Client`
+instance's `usePreviousPwd` is set, and `ClientCreate` resets that, so set it
+right after creating the client, from a running menu-screen client:
+
+```
+global.serverIP = "127.0.0.1"; global.serverPort = 18300;
+global.clientPassword = "the password";
+c = instance_create(0, 0, Client); c.usePreviousPwd = true;
+```
+
+HELLO goes out in the create event, and the password is read on a later
+Begin Step, so the flag is in place in time. The bytes on the wire are those a
+typed password sends. A room code joins this way (`docs/ROOMS.md`).
+
+- **`ClientPlayerChangeteam` only writes to the buffer**; the menu sends it.
+  From `gg2_eval`, follow it with `socket_send(global.serverSocket)`.
+- **A client that loaded a server's plugins must restart before joining
+  anything else**: it raises "Because you used this server's plugins, you will
+  have to restart GG2", the launcher force-closes it, and no connection is
+  made. Relaunch the client between joins to two plugin servers.
+- **Relaunching on the same `--name` too soon races the register**: the old
+  launcher's "game exited" can remove the new game's entry. Stop the old game,
+  wait for its launcher to exit, then launch.
+
 ### A team request for the bigger side is refused in silence
 
 `ClientPlayerChangeteam(TEAM_RED, …)` does nothing at all when red is the larger
