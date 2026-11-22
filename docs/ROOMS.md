@@ -1,198 +1,166 @@
 # Private rooms
 
 A player in gg2-client asks for a server for themselves and their friends,
-gets a short code to share, and the server goes away once everybody has left.
+gets a short code to share, and the room goes away once everybody has left.
 Nobody hosts from a phone. This is the industry's session-based dedicated
 server pattern (Agones allocation, GameLift game sessions, PlayFab
-multiplayer servers), sized for a fleet of small VPSes.
+multiplayer servers), built so that one process holds many rooms.
 
-**Status: steps 1 and 2 built.** The table below says which parts exist and
-what proves each. Nothing else in this file exists until its row says so.
+**Status: step 1 built.** The table says which parts exist and what proves
+each. Nothing else in this file exists until its row says so.
 
 | Step | Part | State |
 |---|---|---|
-| 1 | `--exit-when-empty` and `--max-lifetime` on gg2-server | **Built.** `EmptyServerExitTests`; the real host exits 0 three seconds after an empty start |
-| 2 | `gg2-room@.service` template unit | **Built**, run under systemd 255 in WSL as a user unit (below); not yet installed on any VPS |
-| 3 | The dispatcher, one per VPS | not started |
+| 1 | A server stops itself: empty timeout and hard lifetime | **Built.** `EmptyServerExitTests`; the real host exits 0 three seconds after an empty start |
+| 2 | The room host: one process, one port, many rooms | in progress |
+| 3 | The dispatcher API, inside the room host | not started |
 | 4 | Device check and the ban list | not started |
 | 5 | gg2-client: create, join by code | not started |
-| 6 | Fleet rollout: firewall range, units, dispatcher | not started |
+| 6 | Fleet rollout: one unit and one port per VPS | not started |
 
 ## Where rooms run
 
 **On the three VPSes only**: `gg2-us-west`, `gg2-us-east`, `gg2-de`. Not on
 barbara, which is a home connection. Each VPS also runs its public fleet
-server, and that server's slots come first: the dispatcher's capacity check is
+server, and that server's slots come first: the room host's capacity check is
 what protects them.
 
 ## The shape
 
 ```
-gg2-client ──HTTPS──> dispatcher (per VPS) ──systemctl──> gg2-room@<port>
-     │                                                        │
-     └────────────── GG2 TCP, password = derived from code ───┘
+gg2-client ──HTTPS──> room host (one process per VPS) ──in memory──> room
+     │                    │ game port: the front door
+     └─── GG2 TCP ────────┘ routes each connection by its password
 ```
 
-1. The client pings every dispatcher, picks the nearest one that says it has
+1. The client pings every room host, picks the nearest one that says it has
    room, and sends `POST /rooms` with a device proof (below) and the room's
-   choices (map or rotation, bots on or off).
-2. The dispatcher checks capacity, takes a free port from its range, writes a
-   room ini, starts `gg2-room@<port>`, and replies
-   `{code, host, port, password, expiresAt}`.
+   choices.
+2. The room host checks capacity, builds the room in memory, and replies
+   `{code, host, port, expiresAt}`. Creating a room starts no process.
 3. Friends type the code. Its first letter is the host's prefix in the
-   directory (below), so the client knows which dispatcher to send `GET /rooms/{code}` to, and gets the same
-   address and password. No central directory is needed.
-4. The server exits on its own once nobody has been connected for
-   `ExitWhenEmptySeconds`. systemd reaps it, and the port is free again.
+   directory (below), so the client knows which host to connect to.
+4. Every room on a host shares that host's one game port. **The code is the
+   room's password**, and the front door reads the password from the
+   handshake and hands the connection to that room.
+5. A room ends on its own once nobody has been connected for 120 seconds, or
+   at its hard lifetime. The host drops it from memory.
 
-**Nothing new reaches the wire.** A room is an ordinary server with a
-password and lobby announcing off. A stock GM8 client given the address and
-password can join it too. None of this touches the simulation.
+**Nothing new reaches the wire.** To a client a room is an ordinary
+password-protected server. A stock GM8 client given the address and the code
+can join it too, typing the code into the password dialog. None of this
+touches the simulation.
+
+## Why one process holds the rooms
+
+The numbers below are the ones in `docs/DEPLOY.md`, scaled to 100,000 players
+at about ten per room, so 10,000 rooms.
+
+| Resource | Per room | 10,000 rooms | |
+|---|---|---|---|
+| CPU | 0.15-0.23 ms of a 33.3 ms tick | ~50 cores | cheap |
+| Memory, one process per room | 96-129 MB | ~1 TB | mostly per-process overhead |
+| Bandwidth | ~1.5 kbit/s per roster entry per client, ~24 kbit/s per client in a 16-player room | ~2.4 Gbit/s out | the real cost at that scale |
+
+Most of a process's memory is the runtime, the maps, and the nav tables
+(10.8 MB for one map's next-hop tables), each loaded once per process. A
+match's own state is small: `WorldState` is a flat value type with no
+references. So rooms in one process, sharing what is read-only, should cost a
+few MB each rather than a hundred. **That is an estimate**, and step 2 measures
+it; this section is wrong if a hosted room costs tens of MB.
+
+The rest of the design follows from rooms being objects instead of
+processes: creating one is building a `WorldState`, so it takes microseconds
+rather than a one-second start; one listening port serves every room, so there
+is no port pool or firewall range; and the host knows every room it has, so
+the dispatcher is part of it rather than a separate service driving systemd.
+
+What does **not** change: the simulation, and the language. CPU is not what
+runs out, the tick loop allocates nothing, and rewriting the physics in
+another language would mean re-proving the six roundings, the `x -= hspeed`
+ULP and the x87 `ceil` against every parity fixture to save memory that
+sharing one process already saves. If memory per process still mattered
+after that, .NET Native AOT is the cheaper step.
 
 ## The pieces
 
-### 1. `--exit-when-empty <seconds>` and `--max-lifetime <minutes>` (built)
+### 1. A server stops itself (built)
 
-`ServerOptions.ExitWhenEmptySeconds`, `[Runtime] ExitWhenEmptySeconds` in a
-config file. `EmptyServerExit` is the rule:
+`EmptyServerExit` is the rule, and every room in the host runs it:
 
-- The clock starts at startup, so a room nobody joins goes away after the
-  same interval as one everybody left.
-- A person is a connection: a spectator and a half-finished handshake count,
-  bots do not.
-- Wall clock, not ticks, because an empty server idles at 2 Hz.
-- `--max-lifetime` / `[Runtime] MaxLifetimeMinutes` ends a room at a hard limit
-  whoever is on it (planned: 6 hours), so an idle client cannot hold one open.
-- The process exits **0**, so a `Restart=on-failure` unit leaves it stopped.
-  Under `Restart=always` it would come back empty, which is why no fleet
-  server is given this setting.
+- **Empty**: `ServerOptions.ExitWhenEmptySeconds`, `--exit-when-empty`,
+  `[Runtime] ExitWhenEmptySeconds`. The clock starts at startup, so a room
+  nobody joins goes away after the same interval as one everybody left. A
+  person is a connection: a spectator and a half-finished handshake count,
+  bots do not. Wall clock, not ticks, because an empty server idles at 2 Hz.
+  120 seconds for a room, which covers the creator's connect and a stock
+  client dropping and reconnecting at a map change (`docs/DEPLOY.md`).
+- **Lifetime**: `ServerOptions.MaxLifetimeMinutes`, `--max-lifetime`,
+  `[Runtime] MaxLifetimeMinutes`. Ends a room whoever is on it (planned: 6
+  hours), so an idle client cannot hold one open. Players are dropped without
+  warning; a chat notice before the end does not exist yet.
 
-The intended value for a room is 120 seconds. That covers the creator's
-connect after the dispatcher replies, and a stock client dropping and
-reconnecting at a map change to a custom map it lacks (`docs/DEPLOY.md`
-has that failure).
+`GameServer.SelfExit` says which happened. A standalone server that stops
+itself exits 0, which a `Restart=on-failure` unit leaves alone. That is not
+systemd's `RuntimeMaxSec`: systemd counts that stop as a timeout and
+`Restart=on-failure` restarts it (measured on systemd 255).
 
-### 2. A systemd template unit (built)
+### 2. The room host
 
-`gg2-room@.service`, below, is the unit, for the release layout under
-`/opt/gg2-server` (`docs/DEPLOY.md`). The instance name is the port:
-`systemctl start gg2-room@8301`. The fleet's local `scripts/deploy.sh
---print-room-unit` prints the same text for another `--root`; `scripts/` is
-not carried in this repo, so this copy is the one a clone has. It is never
-enabled; the dispatcher starts rooms and rooms stop themselves. Against the
-fleet unit it differs in four ways:
+One process per VPS, a `gg2-server rooms` subcommand, run by an ordinary
+systemd unit. It holds:
 
-- **Port, empty timeout and lifetime are flags** (`--port %i
-  --exit-when-empty 120 --max-lifetime 360`), and a flag beats the file, so
-  no room config can move a room off its instance's port or make it permanent.
-- **`--config` names `rooms/<port>/gg2.ini`**, which the dispatcher writes
-  before the start.
-- **`MemoryMax=256M`**, against 96-129 MB measured from 1 to 24 clients.
-- **No `ReadWritePaths`.** A room writes nothing: shipped maps only, whose nav
-  graphs ship, and no panel, bans, analytics or recording.
+- **The front door**: the one game listener. It accepts a connection, checks
+  the 17-byte HELLO, sends `PASSWORD_REQUEST`, and reads the password. The
+  handshake allows this for a stock client, because the password comes
+  **before** anything that names a server or a map (`docs/PROTOCOL.md`). A
+  password that names a room hands the connection, and any bytes after the
+  password, to that room, which carries on from the greeting. Anything else
+  gets `PASSWORD_WRONG` and is dropped, which is the stock behaviour for a
+  wrong password. The front door owns the connection limits that are about
+  the host: the accept rate per address, the cap on handshakes in flight, and
+  the handshake timeouts.
+- **The rooms**: one `GameServer` each, with no listener of its own. A room
+  takes handed-over connections where a standalone server takes accepted ones,
+  and still applies its own per-room rules (seats, `MultiClientLimit`).
+  Everything a standalone server does per process (lobby, web panel, control
+  port, recording, analytics) is off for a room.
+- **The loop**: ticks every room at 30 Hz on one thread to begin with.
+  Each room has its own fault budget, so a room whose ticks keep failing is
+  ended alone instead of taking the host down. A room that stops itself is
+  disposed and its code freed.
 
-```ini
-# /etc/systemd/system/gg2-room@.service
-#
-#   scripts/deploy.sh --print-room-unit > room-unit
-#   ssh HOST "sudo tee /etc/systemd/system/gg2-room@.service > /dev/null" < room-unit
-#   ssh HOST "sudo systemctl daemon-reload"
-#
-# Never enabled: a room is started by the dispatcher and stops itself. The
-# instance name is the game port, and the dispatcher writes the room's config
-# to /opt/gg2-server/rooms/<port>/gg2.ini before starting it.
+**Shared data** is loaded once per host: maps and their collision, nav graphs
+and next-hop tables, the bot nets. Every room holds a reference, never a copy.
 
-[Unit]
-Description=Gang Garrison 2 private room on port %i
-After=network-online.target
+**Later, if a host fills a core**: one tick thread per core with rooms spread
+across them and their ticks staggered through the 33 ms window, and the bots'
+policy nets evaluated in one batch across rooms. Batching can change the
+summation order of a net's floats, which is allowed because a bot's decisions
+are not physics on the wire.
 
-[Service]
-Type=simple
-User=gg2
-WorkingDirectory=/opt/gg2-server/current
+### 3. The dispatcher API
 
-# The port, the empty timeout and the lifetime are FLAGS, and a flag beats the
-# file: whatever the dispatcher's template says, a room listens where its
-# instance name says and cannot make itself permanent.
-ExecStart=/opt/gg2-server/current/gg2-server --config /opt/gg2-server/rooms/%i/gg2.ini --port %i --exit-when-empty 120 --max-lifetime 360
-
-# on-failure: a crashed room comes back on the same port, so its code still
-# works. Both ways a room stops itself exit 0, which this leaves alone.
-# NOT RuntimeMaxSec for the lifetime: systemd restarts that as a timeout.
-Restart=on-failure
-RestartSec=5
-Environment=DOTNET_gcServer=0
-
-# A server measures 96-129 MB from 1 to 24 clients (docs/DEPLOY.md); a room
-# has 12 seats. The bound that protects the box's public server.
-MemoryMax=256M
-
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-RestrictAddressFamilies=AF_INET AF_INET6
-
-# No ReadWritePaths at all: a room writes nothing. It serves shipped maps only,
-# whose nav graphs ship, and has no panel, bans, analytics or recording.
-```
-
-**The lifetime is `--max-lifetime` and not systemd's `RuntimeMaxSec`.**
-systemd counts a `RuntimeMaxSec` stop as a timeout and `Restart=on-failure`
-restarts a timeout: measured on systemd 255, two restarts in seven seconds
-against a two-second limit. A room would come back empty each time its
-lifetime ran out. Players are dropped without warning when it does; a chat
-notice before the end does not exist yet.
-
-**What was run** (WSL, systemd 255, a user unit, so `User=` was removed and
-`ProtectHome` turned off because the test tree was under `/home`; the rest of
-the sandbox as printed): the room listened on its instance's port with the
-config's 12 slots, exited 0 five seconds after an empty start with
-`--exit-when-empty 5`, and exited 0 at one minute with `--max-lifetime 1`.
-Both times the unit ended `inactive`, `Result=success`, `NRestarts=0`. Not yet
-run: as a system unit with `User=gg2` under `/opt` on a VPS.
-
-The dispatcher keeps no state of its own. On startup it rebuilds the room list
-from `systemctl list-units 'gg2-room@*'` and the ini files beside them, so a
-dispatcher crash loses nothing. It needs to start and stop rooms and nothing
-else, which is one sudoers line:
-
-```
-gg2-dispatch ALL=(root) NOPASSWD: /usr/bin/systemctl start gg2-room@*, /usr/bin/systemctl stop gg2-room@*
-```
-
-**A deploy and a running room.** `ExecStart` goes through `current`, which a
-deploy flips; a running room should keep the release it started from, because its working directory and executable path resolve the link at start (reasoned, not measured). A deploy keeps
-five releases, so only five deploys inside one room lifetime would delete a
-release out from under a running room.
-
-### 3. The dispatcher
-
-A small HTTP service on each VPS, behind TLS. Planned as a `gg2-server
-dispatch` subcommand, so it ships in the same build and reuses the config
-reader.
+HTTP inside the room host, behind TLS.
 
 | Endpoint | Does |
 |---|---|
 | `GET /status` | region, rooms in use, rooms free. What the client's region picker reads |
 | `POST /rooms` | device proof plus room choices; creates a room or says why not |
-| `GET /rooms/{code}` | the address and password for a live room, 404 otherwise |
+| `GET /rooms/{code}` | whether a room is live, and its address |
 
-**Capacity**, all checked on every create:
+**Capacity**, checked on every create: a room cap per host, a floor on
+`MemAvailable` so the fleet server is never squeezed, and per-device and
+per-address limits (one live room per device, a few creates an hour). The cap
+is set from step 2's measured cost per room.
 
-- a room cap per box, set by RAM: about 4 on a 1 GB VPS beside its fleet
-  server, about 10 on 2 GB. **Memory is the limit, not CPU**, since a twelve-bot
-  server is 0.5% of a core;
-- `MemAvailable` above a floor, so the fleet server is never squeezed;
-- a free port in the room range (planned: 8300-8339, opened in `ufw`);
-- per-device and per-address limits: one live room per device, a few creates
-  an hour.
+**Room codes**: a host prefix letter plus five characters from an alphabet
+without look-alikes (no `0/O`, `1/I/L`): 31^5, about 2.9 x 10^7 per host. The
+five characters are the room's password.
 
-**Room codes**: a region letter plus five characters from an alphabet without
-look-alikes (no `0/O`, `1/I/L`), about 2.9 x 10^7 per region. The server
-password is derived from the code with a secret that only the dispatcher
-knows, so sharing the code is the whole invitation and the password never
-needs to be typed.
+**A restart ends every room on the host**, so a deploy waits for the host to
+empty, the same way a config push already waits for a fleet server to
+(`docs/CONFIG.md`). A host that is draining refuses new rooms.
 
 ### 4. Device check and bans
 
@@ -202,19 +170,19 @@ reinstall.
 **iOS** uses Apple's two services together:
 
 - **App Attest** proves a request comes from the real app on a real device.
-  At first launch the app makes a key, Apple attests it, and the dispatcher
-  checks the attestation once and remembers the key. Every `POST /rooms`
-  carries an assertion signed with that key. The key ID is the identity rate
-  limits and room ownership use.
+  At first launch the app makes a key, Apple attests it, and the host checks
+  the attestation once and remembers the key. Every `POST /rooms` carries an
+  assertion signed with that key. The key ID is the identity rate limits and
+  room ownership use.
 - **DeviceCheck** gives two bits per device that **survive a reinstall**. A
   ban sets one of them through Apple's server API, and a create from a device
   with the bit set is refused, whatever its App Attest key. That is what makes
   a ban stick.
 
 Both need an Apple developer account's private key on the server side. **A
-copy lives on each VPS** with the dispatcher's other secrets (outside the
-release tree, readable only by the dispatcher's user), so each dispatcher
-verifies on its own and no host depends on another.
+copy lives on each VPS**, outside the release tree and readable only by the
+room host's user, so each host verifies on its own and no host depends on
+another.
 
 **Only mobile clients can create rooms.** Desktop has no platform attestation,
 and does not need allocation: a desktop client hosts its own server the way
@@ -222,15 +190,14 @@ the GM8 game does, by running gg2-server in-process and sharing its address.
 A desktop client still joins a room by code.
 
 **The ban list** is keyed by App Attest key ID, with the DeviceCheck bit as
-the reinstall-proof half. Every room's ini records the creator's key ID, so a
+the reinstall-proof half. Every room records its creator's key ID, so a
 report against a room can be traced to a device.
 
 ### Room settings (agreed)
 
 Just enough for a simple game on a phone. Everything the player chooses maps
-onto a setting that already exists, so the dispatcher writes a fixed template
-and fills in three values. The dispatcher accepts only these values and
-refuses anything else; it never passes text from the client into the ini.
+onto a setting that already exists, so the host builds a fixed template and
+fills in three values. It accepts only these values and refuses anything else.
 
 | Choice | Options | Sets |
 |---|---|---|
@@ -242,24 +209,30 @@ Bold is the default. Fixed for every room:
 
 | Setting | Value | Why |
 |---|---|---|
-| `PlayerLimit` | 12 | A friends' game. Memory per room is set by it (`docs/DEPLOY.md`) |
+| `PlayerLimit` | 12 | A friends' game |
 | `Time Limit`, `CapLimit`, respawn, `AutoBalance` | stock | One set of rules everybody already knows |
 | `UseLobby` | 0 | Private |
-| `Password` | derived from the code | The code is the invitation |
+| `Password` | the code | The code is the invitation |
 | `[Bots] Mode` and nets | the fleet's, from `deploy/config/common.ini` | Same bots as the public servers |
 | `[Chat] Enabled` | 1 | gg2-client has native chat |
 | `QuickUpdateInterval` | 7 (stock) | |
-| `[Analytics]`, `--record`, `[Web]`, control port | off | A private room records nothing about who played |
-| `ExitWhenEmptySeconds` | 120 | Step 1 |
+| `[Analytics]`, recording, `[Web]`, control port | off | A private room records nothing about who played |
+| `ExitWhenEmptySeconds`, `MaxLifetimeMinutes` | 120, 360 | Step 1 |
 
 **Shipped maps only**: a custom map would need a download for stock clients
 and a nav graph built at the map change, and neither is worth it for this.
 
 ### 5. gg2-client
 
-"Create private game" (region picker, map or rotation, bots on or off) and
-"Join by code". Joining uses the existing password flow. The creator's client
-shows the code in the in-game menu so it can be shared mid-match.
+"Create private game" (region picker, map or rotation, bots, team size) and
+"Join by code". Joining answers the password request with the code. The
+creator's client shows the code in the in-game menu so it can be shared
+mid-match.
+
+### 6. Rollout
+
+One `gg2-rooms.service` per VPS, from the same release as the fleet server,
+and one more TCP port open in `ufw` (planned: 8300) plus the HTTPS port.
 
 ## A changing set of hosts
 
@@ -270,7 +243,7 @@ host it runs on.
 
 ### The directory
 
-The client learns the dispatchers from a **signed directory**: a small JSON
+The client learns the room hosts from a **signed directory**: a small JSON
 file at a stable URL, and the only thing about the hosts the app knows.
 
 ```json
@@ -293,26 +266,26 @@ file at a stable URL, and the only thing about the hosts the app knows.
 - **Hosts are found by the directory, not by `deploy/hosts`.** The fleet's
   deploy list says where to push builds; the directory says where players go.
   They overlap today and need not.
-- **A host that is down is skipped.** The client already pings every
-  dispatcher's `/status` to pick a region, so a dead entry costs one timeout
-  and nothing else. Liveness is never written into the directory.
+- **A host that is down is skipped.** The client already pings every host's
+  `/status` to pick a region, so a dead entry costs one timeout and nothing
+  else. Liveness is never written into the directory.
 - **A prefix belongs to a host.** A room code's first letter is looked up in
   the directory, so it names a host and not a provider. A prefix is not
-  reused for a different host within one room lifetime (`--max-lifetime`) of
-  retiring it, or an old code would resolve on the wrong machine.
+  reused for a different host within one room lifetime of retiring it, or an
+  old code would resolve on the wrong machine.
 
 ### Switching providers
 
-Each host's dispatcher URL is a hostname under a domain the operator controls,
-so moving a host is: provision the new VPS from `docs/DEPLOY.md`, install the
-room unit and the dispatcher, copy the Apple key, move the DNS name, and retire
-the old box after its last room has ended (at most `--max-lifetime`). The
-directory does not change unless the region does. A new region is one new entry
-and a re-signed directory.
+Each host's URL is a hostname under a domain the operator controls, so moving
+a host is: provision the new VPS from `docs/DEPLOY.md`, install the room host,
+copy the Apple key, move the DNS name, and retire the old box after its last
+room has ended (at most one room lifetime). The directory does not change
+unless the region does. A new region is one new entry and a re-signed
+directory.
 
 **Bans survive the move** because the reinstall-proof half lives in Apple's
-DeviceCheck bits, not on any host. The App Attest key IDs each dispatcher has
-seen, and its per-key limits, are local and start fresh on a new box. That is
+DeviceCheck bits, not on any host. The App Attest key IDs each host has seen,
+and its per-key limits, are local and start fresh on a new box. That is
 acceptable: a fresh limit does not undo a ban.
 
 ### Handing the servers to somebody else
@@ -345,26 +318,39 @@ Copying the Apple key to every host is the right call while all hosts are
 Kyle's. If hosts ever belong to several people, each copy is a key that can
 read and set every device's ban bits, held by someone else. The change then is
 **one token service** that holds the Apple key, verifies a device once, and
-issues a short-lived signed room token. Every dispatcher, whoever runs it,
-checks the token with a public key and never sees Apple's. Until then, the per-host copy is
-simpler and the dispatcher's request format should not need to change to
-switch: `POST /rooms` carries "a device proof", whichever kind it is.
+issues a short-lived signed room token. Every host, whoever runs it, checks
+the token with a public key and never sees Apple's. `POST /rooms` carries "a
+device proof", whichever kind it is, so the switch does not change the request.
+
+## Beyond a handful of hosts
+
+What changes if rooms ever need many hosts per region rather than one:
+
+- **Room codes resolve through a shared key-value store** instead of a prefix
+  per host, so hosts come and go without the directory changing. The
+  directory then lists regions.
+- **Hosts report free capacity to a regional registry** every few seconds, and
+  a create goes to the host with the most room.
+- **Hosts scale** from a cloud provider against rooms in use, with the
+  per-device limits enforced in one place rather than per host.
+- **The token service** above replaces the per-host Apple key.
+
+The client sees none of it: a create still returns an address and a code, a
+join is still a password, and the device proof is opaque.
 
 ## Hardening
 
-The dispatcher is a new surface reachable from the internet, and a worse one
-than the game socket: one request makes the box start a 100 MB process. It
-belongs in `docs/HARDENING.md`'s surface table when it is built. The bounds
-are the capacity checks above, the device proof on every create, TLS, and a
-request size cap. `GET /rooms/{code}` is rate-limited per address, so a guess
-at codes is slow; with about 4 live rooms per region against 2.9 x 10^7 codes,
-the chance of a guess hitting is small even before that limit.
+The room host's HTTP API is a new surface reachable from the internet. It
+belongs in `docs/HARDENING.md`'s surface table when it is built. The bounds are
+the capacity checks above, the device proof on every create, TLS, and a
+request size cap. The front door is the game socket's surface with one
+addition, guessing a room's password, and the accept rate per address already
+bounds that: a wrong password ends the connection, so every guess costs a
+connect. With a few live rooms per host against 2.9 x 10^7 codes, a guess
+hitting is unlikely even before the rate limit.
 
 ## Open questions
 
 - **Android**, if gg2-client ever ships there: Play Integrity is the
   equivalent of App Attest, but nothing like DeviceCheck's reinstall-proof
   bits exists, so a ban there would be weaker.
-
-Settled: rooms are created from mobile only; desktop hosts its own server.
-The Apple key is copied to each VPS.
