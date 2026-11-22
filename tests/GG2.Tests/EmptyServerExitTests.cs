@@ -16,42 +16,62 @@ public sealed class EmptyServerExitTests
     [Fact]
     public void ARoomNobodyJoinsExitsAfterTheInterval()
     {
-        var exit = new EmptyServerExit(60, nowMilliseconds: 1_000);
+        var exit = new EmptyServerExit(60, 0, nowMilliseconds: 1_000);
 
-        Assert.False(exit.ShouldExit(60_999, occupied: false));
-        Assert.True(exit.ShouldExit(61_000, occupied: false));
+        Assert.Equal(SelfExitReason.None, exit.Check(60_999, occupied: false));
+        Assert.Equal(SelfExitReason.Empty, exit.Check(61_000, occupied: false));
     }
 
     [Fact]
     public void TheIntervalCountsFromTheLastMomentSomebodyWasOn()
     {
-        var exit = new EmptyServerExit(60, nowMilliseconds: 0);
+        var exit = new EmptyServerExit(60, 0, nowMilliseconds: 0);
 
-        Assert.False(exit.ShouldExit(50_000, occupied: true));
-        Assert.False(exit.ShouldExit(109_999, occupied: false));
-        Assert.True(exit.ShouldExit(110_000, occupied: false));
+        Assert.Equal(SelfExitReason.None, exit.Check(50_000, occupied: true));
+        Assert.Equal(SelfExitReason.None, exit.Check(109_999, occupied: false));
+        Assert.Equal(SelfExitReason.Empty, exit.Check(110_000, occupied: false));
     }
 
     [Fact]
     public void AnOccupiedServerNeverExits()
     {
-        var exit = new EmptyServerExit(1, nowMilliseconds: 0);
+        var exit = new EmptyServerExit(1, 0, nowMilliseconds: 0);
 
-        Assert.False(exit.ShouldExit(1_000_000, occupied: true));
+        Assert.Equal(SelfExitReason.None, exit.Check(1_000_000, occupied: true));
+    }
+
+    /// <summary>The hard lifetime ends a room even with players on it.</summary>
+    [Fact]
+    public void TheLifetimeEndsAnOccupiedRoom()
+    {
+        var exit = new EmptyServerExit(120, 360, nowMilliseconds: 5_000);
+
+        Assert.Equal(SelfExitReason.None, exit.Check(5_000 + 359 * 60_000L, occupied: true));
+        Assert.Equal(SelfExitReason.Lifetime, exit.Check(5_000 + 360 * 60_000L, occupied: true));
+    }
+
+    /// <summary>A lifetime with no empty limit never exits for being empty.</summary>
+    [Fact]
+    public void ALifetimeAloneIgnoresEmptiness()
+    {
+        var exit = new EmptyServerExit(0, 10, nowMilliseconds: 0);
+
+        Assert.Equal(SelfExitReason.None, exit.Check(9 * 60_000L, occupied: false));
+        Assert.Equal(SelfExitReason.Lifetime, exit.Check(10 * 60_000L, occupied: false));
     }
 
     [Fact]
     public void OffByDefault()
     {
         Assert.Equal(0, new ServerOptions().ExitWhenEmptySeconds);
+        Assert.Equal(0, new ServerOptions().MaxLifetimeMinutes);
     }
 
     [Fact]
     public void ANegativeIntervalIsRefused()
     {
-        var options = new ServerOptions { ExitWhenEmptySeconds = -1 };
-
-        Assert.Throws<ArgumentOutOfRangeException>(options.Validate);
+        Assert.Throws<ArgumentOutOfRangeException>(new ServerOptions { ExitWhenEmptySeconds = -1 }.Validate);
+        Assert.Throws<ArgumentOutOfRangeException>(new ServerOptions { MaxLifetimeMinutes = -1 }.Validate);
     }
 
     [Fact]
@@ -80,7 +100,7 @@ public sealed class EmptyServerExitTests
 
         // Twice the interval, with the client on throughout.
         Assert.False(TickUntilExited(harness, TimeSpan.FromSeconds(2)));
-        Assert.False(harness.Server.ExitedEmpty);
+        Assert.Equal(SelfExitReason.None, harness.Server.SelfExit);
     }
 
     private static bool TickUntilExited(ServerHarness harness, TimeSpan deadline)
@@ -91,7 +111,7 @@ public sealed class EmptyServerExitTests
         {
             harness.Tick();
 
-            if (harness.Server.ExitedEmpty)
+            if (harness.Server.SelfExit == SelfExitReason.Empty)
                 return true;
 
             Thread.Sleep(20);

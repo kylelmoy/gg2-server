@@ -6,13 +6,13 @@ Nobody hosts from a phone. This is the industry's session-based dedicated
 server pattern (Agones allocation, GameLift game sessions, PlayFab
 multiplayer servers), sized for a fleet of small VPSes.
 
-**Status: planned, step 1 built.** The table below says which parts exist and
+**Status: steps 1 and 2 built.** The table below says which parts exist and
 what proves each. Nothing else in this file exists until its row says so.
 
 | Step | Part | State |
 |---|---|---|
-| 1 | `--exit-when-empty` on gg2-server | **Built.** `EmptyServerExitTests`; the real host exits 0 three seconds after an empty start |
-| 2 | `gg2-room@.service` template unit | not started |
+| 1 | `--exit-when-empty` and `--max-lifetime` on gg2-server | **Built.** `EmptyServerExitTests`; the real host exits 0 three seconds after an empty start |
+| 2 | `gg2-room@.service` template unit | **Built**, run under systemd 255 in WSL as a user unit (below); not yet installed on any VPS |
 | 3 | The dispatcher, one per VPS | not started |
 | 4 | Device check and the ban list | not started |
 | 5 | gg2-client: create, join by code | not started |
@@ -51,7 +51,7 @@ password can join it too. None of this touches the simulation.
 
 ## The pieces
 
-### 1. `--exit-when-empty <seconds>` (built)
+### 1. `--exit-when-empty <seconds>` and `--max-lifetime <minutes>` (built)
 
 `ServerOptions.ExitWhenEmptySeconds`, `[Runtime] ExitWhenEmptySeconds` in a
 config file. `EmptyServerExit` is the rule:
@@ -61,6 +61,8 @@ config file. `EmptyServerExit` is the rule:
 - A person is a connection: a spectator and a half-finished handshake count,
   bots do not.
 - Wall clock, not ticks, because an empty server idles at 2 Hz.
+- `--max-lifetime` / `[Runtime] MaxLifetimeMinutes` ends a room at a hard limit
+  whoever is on it (planned: 6 hours), so an idle client cannot hold one open.
 - The process exits **0**, so a `Restart=on-failure` unit leaves it stopped.
   Under `Restart=always` it would come back empty, which is why no fleet
   server is given this setting.
@@ -70,21 +72,99 @@ connect after the dispatcher replies, and a stock client dropping and
 reconnecting at a map change to a custom map it lacks (`docs/DEPLOY.md`
 has that failure).
 
-### 2. A systemd template unit
+### 2. A systemd template unit (built)
 
-`gg2-room@.service`, where the instance name is the port:
-`systemctl start gg2-room@8301`. It copies the fleet unit's sandboxing and adds:
+`gg2-room@.service`, below, is the unit, for the release layout under
+`/opt/gg2-server` (`docs/DEPLOY.md`). The instance name is the port:
+`systemctl start gg2-room@8301`. The fleet's local `scripts/deploy.sh
+--print-room-unit` prints the same text for another `--root`; `scripts/` is
+not carried in this repo, so this copy is the one a clone has. It is never
+enabled; the dispatcher starts rooms and rooms stop themselves. Against the
+fleet unit it differs in four ways:
 
-- `--config /var/lib/gg2-rooms/%i/gg2.ini`, written by the dispatcher;
-- `Restart=on-failure`, never `always`;
-- `RuntimeMaxSec=` as the hard lifetime (planned: 6 hours), so a room that
-  somebody keeps open with an idle client still ends;
-- `MemoryMax=` per room (planned: 200 MB; a server measures 96-129 MB from 1
-  to 24 clients, `docs/DEPLOY.md`).
+- **Port, empty timeout and lifetime are flags** (`--port %i
+  --exit-when-empty 120 --max-lifetime 360`), and a flag beats the file, so
+  no room config can move a room off its instance's port or make it permanent.
+- **`--config` names `rooms/<port>/gg2.ini`**, which the dispatcher writes
+  before the start.
+- **`MemoryMax=256M`**, against 96-129 MB measured from 1 to 24 clients.
+- **No `ReadWritePaths`.** A room writes nothing: shipped maps only, whose nav
+  graphs ship, and no panel, bans, analytics or recording.
+
+```ini
+# /etc/systemd/system/gg2-room@.service
+#
+#   scripts/deploy.sh --print-room-unit > room-unit
+#   ssh HOST "sudo tee /etc/systemd/system/gg2-room@.service > /dev/null" < room-unit
+#   ssh HOST "sudo systemctl daemon-reload"
+#
+# Never enabled: a room is started by the dispatcher and stops itself. The
+# instance name is the game port, and the dispatcher writes the room's config
+# to /opt/gg2-server/rooms/<port>/gg2.ini before starting it.
+
+[Unit]
+Description=Gang Garrison 2 private room on port %i
+After=network-online.target
+
+[Service]
+Type=simple
+User=gg2
+WorkingDirectory=/opt/gg2-server/current
+
+# The port, the empty timeout and the lifetime are FLAGS, and a flag beats the
+# file: whatever the dispatcher's template says, a room listens where its
+# instance name says and cannot make itself permanent.
+ExecStart=/opt/gg2-server/current/gg2-server --config /opt/gg2-server/rooms/%i/gg2.ini --port %i --exit-when-empty 120 --max-lifetime 360
+
+# on-failure: a crashed room comes back on the same port, so its code still
+# works. Both ways a room stops itself exit 0, which this leaves alone.
+# NOT RuntimeMaxSec for the lifetime: systemd restarts that as a timeout.
+Restart=on-failure
+RestartSec=5
+Environment=DOTNET_gcServer=0
+
+# A server measures 96-129 MB from 1 to 24 clients (docs/DEPLOY.md); a room
+# has 12 seats. The bound that protects the box's public server.
+MemoryMax=256M
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_INET AF_INET6
+
+# No ReadWritePaths at all: a room writes nothing. It serves shipped maps only,
+# whose nav graphs ship, and has no panel, bans, analytics or recording.
+```
+
+**The lifetime is `--max-lifetime` and not systemd's `RuntimeMaxSec`.**
+systemd counts a `RuntimeMaxSec` stop as a timeout and `Restart=on-failure`
+restarts a timeout: measured on systemd 255, two restarts in seven seconds
+against a two-second limit. A room would come back empty each time its
+lifetime ran out. Players are dropped without warning when it does; a chat
+notice before the end does not exist yet.
+
+**What was run** (WSL, systemd 255, a user unit, so `User=` was removed and
+`ProtectHome` turned off because the test tree was under `/home`; the rest of
+the sandbox as printed): the room listened on its instance's port with the
+config's 12 slots, exited 0 five seconds after an empty start with
+`--exit-when-empty 5`, and exited 0 at one minute with `--max-lifetime 1`.
+Both times the unit ended `inactive`, `Result=success`, `NRestarts=0`. Not yet
+run: as a system unit with `User=gg2` under `/opt` on a VPS.
 
 The dispatcher keeps no state of its own. On startup it rebuilds the room list
 from `systemctl list-units 'gg2-room@*'` and the ini files beside them, so a
-dispatcher crash loses nothing.
+dispatcher crash loses nothing. It needs to start and stop rooms and nothing
+else, which is one sudoers line:
+
+```
+gg2-dispatch ALL=(root) NOPASSWD: /usr/bin/systemctl start gg2-room@*, /usr/bin/systemctl stop gg2-room@*
+```
+
+**A deploy and a running room.** `ExecStart` goes through `current`, which a
+deploy flips; a running room should keep the release it started from, because its working directory and executable path resolve the link at start (reasoned, not measured). A deploy keeps
+five releases, so only five deploys inside one room lifetime would delete a
+release out from under a running room.
 
 ### 3. The dispatcher
 
@@ -218,7 +298,7 @@ file at a stable URL, and the only thing about the hosts the app knows.
   and nothing else. Liveness is never written into the directory.
 - **A prefix belongs to a host.** A room code's first letter is looked up in
   the directory, so it names a host and not a provider. A prefix is not
-  reused for a different host within one room lifetime (`RuntimeMaxSec`) of
+  reused for a different host within one room lifetime (`--max-lifetime`) of
   retiring it, or an old code would resolve on the wrong machine.
 
 ### Switching providers
@@ -226,7 +306,7 @@ file at a stable URL, and the only thing about the hosts the app knows.
 Each host's dispatcher URL is a hostname under a domain the operator controls,
 so moving a host is: provision the new VPS from `docs/DEPLOY.md`, install the
 room unit and the dispatcher, copy the Apple key, move the DNS name, and retire
-the old box after its last room has ended (at most `RuntimeMaxSec`). The
+the old box after its last room has ended (at most `--max-lifetime`). The
 directory does not change unless the region does. A new region is one new entry
 and a re-signed directory.
 

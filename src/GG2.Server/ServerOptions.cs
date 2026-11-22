@@ -1039,6 +1039,19 @@ public sealed class ServerOptions
     /// </remarks>
     public int ExitWhenEmptySeconds { get; set; }
 
+    /// <summary>
+    /// Stop the server this many minutes after it starts, whoever is on it. Zero,
+    /// the default, keeps it running for ever.
+    /// </summary>
+    /// <remarks>
+    /// A private room's hard lifetime (<c>docs/ROOMS.md</c>), so a room held open
+    /// by an idle client still ends. Exits 0 like
+    /// <see cref="ExitWhenEmptySeconds"/>; <see cref="EmptyServerExit"/> says why
+    /// this is not systemd's <c>RuntimeMaxSec</c>. Players are disconnected with
+    /// no warning.
+    /// </remarks>
+    public int MaxLifetimeMinutes { get; set; }
+
     /// <summary>Ticks per second while idle. A fifteenth of the live rate.</summary>
     /// <remarks>
     /// <b>Two rather than one, so a joiner is noticed within half a second.</b>
@@ -1273,6 +1286,12 @@ public sealed class ServerOptions
         {
             throw new ArgumentOutOfRangeException(
                 nameof(ExitWhenEmptySeconds), ExitWhenEmptySeconds, "must be 0..86400 seconds; 0 means never");
+        }
+
+        if (MaxLifetimeMinutes is < 0 or > 10_080)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(MaxLifetimeMinutes), MaxLifetimeMinutes, "must be 0..10080 minutes (a week); 0 means never");
         }
 
         if (LogKeep is < 0 or > 1000)

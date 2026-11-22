@@ -383,10 +383,10 @@ public sealed partial class GameServer
     public bool RestartRequested => _restartRequested;
 
     /// <summary>
-    /// Whether <see cref="ServerOptions.ExitWhenEmptySeconds"/> has run out, so
-    /// <see cref="Run"/> returns and the host exits 0 instead of restarting.
+    /// Whether the server has stopped itself (<see cref="EmptyServerExit"/>), and
+    /// why, so <see cref="Run"/> returns and the host exits 0 instead of restarting.
     /// </summary>
-    public bool ExitedEmpty => _exitedEmpty;
+    public SelfExitReason SelfExit => _selfExit;
 
     /// <summary>
     /// Ends <see cref="Run"/> and asks the host to start again from a re-read

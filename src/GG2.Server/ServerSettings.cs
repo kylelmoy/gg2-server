@@ -907,6 +907,10 @@ public static class ServerSettings
             "Runtime", "ExitWhenEmptySeconds", nameof(ServerOptions.ExitWhenEmptySeconds),
             o => o.ExitWhenEmptySeconds, (o, v) => o.ExitWhenEmptySeconds = v, "120"));
 
+        settings.Add(IntRow(
+            "Runtime", "MaxLifetimeMinutes", nameof(ServerOptions.MaxLifetimeMinutes),
+            o => o.MaxLifetimeMinutes, (o, v) => o.MaxLifetimeMinutes = v, "360"));
+
         settings.Add(BoolRow(
             "Runtime", "TickStats", nameof(ServerOptions.TickStats),
             o => o.TickStats, (o, v) => o.TickStats = v));

@@ -748,6 +748,12 @@ internal static class CommandLine
                     options.ExitWhenEmptySeconds = cursor.TakeInt();
                     break;
 
+                // A private room's hard lifetime. Not systemd's RuntimeMaxSec,
+                // which Restart=on-failure would restart: EmptyServerExit.
+                case "--max-lifetime":
+                    options.MaxLifetimeMinutes = cursor.TakeInt();
+                    break;
+
                 // ⛔ Pins the controller budget at --bot-arbiter instead of letting
                 // the server walk it down when ticks crowd their deadline. The
                 // budget's units come from a cost measured on ONE machine; this
@@ -1278,6 +1284,10 @@ internal static class CommandLine
                             connected, counted from startup too. Bots do not
                             count as somebody. For temporary private rooms;
                             0 (the default) runs for ever.
+          --max-lifetime <minutes>
+                            stop (exit code 0) this long after starting, even
+                            with players on. A private room's hard limit; 0
+                            (the default) runs for ever.
           --bot-handover-bubbles
                             bots put up a chat bubble whenever their brain
                             changes hands: z1 a policy took the wheel, z3 the

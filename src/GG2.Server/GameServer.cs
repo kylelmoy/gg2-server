@@ -46,7 +46,7 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     /// </summary>
     private PushedConfigWatcher? _pushedConfig;
     private EmptyServerExit? _emptyExit;
-    private bool _exitedEmpty;
+    private SelfExitReason _selfExit;
 
     /// <inheritdoc cref="_pushedConfig"/>
     internal PushedConfigWatcher? PushedConfig => _pushedConfig;
@@ -922,8 +922,11 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         if (_options.ConfigFile.Length != 0)
             _pushedConfig = new PushedConfigWatcher(_options.ConfigFile, _log, Environment.TickCount64);
 
-        if (_options.ExitWhenEmptySeconds > 0)
-            _emptyExit = new EmptyServerExit(_options.ExitWhenEmptySeconds, Environment.TickCount64);
+        if (_options.ExitWhenEmptySeconds > 0 || _options.MaxLifetimeMinutes > 0)
+        {
+            _emptyExit = new EmptyServerExit(
+                _options.ExitWhenEmptySeconds, _options.MaxLifetimeMinutes, Environment.TickCount64);
+        }
 
         // Last, and after OpenMap: the first segment's preamble is a
         // FULL_UPDATE of the world, so there has to be a world.
@@ -1180,12 +1183,14 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         // accepts anything, so a connection that arrives on the deciding tick is
         // the one case it misses. That client sees a closed socket and retries
         // against a dispatcher that no longer lists the room.
-        if (_emptyExit is not null
-            && !_exitedEmpty
-            && _emptyExit.ShouldExit(_nowMs, _clients.Count + _joining.Count != 0))
+        if (_emptyExit is not null && _selfExit == SelfExitReason.None)
         {
-            _exitedEmpty = true;
-            _log.Info($"exiting: nobody connected for {_emptyExit.Seconds}s (--exit-when-empty)");
+            _selfExit = _emptyExit.Check(_nowMs, _clients.Count + _joining.Count != 0);
+
+            if (_selfExit == SelfExitReason.Empty)
+                _log.Info($"exiting: nobody connected for {_emptyExit.EmptySeconds}s (--exit-when-empty)");
+            else if (_selfExit == SelfExitReason.Lifetime)
+                _log.Info($"exiting: reached the {_options.MaxLifetimeMinutes}-minute lifetime (--max-lifetime)");
         }
 
         AcceptConnections(now);

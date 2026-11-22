@@ -852,6 +852,7 @@ const STRINGS = {
       "Speed": "Tick pacing. 1: real time; 'max': unpaced. Must be 1 with players connected.",
       "IdleWhenEmpty": "Tick at 2 Hz with no players or bots. The round clock slows with it.",
       "ExitWhenEmptySeconds": "Stop the server after this many seconds with nobody connected. Bots do not count. 0 runs for ever. For private rooms only.",
+      "MaxLifetimeMinutes": "Stop the server this many minutes after it starts, even with players on. 0 runs for ever. For private rooms only.",
       "TickStats": "Log a tick-interval histogram every 30 s. Safe with players on.",
       "ControlPort": "Loopback-only JSON control port. Setting it enables it; 0 picks a free port. Executes commands against the live game.",
       "ControlPortEnabled": "Open the control port. Explicit so it can be turned off; a ControlPort key alone enables it."
