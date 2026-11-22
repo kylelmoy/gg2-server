@@ -265,7 +265,7 @@ scripts/fleet-analytics.sh --no-collect    # rebuild the page from what is saved
 
 | | |
 |---|---|
-| **How it reads a host** | Over ssh, it logs into that host's panel on loopback with the port and password from the host's own `shared/gg2.ini` — `fleet-state.sh`'s route — and sends `state` (for the server's name) and `analytics`. That is the running server, so sessions still open are counted; the file on disk is up to five minutes behind and has none. |
+| **How it reads a host** | Over ssh, it logs into that host's panel on loopback with the port and password from the host's own `shared/gg2.ini` — `fleet-state.sh`'s route — and sends `state` (for the server's name) and `analytics`. A TLS panel's self-signed certificate is pinned by SHA-256 in `deploy/panel-pins`, one line per host, recorded on first contact; a different certificate is refused before the password is sent (`scripts/fleet-panel.py`). That is the running server, so sessions still open are counted; the file on disk is up to five minutes behind and has none. |
 | **What it keeps** | `deploy/analytics/<host>.json`, the last successful reply per host. A host that does not answer keeps its previous reply, and the page names it and the time its figures are from. The directory is gitignored: it holds player names. |
 | **The page** | Self-contained, opened from disk: `app.css`, `world.json`, the panel's `analytics.js` and `common.js`, and the analytics sheet's markup cut out of `index.html`, with `scripts/fleet-analytics/fleet.js` adding the server switch and the sum. There is no second copy of the view to go stale. A reply's `<` is escaped before it goes into the page, because a player name can spell `</script>`. |
 
