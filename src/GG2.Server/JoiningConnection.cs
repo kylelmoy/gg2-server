@@ -128,6 +128,29 @@ public sealed class JoiningConnection(
     public ReadOnlySpan<byte> Unconsumed => _received.Buffered;
 
     /// <summary>
+    /// Skips straight to the greeting, for a connection whose HELLO and
+    /// password a room host's front door has already read (<c>docs/ROOMS.md</c>).
+    /// </summary>
+    /// <param name="carried">
+    /// Bytes the client sent after its password, which belong to this handshake.
+    /// ⛔ Dropping them desynchronises the framer, for the reason
+    /// <see cref="Unconsumed"/> gives.
+    /// </param>
+    /// <remarks>
+    /// The same state <see cref="HandlePassword"/> leaves behind on a match, so
+    /// everything from the greeting on is the ordinary path.
+    /// </remarks>
+    public void MarkAuthenticated(ReadOnlySpan<byte> carried)
+    {
+        if (State != JoinState.ExpectHello)
+            throw new InvalidOperationException("only a fresh connection can be handed over");
+
+        _received.Append(carried);
+        _expectedBytes = 0;
+        State = JoinState.ClientAuthenticated;
+    }
+
+    /// <summary>
     /// Advances the handshake as far as the bytes available allow.
     /// </summary>
     /// <param name="context">What the server needs to answer with.</param>

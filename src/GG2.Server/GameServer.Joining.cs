@@ -82,6 +82,10 @@ public sealed partial class GameServer
         if (_offline)
             return;
 
+        // A room's connections come through Admit, never a listener.
+        if (_hosted)
+            return;
+
         Debug.Assert(_listener is not null, "Start() must run before Tick()");
 
         // The reference accepts one per tick because GML gave it no reason not
@@ -184,6 +188,53 @@ public sealed partial class GameServer
 
             _joining.Add(new JoiningConnection(connection, now, _limits));
         }
+    }
+
+    /// <summary>
+    /// Takes a connection a room host's front door has already read the HELLO
+    /// and the password from, and carries its handshake on from the greeting.
+    /// </summary>
+    /// <param name="connection">Owned by this room from here, admitted or not.</param>
+    /// <param name="carried">Bytes the client sent after its password.</param>
+    /// <returns>Whether it was admitted; a refused one is told why and closed.</returns>
+    /// <remarks>
+    /// The ban list and the accept rate are the front door's, applied before
+    /// this. What is left is what is about THIS room: the cap on joins in flight
+    /// and <see cref="ServerOptions.MultiClientLimit"/>, with the same refusals
+    /// <see cref="AcceptConnections"/> sends. Called between ticks, on the
+    /// thread that ticks this room.
+    /// </remarks>
+    public bool Admit(ClientConnection connection, ReadOnlySpan<byte> carried)
+    {
+        if (!_hosted)
+            throw new InvalidOperationException("Admit is for a room started with StartHosted");
+
+        if (_offline)
+        {
+            connection.Dispose();
+            return false;
+        }
+
+        if (_joining.Count >= _limits.MaxJoiningConnections)
+        {
+            var full = new NetWriter(2);
+            ServerMessages.ServerFull(full);
+            Refuse(connection, full.WrittenSpan, "the joining queue is full");
+            return false;
+        }
+
+        if (ExceedsMultiClientLimit(connection))
+        {
+            var kick = new NetWriter(2);
+            ServerMessages.Kick(kick, KickReason.MultiClient);
+            Refuse(connection, kick.WrittenSpan, "too many connections from that address");
+            return false;
+        }
+
+        var joining = new JoiningConnection(connection, DateTime.UtcNow, _limits);
+        joining.MarkAuthenticated(carried);
+        _joining.Add(joining);
+        return true;
     }
 
     /// <summary>

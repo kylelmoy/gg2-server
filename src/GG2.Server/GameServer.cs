@@ -165,6 +165,12 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     private Random _pluginRandom = new(0);
 
     private TcpListener? _listener;
+
+    /// <summary>
+    /// A room inside a room host: no listener of its own, and its connections
+    /// arrive through <see cref="Admit"/> already past the password.
+    /// </summary>
+    private bool _hosted;
     private Roster _roster = null!;
     private MatchState _match = null!;
     private StateUpdateWriter _stateWriter = null!;
@@ -753,6 +759,28 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     public int BoundPort { get; private set; }
 
     /// <summary>Binds the listener and loads the map. Does not tick.</summary>
+    /// <summary>
+    /// Starts this server as a room inside a room host (<c>docs/ROOMS.md</c>):
+    /// everything <see cref="Start"/> does except open a listener. Connections
+    /// arrive through <see cref="Admit"/>, and ticks come from the host, never
+    /// from <see cref="Run"/>.
+    /// </summary>
+    public void StartHosted()
+    {
+        _hosted = true;
+        Start();
+    }
+
+    /// <summary>Whether this server is a room inside a room host.</summary>
+    public bool IsHosted => _hosted;
+
+    /// <summary>
+    /// Nav data shared with other servers in this process, or null to load its
+    /// own. Set before <see cref="Start"/>; a room host gives every room the same
+    /// one.
+    /// </summary>
+    public SharedNav? SharedNav { get; set; }
+
     public void Start()
     {
         _roster = new Roster(_options.ServerPlayerName);
@@ -868,12 +896,21 @@ public sealed partial class GameServer : IDisposable, IPluginHost
             ? new ConnectionRateLimiter(_limits.ConnectionBurstPerAddress, _limits.ConnectionBurstWindow)
             : null;
 
-        _listener = GameListener.Start(_options.Port, _log);
-        BoundPort = ((IPEndPoint)_listener.LocalEndpoint).Port;
+        if (_hosted)
+        {
+            _log.Info(
+                $"room open, map {map.Name} ({_match.GameMode}, " +
+                $"{map.Walkmask.Width}x{map.Walkmask.Height} cells), {_options.PlayerLimit} slots");
+        }
+        else
+        {
+            _listener = GameListener.Start(_options.Port, _log);
+            BoundPort = ((IPEndPoint)_listener.LocalEndpoint).Port;
 
-        _log.Info(
-            $"listening on {BoundPort}, map {map.Name} ({_match.GameMode}, " +
-            $"{map.Walkmask.Width}x{map.Walkmask.Height} cells), {_options.PlayerLimit} slots");
+            _log.Info(
+                $"listening on {BoundPort}, map {map.Name} ({_match.GameMode}, " +
+                $"{map.Walkmask.Width}x{map.Walkmask.Height} cells), {_options.PlayerLimit} slots");
+        }
 
         // The 30-second block's wall clock starts here, so its first firing is
         // 30 seconds from now rather than immediately after the registration

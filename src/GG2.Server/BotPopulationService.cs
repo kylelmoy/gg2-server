@@ -143,7 +143,9 @@ public sealed partial class BotPopulationService
                     + "and has been refused. Rebuild it with `gg2-server navgen --map "
                     + $"{map.Name}`, or delete nav/manifest.tsv's line for it to load it anyway");
             }
-            else if (!NavCache.TryLoad(navCacheDirectory, map.Name, area, out var graph, fingerprint))
+            else if (!(_server.SharedNav is { } shared
+                         ? shared.TryLoad(navCacheDirectory, map.Name, area, out var graph, fingerprint)
+                         : NavCache.TryLoad(navCacheDirectory, map.Name, area, out graph, fingerprint)))
             {
                 // Quiet: Generate below is about to make one, and saying "no nav
                 // cache" a line before "built a nav graph" describes a problem the
@@ -254,7 +256,10 @@ public sealed partial class BotPopulationService
             // Dijkstras — so a map that ships tables costs single-digit
             // milliseconds here and a custom map, whose graph was built moments
             // ago and has no file, still works at the old price.
-            set = NavDistanceSet.LoadOrDerive(navCacheDirectory, map.Name, area, Nav, out how);
+            // A room host's rooms share one set per graph: SharedNav.
+            set = _server.SharedNav is { } shared
+                ? shared.LoadOrDerive(navCacheDirectory, map.Name, area, Nav, out how)
+                : NavDistanceSet.LoadOrDerive(navCacheDirectory, map.Name, area, Nav, out how);
         }
         catch (ArgumentException e)
         {
@@ -278,7 +283,7 @@ public sealed partial class BotPopulationService
         _log.Info(
             $"nav distances for {map.Name} area {area}: {how} — "
             + $"{set.TableCount} table(s), {set.Bytes / 1048576.0:0.0} MB, {ms:0} ms"
-            + (how == "loaded"
+            + (how is "loaded" or "shared"
                 ? string.Empty
                 : ". Run `gg2-server navgen` to ship the tables and skip this next time"));
 

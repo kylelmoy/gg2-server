@@ -81,7 +81,8 @@ public sealed partial class GameServer
             return;
         }
 
-        _listener = GameListener.Start(BoundPort, _log);
+        if (!_hosted)
+            _listener = GameListener.Start(BoundPort, _log);
 
         _offline = false;
         AnnounceToLobby();

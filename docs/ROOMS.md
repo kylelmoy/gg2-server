@@ -6,13 +6,13 @@ Nobody hosts from a phone. This is the industry's session-based dedicated
 server pattern (Agones allocation, GameLift game sessions, PlayFab
 multiplayer servers), built so that one process holds many rooms.
 
-**Status: step 1 built.** The table says which parts exist and what proves
+**Status: steps 1 and 2 built; the room host has no command or API yet.** The table says which parts exist and what proves
 each. Nothing else in this file exists until its row says so.
 
 | Step | Part | State |
 |---|---|---|
 | 1 | A server stops itself: empty timeout and hard lifetime | **Built.** `EmptyServerExitTests`; the real host exits 0 three seconds after an empty start |
-| 2 | The room host: one process, one port, many rooms | in progress |
+| 2 | The room host: one process, one port, many rooms | **Built** as a library (`RoomHost`, `RoomFrontDoor`, `SharedNav`). `RoomHostTests` drive real sockets through the one port. Not yet run against a stock GM8 client, and no command starts one |
 | 3 | The dispatcher API, inside the room host | not started |
 | 4 | Device check and the ban list | not started |
 | 5 | gg2-client: create, join by code | not started |
@@ -65,9 +65,8 @@ at about ten per room, so 10,000 rooms.
 Most of a process's memory is the runtime, the maps, and the nav tables
 (10.8 MB for one map's next-hop tables), each loaded once per process. A
 match's own state is small: `WorldState` is a flat value type with no
-references. So rooms in one process, sharing what is read-only, should cost a
-few MB each rather than a hundred. **That is an estimate**, and step 2 measures
-it; this section is wrong if a hosted room costs tens of MB.
+references. So rooms in one process, sharing what is read-only, cost about a
+megabyte each rather than a hundred: measured below, under "The room host".
 
 The rest of the design follows from rooms being objects instead of
 processes: creating one is building a `WorldState`, so it takes microseconds
@@ -130,8 +129,30 @@ systemd unit. It holds:
   ended alone instead of taking the host down. A room that stops itself is
   disposed and its code freed.
 
-**Shared data** is loaded once per host: maps and their collision, nav graphs
-and next-hop tables, the bot nets. Every room holds a reference, never a copy.
+**Shared data**: `SharedNav` loads each map's nav graph and next-hop tables
+once per host, and every room holds a reference. Both types write their arrays
+only in their constructors, which is what makes sharing safe. A miss is cached,
+nothing is evicted (bounded by the shipped maps), and a graph a room GENERATED
+for a map with none is never shared. Maps themselves are still loaded per room;
+they are small next to the tables.
+
+**Measured** (Release, Windows, one 13700K core, `ctf_truefort`, ten scripted
+bots per room, no clients connected):
+
+| | 1 room | 10 rooms | 30 rooms |
+|---|---|---|---|
+| managed heap | 12.3 MB | 19.9 MB | 37.0 MB |
+| process private memory | 47 MB | 56 MB | 65 MB |
+| creating one more room | 197 ms | 5 ms | 3 ms |
+| one host tick, all rooms | | | 4.2 ms |
+
+So a room after the first costs **about 0.85 MB of heap** and about 0.14 ms of
+a tick: roughly 230 rooms per core by CPU, and memory is no longer what runs
+out. Before `SharedNav` each room cost about 12 MB of heap, almost all of it
+its own copy of the tables. The 1- and 10-room tick samples include warm-up and
+are not quoted. **Not measured**: connected clients (serialisation and
+bandwidth per client), maps other than `ctf_truefort`, a VPS core, and policy
+bots, whose nets are loaded per room today.
 
 **Later, if a host fills a core**: one tick thread per core with rooms spread
 across them and their ticks staggered through the 33 ms window, and the bots'
@@ -348,6 +369,20 @@ addition, guessing a room's password, and the accept rate per address already
 bounds that: a wrong password ends the connection, so every guess costs a
 connect. With a few live rooms per host against 2.9 x 10^7 codes, a guess
 hitting is unlikely even before the rate limit.
+
+## Known gaps
+
+- **Every room's bots roll alike.** A room's bot population and plugin RNG are
+  seeded from `ServerOptions.Port`, which is the host's one port for every
+  room, so rooms fill with the same names and classes in the same order.
+  `WorldState.Random` is not affected; it is seeded from a fresh RNG.
+- **Policy bots are not shared.** A room in `Mode=policy` loads its own nets,
+  and a brain object cannot simply be shared, because its decision arbiter
+  keeps per-tick budget state. Unmeasured.
+- **No test makes a room's tick throw**, so the per-room fault budget has never
+  run.
+- **No pre-lifetime warning** reaches the players before `--max-lifetime`
+  drops them.
 
 ## Open questions
 
