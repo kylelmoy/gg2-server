@@ -131,17 +131,49 @@ reinstall.
   with the bit set is refused, whatever its App Attest key. That is what makes
   a ban stick.
 
-Both need an Apple developer account's private key on the server side. It
-lives in one place: a small verification step all three dispatchers call, or
-copied to each with the dispatcher's other secrets. That is undecided.
+Both need an Apple developer account's private key on the server side. **A
+copy lives on each VPS** with the dispatcher's other secrets (outside the
+release tree, readable only by the dispatcher's user), so each dispatcher
+verifies on its own and no host depends on another.
 
-**Desktop** has no platform attestation. Until it has one, desktop clients can
-join rooms by code but not create them. That is the default, and the open
-question below.
+**Only mobile clients can create rooms.** Desktop has no platform attestation,
+and does not need allocation: a desktop client hosts its own server the way
+the GM8 game does, by running gg2-server in-process and sharing its address.
+A desktop client still joins a room by code.
 
 **The ban list** is keyed by App Attest key ID, with the DeviceCheck bit as
 the reinstall-proof half. Every room's ini records the creator's key ID, so a
 report against a room can be traced to a device.
+
+### Room settings (proposed)
+
+Just enough for a simple game on a phone. Everything the player chooses maps
+onto a setting that already exists, so the dispatcher writes a fixed template
+and fills in three values. The dispatcher accepts only these values and
+refuses anything else; it never passes text from the client into the ini.
+
+| Choice | Options | Sets |
+|---|---|---|
+| Map | **Rotation** (the stock rotation, `ShuffleRotation=arena-last`), or any one of the 22 shipped maps. The game mode follows from the map | `Map`, `Rotation`, `ShuffleRotation` |
+| Bots | **Off**, Easy, Normal, Hard, Adaptive | `[Bots] Enabled`; `Difficulty` 1 / 3 / 5; Adaptive is `AutoDifficulty=1` |
+| Team size | Small (fill to 6), **Medium** (fill to 10), Large (fill to 16). Only matters with bots on | `FillToPlayers`, `MaxBots` |
+
+Bold is the default. Fixed for every room:
+
+| Setting | Value | Why |
+|---|---|---|
+| `PlayerLimit` | 12 | A friends' game. Memory per room is set by it (`docs/DEPLOY.md`) |
+| `Time Limit`, `CapLimit`, respawn, `AutoBalance` | stock | One set of rules everybody already knows |
+| `UseLobby` | 0 | Private |
+| `Password` | derived from the code | The code is the invitation |
+| `[Bots] Mode` and nets | the fleet's, from `deploy/config/common.ini` | Same bots as the public servers |
+| `[Chat] Enabled` | 1 | gg2-client has native chat |
+| `QuickUpdateInterval` | 7 (stock) | |
+| `[Analytics]`, `--record`, `[Web]`, control port | off | A private room records nothing about who played |
+| `ExitWhenEmptySeconds` | 120 | Step 1 |
+
+**Shipped maps only**: a custom map would need a download for stock clients
+and a nav graph built at the map change, and neither is worth it for this.
 
 ### 5. gg2-client
 
@@ -161,8 +193,10 @@ the chance of a guess hitting is small even before that limit.
 
 ## Open questions
 
-- **Desktop creates.** Allow them behind a weaker check (a signed install key,
-  stricter limits), or keep creating rooms on iOS only?
-- **Where the Apple key lives**: one verifier or a copy per dispatcher.
-- **Room settings exposed to the player**: map choice, rotation, bot count,
-  player limit. Fewer choices mean a smaller ini surface to validate.
+- **The room settings above** are a proposal waiting on Kyle's approval.
+- **Android**, if gg2-client ever ships there: Play Integrity is the
+  equivalent of App Attest, but nothing like DeviceCheck's reinstall-proof
+  bits exists, so a ban there would be weaker.
+
+Settled: rooms are created from mobile only; desktop hosts its own server.
+The Apple key is copied to each VPS.
