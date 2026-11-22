@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
+using GG2.Bots;
 
 namespace GG2.Server.Rooms;
 
@@ -117,6 +118,7 @@ public sealed class RoomHost : IDisposable
     private readonly Dictionary<string, HostedRoom> _bySecret = new(StringComparer.Ordinal);
     private readonly List<HostedRoom> _rooms = [];
     private readonly SharedNav _sharedNav = new();
+    private readonly SharedPolicies _sharedPolicies = new();
     private RoomFrontDoor? _frontDoor;
 
     public RoomHost(RoomHostOptions options, IServerLog log)
@@ -136,6 +138,9 @@ public sealed class RoomHost : IDisposable
     /// <summary>The nav data every room shares.</summary>
     public SharedNav SharedNav => _sharedNav;
 
+    /// <summary>The policy nets every room shares.</summary>
+    public SharedPolicies SharedPolicies => _sharedPolicies;
+
     /// <summary>Connections at the front door that have not named a room yet.</summary>
     public int PendingConnections => _frontDoor?.PendingCount ?? 0;
 
@@ -153,11 +158,23 @@ public sealed class RoomHost : IDisposable
     /// The options are the room's own from here: the caller must not reuse the
     /// object for another room. <see cref="ServerOptions.Password"/> is replaced
     /// by the room's secret, and the per-process surfaces are switched off.
+    /// <para>
+    /// <b>Bots are scripted or policy, never search or tiered.</b> A search
+    /// decision is ~4.8 ms, and each room's arbiter budgets only its own tick, so
+    /// nothing would bound the host's tick across rooms; the policies match the
+    /// search on the shipped bundle, and both modes are planned for removal
+    /// (<c>docs/ROOMS.md</c>, "Bots in a room"). A policy room with no checkpoint
+    /// named runs the shipped bundle, and its nets come from
+    /// <see cref="SharedPolicies"/>.
+    /// </para>
     /// </remarks>
+    /// <exception cref="ArgumentException">A search or tiered room, or a brain that will not build.</exception>
     public HostedRoom? CreateRoom(ServerOptions options)
     {
         if (_rooms.Count >= _options.MaxRooms)
             return null;
+
+        BuildBrain(options);
 
         var secret = NewUniqueSecret();
         var code = _options.Prefix + secret;
@@ -185,6 +202,24 @@ public sealed class RoomHost : IDisposable
 
         _log.Info($"room {code} created ({_rooms.Count}/{_options.MaxRooms})");
         return room;
+    }
+
+    private void BuildBrain(ServerOptions options)
+    {
+        if (options.BotMode is BotMode.Search or BotMode.Tiered)
+        {
+            throw new ArgumentException(
+                $"bot mode '{options.BotMode.ToString().ToLowerInvariant()}' is not offered in a room; use scripted or policy");
+        }
+
+        if (options.BotMode == BotMode.Policy && options.PolicyPaths.Count == 0)
+        {
+            options.PolicyPaths = MapDirectory.ResolveCheckpoints();
+            options.BotClassPolicies = MapDirectory.ShippedClassPolicies;
+        }
+
+        // Fresh per room, arbiter and all; only the weights are shared.
+        BotBrain.Build(options, report: null, _sharedPolicies.Load);
     }
 
     /// <summary>The live room a code names, or null.</summary>

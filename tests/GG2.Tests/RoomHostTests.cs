@@ -245,6 +245,47 @@ public sealed class RoomHostTests : IDisposable
         Assert.Equal(1, _host.SharedNav.GraphCount);
     }
 
+    /// <summary>
+    /// Policy rooms hold the same weights and their own arbiter: one shared
+    /// would spend one tick budget across every room on the same frame number.
+    /// </summary>
+    [Fact]
+    public void PolicyRoomsShareTheirNetsButNotTheirArbiter()
+    {
+        ServerOptions Policy(string name)
+        {
+            var options = Room(name);
+            options.BotMode = GG2.Bots.BotMode.Policy;
+            return options;
+        }
+
+        var a = _host.CreateRoom(Policy("a"))!.Server.Options.Bots.Brain!;
+        var b = _host.CreateRoom(Policy("b"))!.Server.Options.Bots.Brain!;
+
+        var netsA = a.Tiers.Cast<GG2.Bots.SimPolicyMicroSpec>().Select(t => t.Network).ToArray();
+        var netsB = b.Tiers.Cast<GG2.Bots.SimPolicyMicroSpec>().Select(t => t.Network).ToArray();
+
+        Assert.Equal(MapDirectory.ShippedCheckpoints.Count, netsA.Length);
+        Assert.Equal(netsA.Length, _host.SharedPolicies.Count);
+        for (var i = 0; i < netsA.Length; i++)
+            Assert.Same(netsA[i], netsB[i]);
+
+        Assert.NotNull(a.Arbiter);
+        Assert.NotSame(a.Arbiter, b.Arbiter);
+    }
+
+    [Theory]
+    [InlineData(GG2.Bots.BotMode.Search)]
+    [InlineData(GG2.Bots.BotMode.Tiered)]
+    public void SearchAndTieredRoomsAreRefused(GG2.Bots.BotMode mode)
+    {
+        var options = Room("expensive");
+        options.BotMode = mode;
+
+        Assert.Throws<ArgumentException>(() => _host.CreateRoom(options));
+        Assert.Empty(_host.Rooms);
+    }
+
     [Fact]
     public void CodesAvoidLookAlikes()
     {

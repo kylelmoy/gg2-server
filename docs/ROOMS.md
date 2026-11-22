@@ -12,7 +12,7 @@ each. Nothing else in this file exists until its row says so.
 | Step | Part | State |
 |---|---|---|
 | 1 | A server stops itself: empty timeout and hard lifetime | **Built.** `EmptyServerExitTests`; the real host exits 0 three seconds after an empty start |
-| 2 | The room host: one process, one port, many rooms | **Built** as a library (`RoomHost`, `RoomFrontDoor`, `SharedNav`). `RoomHostTests` drive real sockets through the one port. Not yet run against a stock GM8 client, and no command starts one |
+| 2 | The room host: one process, one port, many rooms | **Built** as a library (`RoomHost`, `RoomFrontDoor`, `SharedNav`, `SharedPolicies`). `RoomHostTests` drive real sockets through the one port. Not yet run against a stock GM8 client, and no command starts one |
 | 3 | The dispatcher API, inside the room host | not started |
 | 4 | Device check and the ban list | not started |
 | 5 | gg2-client: create, join by code | not started |
@@ -154,7 +154,24 @@ out. Before `SharedNav` each room cost about 12 MB of heap, almost all of it
 its own copy of the tables. The 1- and 10-room tick samples include warm-up and
 are not quoted. **Not measured**: connected clients (serialisation and
 bandwidth per client), maps other than `ctf_truefort`, a VPS core, and policy
-bots, whose nets are loaded per room today.
+bots' tick cost.
+
+**Bots in a room are scripted or policy, never search or tiered.** What is
+shared and what is not:
+
+| Part | Per room or per host | Why |
+|---|---|---|
+| Nav graph and next-hop tables | per host, `SharedNav` | Never change after loading |
+| Policy nets (`.gg2p` weights) | per host, `SharedPolicies` | Never change after loading; `Decide` works in the caller's scratch and a sampled decision draws from the bot's own stream. The shipped nine are 5.9 MB of files, loaded once |
+| The brain and its `DecisionQuotaArbiter` | per room, built by `CreateRoom` | The arbiter's per-tick spend is keyed by the room's own frame counter. Shared, two rooms on the same frame number would spend one budget, and which rooms did would depend on when each was created |
+| Controllers, bot random streams | per bot | As on any server |
+
+`CreateRoom` refuses `Mode=search` and `Mode=tiered`. A search decision costs
+about 4.8 ms against a policy decision's 7 us, and each room's arbiter bounds
+only its own tick, so nothing would bound the host's tick across rooms. The
+policies match or beat the search on the shipped bundle, so both modes are
+planned for removal from the server as a whole, not only from rooms. A policy
+room that names no checkpoint runs the shipped bundle.
 
 **Later, if a host fills a core**: one tick thread per core with rooms spread
 across them and their ticks staggered through the 33 ms window, and the bots'
@@ -374,9 +391,11 @@ hitting is unlikely even before the rate limit.
 
 ## Known gaps
 
-- **Policy bots are not shared.** A room in `Mode=policy` loads its own nets,
-  and a brain object cannot simply be shared, because its decision arbiter
-  keeps per-tick budget state. Unmeasured.
+- **Search and tiered bot modes are still in the server**, refused only by
+  `CreateRoom`. Removing them is planned (`BotMode`, `SearchController`,
+  `RolloutSearch`, the arbiter's tiering, `--search-threads`, the bench arms).
+- **A policy room's tick cost is unmeasured**; the 0.14 ms per room above is
+  scripted bots.
 - **No test makes a room's tick throw**, so the per-room fault budget has never
   run.
 - **No pre-lifetime warning** reaches the players before `--max-lifetime`

@@ -58,7 +58,13 @@ public static class BotBrain
     /// a checkpoint loaded, printed and never used is a server saying it is doing
     /// something it is not.
     /// </exception>
-    public static void Build(ServerOptions options, Action<string>? report = null)
+    /// <param name="loadPolicy">
+    /// Opens a checkpoint, or null for <see cref="SimPolicyNetwork.Load(string)"/>.
+    /// A room host passes its <see cref="SharedPolicies"/> so every room holds the
+    /// same weights; the arbiter is still built fresh here, one per call.
+    /// </param>
+    public static void Build(
+        ServerOptions options, Action<string>? report = null, Func<string, SimPolicyNetwork>? loadPolicy = null)
     {
         ArgumentNullException.ThrowIfNull(options);
 
@@ -105,7 +111,7 @@ public static class BotBrain
 
                 labels.Add(label);
 
-                var tier = SimTier(policyPath, label, assigned, report) with { Sampled = options.BotPolicySampled };
+                var tier = SimTier(policyPath, label, assigned, report, loadPolicy ?? SimPolicyNetwork.Load) with { Sampled = options.BotPolicySampled };
 
                 foreach (var playerClass in tier.Drives)
                     claimedBy.TryAdd(playerClass, label);
@@ -210,9 +216,10 @@ public static class BotBrain
         string policyPath,
         string label,
         Dictionary<PlayerClass, string> assigned,
-        Action<string>? report)
+        Action<string>? report,
+        Func<string, SimPolicyNetwork> loadPolicy)
     {
-        var network = SimPolicyNetwork.Load(policyPath);
+        var network = loadPolicy(policyPath);
 
         var drives = assigned
             .Where(entry => string.Equals(entry.Value, label, StringComparison.OrdinalIgnoreCase))
