@@ -165,8 +165,8 @@ they were trained and scored under:
 ```ini
 [Bots]
 Mode=policy
-Policy=checkpoints/duel/ppo-duel2-soldier-s1.gg2p,...   ; all ten in checkpoints/duel/
-ClassPolicy=Soldier=ppo-duel2-soldier-s1,...
+Policy=checkpoints/duel/ppo-duels2-soldier-s1.gg2p,...   ; all ten in checkpoints/duel/
+ClassPolicy=Soldier=ppo-duels2-soldier-s1,...
 HandoverRule=distance
 HandoverRange=100000    ; past a cell's 1,082 px diagonal: the net always drives
 PolicySampled=1
@@ -174,7 +174,8 @@ PolicySampled=1
 
 and `[Server] Team Deathmatch Invulnerability Seconds=0`, which the live duel
 server already runs. The sniper's net is gg2-sim's 1B checkpoint
-(`ppo-duel2-sniper-s1-1000M`), the spy's is `ppo-duel3-spy-s1`, and Quote's is
+(`ppo-duel2-sniper-s1-1000M`), six are fine-tunes against a search opponent
+(`ppo-duels2-*`, the engineer's `ppo-duels-engineer-s1`), and Quote's is
 `ppo-duelq-quote-s1-1000M` (`ClassPolicy=...,Quote=ppo-duelq-quote-s1-1000M`):
 a duel bot takes its human's class, so a Quote human gets a Quote bot, and that
 is the only way a bot is ever a Quote. All ten ship in `checkpoints/duel/`

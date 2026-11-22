@@ -58,7 +58,7 @@ internal static class Nets
     /// <summary>
     /// Every duel net in <paramref name="directory"/>, one tier each, sampled as the
     /// duel server runs them. A duel net's class is the third dash-separated part
-    /// of its file name (<c>ppo-duel2-soldier-s1.gg2p</c>).
+    /// of its file name (<c>ppo-duels2-soldier-s1.gg2p</c>).
     /// </summary>
     public static MicroControllerSpec[] Duel(string directory) =>
     [

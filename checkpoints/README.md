@@ -32,7 +32,12 @@ nothing refuses one trained against an older simulation).
 
 Ten gg2-sim duel nets, one per class, trained for the duel server's cells
 (gg2-sim `docs/HANDOFF-SERVER-DUEL.md` and `docs/STATUS.md`, "Duel nets", at
-gg2-sim `cc9ae50`, pin `da4fafb`). Each is a **terrain-layout** v2 net (the
+gg2-sim `cc9ae50`, pin `da4fafb`). Six of them (`ppo-duels-*`, `ppo-duels2-*`)
+are gg2-sim's fine-tunes with a share of worlds against its port of the
+rollout-search bot this server once ran, copied from its `build/scratch/duelnets/` at gg2-sim `a027aa6`
+(pin `98cce00`); the score after each is its `ref searchduels`, 8,000 sampled
+duels, the shipped net's and the fine-tune's. The other four already scored
+0.98-1.00 there and were not fine-tuned. Each is a **terrain-layout** v2 net (the
 Quote one also the Quote layout) and was scored **sampled**, so the duel server
 runs them with `[Bots] PolicySampled=1`; `docs/DUEL.md`, "The duel nets", has
 the full settings. Exported from gg2-sim's `.pt` checkpoints (md5 of the source
@@ -41,15 +46,15 @@ cross-checked bit-exact against its `ref/PolicyDriver.cs` (`docs/BOTS.md`).
 
 | file | md5 | drives | source `.pt` md5 |
 |---|---|---|---|
-| `ppo-duel2-soldier-s1.gg2p` | `8f67b807ab6c200eae5e77cf2406fb68` | soldier | `987091c6fbbfc1c1a22d169661181cd6` |
-| `ppo-duel2-scout-s1.gg2p` | `d945283640d795b62db9fb7c8139b69f` | scout | `6abf2a2dc1173dee985b08d6ac8f8a40` |
-| `ppo-duel2-heavy-s1.gg2p` | `df87ef7478d79196f6ecc1f0f8fae458` | heavy | `4d7f47bad15037a2506151680c794ccd` |
+| `ppo-duels2-soldier-s1.gg2p` | `b2897095297d34670b2c1926bb54a65d` | soldier | `6464899c008a8fa5574280025572211b` (search fine-tune, 0.751 -> 0.832 vs the search) |
+| `ppo-duels2-scout-s1.gg2p` | `5f1d71f2e06d28e23ef285d7166fed36` | scout | `8d94f971da993042756a7a580423819c` (search fine-tune, 0.561 -> 0.757 vs the search) |
+| `ppo-duels2-heavy-s1.gg2p` | `b0de53f5470e06776fb361a0220dfdaa` | heavy | `632e9d497b2fd668f996a4d35c5ed7d5` (search fine-tune, 0.671 -> 0.764 vs the search) |
 | `ppo-duel2-demoman-s1.gg2p` | `646d25267962445a1a4a10cbfe183205` | demoman | `345c8364977b73762e67ccb4bf061403` |
-| `ppo-duel2-pyro-s1.gg2p` | `61ecca8a63131a1b839ff2873fff9e3c` | pyro | `be5dc17469aad6a3c19ff5b0e5eb1fd0` |
+| `ppo-duels2-pyro-s1.gg2p` | `8468170a68864ca78f652f9ad89e4c27` | pyro | `d97ce831c38d8f0c75b4c7884cb9e149` (search fine-tune, 0.663 -> 0.823 vs the search) |
 | `ppo-duel2-medic-s1.gg2p` | `c9c06c54fd0ab5515a3ad38cabe8382a` | medic | `ef1804fbb78686b9eb08f1306a7d80e5` |
-| `ppo-duel2-engineer-s1.gg2p` | `53c59f702e9349bfd1e753dff54e7b16` | engineer | `a00d5a2195c481e0228aea7edee7655a` |
+| `ppo-duels-engineer-s1.gg2p` | `6c408380e0df16df31b2afefcfe46441` | engineer | `ba280b0c4f5d088810211969870410f8` (search fine-tune, 0.456 -> 0.566 vs the search) |
 | `ppo-duel2-sniper-s1-1000M.gg2p` | `cace34c6b9d33c4067351e616251fb26` | sniper | `4b42a28ef6cb810bc9c696d7a1f9b41b` (1B checkpoint: peaks there) |
-| `ppo-duel3-spy-s1.gg2p` | `225765b7744b3e532a76cc89395cb6b8` | spy | `f2a8c3c3a9ed562cb405efb633ff55cc` (6B, round three) |
+| `ppo-duels2-spy-s1.gg2p` | `2e3d18e60475c2a45c81dc0b8f2da10f` | spy | `01db50fd0721df5285add69867b1a7d2` (search fine-tune, 0.439 -> 0.529 vs the search) |
 | `ppo-duelq-quote-s1-1000M.gg2p` | `65afd411f324c0ccd32e890dff3ead2d` | Quote | `bf5cf6af9a398760427e7705b4324faf` (1B checkpoint) |
 
 Their win rates are gg2-sim's, against its scripted stand-ins; none has been
