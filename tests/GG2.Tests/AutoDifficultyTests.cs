@@ -15,10 +15,11 @@ public sealed class AutoDifficultyTests
 {
     // MaxBots is the count: the fill target counts humans as well, so it is set
     // high enough never to be the one that binds.
-    private static ServerHarness Auto(bool on = true, int bots = 2, string map = "ctf_truefort") =>
+    private static ServerHarness Auto(bool on = true, int bots = 2, string map = "ctf_truefort", int? seed = null) =>
         new(o =>
         {
             o.Map = map;
+            o.RandomSeed = seed;
             o.NavCacheDirectory = ReferenceTree.NavCacheDirectory;
             o.AutoDifficulty = on;
             o.Bots = BotPopulationOptions.Default with
@@ -191,7 +192,16 @@ public sealed class AutoDifficultyTests
     public void ALiveDeathToABotLowersTheRating()
     {
         // Team Deathmatch, so the bots come to the human rather than the intel.
-        using var harness = Auto(bots: 4, map: "tdm_mantic");
+        //
+        // ⚠️ SEEDED. Unseeded, this failed about one run in eight, two ways, and
+        // both were the test rather than the scoring: on some world seeds the
+        // bots never kill a standing soldier inside 9000 ticks, and on others it
+        // ends up in a pit undamaged, which the reference credits to nobody
+        // (Character.events/Collision with PitFall.xml: PITFALL only when there
+        // is no lastDamageDealer) and so is rightly not a duel. Measured over ~160
+        // runs. With the seed fixed the run is identical every time; 1002 is a
+        // bot's rocket kill at tick 323.
+        using var harness = Auto(bots: 4, map: "tdm_mantic", seed: 1002);
         var human = Join(harness, "human", Team.Red);
         var server = harness.Server;
         harness.TickUntil(() => server.IsAlive(human), "the human to spawn", maxTicks: 300);
