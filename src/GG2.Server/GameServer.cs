@@ -781,6 +781,14 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     /// </summary>
     public SharedNav? SharedNav { get; set; }
 
+    /// <summary>
+    /// What seeds the bot population and the plugin RNG in place of the port, or
+    /// null to use the port. Set before <see cref="Start"/>. A room host sets a
+    /// different one per room, since all of its rooms share one port and would
+    /// otherwise fill with the same bots in the same order.
+    /// </summary>
+    public int? LocalSeed { get; set; }
+
     public void Start()
     {
         _roster = new Roster(_options.ServerPlayerName);
@@ -828,7 +836,7 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         // Seeded from the port, so two servers on one machine roll differently and
         // one server rolls the same way every run. NOT WorldState.Random: that
         // stream is observable simulation and a bot joining must not move it.
-        _population = new BotPopulationService(this, _log, (uint)_options.Port);
+        _population = new BotPopulationService(this, _log, (uint)(LocalSeed ?? _options.Port));
 
         // Bots with no nav directory at all fight but do not navigate.
         // MapChanged says "no nav cache for <map>" when a directory is
@@ -855,7 +863,7 @@ public sealed partial class GameServer : IDisposable, IPluginHost
             _log.Warn(warning);
 
         // Not _world.Random and not _spawnRandom. See IPluginHost.Random.
-        _pluginRandom = new Random(_options.Port * 7919);
+        _pluginRandom = new Random((LocalSeed ?? _options.Port) * 7919);
 
         var map = OpenMap(OpeningMap(), area: 1);
 

@@ -134,7 +134,9 @@ once per host, and every room holds a reference. Both types write their arrays
 only in their constructors, which is what makes sharing safe. A miss is cached,
 nothing is evicted (bounded by the shipped maps), and a graph a room GENERATED
 for a map with none is never shared. Maps themselves are still loaded per room;
-they are small next to the tables.
+they are small next to the tables. Each room gets its own
+`GameServer.LocalSeed` for its bot population and plugin RNG, which a
+standalone server seeds from its port.
 
 **Measured** (Release, Windows, one 13700K core, `ctf_truefort`, ten scripted
 bots per room, no clients connected):
@@ -372,10 +374,6 @@ hitting is unlikely even before the rate limit.
 
 ## Known gaps
 
-- **Every room's bots roll alike.** A room's bot population and plugin RNG are
-  seeded from `ServerOptions.Port`, which is the host's one port for every
-  room, so rooms fill with the same names and classes in the same order.
-  `WorldState.Random` is not affected; it is seeded from a fresh RNG.
 - **Policy bots are not shared.** A room in `Mode=policy` loads its own nets,
   and a brain object cannot simply be shared, because its decision arbiter
   keeps per-tick budget state. Unmeasured.

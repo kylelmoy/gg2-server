@@ -174,6 +174,7 @@ public sealed class RoomHost : IDisposable
         var server = new GameServer(options, new PrefixedLog(_log, $"[room {code}] "))
         {
             SharedNav = _sharedNav,
+            LocalSeed = Random.Shared.Next(1, 65536),
         };
 
         server.StartHosted();
