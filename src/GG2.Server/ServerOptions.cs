@@ -22,7 +22,10 @@ public sealed class ServerOptions
     /// </remarks>
     public const int MaxString1Length = 255;
 
-    private string _serverName = "My Server";
+    /// <summary>The reference's default server name.</summary>
+    public const string DefaultServerName = "My Server";
+
+    private string _serverName = DefaultServerName;
     private string _serverPlayerName = "Server";
     private string _welcomeMessage = string.Empty;
 

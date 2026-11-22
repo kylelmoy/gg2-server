@@ -29,7 +29,7 @@ internal static class Program
     /// interactively either.
     /// </para>
     /// </remarks>
-    private sealed class ConsoleLog : IServerLog
+    internal sealed class ConsoleLog : IServerLog
     {
         public void Info(string message) => Console.WriteLine(Line("info ", message));
 
@@ -128,6 +128,38 @@ internal static class Program
                 Console.Error.WriteLine();
                 CellGen.PrintUsage();
                 return 2;
+            }
+        }
+
+        // `gg2-server rooms ...` runs a room host (docs/ROOMS.md): many private
+        // rooms behind one game port, and the API that creates them. A
+        // subcommand because almost none of the server's flags apply to it; a
+        // room's settings come from the base --config and the player's choices.
+        if (args.Length > 0 && args[0] == "rooms")
+        {
+            var rest = args[1..];
+
+            if (rest.Contains("--help") || rest.Contains("-h"))
+            {
+                RoomsCommand.PrintUsage();
+                return 0;
+            }
+
+            try
+            {
+                return RoomsCommand.Run(rest, new ConsoleLog());
+            }
+            catch (Exception e) when (e is ArgumentException or FormatException)
+            {
+                Console.Error.WriteLine(e.Message);
+                Console.Error.WriteLine();
+                RoomsCommand.PrintUsage();
+                return 2;
+            }
+            catch (Exception e) when (e is IOException or System.Net.Sockets.SocketException or InvalidOperationException)
+            {
+                Console.Error.WriteLine($"unable to start: {e.Message}");
+                return 1;
             }
         }
 

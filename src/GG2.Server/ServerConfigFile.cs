@@ -53,7 +53,7 @@ public static class ServerConfigFile
     /// behaviour. Naming either in <c>[Maps]</c> still works — an explicit key
     /// wins over the default list.
     /// </remarks>
-    private static readonly string[] DefaultRotation =
+    internal static readonly string[] DefaultRotation =
     [
         "ctf_truefort", "ctf_2dfort", "ctf_conflict", "ctf_classicwell", "ctf_waterway",
         "ctf_orange", "cp_dirtbowl", "cp_egypt", "arena_montane", "arena_lumberyard",

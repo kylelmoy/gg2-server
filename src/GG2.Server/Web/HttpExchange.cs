@@ -315,6 +315,7 @@ internal static class HttpResponse
     private static string Reason(int status) => status switch
     {
         200 => "OK",
+        201 => "Created",
         204 => "No Content",
         304 => "Not Modified",
         400 => "Bad Request",
@@ -323,6 +324,7 @@ internal static class HttpResponse
         404 => "Not Found",
         405 => "Method Not Allowed",
         413 => "Payload Too Large",
+        415 => "Unsupported Media Type",
         429 => "Too Many Requests",
         500 => "Internal Server Error",
         502 => "Bad Gateway",

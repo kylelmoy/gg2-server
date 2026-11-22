@@ -6,14 +6,14 @@ Nobody hosts from a phone. This is the industry's session-based dedicated
 server pattern (Agones allocation, GameLift game sessions, PlayFab
 multiplayer servers), built so that one process holds many rooms.
 
-**Status: steps 1 and 2 built; the room host has no command or API yet.** The table says which parts exist and what proves
+**Status: steps 1 to 3 built; no device check, so the API is loopback only.** The table says which parts exist and what proves
 each. Nothing else in this file exists until its row says so.
 
 | Step | Part | State |
 |---|---|---|
 | 1 | A server stops itself: empty timeout and hard lifetime | **Built.** `EmptyServerExitTests`; the real host exits 0 three seconds after an empty start |
 | 2 | The room host: one process, one port, many rooms | **Built** as a library (`RoomHost`, `RoomFrontDoor`, `SharedNav`, `SharedPolicies`). `RoomHostTests` drive real sockets through the one port. Not yet run against a stock GM8 client, and no command starts one |
-| 3 | The dispatcher API, inside the room host | not started |
+| 3 | The dispatcher API, inside the room host | **Built**: `gg2-server rooms`. `RoomApiTests` create over real HTTP and join with the returned code over the game port. No authentication yet, so loopback only |
 | 4 | Device check and the ban list | not started |
 | 5 | gg2-client: create, join by code | not started |
 | 6 | Fleet rollout: one unit and one port per VPS | not started |
@@ -179,20 +179,43 @@ policy nets evaluated in one batch across rooms. Batching can change the
 summation order of a net's floats, which is allowed because a bot's decisions
 are not physics on the wire.
 
-### 3. The dispatcher API
+### 3. The dispatcher API (built)
 
-HTTP inside the room host, behind TLS.
+`gg2-server rooms` runs a room host and its HTTP API in one process
+(`src/GG2.Host/RoomsCommand.cs`, `src/GG2.Server/Rooms/RoomApi.cs`):
+
+```
+gg2-server rooms --config rooms.ini --port 8300 --prefix W --max-rooms 8                  --api-port 8301 [--api-bind 127.0.0.1] [--min-free-mb 256]
+```
 
 | Endpoint | Does |
 |---|---|
-| `GET /status` | region, rooms in use, rooms free. What the client's region picker reads |
-| `POST /rooms` | device proof plus room choices; creates a room or says why not |
-| `GET /rooms/{code}` | whether a room is live, and its address |
+| `GET /status` | `prefix`, `gamePort`, `rooms`, `maxRooms`, `free`. What the client's region picker reads |
+| `POST /rooms` | body `{"map", "bots", "teamSize"}`, each optional (room settings below). `201` with the room; `400` for a choice off the list or an unknown field; `415` unless `Content-Type: application/json`; `503` when the host is full or `MemAvailable` is under `--min-free-mb` |
+| `GET /rooms/{code}` | `code`, `gamePort`, `map`, `players`, `playerLimit`, `createdUtc`, `endsUtc`; `404` for a code naming no live room |
 
-**Capacity**, checked on every create: a room cap per host, a floor on
-`MemAvailable` so the fleet server is never squeezed, and per-device and
-per-address limits (one live room per device, a few creates an hour). The cap
-is set from step 2's measured cost per room.
+**A room is the base config plus the choices.** `--config` is an ordinary
+`gg2.ini` (bots' mode and nets, rules, rotation), read again for every room,
+so an edit reaches the next room and never a live one. It is checked once at
+startup with the default choices, and its nets are loaded then. Then
+`RoomTemplate` writes the choices and the fixed values over it, and
+`CreateRoom` switches off the per-process surfaces. The API's threads only
+parse and reply; every answer is computed on the tick thread
+(`RoomHost.Invoke`), so a reply waits at most one tick.
+
+**What the API does not have yet**:
+
+| Missing | Where it lands |
+|---|---|
+| Any authentication, per-device and per-address create limits, one live room per device | step 4. Until then `--api-bind` stays loopback; the host warns when it is not |
+| TLS | a reverse proxy in front of the API port, step 6 |
+| Draining for a deploy | step 6 |
+
+**A room on a map the host has not loaded yet costs about 190 ms on the tick
+thread**, stalling every live room for about six ticks; a room on a map
+already loaded costs 3-5 ms. Each map is loaded at most once per process, so
+a host serving all 21 pays it at most 21 times. Building a room off the tick
+thread would remove it.
 
 **Room codes**: a host prefix letter plus five characters from an alphabet
 without look-alikes (no `0/O`, `1/I/L`): 31^5, about 2.9 x 10^7 per host. The
@@ -241,7 +264,7 @@ fills in three values. It accepts only these values and refuses anything else.
 
 | Choice | Options | Sets |
 |---|---|---|
-| Map | **Rotation** (the stock rotation, `ShuffleRotation=arena-last`), or any one of the 22 shipped maps. The game mode follows from the map | `Map`, `Rotation`, `ShuffleRotation` |
+| Map | **Rotation** (the base config's rotation, or the reference's default twenty if it has none, shuffled with no arena map first), or any one of 21 maps: that twenty plus `ctf_oldfort` (`gg_debug` is left out). The game mode follows from the map | `Map`, `Rotation`, `ShuffleRotation` |
 | Bots | **Off**, Easy, Normal, Hard, Adaptive | `[Bots] Enabled`; `Difficulty` 1 / 3 / 5; Adaptive is `AutoDifficulty=1` |
 | Team size | Small (fill to 6), **Medium** (fill to 10), Large (fill to 16). Only matters with bots on | `FillToPlayers`, `MaxBots` |
 
@@ -253,7 +276,8 @@ Bold is the default. Fixed for every room:
 | `Time Limit`, `CapLimit`, respawn, `AutoBalance` | stock | One set of rules everybody already knows |
 | `UseLobby` | 0 | Private |
 | `Password` | the code | The code is the invitation |
-| `[Bots] Mode` and nets | the fleet's, from `deploy/config/common.ini` | Same bots as the public servers |
+| `[Bots] Mode` and nets | the base `--config`'s; scripted or policy only | Same bots as the public servers when the base is the fleet's `common.ini` |
+| `ServerName` | the base's, or `Private room` where it names none | |
 | `[Chat] Enabled` | 1 | gg2-client has native chat |
 | `QuickUpdateInterval` | 7 (stock) | |
 | `[Analytics]`, recording, `[Web]`, control port | off | A private room records nothing about who played |

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using GG2.Bots;
@@ -119,6 +120,7 @@ public sealed class RoomHost : IDisposable
     private readonly List<HostedRoom> _rooms = [];
     private readonly SharedNav _sharedNav = new();
     private readonly SharedPolicies _sharedPolicies = new();
+    private readonly ConcurrentQueue<Action> _work = new();
     private RoomFrontDoor? _frontDoor;
 
     public RoomHost(RoomHostOptions options, IServerLog log)
@@ -243,6 +245,35 @@ public sealed class RoomHost : IDisposable
         }
     }
 
+    /// <summary>
+    /// Runs <paramref name="work"/> on the tick thread at the start of the next
+    /// <see cref="Tick"/>, and completes with its result or its exception.
+    /// </summary>
+    /// <remarks>
+    /// <b>The only way another thread may touch the host</b>: rooms, codes and
+    /// the front door are the tick thread's alone, as a standalone server's
+    /// state is (<c>docs/WEBADMIN.md</c>'s threading rule). The <see cref="RoomApi"/>
+    /// reaches the host through here.
+    /// </remarks>
+    public Task<T> Invoke<T>(Func<T> work)
+    {
+        var done = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        _work.Enqueue(() =>
+        {
+            try
+            {
+                done.SetResult(work());
+            }
+            catch (Exception e)
+            {
+                done.SetException(e);
+            }
+        });
+
+        return done.Task;
+    }
+
     /// <summary>One host tick: every room, then the front door.</summary>
     /// <remarks>
     /// Rooms before the front door, so a connection handed over here is serviced
@@ -252,6 +283,9 @@ public sealed class RoomHost : IDisposable
     public void Tick()
     {
         var nowMs = Environment.TickCount64;
+
+        while (_work.TryDequeue(out var work))
+            work();
 
         for (var i = _rooms.Count - 1; i >= 0; i--)
         {
