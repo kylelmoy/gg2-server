@@ -39,8 +39,8 @@ gg2-client ──HTTPS──> dispatcher (per VPS) ──systemctl──> gg2-ro
 2. The dispatcher checks capacity, takes a free port from its range, writes a
    room ini, starts `gg2-room@<port>`, and replies
    `{code, host, port, password, expiresAt}`.
-3. Friends type the code. Its first letter names the region, so the client
-   knows which dispatcher to send `GET /rooms/{code}` to, and gets the same
+3. Friends type the code. Its first letter is the host's prefix in the
+   directory (below), so the client knows which dispatcher to send `GET /rooms/{code}` to, and gets the same
    address and password. No central directory is needed.
 4. The server exits on its own once nobody has been connected for
    `ExitWhenEmptySeconds`. systemd reaps it, and the port is free again.
@@ -145,7 +145,7 @@ A desktop client still joins a room by code.
 the reinstall-proof half. Every room's ini records the creator's key ID, so a
 report against a room can be traced to a device.
 
-### Room settings (proposed)
+### Room settings (agreed)
 
 Just enough for a simple game on a phone. Everything the player chooses maps
 onto a setting that already exists, so the dispatcher writes a fixed template
@@ -181,6 +181,95 @@ and a nav graph built at the map change, and neither is worth it for this.
 "Join by code". Joining uses the existing password flow. The creator's client
 shows the code in the in-game menu so it can be shared mid-match.
 
+## A changing set of hosts
+
+The hosts will not stay the same three: a provider gets swapped, a region gets
+added, or one day somebody else runs the servers. So **no host is built into
+the client**, and nothing in a room's lifecycle depends on more than the one
+host it runs on.
+
+### The directory
+
+The client learns the dispatchers from a **signed directory**: a small JSON
+file at a stable URL, and the only thing about the hosts the app knows.
+
+```json
+{
+  "operator": "Vindicator's",
+  "issued": "2026-11-21T00:00:00Z",
+  "hosts": [
+    {"prefix": "W", "region": "US West", "url": "https://w.rooms.example"},
+    {"prefix": "E", "region": "US East", "url": "https://e.rooms.example"},
+    {"prefix": "D", "region": "Germany", "url": "https://d.rooms.example"}
+  ],
+  "signature": "<Ed25519 over the rest>"
+}
+```
+
+- **The app ships the directory's URL and its public signing key**, and caches
+  the last good copy, so a down URL does not stop room creation on hosts that
+  are up. A copy that fails the signature check is ignored, so whoever controls
+  the web server or DNS still cannot point players at their own hosts.
+- **Hosts are found by the directory, not by `deploy/hosts`.** The fleet's
+  deploy list says where to push builds; the directory says where players go.
+  They overlap today and need not.
+- **A host that is down is skipped.** The client already pings every
+  dispatcher's `/status` to pick a region, so a dead entry costs one timeout
+  and nothing else. Liveness is never written into the directory.
+- **A prefix belongs to a host.** A room code's first letter is looked up in
+  the directory, so it names a host and not a provider. A prefix is not
+  reused for a different host within one room lifetime (`RuntimeMaxSec`) of
+  retiring it, or an old code would resolve on the wrong machine.
+
+### Switching providers
+
+Each host's dispatcher URL is a hostname under a domain the operator controls,
+so moving a host is: provision the new VPS from `docs/DEPLOY.md`, install the
+room unit and the dispatcher, copy the Apple key, move the DNS name, and retire
+the old box after its last room has ended (at most `RuntimeMaxSec`). The
+directory does not change unless the region does. A new region is one new entry
+and a re-signed directory.
+
+**Bans survive the move** because the reinstall-proof half lives in Apple's
+DeviceCheck bits, not on any host. The App Attest key IDs each dispatcher has
+seen, and its per-key limits, are local and start fresh on a new box. That is
+acceptable: a fresh limit does not undo a ban.
+
+### Handing the servers to somebody else
+
+Everything a new operator needs is in this repo or rented, except four things
+that belong to whoever runs it now. These are what would be handed over:
+
+| Asset | What it controls | If it is not handed over |
+|---|---|---|
+| The directory's domain | where the app looks for hosts | the app finds no hosts until an update ships a new URL |
+| The directory's signing key | which hosts the app trusts | same: a new key needs an app update |
+| The App Store listing (Apple app transfer) | the bundle ID App Attest binds to | a new operator ships the app under their own account and their own bundle ID |
+| The Apple DeviceCheck key | reading and setting ban bits | bans start from zero under a new account |
+
+**The cheapest route to a clean handover is to make the directory URL a
+setting in the client**, with the shipped default. A new operator who gets
+none of the above can still publish their own signed directory, and players
+point the app at it. Players lose only what was never portable: the ban list
+under the old account. Without that setting, a handover depends entirely on
+the transfer.
+
+**Untested**: whether DeviceCheck bits carry over an App Store app transfer
+between developer teams. Nothing here has checked Apple's documentation on
+that, and it decides whether bans survive a handover. Check it before the
+handover, not during.
+
+### When hosts belong to different people
+
+Copying the Apple key to every host is the right call while all hosts are
+Kyle's. If hosts ever belong to several people, each copy is a key that can
+read and set every device's ban bits, held by someone else. The change then is
+**one token service** that holds the Apple key, verifies a device once, and
+issues a short-lived signed room token. Every dispatcher, whoever runs it,
+checks the token with a public key and never sees Apple's. Until then, the per-host copy is
+simpler and the dispatcher's request format should not need to change to
+switch: `POST /rooms` carries "a device proof", whichever kind it is.
+
 ## Hardening
 
 The dispatcher is a new surface reachable from the internet, and a worse one
@@ -193,7 +282,6 @@ the chance of a guess hitting is small even before that limit.
 
 ## Open questions
 
-- **The room settings above** are a proposal waiting on Kyle's approval.
 - **Android**, if gg2-client ever ships there: Play Integrity is the
   equivalent of App Attest, but nothing like DeviceCheck's reinstall-proof
   bits exists, so a ban there would be weaker.
