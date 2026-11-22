@@ -11,7 +11,7 @@ namespace Bench;
 /// to hit it.
 /// </summary>
 /// <remarks>
-/// <b>The duel server's setting</b>, as <c>BENCH_VERSUS_DUEL</c> builds it: soldier
+/// <b>The duel server's setting</b> (<c>Distance</c>, range 100,000px): soldier
 /// against soldier on <c>maps/duel</c>, the duel nets sampled, the controller
 /// always driving. The shooter is tier 5; the subject plays each tier in
 /// <c>BENCH_DODGE_TIERS</c> (default 5,4,3,2,1) on the same placements, so the

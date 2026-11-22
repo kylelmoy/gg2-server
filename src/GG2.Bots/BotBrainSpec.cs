@@ -8,10 +8,9 @@ namespace GG2.Bots;
 /// instance per bot, and nothing that is per-bot state.
 /// </summary>
 /// <remarks>
-/// <b>A controller is built PER BOT and a spec is shared.</b> Both shipped
-/// controllers hold per-slot state — <c>RolloutSearch</c>'s decision counter, a
-/// decoder's absolute aim — so one instance driving several bots would have them
-/// stepping on each other's cadence. What may be shared is the immutable half:
+/// <b>A controller is built PER BOT and a spec is shared.</b> A controller holds
+/// per-slot state — its decision cadence, a decoder's absolute aim — so one
+/// instance driving several bots would have them stepping on each other. What may be shared is the immutable half:
 /// <see cref="SimPolicyMicroSpec"/> hands every bot the SAME
 /// <see cref="SimPolicyNetwork"/>, which is safe only because bots are polled
 /// serially.
@@ -25,31 +24,9 @@ public abstract record MicroControllerSpec
     public abstract IMicroController Create();
 }
 
-/// <summary>A rollout search driving keys and aim. <c>docs/BOTS.md</c>'s arm 3.</summary>
-/// <param name="TrainedClasses">
-/// Which set to restrict to. Null takes <see cref="SearchController.DefaultClasses"/>.
-/// A bench arming this search against a policy arm should pass the classes that
-/// arm drives: two arms restricted to different class sets are not a comparison,
-/// and the restriction exists to hold class coverage still.
-/// </param>
-public sealed record SearchMicroSpec(
-    RolloutOptions Options,
-    bool RestrictToTrainedClasses = true,
-    PlayerClass[]? TrainedClasses = null) : MicroControllerSpec
-{
-    public override string Name => "search";
-
-    public override IMicroController Create() =>
-        new SearchController(Options)
-        {
-            RestrictToTrainedClasses = RestrictToTrainedClasses,
-            TrainedClasses = TrainedClasses ?? SearchController.DefaultClasses.ToArray(),
-        };
-}
-
 /// <summary>
 /// Everything that makes a bot something other than the all-scripted arm: which
-/// controllers it may use, in what order, behind which gate, under which arbiter.
+/// controllers it may use, in what order, behind which gate.
 /// </summary>
 /// <remarks>
 /// <b>This is the ONE field a caller sets to change what a bot is.</b> Before it
@@ -63,27 +40,16 @@ public sealed record SearchMicroSpec(
 /// against.
 /// </para>
 /// <para>
-/// <b>Tiers are ordered MOST CAPABLE FIRST</b> and only matter when an
-/// <see cref="Arbiter"/> is set — without one, tier 0 always drives. See
-/// <see cref="IMicroArbiter"/> before configuring several, including what it costs
-/// in reproducibility to decide between them badly.
+/// <b>The first tier that drives a bot's class is the one that drives it.</b>
+/// Several tiers are how several checkpoints drive disjoint class sets; on a
+/// server <c>BotBrain</c> guarantees the sets are disjoint, so the order only
+/// decides anything for a hand-built spec that overlaps.
 /// </para>
 /// </remarks>
 public sealed record BotBrainSpec
 {
     /// <summary>The controllers, most capable first. At least one.</summary>
     public required IReadOnlyList<MicroControllerSpec> Tiers { get; init; }
-
-    /// <summary>
-    /// Who decides which tier a bot may spend a decision on, or null to always use
-    /// tier 0.
-    /// </summary>
-    /// <remarks>
-    /// <b>ONE instance shared by every bot on a server</b>, which is the whole
-    /// point — a per-bot arbiter cannot see the coinciding decisions that make the
-    /// tick tail. It is held here rather than created per bot for that reason.
-    /// </remarks>
-    public IMicroArbiter? Arbiter { get; init; }
 
     /// <summary>The handover rule. <c>MacroTask</c> is the shipped conjunction.</summary>
     public HandoverRule Rule { get; init; } = HandoverRule.MacroTask;
@@ -183,7 +149,7 @@ public sealed record BotBrainSpec
         for (var i = 0; i < built.Length; i++)
             built[i] = Tiers[i].Create();
 
-        return new HybridBot(built, scripted, Arbiter)
+        return new HybridBot(built, scripted)
         {
             Rule = Rule,
             Range = Range,

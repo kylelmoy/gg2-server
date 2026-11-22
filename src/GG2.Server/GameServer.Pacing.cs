@@ -119,42 +119,6 @@ public sealed partial class GameServer
         // own network. LateTickMonitor rate-limits itself; see its remarks.
         var late = new LateTickMonitor();
 
-        // ⛔ HERE and nowhere else. The budget may only move BETWEEN ticks, or
-        // Choose stops being a pure function of (tick, poll order, costs, budget)
-        // and a match stops replaying. Run is also the one entry point that
-        // HeadlessMatch, the env and eval never call, which is what keeps a
-        // benchmark from picking this up by accident.
-        //
-        // ⚠️ Re-armed when the operator swaps the brain (SetBotBrain), which
-        // builds a new arbiter: a controller left holding the old one would
-        // tune a budget nothing reads. Checked between ticks, like the rest.
-        DecisionQuotaArbiter? arbiter = null;
-        MicroBudgetController? budget = null;
-        var armedBrain = -1;
-
-        void ArmBudget()
-        {
-            armedBrain = _brainVersion;
-
-            arbiter = _options.AdaptiveBotBudget
-                ? _options.Bots.Brain?.Arbiter as DecisionQuotaArbiter
-                : null;
-
-            budget = arbiter is null
-                ? null
-                : new MicroBudgetController(
-                    ceiling: arbiter.UnitsPerTick,
-
-                    // ⚠️ The floor is one policy decision, not zero: a budget of zero
-                    // would also starve the cheap tier, and the whole point of tiering
-                    // is that the cheap one survives the expensive one being cut.
-                    floor: MicroBudgetController.PolicyFloorUnits,
-                    step: MicroBudgetController.DefaultStepUnits,
-                    windowTicks: LateTickMonitor.WindowTicks);
-        }
-
-        ArmBudget();
-
         // ⚠️ The restart flag is checked HERE, beside the cancellation token,
         // rather than by cancelling that token: the token is the HOST's — a
         // Ctrl-C or a SIGTERM — and cancelling it would make an operator's
@@ -310,27 +274,6 @@ public sealed partial class GameServer
             if (late.Poll(_frame) is { } summary)
                 _log.Warn(summary);
 
-            // ⚠️ AFTER the late check and BEFORE the wait, so it sees this tick's
-            // pressure and the next tick runs on the adjusted budget.
-            if (armedBrain != _brainVersion)
-                ArmBudget();
-
-            if (budget is not null && arbiter is not null)
-            {
-                var used = tickLength - wait;
-
-                if (budget.Observe(
-                        _frame,
-                        used.TotalMilliseconds,
-                        tickLength.TotalMilliseconds,
-                        arbiter.SpentThisTick) is { } moved)
-                {
-                    _log.Info(moved);
-                }
-
-                arbiter.UnitsPerTick = budget.Units;
-            }
-
             if (wait > TimeSpan.Zero)
             {
                 cancellation.WaitHandle.WaitOne(wait);
@@ -378,11 +321,6 @@ public sealed partial class GameServer
             Bots: bots,
             Characters: characters,
             Map: _currentMap,
-            WorkMilliseconds: workMilliseconds,
-
-            // Only DecisionQuotaArbiter can say what it spent, and only a tiered
-            // server has one. Null means "nothing to report", never "zero".
-            ArbiterSpentMicroseconds:
-                (_options.Bots.Brain?.Arbiter as DecisionQuotaArbiter)?.SpentThisTick);
+            WorkMilliseconds: workMilliseconds);
     }
 }

@@ -815,12 +815,6 @@ public static class ControlCommands
     /// server with no bots on it sends no class sets, which is honest: with no
     /// bot built there is no controller to ask.
     /// </para>
-    /// <para>
-    /// <b>The arbiter's budget is read live, not from the options.</b>
-    /// <c>MicroBudgetController</c> moves <c>UnitsPerTick</c> while the server
-    /// runs, so the configured number and the one in force are different
-    /// questions and this answers the second.
-    /// </para>
     /// </remarks>
     private static void AppendBots(StringBuilder json, GameServer server)
     {
@@ -878,12 +872,6 @@ public static class ControlCommands
         }
 
         json.Append(']');
-
-        if (brain?.Arbiter is GG2.Bots.DecisionQuotaArbiter quota)
-        {
-            json.Append(",\"arbiterMicroseconds\":").Append(quota.UnitsPerTick);
-            json.Append(",\"arbiterSpentMicroseconds\":").Append(quota.SpentThisTick);
-        }
 
         json.Append('}');
     }
@@ -1028,8 +1016,8 @@ public static class ControlCommands
     /// did.</b> A controller only holds the wheel inside the engagement window —
     /// a small fraction of ticks — so a panel showing the instant alone would
     /// report a policy server as scripted almost all the time, and one showing
-    /// the configuration alone could not tell a working controller from one an
-    /// arbiter never admits. <c>microTicks</c> and <c>scriptedTicks</c> are the
+    /// the configuration alone could not tell a working controller from one that
+    /// never takes the wheel. <c>microTicks</c> and <c>scriptedTicks</c> are the
     /// running counts behind the second question: they differ by exactly the
     /// ticks a controller drove, and a brain named here whose <c>microTicks</c>
     /// stay at zero is a brain that is configured and never consulted.

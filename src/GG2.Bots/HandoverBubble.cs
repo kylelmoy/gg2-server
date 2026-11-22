@@ -30,18 +30,16 @@ public static class HandoverBubble
     /// <c>z1</c>: a trained checkpoint took the wheel.
     /// </summary>
     /// <remarks>
-    /// The three indices are the client's own <c>z</c> menu, which is where an
+    /// The indices are the client's own <c>z</c> menu, which is where an
     /// operator watching a game will recognise them from:
     /// <c>Objects/Overlays/Interfaces/BubbleMenuZ.events/Key {1,2,3} pressed.xml</c>
-    /// set <c>bubbleImage</c> to 20, 21 and 22 and send <c>CHAT_BUBBLE</c>.
+    /// set <c>bubbleImage</c> to 20, 21 and 22 and send <c>CHAT_BUBBLE</c>; 22
+    /// (<c>z3</c>) is unused.
     /// </remarks>
     public const byte TookPolicy = 20;
 
     /// <summary><c>z2</c>: the scripted layer took the wheel back.</summary>
     public const byte LeftAController = 21;
-
-    /// <summary><c>z3</c>: the rollout search took the wheel.</summary>
-    public const byte TookSearch = 22;
 
     /// <summary>
     /// Which bubble a handover asks for, or null for one nothing depicts.
@@ -52,8 +50,8 @@ public static class HandoverBubble
     /// <remarks>
     /// <b>Keyed off <see cref="IMicroController.Name"/>, which is what that
     /// member is for</b> — "a diagnostic, a control-port roster or a bench
-    /// column". A type test would tie this file to the two shipped controllers
-    /// and would answer nothing for a third; the name is the seam's own identity
+    /// column". A type test would tie this file to the shipped controller and
+    /// would answer nothing for another; the name is the seam's own identity
     /// and a new controller declares it as a matter of course.
     /// <para>
     /// ⚠️ <b>A prefix match, because a controller may be labelled.</b>
@@ -64,7 +62,7 @@ public static class HandoverBubble
     /// <para>
     /// ⚠️ <b>An unrecognised controller gets NO bubble, and that is a gap to
     /// close rather than a design.</b> Silence is the safe failure for a
-    /// debugging aid — it cannot mislabel a brain — but a fourth controller
+    /// debugging aid — it cannot mislabel a brain — but a new controller
     /// arriving without a line here is invisible to this aid and nothing goes
     /// red. Add its bubble when you add it.
     /// </para>
@@ -80,9 +78,6 @@ public static class HandoverBubble
         {
             return TookPolicy;
         }
-
-        if (taking.Name.StartsWith("search", StringComparison.Ordinal))
-            return TookSearch;
 
         return null;
     }

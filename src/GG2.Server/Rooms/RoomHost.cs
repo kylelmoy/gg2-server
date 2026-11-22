@@ -161,16 +161,12 @@ public sealed class RoomHost : IDisposable
     /// object for another room. <see cref="ServerOptions.Password"/> is replaced
     /// by the room's secret, and the per-process surfaces are switched off.
     /// <para>
-    /// <b>Bots are scripted or policy, never search or tiered.</b> A search
-    /// decision is ~4.8 ms, and each room's arbiter budgets only its own tick, so
-    /// nothing would bound the host's tick across rooms; the policies match the
-    /// search on the shipped bundle, and both modes are planned for removal
-    /// (<c>docs/ROOMS.md</c>, "Bots in a room"). A policy room with no checkpoint
+    /// <b>Bots are scripted or policy.</b> A policy room with no checkpoint
     /// named runs the shipped bundle, and its nets come from
     /// <see cref="SharedPolicies"/>.
     /// </para>
     /// </remarks>
-    /// <exception cref="ArgumentException">A search or tiered room, or a brain that will not build.</exception>
+    /// <exception cref="ArgumentException">A brain that will not build.</exception>
     public HostedRoom? CreateRoom(ServerOptions options)
     {
         if (_rooms.Count >= _options.MaxRooms)
@@ -208,19 +204,13 @@ public sealed class RoomHost : IDisposable
 
     private void BuildBrain(ServerOptions options)
     {
-        if (options.BotMode is BotMode.Search or BotMode.Tiered)
-        {
-            throw new ArgumentException(
-                $"bot mode '{options.BotMode.ToString().ToLowerInvariant()}' is not offered in a room; use scripted or policy");
-        }
-
         if (options.BotMode == BotMode.Policy && options.PolicyPaths.Count == 0)
         {
             options.PolicyPaths = MapDirectory.ResolveCheckpoints();
             options.BotClassPolicies = MapDirectory.ShippedClassPolicies;
         }
 
-        // Fresh per room, arbiter and all; only the weights are shared.
+        // Fresh per room; only the weights are shared.
         BotBrain.Build(options, report: null, _sharedPolicies.Load);
     }
 

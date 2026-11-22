@@ -729,8 +729,8 @@ public sealed partial class BotPopulationService
         // note the Query assignment below still reaches the right object.
         //
         // ONE field, so there is nothing to rank and nothing to refuse.
-        // BotBrainSpec carries an ORDERED LIST instead, and IMicroArbiter is what
-        // picks between its tiers per decision.
+        // BotBrainSpec carries an ORDERED LIST instead, one tier per checkpoint,
+        // and the first tier that drives a bot's class drives it.
         IInputSource source = options.Brain is not { } brain ? bot
             : _server.Options.BotBrainTeam is Team.Red or Team.Blue ? new TeamGatedBot(brain.Wrap(bot), _server.Options.BotBrainTeam)
             : brain.Wrap(bot);

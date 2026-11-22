@@ -800,10 +800,8 @@ public sealed class ServerOptions
     /// <c>BotBrainSpec.Engage</c> defaults to <c>Anyone</c> so that a headless
     /// bot-vs-bot match still exercises the controller — with no humans in it,
     /// <c>HumansOnly</c> would make every arm measurement silently measure the
-    /// all-scripted control. A live server wants the opposite: the search and
-    /// policy controllers exist to be good against people, and a 4,800 µs search
-    /// decision spent on two bots shooting at each other in an empty corner is
-    /// most of what a populated server pays for.
+    /// all-scripted control. A live server wants the opposite: the policy
+    /// controllers exist to be good against people, not against each other.
     /// </para>
     /// <para>
     /// <b>Turning this on does not make the bots better.</b> It makes
@@ -926,8 +924,7 @@ public sealed class ServerOptions
     /// <remarks>
     /// <para>
     /// <b>A debugging aid for watching a brain from inside the game</b> —
-    /// <c>z1</c> when a policy takes the wheel, <c>z3</c> when the search does,
-    /// <c>z2</c> when the scripted layer takes it back. <see cref="HandoverBubble"/>
+    /// <c>z1</c> when a policy takes the wheel, <c>z2</c> when the scripted layer takes it back. <see cref="HandoverBubble"/>
     /// has the indices and the reference they come from.
     /// </para>
     /// <para>
@@ -1064,34 +1061,6 @@ public sealed class ServerOptions
     /// </remarks>
     public const int IdleTickRate = 2;
 
-    /// <summary>
-    /// Let the server discover how much bot-controller work this machine can
-    /// afford, instead of trusting a constant measured on another one.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <b>The reason it exists.</b> <c>SearchController</c>'s reference cost was
-    /// measured on one machine, on one map, in Release. A rented VPS makes every
-    /// decision cost more and no compiled-in constant can know that. The arbiter
-    /// never uses the absolute scale — only <c>cost &lt;= budget - spent</c> — so
-    /// the answer is a budget that calibrates itself rather than a better guess.
-    /// <c>MicroBudgetController</c> does the walking.
-    /// </para>
-    /// <para>
-    /// <b><c>--bot-arbiter</c> stays an upper bound.</b> This only ever holds
-    /// the budget at or below the configured number.
-    /// </para>
-    /// <para>
-    /// <b>On for the live server, and structurally absent everywhere a
-    /// measurement is taken.</b> It lives in <see cref="GameServer.Run"/>, which
-    /// <c>HeadlessMatch</c>, the env and <c>eval</c> never call — so a benchmark
-    /// cannot pick it up by accident, and the thread-invariance pins keep meaning
-    /// what they say. Bots get quietly worse under load, which is the point and
-    /// is also why every move it makes is logged.
-    /// </para>
-    /// </remarks>
-    public bool AdaptiveBotBudget { get; set; } = true;
-
     /// <summary>The <c>[Bots]</c> section. Off by default, as in the reference.</summary>
     /// <remarks>
     /// <see cref="BotPopulationOptions.Default"/>, never <c>new()</c> — see the
@@ -1122,11 +1091,11 @@ public sealed class ServerOptions
     public string ConfigFile { get; set; } = string.Empty;
 
     /// <summary>
-    /// Which of the four shipped bot brains this server runs — <c>--bot-mode</c>.
+    /// Which bot brain this server runs — <c>--bot-mode</c>.
     /// </summary>
     /// <remarks>
     /// ⚠️ <b>An INPUT to <see cref="BotPopulationOptions.Brain"/>, not a copy of
-    /// it.</b> <see cref="BotBrain.Build"/> is the one place these five inputs
+    /// it.</b> <see cref="BotBrain.Build"/> is the one place these inputs
     /// become a <see cref="BotBrainSpec"/>, and it is called once at the end of
     /// parsing — so setting this afterwards changes nothing, which is why nothing
     /// outside the two parsers writes it.
@@ -1163,29 +1132,13 @@ public sealed class ServerOptions
     /// <b>A label is a checkpoint's file name without its extension</b>, which is
     /// what the stamp line prints and what a result table calls the tier. A
     /// <c>.gg2p</c> names no classes of its own, so a class not named here is
-    /// driven by no net: the search takes it in tiered mode, the scripted layer
-    /// otherwise.
+    /// driven by no net and the scripted layer plays it.
     /// <para>
     /// ⚠️ <b>Separate from <c>[BotClasslimits]</c> on purpose.</b> That one decides
     /// which classes bots PLAY; this one decides who drives a class that is played.
     /// </para>
     /// </remarks>
     public IReadOnlyList<string> BotClassPolicies { get; set; } = [];
-
-    /// <summary>
-    /// Microseconds of bot-controller work per tick — <c>--bot-arbiter</c>. Null
-    /// lets <see cref="BotModes.NeedsArbiter"/> supply the default.
-    /// </summary>
-    public int? BotArbiterMicroseconds { get; set; }
-
-    /// <summary>
-    /// Threads the search controller's rollouts use — <c>--search-threads</c>.
-    /// </summary>
-    /// <remarks>
-    /// ⚠️ <b>Threads change NO decision</b> — <c>RolloutThreadingTests</c> gates
-    /// that at 2, 4 and 8 — so this is a pure cost knob.
-    /// </remarks>
-    public int SearchThreads { get; set; } = BotBrain.DefaultSearchThreads;
 
     /// <summary>
     /// The <see cref="ServerSetting.Id"/>s the command line set to something the

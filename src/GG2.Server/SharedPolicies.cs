@@ -14,10 +14,9 @@ namespace GG2.Server;
 /// server for the same reason (<c>MicroControllerSpec</c>).
 /// <para>
 /// <b>What is NOT shared is the brain.</b> <see cref="BotBrain.Build"/> makes a
-/// new <c>BotBrainSpec</c> per room, and with it a new
-/// <c>DecisionQuotaArbiter</c>, whose per-tick spend is keyed by the room's own
-/// frame counter: shared, two rooms on the same frame number would spend one
-/// budget, and which rooms did would depend on when each was created.
+/// new <c>BotBrainSpec</c> per room, and every bot in it builds its own
+/// controllers from that, so the only thing two rooms hold in common is
+/// immutable weights.
 /// </para>
 /// <para>
 /// Keyed by full path, never evicted: a host loads the shipped bundle and

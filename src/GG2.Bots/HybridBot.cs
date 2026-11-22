@@ -20,11 +20,10 @@ namespace GG2.Bots;
 /// a fight" is testable on every arm rather than only some of them.
 /// </para>
 /// <para>
-/// <b>TIERS ARE ORDERED MOST CAPABLE FIRST.</b> With one tier and no
-/// <see cref="IMicroArbiter"/> this is a single fixed controller. With
-/// several, an arbiter picks which one may spend a decision this tick — see
-/// <see cref="IMicroArbiter"/> for why that is the shape the tick tail needs and
-/// what it costs in reproducibility.
+/// <b>TIERS ARE ORDERED, AND THE FIRST ELIGIBLE ONE DRIVES.</b> Several tiers
+/// exist so that several checkpoints can drive disjoint class sets — the shipped
+/// bundle is one net per class — and a class no tier drives is the scripted
+/// layer's outright.
 /// </para>
 /// <para>
 /// <b>This does NOT reach the wire or observable simulation.</b> A bot may press
@@ -93,7 +92,6 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
 
     private readonly IMicroController[] _tiers;
     private readonly ScriptedBot _scripted;
-    private readonly IMicroArbiter? _arbiter;
 
     private int _slot = -1;
 
@@ -121,11 +119,10 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// <remarks>
     /// ⛔ <b>Hard-coded against the server's per-player bubble throttle</b>,
     /// <c>ConnectionLimits.ChatBubbleIntervalMs</c> (250 ms), which drops a bubble
-    /// in silence. A search bot releases and re-takes the wheel a couple of ticks
-    /// apart at the edge of the range, so without this the throttle ate the take
-    /// bubble after nearly every release, and a client was left showing <c>z2</c>
-    /// over a bot the search was driving — 6 of 9 <c>z3</c> lost in a measured
-    /// 60 s search match. Nine ticks is 300 ms at 30 Hz: 8 would be 267 ms, too
+    /// in silence. A controller can release and re-take the wheel a couple of
+    /// ticks apart at the edge of the range, so without this the throttle eats the
+    /// take bubble after nearly every release and a client is left showing
+    /// <c>z2</c> over a bot a controller is driving. Nine ticks is 300 ms at 30 Hz: 8 would be 267 ms, too
     /// close to 250 with the server reading <c>Environment.TickCount64</c> at its
     /// ~15.6 ms resolution. A diagnostic, so a constant rather than the live
     /// setting: an operator who raises the throttle gets dropped bubbles again.
@@ -162,13 +159,13 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// </remarks>
     private int _handicapTicksLeft;
 
-    public HybridBot(IMicroController micro, ScriptedBot scripted, IMicroArbiter? arbiter = null)
-        : this([micro], scripted, arbiter)
+    public HybridBot(IMicroController micro, ScriptedBot scripted)
+        : this([micro], scripted)
     {
     }
 
     public HybridBot(
-        IReadOnlyList<IMicroController> tiers, ScriptedBot scripted, IMicroArbiter? arbiter = null)
+        IReadOnlyList<IMicroController> tiers, ScriptedBot scripted)
     {
         ArgumentNullException.ThrowIfNull(tiers);
         ArgumentNullException.ThrowIfNull(scripted);
@@ -178,8 +175,8 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
 
         // 32 because eligibility is carried in a uint bitmask, which is what
         // keeps the per-decision path allocation-free. Nothing wants 32 tiers; the
-        // limit is stated so a 33rd fails loudly rather than silently dropping out
-        // of every arbiter's view.
+        // limit is stated so a 33rd fails loudly rather than silently never
+        // driving.
         if (tiers.Count > 32)
             throw new ArgumentException("at most 32 controller tiers", nameof(tiers));
 
@@ -188,7 +185,6 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
 
         _tiers = [.. tiers];
         _scripted = scripted;
-        _arbiter = arbiter;
     }
 
     /// <summary>The macro layer this wraps. See <see cref="IWrapsScriptedBot"/>.</summary>
@@ -208,10 +204,8 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// </summary>
     /// <remarks>
     /// <b>For a diagnostic — the control port's roster, the panel — never for a
-    /// decision.</b> It is <see cref="Choose"/>'s answer with no arbiter, so under
-    /// one the tier it names can still be refused a decision on any given tick and
-    /// the bot fall to the scripted layer for it. <see cref="Driving"/> is what
-    /// actually held the wheel; this is what could.
+    /// decision.</b> It is the tier that would drive once the handover gate opens;
+    /// <see cref="Driving"/> is what actually holds the wheel.
     /// <para>
     /// <b>An INDEX rather than the controller, and that is what makes it
     /// reportable.</b> <see cref="IMicroController.Name"/> is the controller's
@@ -224,8 +218,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// <para>
     /// <b>Here rather than re-derived by the caller.</b> Eligibility is
     /// <see cref="IMicroController.Drives"/> asked of the tiers in order, and a
-    /// second copy of that walk is a second place for the order to be got wrong —
-    /// the ordering IS the arbiter's whole input.
+    /// second copy of that walk is a second place for the order to be got wrong.
     /// </para>
     /// </remarks>
     public int TierIndexFor(PlayerClass playerClass)
@@ -535,10 +528,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
                 in world, slot, range, Rule, wants, Engage, ally))
             return Scripted(scripted);
 
-        var chosen = Choose(in world, tick, slot, eligible);
-
-        if (chosen < 0)
-            return Scripted(scripted);
+        var chosen = Choose(eligible);
 
         // The chosen controller keeps its own cadence across a gap, so it may not
         // be ready to start a decision even though the gate is open.
@@ -572,10 +562,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     private PlayerInput HeadSplit(
         in WorldView world, int slot, int tick, PlayerInput scripted, uint eligible)
     {
-        var chosen = Choose(in world, tick, slot, eligible);
-
-        if (chosen < 0)
-            return Scripted(scripted);
+        var chosen = Choose(eligible);
 
         if (chosen != _driving)
         {
@@ -623,39 +610,8 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
         return mask;
     }
 
-    /// <summary>
-    /// Which tier may spend a decision here: the arbiter's answer, or the most
-    /// capable eligible tier when there is no arbiter.
-    /// </summary>
-    /// <remarks>
-    /// <b>Advisory, and separate from <see cref="IMicroArbiter.Admitted"/> on
-    /// purpose.</b> A tier chosen here may still not take the wheel — its own
-    /// cadence may not be at a boundary — and a budget spent on a decision that
-    /// never happened is a budget that under-serves the next bot for no reason.
-    /// </remarks>
-    private int Choose(in WorldView world, int tick, int slot, uint eligible)
-    {
-        if (_arbiter is null)
-            return BitOperations.TrailingZeroCount(eligible);
-
-        // Read here rather than passed down from Poll: it is a 64-entry scan
-        // against a decision that costs thousands of microseconds, and threading
-        // it through two more signatures buys nothing measurable.
-        var chosen = _arbiter.Choose(tick, slot, _tiers, eligible, world.LiveCharacters);
-
-        // An arbiter naming an ineligible tier is a bug in the arbiter, and
-        // honouring it would drive a class a controller refuses. Refused here
-        // rather than clamped, because a silent substitution makes an arm that is
-        // not the arm anybody configured.
-        if (chosen >= 0 && (chosen >= _tiers.Length || (eligible & (1u << chosen)) == 0))
-        {
-            throw new InvalidOperationException(
-                $"{_arbiter.GetType().Name} chose tier {chosen}, which is not eligible "
-                + $"(eligible mask 0x{eligible:x}, {_tiers.Length} tiers)");
-        }
-
-        return chosen;
-    }
+    /// <summary>The most capable eligible tier. <paramref name="eligible"/> is nonzero.</summary>
+    private static int Choose(uint eligible) => BitOperations.TrailingZeroCount(eligible);
 
     private void TakeWheel(int chosen, in WorldView world, int slot)
     {
@@ -734,13 +690,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
         DecidedThisPoll = _tiers[tier].DecidedThisPoll;
 
         if (DecidedThisPoll)
-        {
             MicroDecisions++;
-
-            // Charged on the DECISION, not on the tick, and only once it really
-            // happened. See Choose.
-            _arbiter?.Admitted(tick, slot, tier, _tiers[tier].DecisionCostFor(world.LiveCharacters));
-        }
 
         return input;
     }

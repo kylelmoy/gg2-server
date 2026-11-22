@@ -246,11 +246,10 @@ public sealed class RoomHostTests : IDisposable
     }
 
     /// <summary>
-    /// Policy rooms hold the same weights and their own arbiter: one shared
-    /// would spend one tick budget across every room on the same frame number.
+    /// Policy rooms hold the same weights and their own brain.
     /// </summary>
     [Fact]
-    public void PolicyRoomsShareTheirNetsButNotTheirArbiter()
+    public void PolicyRoomsShareTheirNetsButNotTheirBrain()
     {
         ServerOptions Policy(string name)
         {
@@ -270,20 +269,7 @@ public sealed class RoomHostTests : IDisposable
         for (var i = 0; i < netsA.Length; i++)
             Assert.Same(netsA[i], netsB[i]);
 
-        Assert.NotNull(a.Arbiter);
-        Assert.NotSame(a.Arbiter, b.Arbiter);
-    }
-
-    [Theory]
-    [InlineData(GG2.Bots.BotMode.Search)]
-    [InlineData(GG2.Bots.BotMode.Tiered)]
-    public void SearchAndTieredRoomsAreRefused(GG2.Bots.BotMode mode)
-    {
-        var options = Room("expensive");
-        options.BotMode = mode;
-
-        Assert.Throws<ArgumentException>(() => _host.CreateRoom(options));
-        Assert.Empty(_host.Rooms);
+        Assert.NotSame(a, b);
     }
 
     [Fact]

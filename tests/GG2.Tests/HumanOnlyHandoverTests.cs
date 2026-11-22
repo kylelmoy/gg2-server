@@ -53,11 +53,11 @@ public sealed class HumanOnlyHandoverTests
         // wearing a costume.
         Assert.Equal(
             EngageOpponents.Anyone,
-            new HybridBot([new SearchController(new RolloutOptions(Threads: 1))], Scripted(), null).Engage);
+            new HybridBot([PolicyFixture.Tier().Create()], Scripted()).Engage);
 
         Assert.Equal(
             EngageOpponents.Anyone,
-            BotBrainSpec.Of(new SearchMicroSpec(new RolloutOptions(Threads: 1))).Engage);
+            BotBrainSpec.Of(PolicyFixture.Tier()).Engage);
     }
 
     /// <summary>The live server defaults to <c>HumansOnly</c>, and can be told not to.</summary>
@@ -66,10 +66,10 @@ public sealed class HumanOnlyHandoverTests
     {
         Assert.False(new ServerOptions().BotEngagesBotsToo);
 
-        var humansOnly = CommandLine.Parse(["--bot-mode", "search"]).Bots.Brain;
+        var humansOnly = CommandLine.Parse(["--policy", PolicyFixture.Checkpoint]).Bots.Brain;
         Assert.Equal(EngageOpponents.HumansOnly, Assert.IsType<BotBrainSpec>(humansOnly).Engage);
 
-        var anyone = CommandLine.Parse(["--bot-mode", "search", "--bot-engages-bots"]).Bots.Brain;
+        var anyone = CommandLine.Parse(["--policy", PolicyFixture.Checkpoint, "--bot-engages-bots"]).Bots.Brain;
         Assert.Equal(EngageOpponents.Anyone, Assert.IsType<BotBrainSpec>(anyone).Engage);
     }
 

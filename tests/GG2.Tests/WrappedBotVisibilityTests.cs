@@ -33,7 +33,7 @@ public sealed class WrappedBotVisibilityTests
         var bare = Bare();
 
         Assert.Same(bare, ScriptedBot.Of(bare));
-        Assert.Same(bare, ScriptedBot.Of(new HybridBot(new SearchController(new RolloutOptions()), bare)));
+        Assert.Same(bare, ScriptedBot.Of(new HybridBot(PolicyFixture.Tier().Create(), bare)));
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public sealed class WrappedBotVisibilityTests
     }
 
     /// <summary>
-    /// <c>--bot-mode search</c> reaches the population service, and the bots it makes
+    /// A policy brain reaches the population service, and the bots it makes
     /// are still countable, retargetable and removable.
     /// </summary>
     [Fact]
@@ -96,7 +96,7 @@ public sealed class WrappedBotVisibilityTests
                 FillToPlayers = 6,
                 MaxBots = 6,
                 MinHumans = 0,
-                Brain = BotBrainSpec.Of(new SearchMicroSpec(new RolloutOptions(Threads: 2))),
+                Brain = BotBrainSpec.Of(PolicyFixture.Tier()),
             },
         };
 

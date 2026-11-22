@@ -141,8 +141,8 @@ public sealed class ActionDecoder
     public const double AimDistancePixels = 100;
 
     // Indexed by roster slot, so it has to be as wide as the roster. A local
-    // copy of the width once fell behind it (32 against 64), and a policy or
-    // search bot past slot 31 then failed the whole server tick.
+    // copy of the width once fell behind it (32 against 64), and a policy bot
+    // past slot 31 then failed the whole server tick.
     private readonly double[] _aim = new double[WorldState.MaxSlots];
 
     /// <summary>The angle this slot is currently aiming at, in degrees.</summary>

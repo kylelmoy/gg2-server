@@ -183,9 +183,9 @@ public sealed class LiveSettingsTests
 
         harness.TickUntil(() => harness.Server.BotSlots.Count == 3, "three bots");
 
-        AssertOk(Run(harness, """{"cmd":"bot-brain","mode":"search"}"""));
+        AssertOk(Run(harness, """{"cmd":"bot-brain","mode":"policy"}"""));
         Assert.Empty(harness.Server.BotSlots);
-        Assert.Equal("search", State(harness).GetProperty("bots").GetProperty("mode").GetString());
+        Assert.Equal("policy", State(harness).GetProperty("bots").GetProperty("mode").GetString());
 
         harness.TickUntil(() => harness.Server.BotSlots.Count == 3, "the bots back");
     }
@@ -216,11 +216,11 @@ public sealed class LiveSettingsTests
         File.Delete(checkpoint);
         harness.TickUntil(() => harness.Server.BotSlots.Count == 3, "three bots");
 
-        AssertOk(Run(harness, """{"cmd":"bot-brain","mode":"search"}"""));
+        AssertOk(Run(harness, """{"cmd":"bot-brain","mode":"scripted"}"""));
         harness.TickUntil(() => harness.Server.BotSlots.Count == 3, "the bots back");
 
         Assert.False(Run(harness, """{"cmd":"bot-brain","mode":"policy"}""").GetProperty("ok").GetBoolean());
-        Assert.Equal("search", State(harness).GetProperty("bots").GetProperty("mode").GetString());
+        Assert.Equal("scripted", State(harness).GetProperty("bots").GetProperty("mode").GetString());
         Assert.Equal([checkpoint], harness.Server.Options.PolicyPaths);
         Assert.Equal(3, harness.Server.BotSlots.Count);
     }

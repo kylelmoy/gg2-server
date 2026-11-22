@@ -66,30 +66,26 @@ public static class ChurnBench
             $"input churn per bot-second, {bots} bots, {perMap} matches a map, cap {cap} min");
         Roster.Announce([.. policy.Drives], fromCheckpoint: true);
         Console.WriteLine(
-            "arm 1 all-scripted   arm 2 policy hybrid   arm 3 search hybrid");
+            "arm 1 all-scripted   arm 2 policy hybrid");
         Console.WriteLine();
 
         Console.WriteLine(
             $"{"map",-16} {"arm",-4} {"horiz/s",9} {"reversal/s",11} "
             + $"{"AIR rev/s",10} {"aim chg/s",10} {"deg/chg",8}");
 
-        // ⛔ The SAME set for all three arms, and it is the checkpoint's. Arms
-        // populated with different classes are not a comparison, and arm 3's
-        // search has to engage on the classes arm 2's policy trained — for a
-        // checkpoint outside the default family those two sets can be disjoint.
+        // ⛔ The SAME set for both arms, and it is the checkpoint's. Arms
+        // populated with different classes are not a comparison.
         PlayerClass[] allowed = [.. policy.Drives];
 
         foreach (var map in list)
         {
-            for (var arm = 1; arm <= 3; arm++)
+            for (var arm = 1; arm <= 2; arm++)
             {
                 var tally = Measure(
                     map, maps, nav, perMap, cap, bots,
                     arm switch
                     {
                         2 => BotBrainSpec.Of(policy),
-                        3 => BotBrainSpec.Of(new SearchMicroSpec(
-                            new RolloutOptions(Threads: 4), TrainedClasses: allowed)),
                         _ => null,
                     },
                     allowed);

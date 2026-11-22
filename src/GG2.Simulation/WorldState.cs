@@ -291,8 +291,8 @@ public struct WorldState
     /// pool dropped shots with nothing counting them and nothing that could go
     /// red — the exact shape of a divergence no test can catch. This counter
     /// exists so the question "does it ever actually happen?" has an answer that
-    /// is read rather than assumed; <c>MicroBudgetTests</c> and the headless
-    /// match runner assert it stays zero.
+    /// is read rather than assumed; <c>HeadlessMatchTests</c> asserts it stays
+    /// zero over a full match.
     /// </para>
     /// <para>
     /// It is deliberately NOT on <see cref="SimulationStamp"/>'s surface: it is a

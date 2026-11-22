@@ -54,11 +54,9 @@ public sealed partial class GameServer
                 (byte)slot,
                 bot ? TraceParticipant.Bot : TraceParticipant.Human,
 
-                // The configured mode, not the brain this particular bot ended
-                // up running: BotMode.Both hands a decision to whichever
-                // controller the arbiter let spend one, which varies per tick and
-                // is not a property of the slot. A row labelled with the mode is
-                // answerable; one labelled with a per-tick outcome is not.
+                // The configured mode, not who held the wheel: that varies per
+                // tick and is not a property of the slot. A row labelled with the
+                // mode is answerable; one labelled with a per-tick outcome is not.
                 // "reserved" for slot 0, which is driven by no brain at all —
                 // it is a seat the reference keeps for the host's local player
                 // and a headless server never fills. Naming it says so; an empty

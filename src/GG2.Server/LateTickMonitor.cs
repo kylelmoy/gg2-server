@@ -8,7 +8,7 @@ namespace GG2.Server;
 /// </summary>
 /// <param name="Clients">Connected network clients.</param>
 /// <param name="Bots">Bots on the roster.</param>
-/// <param name="Characters">Live characters — the cost driver for the search controller.</param>
+/// <param name="Characters">Live characters.</param>
 /// <param name="Map">The map being served.</param>
 /// <param name="WorkMilliseconds">
 /// How long this tick's own work took — <c>Tick()</c>, measured directly.
@@ -25,19 +25,12 @@ namespace GG2.Server;
 /// amount of optimising this server moves it.
 /// </para>
 /// </param>
-/// <param name="ArbiterSpentMicroseconds">
-/// Controller microseconds the arbiter granted on this tick, or null when there
-/// is no arbiter. <b>The single most useful number here when it exists</b>: a
-/// late tick on a <c>--bot-mode tiered</c> server is usually the search tier, and
-/// this is the difference between "the bots did it" and "something else did".
-/// </param>
 public readonly record struct LateTickContext(
     int Clients,
     int Bots,
     int Characters,
     string Map,
-    double WorkMilliseconds,
-    int? ArbiterSpentMicroseconds);
+    double WorkMilliseconds);
 
 /// <summary>
 /// Warns when a tick overruns its interval, without turning a slow server into a
@@ -202,10 +195,6 @@ public sealed class LateTickMonitor
 
     private static string Describe(in LateTickContext context, double intervalMs)
     {
-        var arbiter = context.ArbiterSpentMicroseconds is { } spent
-            ? $", controllers {spent.ToString(CultureInfo.InvariantCulture)}us"
-            : string.Empty;
-
         // The verdict, not decoration. A late tick whose own work was a
         // fraction of a millisecond was not this server's fault, and saying so on
         // the line is the difference between an operator profiling the bot layer
@@ -220,6 +209,6 @@ public sealed class LateTickMonitor
             : "NOT this tick — the process was not scheduled";
 
         return $"{context.Map}, {context.Clients} client(s), {context.Bots} bot(s), "
-            + $"{context.Characters} character(s){arbiter}; work {work}ms, so: {verdict}";
+            + $"{context.Characters} character(s); work {work}ms, so: {verdict}";
     }
 }

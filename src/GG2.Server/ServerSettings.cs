@@ -756,16 +756,12 @@ public static class ServerSettings
             "Bots", "HandoverBubbles", nameof(ServerOptions.BotHandoverBubbles),
             o => o.BotHandoverBubbles, (o, v) => o.BotHandoverBubbles = v));
 
-        settings.Add(BoolRow(
-            "Bots", "AdaptiveBudget", nameof(ServerOptions.AdaptiveBotBudget),
-            o => o.AdaptiveBotBudget, (o, v) => o.AdaptiveBotBudget = v));
-
         settings.Add(ChoiceRow(
             "Bots", "Mode", nameof(ServerOptions.BotMode),
-            ["scripted", "search", "policy", "tiered"],
+            ["scripted", "policy"],
             o => o.BotMode.ToString().ToLowerInvariant(),
             (o, v) => o.BotMode = Mode(v),
-            "search"));
+            "policy"));
 
         // ⚠️ A LIST, not a path, since 2026-09-07 — the shipped bundle is two
         // checkpoints driving disjoint class sets, and one file cannot express two
@@ -777,23 +773,6 @@ public static class ServerSettings
             "Bots", "Policy", nameof(ServerOptions.PolicyPaths),
             o => o.PolicyPaths, (o, v) => o.PolicyPaths = v,
             "checkpoints/ppo-warm-soldier-s1.gg2p,checkpoints/ppo-finetune-scout-s1.gg2p"));
-
-        settings.Add(new ServerSetting
-        {
-            Section = "Bots",
-            Key = "Arbiter",
-            Property = nameof(ServerOptions.BotArbiterMicroseconds),
-            Kind = SettingKind.Integer,
-            Get = o => o.BotArbiterMicroseconds?.ToString(CultureInfo.InvariantCulture)
-                ?? string.Empty,
-            Set = (o, v) => o.BotArbiterMicroseconds =
-                v.Trim().Length == 0 ? null : Number("Bots.Arbiter", v),
-            Probe = "10000",
-        });
-
-        settings.Add(IntRow(
-            "Bots", "SearchThreads", nameof(ServerOptions.SearchThreads),
-            o => o.SearchThreads, (o, v) => o.SearchThreads = v, OtherNumberProbe));
 
         // --- [BotClasslimits] -------------------------------------------------
         //
@@ -1043,25 +1022,6 @@ public static class ServerSettings
     public const string FlipProbe = "<flip>";
 
     /// <summary>
-    /// The probe marker a row carries when its DEFAULT depends on the machine.
-    /// </summary>
-    /// <remarks>
-    /// The same failure <see cref="FlipProbe"/> exists for, one type along. A
-    /// literal probe is only a probe while it differs from the default, and
-    /// <c>SearchThreads</c> defaults to <c>ProcessorCount / 3</c> clamped to
-    /// [1, 8] — which is exactly 2 on a 6- to 8-core box. A literal <c>"2"</c>
-    /// therefore turns "this setting round-trips" into "this setting is
-    /// unreachable" on the machines most people have, and the gate says the
-    /// setting is broken rather than that the probe is.
-    /// <para>
-    /// Resolves to 1, or to 2 when the current value is already 1, so it is
-    /// always a different value and always inside the range any thread-count
-    /// setting accepts.
-    /// </para>
-    /// </remarks>
-    public const string OtherNumberProbe = "<other>";
-
-    /// <summary>
     /// The probe value to use against <paramref name="options"/>, resolving
     /// <see cref="FlipProbe"/> against the current value.
     /// </summary>
@@ -1071,11 +1031,6 @@ public static class ServerSettings
 
         if (setting.Probe == FlipProbe)
             return setting.Get(options) == "0" ? "1" : "0";
-
-        // A machine-derived default cannot be probed with a literal — see
-        // OtherNumberProbe.
-        if (setting.Probe == OtherNumberProbe)
-            return setting.Get(options) == "1" ? "2" : "1";
 
         return setting.Probe;
     }
@@ -1151,12 +1106,10 @@ public static class ServerSettings
     private static BotMode Mode(string value) => value.Trim().ToLowerInvariant() switch
     {
         "scripted" or "0" => BotMode.Scripted,
-        "search" or "hybrid-search" or "1" => BotMode.Search,
         "policy" or "hybrid-policy" or "2" => BotMode.Policy,
-        "tiered" or "3" => BotMode.Tiered,
-        _ => throw new FormatException(
-            $"Bots.Mode: '{value}' is not a bot mode. scripted (0), search (1), "
-            + "policy (2) or tiered (3)."),
+        _ => throw new FormatException(BotModes.Removed(value) is { } removed
+            ? $"Bots.Mode: {removed}"
+            : $"Bots.Mode: '{value}' is not a bot mode. scripted (0) or policy (2)."),
     };
 
     /// <summary>

@@ -239,7 +239,7 @@ public sealed class IdleServerTests
     /// that applied this flag where it is parsed would make the two orderings two
     /// different servers — and the one that silently loses the flag is the one
     /// somebody will write. It is collected and applied after the loop, the same
-    /// fix <c>--search-threads</c> needed.
+    /// way the bot brain is built.
     /// </remarks>
     [Fact]
     public void BotsMinHumansDoesNotDependOnFlagOrder()

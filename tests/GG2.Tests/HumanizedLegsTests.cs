@@ -20,7 +20,6 @@ public sealed class HumanizedLegsTests
 
         public int DecisionCost => 1;
 
-        public int DecisionCostFor(int liveCharacters) => 1;
 
         public bool DecidedThisPoll => true;
 

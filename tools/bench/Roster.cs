@@ -9,9 +9,8 @@ namespace Bench;
 /// <remarks>
 /// ⛔ <b>This exists because the failure it guards has no tell in the result.</b>
 /// Since 2026-09-06 a checkpoint carries the classes it was trained on, and every
-/// mode that loads one populates its matches from that set rather than from
-/// <see cref="SearchController.DefaultClasses"/>. If a run ever populated the
-/// default instead, a checkpoint outside that family would drive nothing, every
+/// mode that loads one populates its matches from that set rather than from a
+/// fixed default. If a run ever populated a default instead, a checkpoint outside that family would drive nothing, every
 /// bot would fall back to scripted, and the output would be the scripted arm
 /// reported twice with one of them labelled the policy — a clean, plausible null.
 /// <para>

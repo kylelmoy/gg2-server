@@ -62,7 +62,6 @@ public sealed class HandoverBubbleTests
     {
         Assert.Equal(20, HandoverBubble.TookPolicy);
         Assert.Equal(21, HandoverBubble.LeftAController);
-        Assert.Equal(22, HandoverBubble.TookSearch);
     }
 
     /// <summary>Which bubble each handover asks for.</summary>
@@ -75,8 +74,8 @@ public sealed class HandoverBubbleTests
     [Theory]
     [InlineData("policy", HandoverBubble.TookPolicy)]
     [InlineData("policy:tier0_combat4_s2", HandoverBubble.TookPolicy)]
-    [InlineData("search", HandoverBubble.TookSearch)]
-    [InlineData("search:wide", HandoverBubble.TookSearch)]
+    [InlineData("gg2-sim", HandoverBubble.TookPolicy)]
+    [InlineData("gg2-sim:soldier", HandoverBubble.TookPolicy)]
     public void AControllerTakingTheWheelIsNamedByItsBubble(string name, byte expected) =>
         Assert.Equal(expected, HandoverBubble.For(new Stub(name)));
 
@@ -110,7 +109,7 @@ public sealed class HandoverBubbleTests
     /// </remarks>
     [Theory]
     [InlineData("policy", HandoverBubble.TookPolicy)]
-    [InlineData("search", HandoverBubble.TookSearch)]
+    [InlineData("gg2-sim", HandoverBubble.TookPolicy)]
     public void TakingAndLeavingTheWheelEachPutUpTheirBubble(string name, byte taking)
     {
         var world = World();
@@ -153,8 +152,8 @@ public sealed class HandoverBubbleTests
     /// A release right after a take is delayed to clear the throttle, not lost.
     /// </summary>
     /// <remarks>
-    /// The search's own pattern at the edge of the range: the wheel changes hands
-    /// a couple of ticks apart. Each bubble that goes out must be at least
+    /// The pattern at the edge of the range: the wheel changes hands a couple of
+    /// ticks apart. Each bubble that goes out must be at least
     /// <see cref="HybridBot.BubbleSpacingPolls"/> after the last, and the final one
     /// must describe where the bot ended up.
     /// </remarks>
@@ -162,7 +161,7 @@ public sealed class HandoverBubbleTests
     public void AHandoverInsideTheWindowIsDelayedNotLost()
     {
         var world = World();
-        var bot = Wrap(world, new Stub("search"), bubbles: true);
+        var bot = Wrap(world, new Stub("gg2-sim"), bubbles: true);
 
         var red = world.Place(PlayerClass.Soldier, Team.Red, 600, 850);
         var blue = world.Place(PlayerClass.Soldier, Team.Blue, 680, 850);
@@ -171,7 +170,7 @@ public sealed class HandoverBubbleTests
         // In range for 2 polls, then out for good.
         var (sent, _) = Schedule(bot, world, red, blue, tick => tick < 2, ticks: 30);
 
-        Assert.Equal([HandoverBubble.TookSearch, HandoverBubble.LeftAController], sent.Select(s => s.Image));
+        Assert.Equal([HandoverBubble.TookPolicy, HandoverBubble.LeftAController], sent.Select(s => s.Image));
         Assert.True(sent[1].Poll - sent[0].Poll >= HybridBot.BubbleSpacingPolls, $"{sent[0].Poll} then {sent[1].Poll}");
     }
 
@@ -190,7 +189,7 @@ public sealed class HandoverBubbleTests
     public void AFlappingWheelEndsOnTheBubbleForWhoeverDrives()
     {
         var world = World();
-        var bot = Wrap(world, new Stub("search"), bubbles: true);
+        var bot = Wrap(world, new Stub("gg2-sim"), bubbles: true);
 
         var red = world.Place(PlayerClass.Soldier, Team.Red, 600, 850);
         var blue = world.Place(PlayerClass.Soldier, Team.Blue, 680, 850);
@@ -206,7 +205,7 @@ public sealed class HandoverBubbleTests
         }
 
         Assert.NotNull(bot.Driving);
-        Assert.Equal(HandoverBubble.TookSearch, sent[^1].Image);
+        Assert.Equal(HandoverBubble.TookPolicy, sent[^1].Image);
         Assert.True(handovers > sent.Count, $"{handovers} handovers, {sent.Count} bubbles");
     }
 

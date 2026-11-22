@@ -13,16 +13,13 @@ namespace GG2.Server;
 /// <remarks>
 /// <para>
 /// ⛔ <b>ONE PLACE BUILDS THE BRAIN, at the end, from inputs collected first.</b>
-/// The flag handlers used to write the brain directly, which made
-/// <c>--search-threads</c> order-dependent: given before <c>--search-bots</c> it
-/// was picked up, given after it had to re-write the option it had just found.
-/// Collecting first and building once removes the ordering entirely, and it is
-/// what lets a config file and the command line reach the same reconcile instead
+/// Collecting first and building once keeps the flags order-independent, and it
+/// is what lets a config file and the command line reach the same reconcile instead
 /// of growing two copies of it — CLAUDE.md's "three places" rule one level up,
 /// the same argument <see cref="ControlCommands"/> makes for the operator verbs.
 /// </para>
 /// <para>
-/// ⚠️ <b>This is why <see cref="ServerOptions.BotMode"/> and the four settings
+/// ⚠️ <b>This is why <see cref="ServerOptions.BotMode"/> and the settings
 /// beside it exist as options at all.</b> A brain holds a loaded
 /// <c>SimPolicyNetwork</c> — megabytes of weights with no textual form — so it
 /// cannot be written back to a config file and cannot round-trip. Its inputs
@@ -31,16 +28,6 @@ namespace GG2.Server;
 /// </remarks>
 public static class BotBrain
 {
-    /// <summary>
-    /// <c>--search-threads</c>'s default: a third of the machine's cores, 1..8.
-    /// </summary>
-    /// <remarks>
-    /// A property rather than a constant because it reads
-    /// <see cref="Environment.ProcessorCount"/>, and a <c>const</c> would bake
-    /// the build machine's core count into every deployment.
-    /// </remarks>
-    public static int DefaultSearchThreads => Math.Clamp(Environment.ProcessorCount / 3, 1, 8);
-
     /// <summary>
     /// Reconciles the brain settings and writes the result into
     /// <see cref="BotPopulationOptions.Brain"/>.
@@ -61,7 +48,7 @@ public static class BotBrain
     /// <param name="loadPolicy">
     /// Opens a checkpoint, or null for <see cref="SimPolicyNetwork.Load(string)"/>.
     /// A room host passes its <see cref="SharedPolicies"/> so every room holds the
-    /// same weights; the arbiter is still built fresh here, one per call.
+    /// same weights.
     /// </param>
     public static void Build(
         ServerOptions options, Action<string>? report = null, Func<string, SimPolicyNetwork>? loadPolicy = null)
@@ -73,33 +60,12 @@ public static class BotBrain
         var mode = options.BotMode;
         var policyPaths = options.PolicyPaths;
 
-        var arbiterUnits = options.BotArbiterMicroseconds;
-
-        // ⚠️ Tiered DEFAULTS its budget rather than refusing without one. Refusing
-        // made the mode unreachable without a number nobody has tuned, which is a
-        // worse default than a stated guess — see the constant, which says what
-        // would show it is wrong.
-        // ⚠️ EVERY mode with a controller gets a budget, not just tiered. The
-        // reasoning that "one tier has nothing to choose between, so an arbiter is
-        // pure cost" was wrong: an arbiter's second job is to GATE, and with one
-        // tier it still returns -1 and drops the bot to the scripted layer once the
-        // budget is spent. Without one, search mode let all twelve bots search on
-        // the same tick — 12 x ~4,800 us against a 33,300 us tick, which is over
-        // budget before the simulation runs at all.
-        if (mode.NeedsArbiter())
-            arbiterUnits ??= DecisionQuotaArbiter.DefaultTieredBudgetMicroseconds;
-
         var tiers = new List<MicroControllerSpec>();
 
         // The operator's per-class assignments, parsed and validated before a
         // single checkpoint is opened so a typo costs no file I/O and, more to the
         // point, so the error names the setting rather than a load failure.
         var assigned = ParseClassPolicies(options.BotClassPolicies);
-
-        // Which policy tier already claimed each class, so an OVERLAP is named
-        // rather than silently resolved by list order — and, afterwards, so the
-        // search can take the classes no policy drives.
-        var claimedBy = new Dictionary<PlayerClass, string>();
 
         if (mode.UsesPolicy())
         {
@@ -111,12 +77,8 @@ public static class BotBrain
 
                 labels.Add(label);
 
-                var tier = SimTier(policyPath, label, assigned, report, loadPolicy ?? SimPolicyNetwork.Load) with { Sampled = options.BotPolicySampled };
-
-                foreach (var playerClass in tier.Drives)
-                    claimedBy.TryAdd(playerClass, label);
-
-                tiers.Add(tier);
+                tiers.Add(SimTier(policyPath, label, assigned, report, loadPolicy ?? SimPolicyNetwork.Load)
+                    with { Sampled = options.BotPolicySampled });
             }
 
             // ⛔ AFTER the loop, so the message can name the labels that DO exist.
@@ -133,38 +95,6 @@ public static class BotBrain
                     + $"loaded: {(labels.Count == 0 ? "none" : string.Join(", ", labels))} — or "
                     + $"'{Scripted}' to leave the class to the scripted layer.");
             }
-        }
-
-        if (mode.UsesSearch())
-        {
-            var searched = SearchClasses(claimedBy, assigned);
-
-            // ⚠️ FIRST, inserted after the policies were built: most capable first
-            // is the arbiter's whole input, and the set could not be known before
-            // the policies had claimed theirs.
-            tiers.Insert(0, new SearchMicroSpec(
-                new RolloutOptions(Threads: options.SearchThreads), TrainedClasses: searched));
-
-            report?.Invoke($"search: drives {Classes(searched)}");
-        }
-
-        // ⛔ Unreachable from the settings now — NeedsArbiter defaults the budget
-        // for every mode with a controller — and kept as the invariant it always
-        // was. If a fifth mode arrives with two tiers and no default, this is what
-        // stops it shipping a controller that is configured, reported and never
-        // consulted.
-        //
-        // ⚠️ "The rest are dead weight" is the WORST case, not the only one, since
-        // several policy tiers became possible on 2026-09-07: with DISJOINT class
-        // sets HybridBot.Choose picks the most capable ELIGIBLE tier, so an
-        // arbiter-less pair would both drive, each on its own classes. The refusal
-        // stays because nothing here checks disjointness, and the overlapping case
-        // — the one this sentence describes — is still silent without it.
-        if (tiers.Count > 1 && arbiterUnits is null)
-        {
-            throw new ArgumentException(
-                $"{tiers.Count} bot controllers were configured but no arbiter budget; "
-                + "without one the first tier always drives and the rest are dead weight");
         }
 
         // ⚠️ CLEARED when there is no controller, not left alone. Reconciling twice
@@ -190,11 +120,6 @@ public static class BotBrain
                     // A debugging aid, and the only setting here that changes
                     // nothing a bot decides — see ServerOptions.
                     Bubbles = options.BotHandoverBubbles,
-
-                    // ⛔ ONE arbiter for the whole server, shared by every bot. A
-                    // per-bot one cannot see the coinciding decisions that make the
-                    // tick tail, which is the only reason it exists.
-                    Arbiter = arbiterUnits is { } units ? new DecisionQuotaArbiter(units) : null,
                 },
         };
     }
@@ -245,65 +170,6 @@ public static class BotBrain
     }
 
     /// <summary>
-    /// Which classes the search tier drives on a live server.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <b>The policy's default trained set, plus every class no policy tier
-    /// drives</b> — so all nine in search mode, where there is no policy. The
-    /// search holds no checkpoint and can drive any class. The restriction to a
-    /// trained set that <see cref="SearchMicroSpec"/> defaults to exists to hold
-    /// class coverage still between a search arm and a policy arm in a bench
-    /// comparison, and nothing on a live server is that comparison: leaving it on
-    /// made Pyro, Medic, Engineer, Spy and Sniper bots scripted in search mode, and
-    /// in tiered mode left every class no tier named with no controller at all.
-    /// </para>
-    /// <para>
-    /// <b>The default four are KEPT in tiered mode</b> even where a policy drives
-    /// them, because that overlap is the shipped fallback ladder: the search leads
-    /// on those classes and the arbiter drops to the policy under pressure. A
-    /// class a policy claims outside the four stays the policy's alone. A class the
-    /// operator pinned to <see cref="Scripted"/> is not unclaimed and is left
-    /// alone.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Measured before shipping, on the five new classes</b>, with
-    /// <c>tools/bench</c>'s <c>BENCH_SEARCHCLASSES</c> (2026-09-15, 21 maps, 420
-    /// matches an arm, 8 bots, 5-minute cap, no arbiter). Rostered with Pyro,
-    /// Medic, Engineer, Spy and Sniper, the search hybrid's death share fell from
-    /// 50.0% to 47.3% (pooled z -4.89; match-level Welch t -3.39) and its win
-    /// share rose from 57.9% to 64.6% (z +1.45). Every one of the five classes
-    /// moved the right way — Spy -5.1 points and Engineer -3.5 the largest, Medic
-    /// -1.3 the smallest — though none is significant alone at match level. The
-    /// control, the same instrument on the default four, reproduced the known
-    /// direction only weakly (death share 49.3% to 48.6%, t -0.69), so the new
-    /// classes gain at least as much as the old. What would show this wrong is
-    /// that mode's per-class death share or win share going against the
-    /// all-scripted control for one of those classes at a larger match count.
-    /// </para>
-    /// </remarks>
-    private static PlayerClass[] SearchClasses(
-        Dictionary<PlayerClass, string> claimedByPolicy, Dictionary<PlayerClass, string> assigned)
-    {
-        var classes = new List<PlayerClass>(SearchController.DefaultClasses.ToArray());
-
-        for (var playerClass = PlayerClass.Scout; playerClass <= PlayerClass.Pyro; playerClass++)
-        {
-            if (classes.Contains(playerClass)
-                || claimedByPolicy.ContainsKey(playerClass)
-                || assigned.ContainsKey(playerClass))
-            {
-                continue;
-            }
-
-            classes.Add(playerClass);
-        }
-
-        classes.Sort((left, right) => ((int)left).CompareTo((int)right));
-        return [.. classes];
-    }
-
-    /// <summary>
     /// The refusals <see cref="Build"/> makes from the settings alone, with no
     /// checkpoint opened.
     /// </summary>
@@ -311,9 +177,9 @@ public static class BotBrain
     /// ⛔ <b>Called from <see cref="ServerOptions.Validate"/>, and that is the
     /// point.</b> The panel's save, the fleet renderer and the pushed-config
     /// watcher all decide "this file will start" with <c>Validate</c> alone, so a
-    /// refusal only <see cref="Build"/> made let the panel write
-    /// <c>Mode=search</c> beside a leftover <c>Policy</c> key, and "Save &amp;
-    /// restart" then ended the process with exit 2. Nothing here may touch the
+    /// refusal only <see cref="Build"/> made would let the panel write a mode
+    /// beside a <c>Policy</c> key it cannot use, and "Save &amp; restart" would
+    /// then end the process with exit 2. Nothing here may touch the
     /// disk: the renderer validates on a machine where the checkpoint paths do not
     /// exist.
     /// </remarks>
@@ -329,7 +195,7 @@ public static class BotBrain
             throw new ArgumentException(
                 $"bot mode '{mode.ToString().ToLowerInvariant()}' drives bots with a trained "
                 + "checkpoint and none was given; add --policy <path> (or a [Bots] Policy key), "
-                + "or use bot mode scripted or search.");
+                + "or use bot mode scripted.");
         }
 
         // Only gg2-sim nets are loaded. Refused here, from the name alone, so the
@@ -347,7 +213,7 @@ public static class BotBrain
         {
             throw new ArgumentException(
                 $"a policy checkpoint was given but bot mode '{mode.ToString().ToLowerInvariant()}' "
-                + "never consults one; use bot mode policy or tiered, or drop the checkpoint.");
+                + "never consults one; use bot mode policy, or drop the checkpoint.");
         }
 
         var assigned = ParseClassPolicies(options.BotClassPolicies);
@@ -359,8 +225,8 @@ public static class BotBrain
             // server saying it is doing something it is not.
             throw new ArgumentException(
                 $"bot class policies were configured but bot mode "
-                + $"'{mode.ToString().ToLowerInvariant()}' runs no policy; use bot mode policy "
-                + "or tiered, or drop them.");
+                + $"'{mode.ToString().ToLowerInvariant()}' runs no policy; use bot mode policy, "
+                + "or drop them.");
         }
     }
 

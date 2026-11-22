@@ -81,8 +81,6 @@ const STRINGS = {
       "policy": "Policy",
       "raiseLimit": "Raise bot limit",
       "scripted": "Scripted",
-      "search": "Search",
-      "tiered": "Tiered",
       "title": "Bots"
     },
     "brand": "gg2-server",
@@ -329,7 +327,6 @@ const STRINGS = {
       }
     },
     "brain": {
-      "arbiter": "Arbiter: {budget} µs/tick budget, {spent} used last tick.",
       "noBots": "No bots running.",
       "humansOnly": "Controllers engage human enemies only (--bot-engages-bots enables bot-vs-bot).",
       "drives": "Drives {classes}.",
@@ -819,12 +816,9 @@ const STRINGS = {
       "HandoverRange": "Pixels: how near the nearest opponent must be for that handover (150 by default). Very large with distance: the policy drives whenever an opponent is alive.",
       "PolicySampled": "Draw each gg2-sim policy decision from its softmax instead of the argmax. How the duel nets were trained and scored; greedy can freeze on a still target. Behavioural.",
       "BrainTeam": "The one team whose bots the brain drives; the other team's bots are plain scripted bots. Both by default; red is how gg2-sim plays its matches.",
-      "HandoverBubbles": "Chat bubble on brain handover: z1 policy, z3 search, z2 scripted. Debug only; each bubble is a broadcast.",
-      "AdaptiveBudget": "Lower the controller budget when ticks approach their deadline. Arbiter remains the upper bound.",
-      "Mode": "Which of the four shipped brains runs. search plays best and costs most.",
-      "Policy": "gg2-sim .gg2p nets for the policy and tiered modes, one per tier. A net drives only the classes ClassPolicy assigns it.",
-      "Arbiter": "Bot-controller budget per tick, µs (tick = 33,300 µs). Empty: mode default.",
-      "SearchThreads": "Rollout search threads. Affects cost only, never decisions."
+      "HandoverBubbles": "Chat bubble on brain handover: z1 policy, z2 scripted. Debug only; each bubble is a broadcast.",
+      "Mode": "Which brain runs: scripted alone, or policy nets inside the engagement window.",
+      "Policy": "gg2-sim .gg2p nets for the policy mode, one per tier. A net drives only the classes ClassPolicy assigns it."
     },
     "BotClasslimits": {
       "Scout": "Per-team bot limit for Scout. 255 = unlimited; 0 = disabled.",

@@ -61,52 +61,6 @@ public interface IMicroController
     }
 
     /// <summary>
-    /// What one DECISION costs, in <b>microseconds</b>.
-    /// </summary>
-    /// <remarks>
-    /// <b>Microseconds, not an arbitrary relative unit.</b> A policy decision is
-    /// 6.9 µs (2.2 extracting the observation, 4.7 in the forward pass); a search
-    /// decision at twelve live characters is 4,795 µs — a 695:1 ratio. An arbiter
-    /// budgeting in coarse relative units (say 4 and 1) would admit four policy
-    /// decisions as the price of one search and be wrong by more than two orders
-    /// of magnitude.
-    /// <para>
-    /// <b>A microsecond unit makes a budget mean something.</b> The tick is
-    /// 33,300 µs, so <c>--bot-arbiter 10000</c> is "ten milliseconds of controller
-    /// work a tick" and caps concurrent search decisions at two.
-    /// </para>
-    /// <para>
-    /// <b>A constant cannot be right for the search, and this is the honest
-    /// approximation rather than a claim.</b> A rollout re-simulates every live
-    /// character for every tick of every candidate, so its cost scales with
-    /// POPULATION, horizon and candidate count — <c>BENCH_SEARCH</c> shows
-    /// 2.47 ms at two characters against 7.64 ms at twelve. The value below names
-    /// the configuration it was measured at. <b>Re-measure with
-    /// <c>BENCH_SEARCH</c> and <c>BENCH_POLICYCOST</c> before trusting a budget
-    /// derived from it.</b>
-    /// </para>
-    /// <para>
-    /// The default of 1 belongs to a controller that has not measured itself —
-    /// a stub or a test double. A real one overrides it.
-    /// </para>
-    /// <para>
-    /// <b>It takes the live character count because cost is not a constant.</b>
-    /// A rollout re-simulates every live character for every tick of every
-    /// candidate, so its cost is affine in the population — measured, see
-    /// <c>SearchController</c>. A controller whose cost really is flat (a policy
-    /// forward pass is a fixed-size network) simply ignores the argument.
-    /// </para>
-    /// <para>
-    /// <b>Only the RATIO between controllers is ever used</b>, by
-    /// <c>DecisionQuotaArbiter</c>: <c>cost &lt;= budget - spent</c>. Nothing reads
-    /// the absolute scale, which is why a number measured on one machine is still
-    /// useful on another — see <c>MicroBudgetController</c>, which calibrates the
-    /// budget to whatever these numbers happen to mean on the machine it is on.
-    /// </para>
-    /// </remarks>
-    int DecisionCostFor(int liveCharacters) => 1;
-
-    /// <summary>
     /// Whether this controller may drive a character of this class at all.
     /// </summary>
     /// <remarks>
@@ -146,12 +100,8 @@ public interface IMicroController
     /// Called on every handover OUT, when the scripted layer takes the wheel back.
     /// </summary>
     /// <remarks>
-    /// <b>The two shipped controllers answer this differently and both are
-    /// right.</b> <see cref="SimPolicyController"/> abandons its part-finished
-    /// decision, so a re-entry starts a fresh one; <see cref="SearchController"/>
-    /// leaves <c>RolloutSearch</c>'s counter alone, so a re-entry waits for the
-    /// search's own boundary. The search's half is inherited verbatim from
-    /// <c>SearchBot</c> and preserved on purpose — the arms were measured with it.
+    /// <see cref="SimPolicyController"/> abandons its part-finished decision, so a
+    /// re-entry starts a fresh one.
     /// </remarks>
     void OnHandoverOut();
 
@@ -165,8 +115,7 @@ public interface IMicroController
     /// <remarks>
     /// <b>This is the expensive event and it is not "the controller drove".</b>
     /// A controller drives every tick of a decision and decides on one of them, so
-    /// counting ticks it drove over-reports the cost by the decision length. A
-    /// tick-budget question needs the count of DECISIONS that coincided.
+    /// counting ticks it drove over-reports the cost by the decision length.
     /// </remarks>
     bool DecidedThisPoll { get; }
 }

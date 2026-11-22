@@ -260,13 +260,14 @@ public sealed class ServerRestartTests : IDisposable
     /// </summary>
     /// <remarks>
     /// ⛔ <b>This took a live server down.</b> An operator switched <c>Mode</c>
-    /// from policy to search on a host whose file still carried <c>Policy</c>;
+    /// from policy to a mode that consults no checkpoint on a host whose file
+    /// still carried <c>Policy</c>;
     /// the save validated, the restart reached <c>BotBrain.Build</c>, and the
     /// process exited 2 into a systemd crash loop. The file here carries no
     /// <c>Mode</c>, so the server starts, and the save supplies both halves.
     /// </remarks>
     [Theory]
-    [InlineData("""{"Bots.Mode":"search","Bots.Policy":"checkpoints/a.gg2p"}""", "never consults one")]
+    [InlineData("""{"Bots.Mode":"scripted","Bots.Policy":"checkpoints/a.gg2p"}""", "never consults one")]
     [InlineData("""{"Bots.Mode":"policy"}""", "none was given")]
     public void ABotModeTheServerWouldRefuseIsRefusedAtTheSave(string settings, string expected)
     {

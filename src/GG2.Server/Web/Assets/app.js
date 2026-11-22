@@ -305,7 +305,7 @@ function tiles(s) {
  * which bots it is allowed to drive. The SHARE beside it is ticks a controller
  * drove over ticks it was polled on — and that is the only one that says the
  * controller is being consulted at all, because a tier can be loaded, named here
- * and never admitted by the arbiter.
+ * and never take the wheel.
  *
  * ⚠️ A controller only holds the wheel inside the engagement window, so "driving
  * right now" is zero most of the time on a perfectly healthy server. It is shown
@@ -333,16 +333,6 @@ function brains(s) {
 
   const note = $('brain-note');
   const parts = [];
-
-  if (s.bots.arbiterMicroseconds !== undefined) {
-    // ⚠️ The budget IN FORCE, not the one configured: MicroBudgetController moves
-    // it while the server runs, so a number here that is not the one in the
-    // config file is the calibration working rather than a bug.
-    parts.push(t('app.brain.arbiter', {
-      budget: s.bots.arbiterMicroseconds.toLocaleString(),
-      spent: s.bots.arbiterSpentMicroseconds.toLocaleString(),
-    }));
-  }
 
   if (all.length === 0 && s.bots.tiers.length > 0) {
     parts.push(t('app.brain.noBots'));
@@ -1605,7 +1595,7 @@ function controls(s) {
     button.classList.toggle('is-on', s.bots.mode === mode);
 
     // A policy brain needs a checkpoint: the server's own, or the shipped bundle.
-    button.disabled = (mode === 'policy' || mode === 'tiered') && !s.server.policy;
+    button.disabled = mode === 'policy' && !s.server.policy;
     button.title = button.disabled ? t('app.brain.needsPolicy') : '';
   }
 }

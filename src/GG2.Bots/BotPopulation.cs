@@ -54,23 +54,6 @@ namespace GG2.Bots;
 /// window, with the scripted layer still owning movement, routing and objectives.
 /// Null is the all-scripted arm 1. See <see cref="BotBrainSpec"/>.
 /// </param>
-/// <remarks>
-/// <b>The search arm is the better BOT and the more expensive one.</b> It beat
-/// the policy hybrid on death share pooled over ~34,000 deaths (44.55% against
-/// 46.17%, z = −4.26) and over 840 matches an arm (−3.59 points, t = −5.60). It
-/// also costs far more per decision, which is what <c>RolloutOptions.Threads</c>
-/// and <see cref="IMicroArbiter"/> are for.
-/// <para>
-/// <b>Measured at 8 bots, not 12.</b> A rollout re-simulates every live
-/// character for every tick of every candidate, so its cost rises with the
-/// POPULATION as well as with the bot count — <c>tools/bench/README.md</c> trap 5.
-/// Nothing here has been measured at a full server with humans in it.
-/// </para>
-/// <para>
-/// <b>Both of those numbers describe <c>SIM_UUID 7ff5940d97aa7bed</c> and this
-/// build is not that simulation.</b> Re-measure before repeating one.
-/// </para>
-/// </remarks>
 public readonly record struct BotPopulationOptions(
     bool Enabled = false,
     int FillToPlayers = 8,

@@ -112,14 +112,6 @@ if (Environment.GetEnvironmentVariable("BENCH_COMBAT") is { } combatTicks)
     return;
 }
 
-if (Environment.GetEnvironmentVariable("BENCH_SEARCH") == "1")
-{
-    var snd = Environment.GetEnvironmentVariable("GG2_NAV");
-    if (snd is not null && !Directory.Exists(snd)) snd = null;
-    Bench.SearchBench.Run(maps, snd, Environment.GetEnvironmentVariable("BENCH_MAP") ?? "gg_debug");
-    return;
-}
-
 if (Environment.GetEnvironmentVariable("BENCH_EVAL") is { } perMap)
 {
     Bench.PolicyEval.Run(maps, Environment.GetEnvironmentVariable("GG2_NAV")!, Environment.GetEnvironmentVariable("NPZ")!, int.Parse(perMap));
@@ -175,40 +167,9 @@ if (Environment.GetEnvironmentVariable("BENCH_DODGE") is { } dodgeDuels)
     return;
 }
 
-if (Environment.GetEnvironmentVariable("BENCH_VERSUS_DUEL") is { } versusDuels)
-{
-    Bench.Versus.RunDuels(maps, Beside(maps, "nav", "GG2_NAV"), Beside(maps, "checkpoints", "CHECKPOINTS"), int.Parse(versusDuels));
-    return;
-}
-
-if (Environment.GetEnvironmentVariable("BENCH_VERSUS") is { } versusMatches)
-{
-    Bench.Versus.Run(maps, Beside(maps, "nav", "GG2_NAV"), Beside(maps, "checkpoints", "CHECKPOINTS"), int.Parse(versusMatches));
-    return;
-}
-
 if (Environment.GetEnvironmentVariable("BENCH_TIERS") is { } tierMatches)
 {
     Bench.Tiers.RunMatches(maps, Beside(maps, "nav", "GG2_NAV"), Beside(maps, "checkpoints", "CHECKPOINTS"), int.Parse(tierMatches));
-    return;
-}
-
-if (Environment.GetEnvironmentVariable("BENCH_ARMS") is { } armsN)
-{
-    Bench.ArmsEval.Run(
-        maps,
-        Environment.GetEnvironmentVariable("GG2_NAV")!,
-        Environment.GetEnvironmentVariable("NPZ")!,
-        int.Parse(armsN));
-    return;
-}
-
-if (Environment.GetEnvironmentVariable("BENCH_SEARCHCLASSES") is { } searchClassesN)
-{
-    Bench.SearchClassesEval.Run(
-        maps,
-        Environment.GetEnvironmentVariable("GG2_NAV")!,
-        int.Parse(searchClassesN));
     return;
 }
 
@@ -219,15 +180,6 @@ if (Environment.GetEnvironmentVariable("BENCH_CHURN") is { } churnN)
         Environment.GetEnvironmentVariable("GG2_NAV")!,
         Environment.GetEnvironmentVariable("NPZ")!,
         int.Parse(churnN));
-    return;
-}
-
-if (Environment.GetEnvironmentVariable("BENCH_THREADS") is { } threadsN)
-{
-    Bench.ThreadsBench.Run(
-        maps,
-        Environment.GetEnvironmentVariable("GG2_NAV")!,
-        int.Parse(threadsN));
     return;
 }
 

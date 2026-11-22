@@ -134,7 +134,7 @@ public sealed class BotClassPolicyTests
         var options = new ServerOptions
         {
             MapDirectory = "maps",
-            BotMode = BotMode.Search,
+            BotMode = BotMode.Scripted,
             BotClassPolicies = ["Scout=scripted"],
         };
 

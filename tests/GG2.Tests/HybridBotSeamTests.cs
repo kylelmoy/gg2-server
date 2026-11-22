@@ -6,19 +6,16 @@ namespace GG2.Tests;
 
 /// <summary>
 /// The parts of <see cref="HybridBot"/> that are the SEAM rather than the arm:
-/// tier selection, the arbiter, the head split, and the counter invariant.
+/// tier selection, the head split, and the counter invariant.
 /// </summary>
 /// <remarks>
 /// <b>None of this was reachable before the wrapper split was merged.</b> The
 /// two old classes each hard-coded one controller, so "which controller drives"
 /// was not a decision anything could make and not a decision anything could test.
 /// <para>
-/// <b>These use a STUB controller on purpose.</b> A test that drove a real
-/// <c>RolloutSearch</c> to establish that the arbiter refused it would take
-/// seconds and would fail for a dozen reasons that are not the arbiter. The stub
-/// makes "who was asked, and what did they answer" the only variable — and the
-/// real controllers are covered by <c>SearchBotTests</c> and
-/// <c>PolicyMatchTests</c>, which is the right split.
+/// <b>These use a STUB controller on purpose.</b> The stub makes "who was asked,
+/// and what did they answer" the only variable — and the real controller is
+/// covered by <c>PolicyMatchTests</c>, which is the right split.
 /// </para>
 /// <para>
 /// <b>Every assertion of an ABSENCE here states its own control</b>, because an
@@ -41,21 +38,13 @@ public sealed class HybridBotSeamTests
     {
         private readonly PlayerKeys _keys;
 
-        internal Stub(string name, int cost, PlayerKeys keys = PlayerKeys.Attack)
+        internal Stub(string name, PlayerKeys keys = PlayerKeys.Attack)
         {
             Name = name;
-            DecisionCost = cost;
             _keys = keys;
         }
 
         public string Name { get; }
-
-        public int DecisionCost { get; }
-
-        // Flat: a double's cost is whatever the test said it was, and a test
-        // that varied with the population would be measuring the model rather
-        // than the seam it exists to exercise.
-        public int DecisionCostFor(int liveCharacters) => DecisionCost;
 
         public bool DecidedThisPoll => true;
 
@@ -114,7 +103,7 @@ public sealed class HybridBotSeamTests
     }
 
     /// <summary>
-    /// With no arbiter, tier 0 drives and the cheaper tiers are never asked.
+    /// The first eligible tier drives and the later tiers are never asked.
     /// </summary>
     /// <remarks>
     /// <b>The control is the second assertion.</b> "Tier 1 was never polled"
@@ -122,189 +111,23 @@ public sealed class HybridBotSeamTests
     /// positive for the zero to mean anything.
     /// </remarks>
     [Fact]
-    public void WithNoArbiterTheMostCapableTierAlwaysDrives()
+    public void TheFirstEligibleTierAlwaysDrives()
     {
         var world = World();
-        var expensive = new Stub("expensive", cost: 4);
-        var cheap = new Stub("cheap", cost: 1);
-        var bot = new HybridBot([expensive, cheap], Scripted(world)) { Rule = HandoverRule.Distance };
+        var first = new Stub("first");
+        var second = new Stub("second");
+        var bot = new HybridBot([first, second], Scripted(world)) { Rule = HandoverRule.Distance };
 
         Run(bot, world, Duel(world), 12);
 
-        Assert.True(expensive.Polls > 0, "nobody engaged, so the zero below proves nothing");
-        Assert.Equal(0, cheap.Polls);
-        Assert.Same(expensive, bot.Driving);
+        Assert.True(first.Polls > 0, "nobody engaged, so the zero below proves nothing");
+        Assert.Equal(0, second.Polls);
+        Assert.Same(first, bot.Driving);
     }
 
     /// <summary>
-    /// A budget too small for tier 0 drops the bot to the cheaper tier, not to the
-    /// scripted layer.
-    /// </summary>
-    /// <remarks>
-    /// <b>This is the behaviour the seam was built for</b>: cheaper logic when
-    /// the expensive one cannot be afforded, rather than an all-or-nothing switch.
-    /// The control is the previous test — the same bot with no arbiter runs the
-    /// expensive tier — so a zero here is the arbiter's doing and not the gate's.
-    /// </remarks>
-    [Fact]
-    public void ABudgetTooSmallForTierZeroFallsToTheCheaperTier()
-    {
-        var world = World();
-        var expensive = new Stub("expensive", cost: 4);
-        var cheap = new Stub("cheap", cost: 1);
-        var bot = new HybridBot(
-            [expensive, cheap], Scripted(world), new DecisionQuotaArbiter(unitsPerTick: 1))
-        {
-            Rule = HandoverRule.Distance,
-        };
-
-        Run(bot, world, Duel(world), 12);
-
-        Assert.True(cheap.Polls > 0, "nobody engaged, so the zero below proves nothing");
-        Assert.Equal(0, expensive.Polls);
-    }
-
-    /// <summary>
-    /// A budget too small for ANY tier leaves the wheel with the scripted layer.
-    /// </summary>
-    /// <remarks>
-    /// <b>-1, not "the cheapest tier anyway".</b> A budget that one more
-    /// decision always exceeds is not a budget. The scripted layer is a complete
-    /// bot, which is why refusing is a safe answer at all.
-    /// </remarks>
-    [Fact]
-    public void AnExhaustedBudgetLeavesTheScriptedLayerDriving()
-    {
-        var world = World();
-        var micro = new Stub("micro", cost: 1);
-        var bot = new HybridBot(
-            micro, Scripted(world), new DecisionQuotaArbiter(unitsPerTick: 0))
-        {
-            Rule = HandoverRule.Distance,
-        };
-
-        var red = Duel(world);
-
-        Run(bot, world, red, 12);
-
-        Assert.Equal(0, micro.Polls);
-        Assert.Equal(12, bot.ScriptedTicks);
-
-        // The control: the identical bot with the budget raised engages. Without
-        // this, a gate that never opened would produce the same two numbers.
-        var open = World();
-        var micro2 = new Stub("micro", cost: 1);
-        var bot2 = new HybridBot(
-            micro2, Scripted(open), new DecisionQuotaArbiter(unitsPerTick: 1))
-        {
-            Rule = HandoverRule.Distance,
-        };
-
-        Run(bot2, open, Duel(open), 12);
-
-        Assert.True(micro2.Polls > 0, "the budget was not what kept the controller out");
-    }
-
-    /// <summary>
-    /// ONE arbiter shared by several bots is what makes coinciding decisions
-    /// visible, and it is the only reason this seam exists.
-    /// </summary>
-    /// <remarks>
-    /// <b>The tick tail is several bots deciding on the SAME tick</b>, not one
-    /// expensive bot — handovers are correlated, because several bots have an enemy
-    /// in range during the same firefight. A per-bot budget cannot see that at all.
-    /// <para>
-    /// <b>The spend is ordered by roster slot</b>, so the first bot polled takes
-    /// the budget. Deterministic, and stated in <see cref="IMicroArbiter"/> as the
-    /// fairness cost.
-    /// </para>
-    /// </remarks>
-    [Fact]
-    public void OneArbiterBoundsTheTotalAcrossBotsDecidingOnTheSameTick()
-    {
-        var world = World();
-        var arbiter = new DecisionQuotaArbiter(unitsPerTick: 1);
-
-        var firstMicro = new Stub("first", cost: 1);
-        var secondMicro = new Stub("second", cost: 1);
-
-        var first = new HybridBot(firstMicro, Scripted(world), arbiter) { Rule = HandoverRule.Distance };
-        var second = new HybridBot(secondMicro, Scripted(world), arbiter) { Rule = HandoverRule.Distance };
-
-        var redA = world.Place(PlayerClass.Soldier, Team.Red, 600, 850);
-        var redB = world.Place(PlayerClass.Soldier, Team.Red, 640, 850);
-        world.Place(PlayerClass.Soldier, Team.Blue, 680, 850);
-        world.Step(20);
-
-        for (var tick = 0; tick < 12; tick++)
-        {
-            var view = new WorldView(in world.State, world.Collision);
-            first.Poll(in view, redA, tick);
-            second.Poll(in view, redB, tick);
-            world.Step();
-        }
-
-        Assert.True(firstMicro.Polls > 0, "neither bot engaged, so the zero below proves nothing");
-        Assert.Equal(0, secondMicro.Polls);
-
-        // The control: two arbiters with the same budget, so the SHARING is what is
-        // under test rather than the budget. Both bots must engage.
-        var apart = World();
-        var thirdMicro = new Stub("third", cost: 1);
-        var fourthMicro = new Stub("fourth", cost: 1);
-
-        var third = new HybridBot(
-            thirdMicro, Scripted(apart), new DecisionQuotaArbiter(1)) { Rule = HandoverRule.Distance };
-        var fourth = new HybridBot(
-            fourthMicro, Scripted(apart), new DecisionQuotaArbiter(1)) { Rule = HandoverRule.Distance };
-
-        var redC = apart.Place(PlayerClass.Soldier, Team.Red, 600, 850);
-        var redD = apart.Place(PlayerClass.Soldier, Team.Red, 640, 850);
-        apart.Place(PlayerClass.Soldier, Team.Blue, 680, 850);
-        apart.Step(20);
-
-        for (var tick = 0; tick < 12; tick++)
-        {
-            var view = new WorldView(in apart.State, apart.Collision);
-            third.Poll(in view, redC, tick);
-            fourth.Poll(in view, redD, tick);
-            apart.Step();
-        }
-
-        Assert.True(
-            thirdMicro.Polls > 0 && fourthMicro.Polls > 0,
-            "with a budget each, both bots must engage — otherwise the zero above is "
-            + "the budget's doing rather than the sharing's");
-    }
-
-    /// <summary>
-    /// The budget resets every TICK, from the tick number and nothing else.
-    /// </summary>
-    /// <remarks>
-    /// <b>The one thing an arbiter may read.</b> A wall clock in here makes a
-    /// match unreproducible — <c>HeadlessMatch</c> results stop being a function of
-    /// the seed and <c>eval</c> stops being thread-count independent, which this
-    /// repo gates rather than assumes. <see cref="IMicroArbiter"/> says so; this
-    /// makes the reset itself mechanical.
-    /// </remarks>
-    [Fact]
-    public void TheBudgetIsPerTickAndResetsOnTheTickNumber()
-    {
-        var arbiter = new DecisionQuotaArbiter(unitsPerTick: 2);
-        var tiers = new IMicroController[] { new Stub("only", cost: 2) };
-
-        Assert.Equal(0, arbiter.Choose(tick: 10, slot: 1, tiers, eligible: 1, liveCharacters: 12));
-        arbiter.Admitted(tick: 10, slot: 1, tier: 0, cost: 2);
-
-        Assert.Equal(-1, arbiter.Choose(tick: 10, slot: 2, tiers, eligible: 1, liveCharacters: 12));
-
-        // Same budget, next tick.
-        Assert.Equal(0, arbiter.Choose(tick: 11, slot: 2, tiers, eligible: 1, liveCharacters: 12));
-    }
-
-    /// <summary>
-    /// A tier that refuses this class is not offered to the arbiter, and a bot
-    /// whose every tier refuses stays scripted.
+    /// A tier that refuses this class is skipped, and a bot whose every tier
+    /// refuses stays scripted.
     /// </summary>
     /// <remarks>
     /// <b>Asked per tick, not at construction</b> — a class can change mid-match
@@ -314,8 +137,8 @@ public sealed class HybridBotSeamTests
     public void ATierThatRefusesTheClassIsSkippedAndTheLastOneFallsBackToScripted()
     {
         var world = World();
-        var refuses = new Stub("refuses", cost: 1) { Refuses = PlayerClass.Soldier };
-        var takes = new Stub("takes", cost: 1);
+        var refuses = new Stub("refuses") { Refuses = PlayerClass.Soldier };
+        var takes = new Stub("takes");
         var bot = new HybridBot([refuses, takes], Scripted(world)) { Rule = HandoverRule.Distance };
 
         Run(bot, world, Duel(world), 12);
@@ -324,49 +147,13 @@ public sealed class HybridBotSeamTests
         Assert.Equal(0, refuses.Polls);
 
         var none = World();
-        var refusesToo = new Stub("refuses", cost: 1) { Refuses = PlayerClass.Soldier };
+        var refusesToo = new Stub("refuses") { Refuses = PlayerClass.Soldier };
         var scriptedOnly = new HybridBot(refusesToo, Scripted(none)) { Rule = HandoverRule.Distance };
 
         Run(scriptedOnly, none, Duel(none), 12);
 
         Assert.Equal(0, refusesToo.Polls);
         Assert.Equal(12, scriptedOnly.ScriptedTicks);
-    }
-
-    /// <summary>
-    /// An arbiter naming an ineligible tier throws rather than being clamped.
-    /// </summary>
-    /// <remarks>
-    /// <b>A silent substitution makes an arm that is not the arm anybody
-    /// configured</b>, and it would be invisible in a result table — the class of
-    /// failure this repo keeps catching late.
-    /// </remarks>
-    [Fact]
-    public void AnArbiterNamingAnIneligibleTierThrows()
-    {
-        var world = World();
-        var refuses = new Stub("refuses", cost: 1) { Refuses = PlayerClass.Soldier };
-        var takes = new Stub("takes", cost: 1);
-        var bot = new HybridBot([refuses, takes], Scripted(world), new AlwaysTierZero())
-        {
-            Rule = HandoverRule.Distance,
-        };
-
-        var red = Duel(world);
-
-        var thrown = Assert.Throws<InvalidOperationException>(() => Run(bot, world, red, 12));
-
-        Assert.Contains("not eligible", thrown.Message, StringComparison.Ordinal);
-    }
-
-    private sealed class AlwaysTierZero : IMicroArbiter
-    {
-        public int Choose(
-            int tick, int slot, IReadOnlyList<IMicroController> tiers, uint eligible, int liveCharacters) => 0;
-
-        public void Admitted(int tick, int slot, int tier, int cost)
-        {
-        }
     }
 
     /// <summary>
@@ -389,7 +176,7 @@ public sealed class HybridBotSeamTests
     public void TheScriptedLayerIsPolledOnEveryTickWhicheverControllerDrove()
     {
         var world = World();
-        var micro = new Stub("micro", cost: 1);
+        var micro = new Stub("micro");
         var bot = new HybridBot(micro, Scripted(world)) { Rule = HandoverRule.Distance };
 
         var red = world.Place(PlayerClass.Soldier, Team.Red, 600, 850);
@@ -441,7 +228,7 @@ public sealed class HybridBotSeamTests
         var split = World();
         var control = World();
 
-        var micro = new Stub("micro", cost: 1, keys: PlayerKeys.Attack | PlayerKeys.Left);
+        var micro = new Stub("micro", keys: PlayerKeys.Attack | PlayerKeys.Left);
         var bot = new HybridBot(micro, Scripted(split)) { Rule = HandoverRule.HeadSplit };
         var bare = Scripted(control);
 
@@ -504,7 +291,7 @@ public sealed class HybridBotSeamTests
     public void TheWheelChangingHandsIsAnnouncedToTheController()
     {
         var world = World();
-        var micro = new Stub("micro", cost: 1);
+        var micro = new Stub("micro");
         var bot = new HybridBot(micro, Scripted(world)) { Rule = HandoverRule.Distance };
 
         var red = world.Place(PlayerClass.Soldier, Team.Red, 600, 850);
@@ -542,7 +329,7 @@ public sealed class HybridBotSeamTests
         // difference from the bare bot's stream is the handicap's.
         var world = World();
         var control = World();
-        var micro = new Stub("micro", cost: 1);
+        var micro = new Stub("micro");
         var scripted = Scripted(world);
         var bare = Scripted(control);
         var bot = new HybridBot(micro, scripted) { Rule = HandoverRule.Distance };
@@ -588,7 +375,7 @@ public sealed class HybridBotSeamTests
     public void BelowTheTopTierTheControllerCarriesTheDifficulty()
     {
         var world = World();
-        var micro = new Stub("micro", cost: 1);
+        var micro = new Stub("micro");
         var scripted = Scripted(world, tier: 1);
         var bot = new HybridBot(micro, scripted) { Rule = HandoverRule.Distance };
         var red = Duel(world);
@@ -648,7 +435,7 @@ public sealed class HybridBotSeamTests
     public void AReleaseBandKeepsTheWheelInAFightAlreadyTaken(double release, bool keptAt200)
     {
         var world = World();
-        var micro = new Stub("policy", cost: 1, PlayerKeys.None);
+        var micro = new Stub("policy", PlayerKeys.None);
         var bot = new HybridBot(micro, Scripted(world)) { Rule = HandoverRule.Distance, ReleaseRange = release };
         var red = Duel(world);
         var blue = red + 1;
@@ -689,7 +476,7 @@ public sealed class HybridBotSeamTests
     public void NearItsOwnGoalTheFightIsHandedOverOnlyWhenAsked(bool nearGoal)
     {
         var world = World();
-        var micro = new Stub("policy", cost: 1, PlayerKeys.None);
+        var micro = new Stub("policy", PlayerKeys.None);
         var scripted = Scripted(world);
         var bot = new HybridBot(micro, scripted) { EngageNearOwnGoal = nearGoal };
         var red = Duel(world);
@@ -729,7 +516,7 @@ public sealed class HybridBotSeamTests
     public void ABeamingMedicIsHandedOnlyToAControllerThatOwnsTheBeam(bool ownsBeam)
     {
         var world = World();
-        var micro = new Stub("policy", cost: 1, PlayerKeys.None) { OwnsBeam = ownsBeam };
+        var micro = new Stub("policy", PlayerKeys.None) { OwnsBeam = ownsBeam };
         var scripted = Scripted(world);
         var bot = new HybridBot(micro, scripted) { Rule = HandoverRule.Distance };
         var medic = world.Place(PlayerClass.Medic, Team.Red, 600, 850);
@@ -757,7 +544,7 @@ public sealed class HybridBotSeamTests
     /// <summary>A <see cref="Stub"/> that also counts sightings and wants to build on every tick.</summary>
     private sealed class SightingBuilder : IMicroController, ISightingController, IBuildController
     {
-        private readonly Stub _inner = new("sighting", cost: 1);
+        private readonly Stub _inner = new("sighting");
 
         internal int Sightings { get; private set; }
 
@@ -768,8 +555,6 @@ public sealed class HybridBotSeamTests
         public string Name => _inner.Name;
 
         public bool DecidedThisPoll => true;
-
-        public int DecisionCostFor(int liveCharacters) => 1;
 
         public bool Drives(PlayerClass playerClass) => true;
 

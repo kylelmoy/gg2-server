@@ -165,16 +165,11 @@ public sealed class SimPolicyController
 
     public SimPolicyNetwork Network => _network;
 
-    /// <summary>
-    /// Observation plus forward pass, Release, one core of an i7-13700K
-    /// (2026-10-27): 72 µs for the 253-256-256-106 team net, 57 µs for the
-    /// 169-256-256-56 duel net, scalar by design (see <see cref="SimPolicyNetwork"/>)
-    /// — ten times a gg2-rl decision. The larger is used for both. A terrain net
-    /// (2026-11-17, same machine, sampled): 102-107 µs for the 439-256-256-106
-    /// duel soldier net against 71 µs for the 263-wide v2 soldier net, the blocks
-    /// and the wider first layer. Re-measure for a wider net.
-    /// </summary>
-    public int DecisionCostFor(int liveCharacters) => _network.IsTerrain ? 110 : 75;
+    // Observation plus forward pass, Release, one core of an i7-13700K: 72 us for
+    // the 253-256-256-106 team net, 57 us for the 169-256-256-56 duel net, scalar
+    // by design (see SimPolicyNetwork); 102-107 us for the 439-wide terrain duel
+    // soldier net. Twelve bots deciding on one tick is about 1.3 ms of a 33.3 ms
+    // tick, which is why nothing throttles policy decisions.
 
     public bool DecidedThisPoll { get; private set; }
 

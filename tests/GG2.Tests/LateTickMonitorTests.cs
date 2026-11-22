@@ -32,8 +32,7 @@ public sealed class LateTickMonitorTests
             Bots: 4,
             Characters: 6,
             Map: "ctf_truefort",
-            WorkMilliseconds: workMs,
-            ArbiterSpentMicroseconds: null);
+            WorkMilliseconds: workMs);
 
     // ------------------------------------------------------------------
     // Whose fault the late tick was
@@ -342,36 +341,5 @@ public sealed class LateTickMonitorTests
 
         Assert.Null(monitor.Flush());
         Assert.Equal(0, monitor.LateTicks);
-    }
-
-    /// <summary>
-    /// The arbiter spend appears only when there is an arbiter.
-    /// </summary>
-    /// <remarks>
-    /// Null means "no arbiter", never "spent zero" — a tiered server that
-    /// granted nothing this tick is a real and different observation from a
-    /// scripted server that has no arbiter to ask.
-    /// </remarks>
-    [Fact]
-    public void TheArbiterSpendIsReportedOnlyWhenThereIsOne()
-    {
-        var without = new LateTickMonitor(windowTicks: 10)
-            .Record(0, 10, Interval, Context);
-
-        Assert.NotNull(without);
-        Assert.DoesNotContain("controllers", without, StringComparison.Ordinal);
-
-        var withArbiter = new LateTickMonitor(windowTicks: 10).Record(
-            0, 10, Interval, Context with { ArbiterSpentMicroseconds = 9600 });
-
-        Assert.NotNull(withArbiter);
-        Assert.Contains("controllers 9600us", withArbiter, StringComparison.Ordinal);
-
-        // Zero is reported, and is not the same as absent.
-        var spentNothing = new LateTickMonitor(windowTicks: 10).Record(
-            0, 10, Interval, Context with { ArbiterSpentMicroseconds = 0 });
-
-        Assert.NotNull(spentNothing);
-        Assert.Contains("controllers 0us", spentNothing, StringComparison.Ordinal);
     }
 }

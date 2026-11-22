@@ -59,19 +59,17 @@ internal static class CommandLine
     /// <c>--bot-mode</c>: a name or the enum's number.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Numbers are part of the contract</b> — a sweep over 0..3 is how a
-    /// bench harness asks for each arm in turn, so <see cref="BotMode"/>'s values
-    /// must not be renumbered. Names are the readable form and both are accepted.
+    /// ⚠️ <b>Numbers are part of the contract</b>, so <see cref="BotMode"/>'s
+    /// values must not be renumbered. Names are the readable form and both are
+    /// accepted.
     /// </remarks>
     private static BotMode ParseBotMode(string flag, string text) => text.ToLowerInvariant() switch
     {
         "scripted" or "0" => BotMode.Scripted,
-        "search" or "hybrid-search" or "1" => BotMode.Search,
         "policy" or "hybrid-policy" or "2" => BotMode.Policy,
-        "tiered" or "3" => BotMode.Tiered,
-        _ => throw new ArgumentException(
-            $"{flag}: '{text}' is not a bot mode. scripted (0), search (1), policy (2) "
-            + "or tiered (3) — see --help for what each one costs."),
+        _ => throw new ArgumentException(BotModes.Removed(text) is { } removed
+            ? $"{flag}: {removed}"
+            : $"{flag}: '{text}' is not a bot mode. scripted (0) or policy (2)."),
     };
 
     /// <summary>
@@ -245,8 +243,7 @@ internal static class CommandLine
         // ⚠️ Every bot-controller flag is COLLECTED into ServerOptions here and
         // reconciled once, after the switch, by BotBrain.Build. A flag whose
         // effect depends on argument order is the kind of thing nobody notices
-        // until a measurement is wrong, and --search-threads before
-        // --search-bots was exactly that.
+        // until a measurement is wrong.
 
         // The last --web-* settings flag seen, so one given without --web can be
         // refused by name after the loop rather than silently doing nothing.
@@ -291,8 +288,8 @@ internal static class CommandLine
         // ⚠️ COLLECTED, not applied in the switch. `--bots` rewrites MinHumans to
         // 0, so applying this where it is parsed would make
         // `--bots-min-humans 1 --bots 8` and `--bots 8 --bots-min-humans 1` two
-        // different servers -- the same order-dependence --search-threads once
-        // had, and the reason the brain is built in one place at the end.
+        // different servers -- the same order-dependence the brain avoids by
+        // being built in one place at the end.
         int? botsMinHumans = null;
 
         var cursor = new ArgCursor(args);
@@ -651,10 +648,7 @@ internal static class CommandLine
                     break;
                 }
 
-                // Which of the four shipped brains this server runs -- see BotMode,
-                // which carries the per-arm warnings. Replaced --search-bots, a
-                // boolean: with one flag per controller the four combinations were
-                // reachable only by knowing which pairs to give together.
+                // Which brain this server runs -- see BotMode.
                 //
                 // ⚠️ The mode ALONE decides; nothing below infers a controller from
                 // another flag being present, except the one documented fallback
@@ -754,42 +748,8 @@ internal static class CommandLine
                     options.MaxLifetimeMinutes = cursor.TakeInt();
                     break;
 
-                // ⛔ Pins the controller budget at --bot-arbiter instead of letting
-                // the server walk it down when ticks crowd their deadline. The
-                // budget's units come from a cost measured on ONE machine; this
-                // flag is for when you would rather have the number you set than
-                // the number this machine can afford.
-                case "--fixed-bot-budget":
-                    options.AdaptiveBotBudget = false;
-                    break;
-
-                // ⚠️ Threads change NO decision -- RolloutThreadingTests gates that
-                // at 2, 4 and 8 -- so this is a pure cost knob. It is also the one
-                // place this server is not single-threaded, and the pool it uses is
-                // the process's: a burst inside a tick takes cores from nothing else
-                // here, but it is not free on a shared machine.
-                case "--search-threads":
-                    options.SearchThreads = cursor.TakeInt();
-                    break;
-
-                // MICROSECONDS of controller work per tick. ⛔ REQUIRED when more
-                // than one controller is configured, because without an arbiter the
-                // first tier always drives and the second would be dead weight
-                // nobody could see.
-                //
-                // ⚠️ The per-decision COSTS are measured (policy 7 us, search 4800
-                // at twelve live characters); the BUDGET is not tuned. The tick is
-                // 33,300 us, so 10000 caps concurrent search decisions at two.
-                // Watch --tick-stats.
-                //
-                // ⛔ The arbiter reads the TICK, never a clock: a match with one in
-                // it still replays from its seed. See IMicroArbiter.
-                case "--bot-arbiter":
-                    options.BotArbiterMicroseconds = cursor.TakeInt();
-                    break;
-
-                // docs/BOTS.md's arm 2: gg2-rl's trained checkpoint driving keys and
-                // aim inside the same engagement window --search-bots uses.
+                // A trained gg2-sim checkpoint driving keys and aim inside the
+                // engagement window.
                 //
                 // ⛔ REPEATABLE, and the second one APPENDS rather than replacing —
                 // one checkpoint is one tier, and the shipped bundle is nine of them,
@@ -1003,11 +963,7 @@ internal static class CommandLine
 
         // ⛔ ONE PLACE BUILDS THE BRAIN, at the end, from settings collected
         // above -- and that place is BotBrain.Build, shared with the config file.
-        // The flag handlers used to write BotPopulationOptions.SearchMicro
-        // directly, which made --search-threads order-dependent: given BEFORE
-        // --search-bots it was picked up, given after it had to re-write the
-        // option it had just found. Collecting first and building once removes
-        // the ordering entirely.
+        // Collecting first and building once keeps the flags order-independent.
         //
         // ⚠️ THE ONE INFERENCE, and it exists to keep `--policy <path>` working on
         // its own the way docs/BOTS.md documents it: a --policy with no --bot-mode
@@ -1226,37 +1182,14 @@ internal static class CommandLine
                               scripted (0)  the scripted layer alone. A complete
                                             bot, and the control every comparison
                                             is made against.
-                              search   (1)  + a rollout search inside the
-                                            engagement window. Better on death
-                                            share and MUCH more expensive; never
-                                            yet measured with humans in the
-                                            server.
-                              policy   (2)  + a trained checkpoint. Needs --policy.
-                              tiered   (3)  both, most expensive first, with an
-                                            arbiter choosing between them. Needs
-                                            --policy; defaults --bot-arbiter to
-                                            10000.
-                            Replaces --search-bots. --policy on its own still
-                            means policy mode.
-          --search-threads <n>
-                            threads the search splits its candidates across
-                            (default: cores/3, capped at 8). Changes cost only,
-                            never a decision.
-          --policy <path>   the trained checkpoint --bot-mode policy and
-                            --bot-mode tiered run - docs/BOTS.md arm 2: a
+                              policy   (2)  + trained checkpoints inside the
+                                            engagement window. Needs --policy.
+                            --policy on its own means policy mode.
+          --policy <path>   a trained checkpoint --bot-mode policy runs: a
                             gg2-sim .gg2p, which drives only the classes
                             --bot-class-policy names. Given on
                             its own it selects policy mode. Given to a mode that
                             cannot consult it, it is REFUSED rather than ignored.
-          --bot-arbiter <us>
-                            per-tick budget in MICROSECONDS of controller work,
-                            shared by every bot, deciding which controller may
-                            spend a decision when several bots engage on the same
-                            tick. Cheaper tiers, then the scripted layer, once it
-                            runs out. Defaults to 10000 under --bot-mode tiered,
-                            which is the only mode with more than one tier.
-                            A tick is 33300us; a search decision measures ~4800 at
-                            12 live characters and a policy decision ~7.
           --bots-min-humans <n>
                             humans who must be connected before any bot spawns
                             (default 0 with --bots). Below it the target is ZERO
@@ -1266,13 +1199,6 @@ internal static class CommandLine
                             how long the /bots off chat command takes the bots
                             away for, 0..1440. 0 (the default) means the command
                             does not exist on this server.
-          --fixed-bot-budget
-                            keep the bot controller budget pinned at
-                            --bot-arbiter. By default the server walks it down
-                            when ticks crowd their deadline and back up when they
-                            do not, because the budget's units come from a cost
-                            measured on one machine and yours is a different one.
-                            Every change is logged.
           --no-idle-when-empty
                             keep ticking at full rate with nobody connected.
                             By default a server with no clients, no joiners and
@@ -1290,8 +1216,8 @@ internal static class CommandLine
                             (the default) runs for ever.
           --bot-handover-bubbles
                             bots put up a chat bubble whenever their brain
-                            changes hands: z1 a policy took the wheel, z3 the
-                            search did, z2 the scripted layer took it back. A
+                            changes hands: z1 a policy took the wheel, z2 the
+                            scripted layer took it back. A
                             DEBUGGING aid -- every bubble is a broadcast to every
                             client, and it changes nothing a bot decides.
           --bot-humanize

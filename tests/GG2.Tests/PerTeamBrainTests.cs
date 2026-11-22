@@ -17,7 +17,6 @@ public sealed class PerTeamBrainTests
 
         public int DecisionCost => 1;
 
-        public int DecisionCostFor(int liveCharacters) => 1;
 
         public bool DecidedThisPoll => false;
 

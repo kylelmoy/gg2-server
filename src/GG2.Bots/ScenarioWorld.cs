@@ -269,7 +269,7 @@ public sealed class ScenarioWorld : DrivenWorld
     /// distinct episode lengths out of 16.
     /// <para>
     /// <b>And a fixed position does not merely repeat, it MISLEADS.</b> Twelve
-    /// duels of <c>RolloutSearch</c> against a tier-5 <c>ScriptedBot</c> on
+    /// duels of the retired rollout search against a tier-5 <c>ScriptedBot</c> on
     /// <c>gg_debug</c> read <b>11-1-0 at x=600 and 4-2-6 at x=1500</b> — same map,
     /// same classes, same budget, budget-invariant out to 5,400 ticks. One spot
     /// in one room is a rout and another is half stalemates, a swing an order of

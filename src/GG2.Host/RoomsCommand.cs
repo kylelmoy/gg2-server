@@ -103,9 +103,6 @@ internal static class RoomsCommand
         // The startup check: the default room, validated, its nets loaded.
         var probe = Template(new RoomChoices());
 
-        if (probe.BotMode is BotMode.Search or BotMode.Tiered)
-            throw new ArgumentException($"[Bots] Mode={probe.BotMode.ToString().ToLowerInvariant()} is not offered in rooms; use scripted or policy");
-
         probe.Validate();
         BotBrain.CheckSettings(probe);
 

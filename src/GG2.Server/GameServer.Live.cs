@@ -28,9 +28,6 @@ public sealed partial class GameServer
     /// <summary>Longest game password a client can send: a <c>ubyte</c>-prefixed string.</summary>
     public const int MaxPasswordLength = 255;
 
-    /// <summary>Bumped when the bot brain is replaced, so the pacing loop re-arms its budget.</summary>
-    private int _brainVersion;
-
     /// <summary>Set by <see cref="SetOffline"/>.</summary>
     private bool _offline;
 
@@ -307,7 +304,6 @@ public sealed partial class GameServer
 
         _options.PolicyPaths = saved.PolicyPaths;
         _options.BotClassPolicies = saved.BotClassPolicies;
-        _brainVersion++;
 
         // Highest slot first, so every removal leaves the lower indices alone.
         var bots = BotSlots.ToArray();
