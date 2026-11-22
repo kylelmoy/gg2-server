@@ -467,38 +467,10 @@ the same tick), item 6's `WorldView` queries, item 7's damage accumulators (the
 score), and item 11's `ScenarioWorld` (a fight, not a match). **Nothing new is
 required from the simulation.** This item is assembly, not capability.
 
-**Built.** `GG2.Bots.RolloutSearch`. 2.94 ms a decision in Release and 11-0-1
-against `ScriptedBot` over twelve duels; `docs/TRAPS-BOTS.md`, "Item 12", has the
-rest.
-
-**The one open design question**, and it is the one that decides whether the
-search is worth imitating: **what the opponent is assumed to do during a
-rollout.** `botAimLead.gml` assumes constant velocity plus gravity, which is the
-assumption this whole programme exists because it is wrong. Self-play - rolling
-the opponent out with the same search - is the answer that needs no data.
-
-**Decided, as a named enum rather than a comment**: `RolloutOpponent.HoldLastInput`
-is the default — every other character holds the input it is already holding,
-read off `CharacterState`. `Idle` (presses nothing) is kept beside it as the
-comparison floor. Self-play is deliberately out of v0 and its seam is a third
-member of that enum.
-
-**`HoldLastInput` is the same CLASS of assumption as `botAimLead`'s** — better,
-because it is right about momentum over a 20-tick horizon, and still an opponent
-who does not *react*, which is the thing this programme exists because of. So
-`gg2-rl` phase 1 should report the win rate under both models rather than one
-headline number: if they barely differ the search is not really using its
-opponent model and the horizon or the scoring is the binding constraint, and if
-they differ a lot that gap is the quantified argument for paying for nested
-rollouts. That number is wanted before phase 2 distils anything, because a
-policy inherits whatever the search assumed.
-
-**`RolloutOpponent.Idle` is therefore not dead code.** It looks like unused
-surface area and it is the control that makes the paragraph above measurable.
-`docs/TRAPS-BOTS.md`, "Item 12", and `gg2-rl/docs/PLAN.md` phase 1.
-
-**Not asked for:** a learned policy guiding the search. That is `gg2-rl` phase 2's
-expert iteration, and it arrives as weights behind a seam that already exists.
+**Built, and since removed.** The rollout search shipped as `--bot-mode search`
+and `tiered`, and was deleted once the gg2-sim policy nets matched or beat it
+(`docs/BOTS.md`, "There is no search controller"). Items 1 and 2 still hold:
+client prediction forks the world the same way (`docs/PREDICTION.md`).
 
 ## Not asking for
 

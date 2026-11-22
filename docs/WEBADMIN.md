@@ -301,10 +301,7 @@ also how a fleet starts: with no shared settings the comparison is against the
 defaults, so adopting one server into "all servers" makes its file the common
 one. Host-local settings are never compared. **Secrets cannot be adopted** —
 `config` never sends a secret's value — so the dialog names the ones the member
-has set and they are entered on the settings page by hand. A setting whose
-default is resolved on the machine (`[Bots] SearchThreads`, from its core count)
-shows as a difference whenever the two machines differ, and adopting it writes
-the member's resolved value explicitly.
+has set and they are entered on the settings page by hand.
 
 **Every server at once** (the Fleet sheet; `POST /api/fleet/broadcast` with a
 control command) sends one command to every member and reports each reply. Only
@@ -584,7 +581,7 @@ card answers all three because no one of them is enough on its own:
 |---|---|---|
 | What was **configured** | `bots.mode`, `bots.brain` | The mode as given, and `BotBrainSpec.Name` — the same string `tools/bench` prints in a result table, so a bot watched here and a number read off the bench name the same arm. The mode alone is not enough: a reconcile that leaves no controller clears the brain, and a policy server whose bots are all scripted still reports mode `policy`. |
 | What each tier is **allowed** to drive | `bots.tiers[].classes` | Read off a live controller through `IMicroController.Drives`, never re-derived — that interface is the one place a tier's class set is decided, narrowed by `[Bots] ClassPolicy`. A server with no bots on it therefore sends no class sets, which is honest: with nothing built there is nothing to ask. |
-| What a brain has **actually done** | the share beside each tier | Ticks a controller drove over ticks it was polled on, summed over the bots it drives. It is the only one of the three that says the brain is consulted at all — a tier can be loaded, named on this card and never admitted by the arbiter. |
+| What a brain has **actually done** | the share beside each tier | Ticks a controller drove over ticks it was polled on, summed over the bots it drives. It is the only one of the three that says the brain is consulted at all — a tier can be loaded, named on this card and never take the wheel. |
 
 **A slot's `brain` is the tier that will drive it, and `driving` is whether one
 held the wheel on the tick the snapshot was taken.** A controller only drives
@@ -594,8 +591,8 @@ instant must not read as a broken brain. A share of exactly zero is the one that
 means something.
 
 **Two tiers claiming one class shows up here as a tier with no bots.** The
-roster reports the most capable eligible tier — `HybridBot.TierFor`, the same
-walk the arbiter's input comes from — so an overlapped tier is visibly driving
+roster reports the first eligible tier — `HybridBot.TierIndexFor`, the same
+walk that picks who drives — so an overlapped tier is visibly driving
 nothing while the tier above it takes its classes. `BotBrain.Build` warns about
 this at startup; the card is where it stays visible afterwards.
 
@@ -655,7 +652,7 @@ which is the whole test for belonging on this list (`GameServer.Live`):
 | `rotation` `{maps}` | a round ends | Refused whole if any entry is not on disk. The index follows the current map when it is in the new list; otherwise the next round is the first entry. `state` carries `rotation` and `rotationIndex` (-1 when the current map is not the rotation's). |
 | `team` `{slot, team}` | now | `ForceTeam`: skips the balance refusal a client's request meets, nothing else. Not slot 0. |
 | `bot-limit` `{max}` | every tick | `MaxBots`; the fill is separate. |
-| `bot-brain` `{mode}` | bot add | Rebuilt by `BotBrain.Build`, then every bot is removed and re-added with it, because a bot keeps its brain for life. A policy mode uses the checkpoints the server started with; a server started with none loads the shipped bundle (`MapDirectory.ShippedCheckpoints`, from `checkpoints/` beside the executable or above it), and is refused only when that is missing too. The verb takes a mode and never a path, so nothing on the network names a file to open. The pacing loop re-arms the adaptive budget against the new arbiter. Loading a checkpoint runs on the tick thread and can make that tick late. |
+| `bot-brain` `{mode}` | bot add | Rebuilt by `BotBrain.Build`, then every bot is removed and re-added with it, because a bot keeps its brain for life. A policy mode uses the checkpoints the server started with; a server started with none loads the shipped bundle (`MapDirectory.ShippedCheckpoints`, from `checkpoints/` beside the executable or above it), and is refused only when that is missing too. The verb takes a mode and never a path, so nothing on the network names a file to open. Loading a checkpoint runs on the tick thread and can make that tick late. |
 | `bot-difficulty` `{tier}` | every combat decision | 1..5, `Bots.Difficulty`. Sets `ScriptedBot.Skill` on every running bot in place, so nobody is replaced, and a hybrid bot's controller reads the same skill (`docs/TRAPS-BOTS.md`, the difficulty chain); a delay already counting down finishes on the old tier. `state` carries it as `bots.difficulty`. |
 
 **Freeze, step and speed stay off the page**, as above.

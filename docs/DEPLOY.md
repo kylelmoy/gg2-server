@@ -222,17 +222,12 @@ by repeating the ramp above; capped `fps` alone cannot show headroom.
 
 ### The one setting that changes the answer
 
-**Keep `--bot-mode` at its default, `scripted`.** `docs/BOTS.md` measures a
-search decision at **3617 µs at twelve live characters** against ~7 µs for a
-policy forward pass — three to four orders of magnitude above the scripted
-layer's per-bot cost. `search` and `tiered` are what turn a 0.7%-of-a-core server
-into a CPU-bound one.
-
-It degrades rather than breaks: `MicroBudgetController` walks the arbiter's
-budget down by AIMD when ticks crowd their deadline, so the tick survives and the
-bots get dumber. But you would be paying for cores to buy behaviour the scripted
-layer gives away, and `--bot-mode search` **has never been measured with humans
-in the server** — see the flag's own help text.
+**`--bot-mode policy` is the one bot setting with a real cost.** A gg2-sim
+decision is 57-110 µs (`docs/BOTS.md`, "There is no search controller"), so
+twelve bots deciding on the same tick is about 1.3 ms of a 33.3 ms tick on a
+13700K core. Nothing throttles it. It has not been measured on a VPS core; a
+late-tick line whose `work` figure rises with the number of engaged bots is what
+would show it matters there.
 
 `--speed` and `--control-port` must stay **off** on anything a client
 connects to. CLAUDE.md, "Phase 8's four switches", says why: an unpaced server
@@ -983,7 +978,7 @@ deployed server has no dependency on a Gang Garrison 2 checkout of any kind.
 | running it where anybody can reach it | `docs/HARDENING.md` |
 | running the attacks at it yourself | `tools/abuse/README.md` |
 | what the switches do and why two are dangerous | `CLAUDE.md`, "Phase 8's four switches" |
-| bot cost, the arbiter, the budget controller | `docs/BOTS.md` |
+| bot cost | `docs/BOTS.md` |
 | why a late tick is usually not the server | `docs/BOTS.md`, "late ticks are a pacing measurement" |
 | the runtime settings and what the TFM bump proved | `docs/ARCHITECTURE.md`, "Runtime settings" |
 | every CLI flag | `gg2-server --help` |

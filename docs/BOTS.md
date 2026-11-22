@@ -51,11 +51,9 @@ near them", has the state rules that apply to everyone, bot work included.
 |---|---|---|
 | the scripted bot — nav, A\*, path following, targeting, combat, objectives, population | `src/GG2.Bots/` | `ScenarioSuiteTests`, `BotObjectiveTests`, `PathFollowerFixtureTests` |
 | the learned policy — loads a gg2-sim `.gg2p`, the only checkpoint format the server loads | `SimPolicyNetwork.cs`, `SimPolicyObservation.cs` | `SimPolicyTests` |
-| the hybrid — a controller takes keys and aim inside an engagement window, scripted layer keeps movement, routing, objectives, class | `HybridBot.cs` | `SearchBotTests`, `HybridBotSeamTests`, `ShippedCheckpointTests` |
+| the hybrid — a controller takes keys and aim inside an engagement window, scripted layer keeps movement, routing, objectives, class | `HybridBot.cs` | `HybridBotSeamTests`, `ShippedCheckpointTests` |
 | **the controller seam** — how a new bot implementation drops in | `IMicroController.cs`, `BotBrainSpec.cs` | `HybridBotSeamTests` |
-| the per-tick controller budget across bots | `IMicroArbiter.cs` | `HybridBotSeamTests` |
 | the policy as a controller | `SimPolicyController.cs` | `SimPolicyTests` |
-| the rollout search, and as a controller | `RolloutSearch.cs`, `SearchController.cs` | `RolloutRestrictionTests`, `SearchBotTests` |
 | the next-hop route table (CPD-Search) and the exact A\* heuristic — **ON by default**, `--no-nav-distances` | `NavDistances.cs`, `NavDistanceSet.cs`, `NavSearch.cs` | `NavDistancesTests`, `NavDistanceSetTests`, `NavSearchTests` |
 | the tables **on disk** — `nav/<key>.dist.gz`, next-hop only, cost rebuilt on load | `NavDistanceFile.cs`, `NavDistances.FromNextHops` | `NavDistanceFileTests` |
 | difficulty 1-4 aim like people, tier 5 untouched, `--no-bot-human-aim` to turn off (on) | `HumanizedBot.ByTier`, `BotSkill.HumanAim` | `HumanizedBotTests`, `BotCombatTests` |
@@ -121,101 +119,30 @@ retrain first**, and would not look broken without one.
 
 Numbers, tables and scope: `gg2-rl/gg2-rl/docs/ENV.md`, "Phase 4 re-measured".
 
-### The search controller (arm 3): where it stands
+### There is no search controller, and no controller budget
 
-Three arms are compared throughout this section: arm 1 all-scripted, arm 2
-policy hybrid, arm 3 search hybrid — same 150px engagement gate, same macro
-layer, one thing different.
+The server runs two brains: `scripted` (0) and `policy` (2). The rollout-search
+controller (`--bot-mode search`, 1) and the tiered mode that put it ahead of a
+policy under a per-tick arbiter (`tiered`, 3) are removed, along with the
+arbiter, the adaptive budget and their flags and keys. Both numbers are refused
+by name and by number with a message naming `policy`, so an old config file
+fails at startup rather than running something else (`BotModeTests`).
 
-**Tick cost, single-threaded.** Arm 3 exceeds the 33.3ms budget on the max tick
-over every map tried, at both 8 bots (worst 80.65ms, `ctf_eiger`; `BENCH_ARMS`,
-21 maps, 40 matches/arm, 2026-09-01) and 12 bots (19 of 21 maps on the max;
-worst 80.74ms on the same map — a near-exact reproduction of the 8-bot number
-that is a sanity check on the instrument, not evidence the two population sizes
-cost the same; `BENCH_THREADS=6 BENCH_BOTS=12`, 6 matches/map, Release, 24
-cores, 2026-09-02). A **max is a maximum over every tick of every match, not a
-rate — it is monotone in coverage**: a pass at low n is never evidence a
-larger run would also pass, but a fail is conclusive regardless of n.
+Why: the shipped nets match or beat the search, and the search cost ~4.8 ms a
+decision against a 33.3 ms tick. The head-to-head that settled it (`39cdd24`,
+12 bots, 21 maps, 210 matches, all nine classes, both tier 5, no arbiter): the
+search team took 0.519 ± 0.017 of a match's deaths, and in 1v1 duels with the
+controller always driving the duel nets beat the search 0.712 ± 0.023 over
+1,440 duels. The search still won more decided matches (52 of 85); why was never
+measured. What would show the removal wrong is a policy brain losing to the
+scripted control on the objective at a match count where it currently wins.
 
-**Tick cost, threaded.** At 8 threads and the shipping population (12 bots),
-the max clears budget on all 21 maps (worst 18.26ms, `gen_destroy`, 55% of
-budget) and p99.9 clears with margin (worst 6.37ms, `tdm_mantic`). At 8 bots,
-p99.9 already clears budget **serially** (worst 29.37ms, `arena_montane`) — so
-threading is not what decides affordability at 8 bots. At 12 bots it is: serial
-p99.9 has no headroom left (worst 32.11ms, `dkoth_atalia`, 96% of budget).
-Threading buys 4-5x on p99.9 at a cost of 8 cores — under 60% efficiency; say
-what a factor costs in cores before recommending it.
-⚠️ **A max is one draw from a heavy tail** — three identical runs at one config
-read 72.37, 98.31 and 97.47ms serially (`Threads.cs`) — so a pass at 6
-matches/map does not mean 40 would; widening coverage can only make the max
-worse.
-
-**Every arm-3 number below understates the search.** They were measured while
-`SearchController.OnHandoverOut` kept a decision open across a release off a
-decision boundary (a death, an intel pickup). The search's countdown runs only
-while it drives, so the decision never ended and a search bot stayed scripted
-after its first such release. On `ctf_truefort` that held the search side's
-wheel share at 3% against the policy's 36%; with the release fixed it is 21%
-(`BENCH_VERSUS`, 4 matches). `SearchBotTests.AReleaseMidDecisionLeavesTheSearchReady`
-gates the fix. Re-measure before quoting the figures below as the search's.
-
-**Head to head, the policy wins the fights and the search wins more matches.**
-`BENCH_VERSUS=10` at `39cdd24`: 21 maps, 210 matches, 12 bots, both tier 5,
-`Distance` rule, all nine classes, the nine shipped nets against the search
-with no arbiter. The search team takes 0.519 ± 0.017 of a match's deaths (pooled
-7,105 of 13,870, 0.512), so the policy is ahead in the fighting by about two
-points, and four maps lean the other way (`tdm_mantic` 0.443 ± 0.037). Of the 85
-decided matches the search won 52 and the policy 33. The wheel shares differ
-(policy 0.27, search 0.17 of polls), so the two controllers were not asked
-equally often; one candidate cause is that a medic net takes a beaming medic and
-the search does not (`IBeamController`). Not measured: why the search wins more
-objectives while dying more, and either controller under a live arbiter.
-
-**In a 1v1 duel with the controller always driving, the duel nets beat the
-search 0.712 ± 0.023** (`BENCH_VERSUS_DUEL=180`: 1,440 duels on `duel_01`-`duel_08`,
-every class and side, both tier 5, wheel share 1.00 both sides; 990 policy kills,
-364 search). By class it is far from uniform: the search wins Engineer (0.403)
-and Spy (0.424), Scout is close (0.530), and it almost never wins Demoman (0 of
-160), Sniper (4) or, with special off as the server runs it, Medic (0). Letting
-it press special (`BENCH_VERSUS_SPECIAL=1`) moves Medic to 0.656 and Pyro 0.730
-to 0.616, and the whole to 0.661 ± 0.023; Demoman and Sniper do not move. Not
-measured: why. A sticky's damage lands only on a detonation and a sniper's
-charge pays out late, and both may sit past the 20-tick horizon, but that is a
-guess.
-
-**Death share.** Pooled over ~34,000 deaths (`BENCH_ARMS`, 8 bots, 21 maps, 40
-matches/arm, 2026-09-01): arm 1 49.82%, arm 2 46.17%, arm 3 44.55%. Arm 3 beats
-arm 2 by 1.62 points (z = −4.26) and beats arm 1 (z = −13.82). At the match
-level (840 matches/arm) the gap is larger: −3.59 points, t = −5.60, df 1678 —
-both units agree the effect is real. The aggregate is decisive where a per-map
-sign test is not: only 6 of 21 maps clear the 4.2-point effect-size floor at
-which per-map direction was shown stable (an exogenous threshold, taken from a
-separate policy-vs-control run); those 6 favour arm 3 6-of-6 (p = 0.016). The
-other 15 maps' per-map directions are unknown, not absent.
-
-⚠️ **The advantage varies by map lethality, and the tick cost does not track
-it (r = +0.16 against map lethality).** Bucketing maps by **arm 1's own** death
-rate (pre-treatment, so not an artefact of arm 3's own effect on match length)
-shows the arm2→arm3 gap shrinking from quiet maps (−7.72p, 95% CI
-[−10.90, −4.54]) through middling (−2.01p) to bloody maps (−1.04p, CI
-[−2.33, +0.25] — not distinguishable from zero). This is a fact about where the
-search's advantage lives, not about when it is affordable.
-
-**Decision cost.** A search decision re-simulates every live character for
-every candidate for every tick of the horizon; cost is affine in population,
-`1490 + 181·N` µs (within 2%; `BENCH_SEARCH`, horizon 20, 60 candidates,
-`gg_debug`, Release, 2026-09-03): 1831µs at 2 live characters, 5116µs at 20. A
-duel bench or scenario undercounts real-match cost by 3-6x — 7.64ms in a
-12-character bench scenario versus 22-44ms decomposed from a real match's
-worst tick (2026-09-01) — because a scenario has no projectiles, sentries or
-bystanders for the rollout to re-simulate.
-
-**Maintenance: a policy is dated by the physics; a search is not.** A net
-carries weights fit to one simulation version, and a `.gg2p` carries no stamp,
-so nothing refuses a stale one: gg2-sim records the gg2-server commit it trained
-at, and a physics change here is the cue to retrain. `RolloutSearch` carries no
-weights and re-derives from the simulation every decision, so it absorbs a
-physics change for free.
+**Nothing throttles policy decisions.** A gg2-sim decision is 57-110 µs
+(observation plus forward pass, Release, `SimPolicyController`), so twelve bots
+deciding on one tick is about 1.3 ms. `HybridBot` drives with the first tier
+that drives the bot's class; `BotBrain` guarantees the per-class tiers are
+disjoint. What would show this wrong is a late-tick line whose `work` figure
+rises with the number of engaged bots.
 
 ### The shipped bundle — `checkpoints/`
 
@@ -257,8 +184,7 @@ against the scripted bots.
 
 A reduced setting does not *contain* what a real one does — a duel has no
 second enemy, no projectile crossfire, no sentry, no bystander — and **every
-absence arrives as a legal-looking zero, not an error.** The 3-6x cost gap
-above is an instance of this. Before
+absence arrives as a legal-looking zero, not an error.** Before
 trusting a duel- or scenario-scale measurement, ask what the reduced setting
 does not contain, not only what obvious parameter you forgot to vary.
 
@@ -281,20 +207,18 @@ new branch in `HeadlessMatch` or `BotPopulationService`, no new wrapper.
 "the scripted layer thinks every tick", the aim resync, the counters — and
 knows nothing about how a controller decides. `IMicroController` is what it
 hands to. `BotBrainSpec` is the recipe a caller configures: an ordered tier
-list, the gate settings, and an optional `IMicroArbiter`. Every arm carries
+list and the gate settings. Every arm carries
 every counter (`ScriptedPolls` included), and `HandoverRule.HeadSplit` is
 gated by `HybridBotSeamTests` even though nothing in the suite, the bench or
 the host currently selects it.
 
-⚠️ **`BENCH_CHURN` output byte-identical across a `HybridBot` restructure, all
-three arms, two maps, every input-derived statistic, is the only check that
+⚠️ **`BENCH_CHURN` output byte-identical across a `HybridBot` restructure, both
+arms, two maps, every input-derived statistic, is the only check that
 can catch a behaviour change** — every pre-existing assertion about a hybrid is
 an inequality (`PolicyTicks > 0`), so a green suite alone does not establish
 that a restructure preserved behaviour. Prove the comparison could fail before
-trusting it (e.g. delete the aim resync and confirm arm 2/3 rows move while arm
-1 does not). `BENCH_ARMS` cannot substitute: it loads the checkpoint without
-the stamp bypass, so arm 2 does not run on this build. `BENCH_CHURN` loads with
-the bypass and is the only mode that exercises all three arms.
+trusting it (e.g. delete the aim resync and confirm the arm 2 rows move while
+arm 1 does not).
 
 ### The handover is HUMAN-ONLY on a live server, and NOT in a measurement
 
@@ -305,7 +229,7 @@ purpose:
 | | default | why |
 |---|---|---|
 | `BotBrainSpec.Engage` (library) | `Anyone` | A headless bot-vs-bot match has **no humans in it**. `HumansOnly` here would make `HeadlessMatch`, the scenarios and `tools/bench` silently measure the all-scripted control and report it as a controller result. |
-| `gg2-server` (live) | `HumansOnly` | The expensive controllers exist to be good against **people**. A multi-millisecond search decision spent on two bots shooting at each other in an empty corner is most of what a populated server pays for. `--bot-engages-bots` restores `Anyone`. |
+| `gg2-server` (live) | `HumansOnly` | The controllers exist to be good against **people**, not against each other. `--bot-engages-bots` restores `Anyone`. |
 
 **Every arm number in this document was measured under `Anyone`**, the only
 setting under which a bot-vs-bot match exercises a controller at all. A
@@ -327,7 +251,6 @@ where it was standing" — the question a screenshot has to answer.
 |---|---|---|
 | `z1` | 20 | a policy tier took the wheel (gg2-rl or gg2-sim) |
 | `z2` | 21 | the scripted layer took it back |
-| `z3` | 22 | the rollout search took the wheel |
 
 The indices are the client's own `z` menu
 (`Objects/Overlays/Interfaces/BubbleMenuZ.events/Key {1,2,3} pressed.xml`), so an
@@ -353,93 +276,8 @@ that asked for it.
 `HandoverBubbleTests` gates the mapping, the wrapper's transitions, the
 off-by-default control, and — the claim nothing inside `GG2.Bots` could make —
 that the bubble reaches the wire, by decoding the server's own broadcast.
-Confirmed against a stock GM8 client: a pyro driven by the policy tier put up
-bubble 20 and a search-driven bot put up 22 and 21, and all three draw as
-distinct sprites.
-
-### The controller budget calibrates itself to the machine
-
-Two things decide whether a bot may spend an expensive decision: what the
-decision costs, and what this tick can afford.
-
-**Cost is affine in the live character count** (measured; see "Decision cost"
-above) — a rollout re-simulates every live character per candidate per tick, so
-`SearchController` takes the population. A policy forward pass is flat and
-ignores the count.
-
-**The budget walks itself down.** No compiled-in constant can know the
-machine's headroom, so the arbiter never uses an absolute scale — only
-`cost <= budget - spent` — and `MicroBudgetController` calibrates the budget by
-AIMD instead: halve it when a tick uses more than 80% of its interval (at most
-once per 900-tick window), creep it back up after a quiet window, never above
-`--bot-arbiter`. The cost model only has to be right up to a constant factor;
-the loop supplies the factor.
-
-⛔ **A duel has no arbiter, so nothing on this path reaches `gg2-rl`.**
-`GG2.Env` references `GG2.Protocol`, `GG2.Maps`, `GG2.Simulation` and
-`GG2.Bots` — **not `GG2.Server`** — and nothing in `gg2-rl/env/GG2.Env/` mentions
-`IMicroArbiter` or `BotBrainSpec`. `HybridBot.Choose` short-circuits at
-`_arbiter is null`, `DecisionCostFor` is never called, and a duel cannot be
-moved by the cost model or the budget however wrong either is.
-
-⛔ **The budget may only change BETWEEN ticks.** It lives in `GameServer.Run`,
-which `HeadlessMatch`, the env and `eval` never call — so `Choose` stays a pure
-function of tick, poll order, costs and budget, and `RolloutThreadingTests` and
-`EnvBatchTests.ABotDrivenBatchIsTheSameHoweverManyThreads` keep meaning what
-they say. `--fixed-bot-budget` pins it.
-
-⚠️ **It responds to TOTAL tick pressure, not to controller-attributable
-pressure**, so it throttles bots for slowness that is not theirs — the safe
-direction, since cutting optional work is right whenever the tick is at risk,
-but surprising from outside; every cut logs what the controllers actually
-spent. **Bots get quietly worse under load**, which is why this is structurally
-absent from every measurement path rather than merely defaulted off.
-
-### Choosing a controller by what the machine can afford
-
-⛔ **The constraint is the TICK TAIL, not the duty cycle.** A search decision is
-a large fraction of a 33.3ms tick on its own, and handovers are **correlated**
-— several bots have an enemy in range during the same firefight — so the worst
-tick is several coinciding decisions rather than one expensive bot. **A per-bot
-setting cannot see that.** One `IMicroArbiter`, shared by every bot on a
-server, can: `HybridBot` asks it which tier may spend this decision, and a
-refused bot drops to a cheaper tier or to the scripted layer.
-
-⛔ **DO NOT READ A CLOCK INSIDE AN ARBITER.** An answer that depends on
-wall-clock time makes a match unreproducible: `HeadlessMatch` stops being a
-function of its seed, `eval` stops being thread-count independent — a property
-this repo *gates* rather than assumes — and a parity fixture recorded with bots
-in it stops replaying. **The measured resource number belongs outside the
-tick**: read `--tick-stats` between ticks and write
-`DecisionQuotaArbiter.UnitsPerTick`, keeping the in-tick decision a pure
-function of the budget it was given.
-
-⚠️ **Spend is ordered by roster slot**, so a low slot takes the budget first.
-That is deterministic and it is not fair; an arbiter wanting fairness must
-rotate on something derived from the **tick**.
-
-✅ **Measured costs, in microseconds** (`BENCH_POLICYCOST`, `BENCH_SEARCH`,
-2026-09-02, Release):
-
-| decision | cost |
-|---|---|
-| policy: observation + forward pass | **6.9 µs** (2.2 + 4.7) |
-| search: 60 candidates × horizon 20, twelve live characters | **4,795 µs** |
-| the tick itself | 33,300 µs |
-
-`DecisionCost` is priced in these microsecond units — the measured ratio is
-695:1, so `--bot-arbiter 10000` means "ten milliseconds of controller work a
-tick" and caps concurrent search decisions at two. Do not price controllers in
-invented relative units; `tools/bench/README.md` trap 7 covers this shape.
-
-⛔ **The search's constant is configuration-dependent**: cost scales with
-population, horizon and candidate count. Re-measure with `BENCH_SEARCH=1
-BENCH_POP=<n>` before deriving a budget.
-
-⚠️ **No budget has been TUNED.** The mechanism and the costs are measured; what
-`UnitsPerTick` should be is not. Falsification: if a downgrading arbiter does
-not move a `BENCH_THREADS`-style p99.9 column, it is not doing what this
-section says it does.
+Confirmed against a stock GM8 client: a bot taking the wheel put up bubble 20
+and one releasing it put up 21, and both draw as distinct sprites.
 
 ## ⛔ Measuring a bot change
 

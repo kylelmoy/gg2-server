@@ -202,10 +202,10 @@ shape.** `tools/bench/README.md` has the measurement traps.
   routability rule.
 - **`WorldState` is a value type, sized close to its test ceiling.**
   `ACloneStaysWithinItsBudget` caps a clone at 160 KB; the struct is currently
-  156,624 bytes. A `RolloutSearch` decision clones `WorldState` once per
-  candidate tick (candidates × horizon), so the struct's size is on the hot
-  path for search-based bots, though the simulation tick itself (not the clone)
-  dominates a rollout's cost.
+  156,624 bytes. Client prediction replays a struct copy of the world
+  (`docs/PREDICTION.md`, "replay a fork of the whole world"), so the struct's
+  size is on a client's hot path, though the simulation tick itself (not the
+  copy) dominates a replay's cost.
 - **`dotnet-trace`'s sampling profiler is unreliable on this workload** and has
   repeatedly misattributed cost to runtime helpers (`memset`/`memmove`-shaped
   code) rather than to where the time actually is. Use it only to pick which

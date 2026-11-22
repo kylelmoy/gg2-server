@@ -3494,109 +3494,6 @@ run and the longest leg — are all pinned exactly now**, in both directions, ea
 saying in its own message that a failure is the re-record. Two of the three were
 hiding something; the sweep is what established that the third was not.
 
-### Item 12: the rollout-search bot, and the assumption it is built on
-
-`GG2.Bots.RolloutSearch`, built for `gg2-rl` phase 1. `docs/BOTAI.md` item 12 is
-the requirement; this is what it cost and what to know before touching it.
-
-**What it is.** On each decision it copies the `WorldState`, plays every
-candidate action to a 20-tick horizon, scores each from `TickEvents.DamageDealt`
-minus `DamageTaken`, and plays the first 4 ticks of the winner — then replans.
-Nothing new was needed from the simulation: item 2's copyable state is the fork,
-item 7's accumulators are the score, item 11's `ScenarioWorld` is the fight.
-
-**Measured, Release, one searcher on `gg_debug` with the defaults:**
-
-| | |
-|---|---|
-| candidates | 60 (5 aim bins x 2 fire x 3 horizontal x 2 jump) |
-| simulated ticks per decision | 1,200 |
-| cost per decision | **2.94 ms** — about 0.74 ms of a 33.3 ms tick, at one decision every four |
-| against `ScriptedBot` tier 5, 12 duels | **11 wins, 0 losses, 1 draw** |
-
-⚠️ **Name the build.** Debug is roughly twice that, and `CLAUDE.md` records what
-a stale unattributed figure cost this project.
-
-#### ⚠️ The opponent model is a decision, and it is written down
-
-`docs/BOTAI.md` item 12 calls this "the one open design question" and says to
-decide it explicitly, *"because leaving it implicit is how a search ends up with
-a hidden opponent model nobody chose"*. The `RolloutOpponent` enum is that
-decision made visible:
-
-- **`HoldLastInput` (the default)** — every other character holds the input it is
-  already holding, read straight off `CharacterState.KeyState` and
-  `NetAimDirection`. No history, no allocation, no model: it is the wire's last
-  word about them replayed forward. Right about momentum over 20 ticks, wrong
-  about reactions, and wrong in the direction that assumes the opponent keeps
-  doing what they were doing rather than stopping.
-- **`Idle`** — presses nothing. Optimistic, and kept as the floor for a
-  comparison.
-- **Self-play is deliberately not in v0.** It is what item 12 points at as the
-  answer needing no data, and it costs a nested search per candidate per tick.
-  The seam is a third enum member and a branch in `OpponentInput`.
-
-⚠️ **`Idle` is NOT dead code, and it is the member most likely to be deleted by
-somebody tidying up.** `HoldLastInput` is the same *class* of assumption as
-`botAimLead.gml`'s constant velocity — better, because it is right about momentum
-over 20 ticks, and still an opponent who does not react. `gg2-rl` phase 1 will
-therefore report the win rate under **both** models rather than one headline
-number: if they barely differ the search is not really using its opponent model
-and the horizon or the scoring is the binding constraint; if they differ a lot,
-that gap is the quantified argument for paying for nested rollouts. `Idle` is the
-control that makes the comparison possible, and the number is wanted before
-phase 2 distils anything — a policy inherits whatever the search assumed.
-
-⚠️ **Test it on the SCORE, not on the chosen action.** Two opponent models pick
-the same action all the time; a first draft of `RolloutSearchTests` compared
-actions in a position where nothing landed inside the horizon, so both models
-returned the first candidate and the test passed for no reason.
-
-#### ⚠️ A horizon shorter than a refire timer makes the search blind
-
-The trap that cost this the most time, and it is a property rather than a bug.
-When nothing can fire inside the horizon **every candidate scores exactly zero**,
-the tie goes to the first candidate, and the bot stands still looking broken.
-
-**A freshly spawned soldier's `refireTimer` starts at 29** and a scout is
-nineteen ticks from its first shot — measured — so the first second of every life
-is exactly that state. Two tests here were written inside that window and
-asserted against a weapon that could not fire.
-
-The honest fix is a shaping term (distance, facing, ammo), **not** a longer
-horizon: 20 ticks is already 1,200 simulated ticks a decision, and doubling it
-doubles the cost of every decision to cover a case that lasts a second.
-
-#### Three properties that make it a baseline rather than merely a bot
-
-Each has its own test, because each would fail silently:
-
-1. ⚠️ **It draws nothing from the match's RNG.** That is automatic and it is why
-   the fork is safe: `WorldState.Random` travels inside the copy, so a
-   candidate's shots advance a stream that is thrown away. A search that rolled
-   out in place would make every unseeded weapon's spread depend on how many bots
-   were thinking — the one thing `docs/BOTAI.md` forbids the bot layer outright,
-   and it would not crash.
-2. ⚠️ **It leaves no aim behind.** `ActionDecoder` carries an *absolute* bearing
-   and 60 candidates turn it 60 times, so `Search` saves and restores it. Without
-   that the character comes out pointing wherever the last candidate looked —
-   which is a bearing nobody chose, and the bot still moves and still fires.
-3. **It is deterministic.** Candidate order is fixed and nothing is drawn to
-   break ties. A baseline that answered differently twice would make every win
-   rate measured against it meaningless.
-
-⚠️ **`new RolloutOptions()` is not the primary constructor.** A record struct's
-parameterless form is `default` — every field zero, none of the declared defaults
-applied — so `default` and `new()` gave a zero horizon where
-`new RolloutOptions(ConsiderSpecial: true)` gave 20. `WithDefaults()` is what
-makes the two agree, and the first run of the tests died on it.
-
-**It is also a parity fuzzer**, and that is worth more than it sounds: a search
-tries what no human would, so it finds physics-port bugs by exploiting them.
-⚠️ **An exploit is a finding for `docs/PARITY.md`, not something to penalise in
-the score** — scoring around a bug hides it. `gg2-rl/docs/PLAN.md` phase 1 says
-the same thing from the other side.
-
 ### ✅ Team Deathmatch had no goal — FIXED 2026-08-28, and the conga line was the wrong fear
 
 **Found 2026-08-28**, by applying the Arena lesson ("a match that ends is not a
@@ -4867,7 +4764,7 @@ what a match contains".
 `toggleZoom` is not a key. `PlayerCommands.ToggleZoom` says so in as many words —
 *"Zoom is not a key. It is its own client command"* — and a bot's entire output is
 `PlayerInput`, which is `PlayerKeys` plus an aim. So **no `IInputSource` in this
-port can zoom**: not `ScriptedBot`, not `RolloutSearch`, and not a learned policy,
+port can zoom**: not `ScriptedBot`, and not a learned policy,
 because `EnvAction`'s five heads have no zoom either.
 
 Reference damage, from `Weapons.RifleBeginStep`: unscoped
@@ -4897,123 +4794,6 @@ things were missing:
 `ActionDecoder.WantsZoomToggle` owns the edge, so the head is idempotent and a
 policy needs no memory of its own scope. A toggle-shaped head would turn one
 dropped or duplicated action into a permanently inverted sniper.
-
-#### ⚠️⚠️ The search's aim was decided by its tie-break, not its scoring — fixed
-
-`gg2-rl`'s corpus analysis measured, on rows that are **not** blind:
-
-| | |
-|---|---|
-| rows with the top two candidates tied | **85.2%** |
-| actions sharing the best score, median | **6** (mean 15.2, max 60) |
-| rows with a unique best action | **7.8%** |
-
-⚠️ **The search is usually INDIFFERENT**, and ties go to the first candidate.
-`BuildCandidates` loops **aim outermost** over `[0, 3, 7, 11, 14]`, where bin 0 is
-a hard left turn — so the first candidate at any aim-tied score is *turn hard
-left*. Measured here over ~thousands of decisions on `ctf_2dfort` banded, tier 5:
-
-| class | share of decisions taking aim bin 0 |
-|---|---|
-| soldier | **0.966** |
-| scout | **0.929** |
-
-**So the bot's aiming is essentially "turn hard left", with occasional scored
-corrections.** That is not a strategy, it is enumeration order showing through —
-and it is the same signature as the blind tie-break, reaching decisions that are
-*not* blind.
-
-##### ✅ Fix: a lexicographic aim tie-break
-
-Among candidates whose scores are **exactly equal**, prefer the one that leaves
-the searcher pointing closest to its nearest live enemy. ⚠️ **Damage stays the
-only objective**: it is compared only on a tie, so no decision the score settles
-changes and the search cannot trade a hit for a bearing. What it replaces is loop
-order.
-
-**Paired A/B, `ctf_2dfort` banded, tier 5, 60 duels a cell, same seeds:**
-
-| class | before | after |
-|---|---|---|
-| scout | 49-8-3, hard-left 0.892 | **58-1-1**, 0.137 |
-| soldier | 42-5-13, hard-left 0.967 | 42-6-12, 0.048 |
-
-✅ **And the blind fraction falls** — scout 0.810 → 0.649, soldier 0.902 → 0.841,
-and on a fixed 160px soldier duel **0.84 → 0.29** — because better aim lands more
-shots inside the horizon. ⚠️ **That is the signature `RolloutOptions.CommitTicks`
-was built to produce and failed to**: blind falling without win rate falling,
-reached by a different mechanism.
-
-✅ **CONFIRMED INDEPENDENTLY AND IT IS BIGGER THAN THE A/B SHOWED.** `gg2-rl`
-re-measured the whole expert against this build — 1,600 duels, sixteen pairings,
-both orientations:
-
-| | old (`ab78c9d`) | new (`2d810c3`) |
-|---|---|---|
-| expert win rate | 76.9% | **84.2%** [81.8%, 86.5%] |
-| matchups clearing p<0.01 | 15 of 16 | **16 of 16** |
-| worst matchup | sniper mirror, **a loss** | scout-v-sniper, 66.0% |
-
-**+7.3 points, and the sniper mirror stops being a defeat.** My own A/B saw the
-scout move and the soldier stay flat at 60 duels a cell; the full sixteen-pairing
-run says the effect is broad rather than one class. ⚠️ **A two-class A/B
-understated a change that touched every class**, which is the opposite of the
-sample-size error made earlier the same day and worth the same caution.
-
-✅ **The three predictions made when handing this over all held**: the
-`[0,0,0,0,0,0]` share fell 35.2% → **1.5%**, the aim-bin-0 share ~85% → **4.4%**,
-and the tie RATE held (85.2% → 89.6%) because the scoring function was untouched.
-⚠️ **The tied-set SIZE shrank, median 6 → 4**, which was explicitly *not*
-predicted either way.
-
-✅ **It also kills `gg2-rl`'s `[0,0,0,0,0,0]` corpus signature.** A blind decision
-now points at the enemy rather than turning hard left, so a blind row is no longer
-identifiable by its action at all — only by `BestScore == 0`. **That makes
-`BestScore` load-bearing rather than convenient.**
-
-⚠️ **Three tests were re-recorded** and one is worth knowing: the sniper now
-scopes at horizon 20, where it never did. Scoping changes `RunPower`, which
-changes where the character ends up, which changes the aim error the tie-break
-compares — so a zoom candidate can win a tie enumeration order used to give to its
-unscoped twin. **That is the scope being chosen by a side effect rather than on
-merit**, which is better than never being chosen and is not the same as being
-chosen well.
-
-##### ❌ The obvious fix, which does NOT win
-
-Putting no-turn first (`[7, 3, 11, 0, 14]` — same candidate set, different order,
-so ties resolve to *not turning*) removes the bias completely: hard-left share
-0.966 → **0.004**. Win rate, 24 duels a cell:
-
-| class | shipped | centred |
-|---|---|---|
-| soldier | 18-2-4 | **12-2-10** |
-| scout | 18-3-3 | **22-1-1** |
-
-⚠️ **The scout improves and the soldier degrades**, the soldier's losses turning
-into draws rather than defeats — consistent with a splash class that was
-accidentally benefiting from sweeping its aim across the target every decision.
-
-⚠️⚠️ **DO NOT READ A DIRECTION OFF THAT TABLE.** It is 24 duels a cell, and this
-file already had to retract a direction read off twelve. **What is solid is the
-BIAS RATE** — a share over thousands of decisions — and what is not solid is
-whether removing it helps. Two different sample sizes in one experiment, and only
-one of them supports a conclusion.
-
-##### ⬅️ Why it matters beyond the bot
-
-**An expert whose actions are 93-97% arbitrary tie-breaks is a hard thing to
-clone**, and phase 2 is trying. `gg2-rl` measured a soft-target policy landing
-inside the tied-best set 57.8% of the time while its *exact* match fell to 0.143
-— agreement rising while exact-match fell, because exact-match was scoring a
-tied alternative as wrong. ⚠️ **Any metric that treats one of six equally-good
-actions as the right answer was measuring the wrong thing**, and phase 2 reported
-that metric for three days.
-
-⬅️ **The open question this raises is whether the EXPERT should be improved before
-more effort goes into distilling it** — a scoring function that discriminated
-among today's ties would change what there is to learn. That is a bigger question
-than a tie-break order and it is not answered here.
 
 #### ⚠️⚠️ Known issue: the scope makes the scripted sniper WORSE, by about 10%
 
@@ -5076,107 +4856,15 @@ gates the **mechanism** (damage a hit up, hits down — both pinned) and
 deliberately does **not** assert the net direction, because that sample does not
 carry it. **Anyone re-tuning this rule from a short run will read noise.**
 
-#### ⚠️⚠️ The search does NOT use the zoom head at its default horizon
-
-`ScriptedBot` uses the scope immediately — its rule is "have a target, be
-scoped". `RolloutSearch` only uses what pays inside its horizon, and **the
-rifle's 40-tick
-refire is double the 20-tick default**, so the whole candidate set scores exactly
-zero, the tie goes to the first candidate, and the first candidate is unscoped.
-
-Measured, `gg_debug` at 220px:
-
-| horizon | scopes? | decision score |
-|---|---|---|
-| 20 (default) | **no** | 0 throughout |
-| 60 | yes | 45-70 |
-| 90 | yes | 70-105 |
-
-✅ **So the head is not inert — the horizon is the binding constraint**, and
-`BotZoomTests.ARolloutDrivenSniperScopesOnlyWhenItsHorizonCanSeeAShot` pins both
-halves so neither can be mistaken for the other.
-
-⚠️ **The default was deliberately NOT changed to fix it.** A horizon is a
-whole-bot knob, and the sweep has since shown it is **not** one worth turning:
-blind fraction and win rate oppose monotonically for every class, because a
-candidate is one action held for the whole horizon. See "both curves oppose"
-above. That is a separate measured decision, not a side
-effect of adding a head.
-
-⚠️ **Consequence for anyone measuring the sniper matchup now**: a scripted sniper
-plays a 75-damage weapon and a default-horizon search still plays the 35-damage
-one, so `gg2-rl`'s 18.4% is expected to get *worse* before it gets better. That
-is the cost of closing the gap in the right order — the class was previously
-unlearnable, which is worse.
-
-### ⚠️ A horizon shorter than the refire: measured per class, and it is the SOLDIER
-
-A horizon shorter than a refire timer makes every candidate score zero, so the
-tie goes to the first candidate and the bot stands still. **The rifle's refire
-is 40 ticks against a 20-tick horizon — the longest in the game, and the only
-one at double it** (rocket launcher 30, minegun 26, revolver 18, the rest under
-6). Lengthening the horizon past the rifle's refire makes the sniper *worse*
-(win rate falls as horizon rises — see the table below), so the blindness is
-real and survives a longer horizon. ⚠️ **Direction claims here need at least 80
-duels a cell** — a 12-duel sample read the soldier's row as "much better" at a
-longer horizon and inverted at 80 duels (93.8% → 78.8%); only the sniper's
-direction held up at the larger sample.
-
-#### ⚠️⚠️ BOTH CURVES OPPOSE, MONOTONICALLY, FOR EVERY CLASS
-
-`ctf_2dfort` banded, tier 5, repeat 4 — blind over 1,200 decisions a cell, win
-rate over 80 duels a cell:
-
-| | 20 | 30 | 45 | 60 | 90 |
-|---|---|---|---|---|---|
-| **blind** sniper | 89.8 | 82.2 | 53.0 | 47.0 | **43.5** |
-| **blind** soldier | 80.5 | 69.6 | 52.0 | 38.1 | **29.8** |
-| **win** sniper | **68.4** | 66.2 | 39.2 | 39.2 | 22.8 |
-| **win** soldier | **93.8** | 92.5 | 78.8 | 64.6 | 63.7 |
-
-**Every class, every step, opposite directions.** ✅ The refire mechanism is
-confirmed by the cliff LOCATIONS — the sniper's between 30 and 45 around its
-40-tick refire, the soldier's opening at 30 — but every class plateaus at 30-45%
-blind however long the horizon, and **that floor is geometry**: decisions with
-nothing to shoot. A fully-signal corpus was never available at any horizon.
-
-⚠️ **THE CAUSE IS THE CANDIDATE REPRESENTATION, not the horizon.**
-`RolloutSearch.Rollout` takes one `EnvAction` and calls `_decoder.Decode` with it
-**every tick to the horizon**, so at horizon 90 the search chooses among 120 plans
-of the shape *"hold this key and this aim for three seconds"*. It sees further —
-blindness falls exactly as the refire mechanism predicts — while the plans become
-increasingly implausible commitments. **Lookahead and commitment are the same
-number.**
-
-⚠️ So raising the default would not fix a distillation corpus: it trades rows
-carrying no decision for rows carrying a **badly chosen** one, and the second is
-strictly worse. A blind row is labelled `BestScore == 0` and can be dropped; a
-confidently-wrong row is indistinguishable from a good one.
-
-❌ **A second, attractive hypothesis died here.** `HoldLastInput` planning against
-an increasingly fictional opponent predicts the opponent-model gap should WIDEN
-with horizon. Measured, soldier mirror, 80 duels a cell: horizon 20 gap
-**-3.5pp** (Idle better), horizon 90 **+0.9pp** — it does not widen, and both
-models lose about thirty points together. The degradation is **not** opponent-model
-error, which is what leaves the candidate representation as an explanation rather
-than a guess.
-
-⬅️ **The open idea, from `gg2-rl` and explicitly not asked for**: decouple
-lookahead from commitment — score a candidate over its `DecisionTicks` and
-continue the rollout under a default continuation for the rest of the horizon.
-The ordinary receding-horizon split; today the two are one number. ⚠️ **The
-signature of a real fix is the blind fraction falling WITHOUT the win rate
-falling.**
-
 ### ⚠️⚠️ A `ScriptedBot` with no `Objective` is not the scripted bot
 
-**The largest single effect measured on `RolloutSearch` all session**, and it was
-in the test apparatus rather than in the bot.
+**The largest single effect measured in a duel against the scripted bot**, and
+it was in the test apparatus rather than in either bot.
 
 `ScriptedBot.Objective` is optional. Without it the bot has no objective layer at
 all: it never picks a goal, never hunts, and **stands where it was placed**.
-`DuelEnv.MakeBot` has always set it. `RolloutSearchTests.ItBeatsTheScriptedBotInADuel`
-never did, and neither did the first draft of every measurement in this section.
+`DuelEnv.MakeBot` has always set it; a duel harness that does not measures an
+opponent that cannot close.
 
 The same 24 banded duels on `ctf_2dfort`, tier 5, 2,400 ticks:
 
@@ -5190,13 +4878,8 @@ The same 24 banded duels on `ctf_2dfort`, tier 5, 2,400 ticks:
 opponent that cannot close loses nothing by it. Banded placement puts the pair
 150-350px apart on purpose — and then "cannot close" is the whole duel.
 
-⚠️ **So the pinned smoke figure was against a weaker opponent than the one every
-other caller uses.** Fixed, and the corrected banded figure (21-1-2 against
-`gg2-rl`'s independently measured 76.5% over 1,600 duels) is in that test's
-remark. **A harness that constructs a bot by hand has to construct the same bot
-the product constructs** — the third time this session a measurement was invalid
-because the apparatus differed from the thing it claimed to measure, after the
-flight harness's start position and the `gg_debug` opponent-model scenario.
+**A harness that constructs a bot by hand has to construct the same bot the
+product constructs.**
 
 ### ⚠️ `gg_debug` is a determinism fixture, not an evaluation map
 
