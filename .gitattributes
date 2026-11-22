@@ -23,7 +23,6 @@ maps/duel/*.png binary
 # fixture change. docs/PARITY.md.
 *.trace        binary
 *.bin          binary
-*.npz          binary
 
 # Shell scripts are read by bash, and a CR at the end of every line is a syntax
 # error there rather than a cosmetic difference. core.autocrlf=true would put one

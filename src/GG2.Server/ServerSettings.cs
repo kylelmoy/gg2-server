@@ -655,12 +655,12 @@ public static class ServerSettings
             (o, v) => o.Bots = o.Bots with { NamePrefix = v }, "[AI] "));
 
         // ⛔ WHICH CONTROLLER DRIVES A CLASS — a different question from which
-        // classes bots play, which is [BotClasslimits]. Default is every
-        // checkpoint's own set, so this only ever has to be written to override one.
+        // classes bots play, which is [BotClasslimits]. A .gg2p names no class, so
+        // a policy server assigns every class it wants driven here.
         settings.Add(ListRow(
             "Bots", "ClassPolicy", nameof(ServerOptions.BotClassPolicies),
             o => o.BotClassPolicies, (o, v) => o.BotClassPolicies = v,
-            "Sniper=scripted,Pyro=tier2_pyro_rest3_s0"));
+            "Sniper=scripted,Pyro=ppo-finetune2-pyro-s1"));
 
         // ⛔ A BEHAVIOUR switch, not a performance one. Off, a team's routes stop
         // being pushed apart and match dispersion falls 0.785 -> 0.634 with nothing

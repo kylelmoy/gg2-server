@@ -73,7 +73,7 @@ public sealed class HandoverBubbleTests
     /// </remarks>
     [Theory]
     [InlineData("policy", HandoverBubble.TookPolicy)]
-    [InlineData("policy:tier0_combat4_s2", HandoverBubble.TookPolicy)]
+    [InlineData("policy:ppo-warm-soldier-s1", HandoverBubble.TookPolicy)]
     [InlineData("gg2-sim", HandoverBubble.TookPolicy)]
     [InlineData("gg2-sim:soldier", HandoverBubble.TookPolicy)]
     public void AControllerTakingTheWheelIsNamedByItsBubble(string name, byte expected) =>

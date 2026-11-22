@@ -176,9 +176,8 @@ public static class SimulationStamp
     /// else's 210) and <see cref="ClassStats.NumFlames"/> were a single constant
     /// for every class, so a pyro burned 21 times longer than the reference's.
     /// That is a damage number and the rule above says bump. It was not bumped
-    /// because the stamp dated only <c>gg2-rl</c>'s <c>.npz</c> checkpoints, which
-    /// the server no longer loads at all. The <c>.gg2p</c> nets every host runs
-    /// carry no stamp. Both values are also left out of the class line below for
+    /// because no checkpoint the server loads carries the stamp: the <c>.gg2p</c>
+    /// nets every host runs have none. Both values are also left out of the class line below for
     /// that reason. The next bump for any other cause should add them to it.
     /// </para>
     /// </remarks>

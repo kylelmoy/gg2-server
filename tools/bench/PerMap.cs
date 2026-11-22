@@ -31,9 +31,9 @@ public static class PerMapEval
         long RedDeaths, long BlueDeaths, long RedScore, long BlueScore,
         int Bots, int Stuck, double MinTravel, int Capped);
 
-    public static void Run(string maps, string nav, string npz, int perMap)
+    public static void Run(string maps, string nav, string policyPath, int perMap)
     {
-        var policy = Nets.Load(npz);
+        var policy = Nets.Load(policyPath);
 
         // THE CENSORING. Every phase 4 number was taken at the 5-minute cap,
         // and on gen_destroy the CONTROL arm decides 50% of matches there and

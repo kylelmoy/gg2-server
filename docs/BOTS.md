@@ -383,9 +383,8 @@ in `gg2-rl/gg2-rl/docs/ENV.md`, "So a pure refactor". The worst: `EnvServer.cs` 
 that method goes red with no semantic change**.
 
 ⚠️ **Flagging a move is a courtesy on top of that gate, never a substitute.**
-`ObservationWriter.cs`, `PolicyNetwork.cs` and the `.npz` loader were removed
-with the gg2-rl nets, so any of its patterns that read those files no longer
-have a source here.
+The patterns that read `ObservationWriter.cs`, `PolicyNetwork.cs` or the
+`.npz` loader have no source here: none of those files exists.
 
 `SIM_UUID` covers the constants, the action encoding, the observation layout
 and the simulation behaviour version — **not `GG2.Bots`**. So a bot change does

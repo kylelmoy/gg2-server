@@ -17,7 +17,7 @@ namespace Bench;
 /// </remarks>
 public static class PolicyEval
 {
-    public static void Run(string maps, string nav, string npz, int matchesPerMap)
+    public static void Run(string maps, string nav, string policyPath, int matchesPerMap)
     {
         // BOTH ARMS. A stuck-bot number from the policy arm alone cannot say
         // whether the policy caused it; the scripted bot has always been able to
@@ -25,32 +25,32 @@ public static class PolicyEval
         // with Policy = null.
         if (Environment.GetEnvironmentVariable("BENCH_CONFIRM") == "1")
         {
-            Measure(maps, nav, npz, matchesPerMap, true, HandoverRule.MacroTask, 150);
+            Measure(maps, nav, policyPath, matchesPerMap, true, HandoverRule.MacroTask, 150);
             Console.WriteLine();
-            Measure(maps, nav, npz, matchesPerMap, false, HandoverRule.Distance, 300);
+            Measure(maps, nav, policyPath, matchesPerMap, false, HandoverRule.Distance, 300);
             return;
         }
 
-        Measure(maps, nav, npz, matchesPerMap, true, HandoverRule.MacroTask, 300);
+        Measure(maps, nav, policyPath, matchesPerMap, true, HandoverRule.MacroTask, 300);
         Console.WriteLine();
-        Measure(maps, nav, npz, matchesPerMap, true, HandoverRule.MacroTask, 220);
+        Measure(maps, nav, policyPath, matchesPerMap, true, HandoverRule.MacroTask, 220);
         Console.WriteLine();
-        Measure(maps, nav, npz, matchesPerMap, true, HandoverRule.MacroTask, 150);
+        Measure(maps, nav, policyPath, matchesPerMap, true, HandoverRule.MacroTask, 150);
         Console.WriteLine();
-        Measure(maps, nav, npz, matchesPerMap, true, HandoverRule.MacroTask, 80);
+        Measure(maps, nav, policyPath, matchesPerMap, true, HandoverRule.MacroTask, 80);
         Console.WriteLine();
-        Measure(maps, nav, npz, matchesPerMap, false, HandoverRule.Distance, 300);
+        Measure(maps, nav, policyPath, matchesPerMap, false, HandoverRule.Distance, 300);
     }
 
     private static void Measure(
-        string maps, string nav, string npz, int matchesPerMap, bool usePolicy, HandoverRule rule, double range)
+        string maps, string nav, string policyPath, int matchesPerMap, bool usePolicy, HandoverRule rule, double range)
     {
         // ⛔ Loaded even for the control arm, which does not DRIVE with it. The
         // control is "the same matches with Policy = null" — the same MATCHES, so
         // it has to be populated with the same classes, and those come from the
         // checkpoint. Deciding the roster by whether this arm drives would move
         // two things between the arms at once.
-        var loaded = Nets.Load(npz);
+        var loaded = Nets.Load(policyPath);
         var policy = usePolicy ? loaded : null;
         string[] mapNames =
         [

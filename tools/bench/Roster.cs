@@ -24,9 +24,8 @@ namespace Bench;
 /// <para>
 /// ⚠️ It says where the set CAME FROM, not just what it is. "the checkpoint's own"
 /// against "the default (no checkpoint)" is the distinction that matters — the two
-/// print identically for a <c>combat4</c>-family file, whose set IS the default,
-/// and that coincidence is exactly what hid the defect until a family outside it
-/// existed.
+/// print identically for a file whose set happens to BE the default, and that
+/// coincidence hides a wrong set.
 /// </para>
 /// </remarks>
 internal static class Roster

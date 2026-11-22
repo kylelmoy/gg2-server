@@ -190,11 +190,6 @@ gg2-sim's claim**, judged against its other nets rather than against the
 scripted bots, and nothing here measures it. A `.gg2p` carries no simulation
 stamp, so a physics change here does not refuse one; it is the cue to retrain.
 
-The phase was first built on `gg2-rl`'s `.npz` nets, which beat the all-scripted
-bot on death share on 21 of 21 maps against a simulation since superseded. That
-runner, its nets and its fixtures are removed; the result describes nothing the
-server can run.
-
 ---
 
 ## Why the project exists

@@ -1686,23 +1686,6 @@ it.
 (`EnvProtocol.SimulationUuid`) rather than computing it, so the trainer records
 whatever this build hands it.
 
-#### ⚠️ A whole-file md5 is the wrong pin for an artefact with a provenance field
-
-`ShippedCheckpointTests` pinned the md5 of the whole `.npz`, with the explicit
-instruction that going red must **not** be answered by updating the constant:
-"a checkpoint that changed has new numbers or no numbers; take the README with
-it, or the pin becomes a rubber stamp."
-
-**A re-stamp broke that pin while changing nothing the README measures**, so
-following the instruction literally would have meant re-measuring numbers that
-could not have moved — and not following it makes the pin a rubber stamp. The
-pin was the problem, not the instruction.
-
-It is now two pins: a digest over every member **except** `meta.npy` (what the
-README's numbers were measured against, and provably unmoved by a re-stamp), and
-a separate one over `meta.npy`. A provenance edit and a different set of weights
-now produce different failures instead of the same one.
-
 ### Phase 7 item 4h: a server that fills itself, and the headroom number
 
 `GG2.Bots.{BotPopulation, BotPopulationOptions}`,

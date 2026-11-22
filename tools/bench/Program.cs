@@ -114,13 +114,13 @@ if (Environment.GetEnvironmentVariable("BENCH_COMBAT") is { } combatTicks)
 
 if (Environment.GetEnvironmentVariable("BENCH_EVAL") is { } perMap)
 {
-    Bench.PolicyEval.Run(maps, Environment.GetEnvironmentVariable("GG2_NAV")!, Environment.GetEnvironmentVariable("NPZ")!, int.Parse(perMap));
+    Bench.PolicyEval.Run(maps, Environment.GetEnvironmentVariable("GG2_NAV")!, Environment.GetEnvironmentVariable("POLICY")!, int.Parse(perMap));
     return;
 }
 
 if (Environment.GetEnvironmentVariable("BENCH_SWEEP") is { } sweepArg)
 {
-    Bench.RangeSweep.Run(maps, Environment.GetEnvironmentVariable("GG2_NAV")!, Environment.GetEnvironmentVariable("NPZ")!, int.Parse(sweepArg));
+    Bench.RangeSweep.Run(maps, Environment.GetEnvironmentVariable("GG2_NAV")!, Environment.GetEnvironmentVariable("POLICY")!, int.Parse(sweepArg));
     return;
 }
 
@@ -178,14 +178,14 @@ if (Environment.GetEnvironmentVariable("BENCH_CHURN") is { } churnN)
     Bench.ChurnBench.Run(
         maps,
         Environment.GetEnvironmentVariable("GG2_NAV")!,
-        Environment.GetEnvironmentVariable("NPZ")!,
+        Environment.GetEnvironmentVariable("POLICY")!,
         int.Parse(churnN));
     return;
 }
 
 if (Environment.GetEnvironmentVariable("BENCH_PERMAP") is { } pm)
 {
-    Bench.PerMapEval.Run(maps, Environment.GetEnvironmentVariable("GG2_NAV")!, Environment.GetEnvironmentVariable("NPZ")!, int.Parse(pm));
+    Bench.PerMapEval.Run(maps, Environment.GetEnvironmentVariable("GG2_NAV")!, Environment.GetEnvironmentVariable("POLICY")!, int.Parse(pm));
     return;
 }
 

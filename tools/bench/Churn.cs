@@ -47,7 +47,7 @@ public static class ChurnBench
         internal double PerSecond(long n) => Ticks == 0 ? 0 : n / (Ticks / 30.0);
     }
 
-    public static void Run(string maps, string nav, string npz, int perMap)
+    public static void Run(string maps, string nav, string policyPath, int perMap)
     {
         var list = Environment.GetEnvironmentVariable("BENCH_FOCUS") is { Length: > 0 } focus
             ? focus.Split(',', StringSplitOptions.RemoveEmptyEntries)
@@ -56,11 +56,7 @@ public static class ChurnBench
         var cap = int.Parse(Environment.GetEnvironmentVariable("BENCH_CAP") ?? "2");
         var bots = int.TryParse(Environment.GetEnvironmentVariable("BENCH_BOTS"), out var b) && b > 0 ? b : 8;
 
-        // The policy is loaded with the stamp check BYPASSED, because this asks
-        // what the live server's bots do and the live server is running it that
-        // way. A churn number measured on a configuration nobody is playing would
-        // answer a question nobody asked.
-        var policy = Nets.Load(npz);
+        var policy = Nets.Load(policyPath);
 
         Console.WriteLine(
             $"input churn per bot-second, {bots} bots, {perMap} matches a map, cap {cap} min");

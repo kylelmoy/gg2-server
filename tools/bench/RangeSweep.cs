@@ -33,9 +33,9 @@ namespace Bench;
 /// </remarks>
 public static class RangeSweep
 {
-    public static void Run(string maps, string nav, string npz, int count)
+    public static void Run(string maps, string nav, string policyPath, int count)
     {
-        var policy = Nets.Load(npz);
+        var policy = Nets.Load(policyPath);
         var mapList = (Environment.GetEnvironmentVariable("BENCH_FOCUS") ?? "gen_destroy").Split(',');
         var ranges = (Environment.GetEnvironmentVariable("BENCH_RANGES") ?? "0,80,150,220,300,450")
             .Split(',').Select(double.Parse).ToArray();

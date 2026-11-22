@@ -233,7 +233,7 @@ public sealed class PolicyTierWiringTests
     /// fleet renderer refuse it too instead of a restart ending in exit 2.
     /// </remarks>
     [Theory]
-    [InlineData("checkpoints/tier0_combat4_s2.npz")]
+    [InlineData("checkpoints/policy.npz")]
     [InlineData("checkpoints/net.onnx")]
     public void ACheckpointThatIsNotAGg2pIsRefused(string path)
     {
