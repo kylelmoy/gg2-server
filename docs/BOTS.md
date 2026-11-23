@@ -83,10 +83,10 @@ too, and with mostly-bot teams it reduces to per-human anyway.
 
 | | |
 |---|---|
-| The rating | `DuelLadder`'s staircase and its eight levels (`docs/DUEL.md`, "The difficulty ladder"), one per human across every class, by address and name, forgotten an hour after it was last used |
+| The rating | `DuelLadder`'s staircase on the one level scale every bot plays (`BotLevel`, 0-10; `docs/DUEL.md`, "The difficulty ladder"), floored at tier 1's level 3 (`DuelLadder.ForAuto`) so a team-mate is never a Dummy or a Novice, one per human across every class, by address and name, forgotten an hour after it was last used |
 | A result | A kill between a human and a bot, whoever `PlayerDeathEvent.Killer` credits: the bot dying is a win, the human dying a loss, with the margin the winner's health left. Human against human, a suicide and a death with no killer count for nobody |
 | The target | `AutoDifficultyWinPercent`, 60%: the rating stands still where a human wins 60% of their fights with bots |
-| The start | A new human starts on `Difficulty`'s level (`DuelLadder.LevelOfTier`: tiers 1-4 on levels 1, 3, 5, 7, tier 5 on 8), where a bot plays exactly the tier, so turning it on changes nothing until results come in |
+| The start | A new human starts on `Difficulty`'s level (`BotLevel.OfTier`: tiers 1-5 on levels 3, 5, 6, 7, 10), where a bot plays exactly the tier, so turning it on changes nothing until results come in |
 | Against a bot, a generator, nothing | The bot's own `Difficulty` |
 | Where it is read | `ScriptedBot.Skill` resolves the current target's row in `OpponentSkills`, which the population service rewrites every tick; every reader of a bot's skill goes through it (the combat step, which re-reads it once the target is settled so a fresh target's acquire hold is already its player's, the reflex dodge, `HumanizedBot`, and `HybridBot`'s handicap over a net). A bot is never renamed for it |
 | Where it shows | The admin panel's player list, an `LV` tag on each human (`autoLevel` in `state`) |

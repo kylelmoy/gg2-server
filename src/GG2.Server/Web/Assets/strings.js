@@ -348,7 +348,7 @@ const STRINGS = {
       "brainShare": "{brain}: {share}% of ticks ({micro}/{polls})",
       "intelTag": "INTEL",
       "autoLevelTag": "LV {level}",
-      "autoLevel": "Auto difficulty: bots fighting this player play level {level} of 8",
+      "autoLevel": "Auto difficulty: bots fighting this player play level {level} of 10",
       "actionsFor": "Actions for {name}"
     },
     "objective": {

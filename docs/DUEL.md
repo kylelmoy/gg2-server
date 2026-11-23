@@ -99,22 +99,24 @@ Difficulty` is not read for duel bots while it is on. `DuelLadder` in
 `src/GG2.Server/` is the whole of the arithmetic; `BotPopulationService.Duel.cs`
 applies it.
 
-**Levels.** Eleven, 0-10, with their own table (`DuelLadder.DuelSkillOf`); only
-level 10 is a server tier (5, the nets as trained). Levels 0-2 are for players
+**Levels.** Eleven, 0-10, on the one scale every bot plays (`BotLevel`): the
+server's `Difficulty` tiers 1-5 are levels 3, 5, 6, 7 and 10 (`BotLevel.OfTier`),
+so a level here is the same bot as on a team server. Levels 0-2 are for players
 on cumbersome controls such as a phone: every ramp in `BotSkill.For` is flat
 below skill 0.15, so they push the handicaps past that floor instead
 (`BotSkill.Novice`). **Level 0 never fires** (`BotSkill.NeverFires`, any rating
 under 0.5): no `Attack` and no `Special` from either layer, and no `BuildSentry`,
-so no rocket jump, mine, airblast or sentry lands a hit either. Auto difficulty on team servers keeps its own eight levels.
-Human-like aim costs a duel several tiers where it costs a match about one, so
+so no rocket jump, mine, airblast or sentry lands a hit either. Auto difficulty
+on team servers uses the same scale from level 3 up. Human-like aim costs a duel several tiers where it costs a match about one, so
 on the tiers' own mapping the levels bunched far below the top. Here the human
 aim fades over levels 3-10
 (`BotSkill.Human(double)`: the aim lag's share, the reflex floor and the
 reversal cooldown together) and the skill under it is refitted, so each level is
 an even step in log-odds against a level-6 bot (`BENCH_DUEL_LADDER`, about 0.6 a
 level; `docs/TRAPS-BOTS.md`, "The duel ladder"). The Novice levels step a little
-wider, 0.75 and 0.92. Auto difficulty on team servers
-keeps the tiers' mapping (`DuelLadder.SkillOf`).
+wider, 0.75 and 0.92. In a match the same levels are not evenly apart (human aim
+costs less there), which is why the tiers sit where they do: `docs/TRAPS-BOTS.md`,
+"The tiers are levels".
 
 | Level | Skill | Human | Label | Score vs level 6 | Score vs level 3 |
 |---|---|---|---|---|---|

@@ -933,7 +933,25 @@ model.** Four gates, all off `BotSkill`:
 - The match ladder is still even after the rocket perception
   (`BENCH_TIERS=20 BENCH_HUMAN_AIM=1`, 21 maps, 420 matches an arm: −0.086 /
   −0.153 / −0.235 / −0.303 against 5, ±0.008-0.011; −0.085 / −0.149 / −0.231 /
-  −0.300 before it), so `TierSkills` stands for team servers.
+  −0.300 before it). Those are the strengths the tier levels below were
+  placed to keep.
+- **The tiers are levels.** Every bot plays `BotLevel` (0-10, the duel's
+  table); `Difficulty` 1-5 is levels 3 / 5 / 6 / 7 / 10 (`BotLevel.OfTier`),
+  and the per-tier skill table this section describes below is gone. Placed by
+  `BENCH_TIERS=20 BENCH_HUMAN_AIM=1` with `lv:` arms (420 paired matches an
+  arm, opponent's death share against tier 5): levels 3-9 read −0.312 /
+  −0.272 / −0.206 / −0.139 / −0.093 / −0.046 / −0.015, so **in a match the top
+  of the scale bunches** (8 and 9 barely below 10) and tier 4 sits three levels
+  under tier 5. Held out (`BENCH_SEED_BASE=500000`), tiers 4..1 read −0.088 /
+  −0.134 / −0.205 / −0.312 ±0.009-0.011, against −0.086 / −0.153 / −0.235 /
+  −0.303 for the table they replace: tiers 1 and 4 unchanged, 2 and 3 about
+  0.02-0.03 stronger, steps 0.05-0.11 where they were 0.07-0.09. Fractional tier
+  levels (4.5 for tier 2) would even that out; whole levels were the call so a
+  tier names a level. **Tier 4 is now a weaker skill aiming less like a person**
+  (0.70, human share 0.33) rather than tier 5's skill aiming fully like one, so
+  its rocket reaction is 3.9 ticks rather than the 3-tick human floor. What
+  would show the placement stale: a retrained net, a change to `BotLevel`'s
+  table, or `BENCH_TIERS` reading a tier more than ~0.03 from those numbers.
 - **The tiers are tuned to be evenly apart in a match**, through
   `BotSkill.TierSkills` (0.15, 0.30, 0.42, 0.67, 0.95 until 2026-10-10, ⚠️ now
   shifted: see the next item; evenly spaced skills cost

@@ -11,9 +11,8 @@ namespace GG2.Bots;
 /// makes its reactions slower, its tracking coarser and its aim looser, which is
 /// what a weaker player actually looks like.
 /// <para>
-/// <b>The server's 1-5 setting is one point on a continuous scale</b>, at the
-/// skills in <see cref="TierSkills"/> — spaced so the tiers are evenly apart in
-/// play, not evenly apart in skill.
+/// <b>Every bot plays a point on one continuous scale</b>, <see cref="BotLevel"/>
+/// 0-10, and the server's 1-5 setting is five of its levels (<see cref="ForTier"/>).
 /// </para>
 /// </remarks>
 /// <param name="AcquireTicks">
@@ -167,48 +166,12 @@ public readonly record struct BotSkill(
     /// </remarks>
     public static bool IsTier(int tier) => tier is >= BotConstants.TierMin and <= BotConstants.TierMax;
 
-    /// <summary>The skill each of the server's tiers 1-5 plays at.</summary>
+    /// <summary>The server's 1-5 difficulty: the skill of its level, <see cref="BotLevel.OfTier"/>.</summary>
     /// <remarks>
-    /// <b>Tuned so each step down costs about the same in a match</b>, measured by
-    /// <c>BENCH_TIERS</c> as the opponent's share of a match's deaths against tier 5
-    /// (<c>docs/TRAPS-BOTS.md</c>, the difficulty chain). Evenly spaced skills
-    /// (0.15, 0.35, 0.55, 0.75) are not evenly spaced in play: the bottom two
-    /// steps cost twice what the top two did.
-    /// <para>
-    /// <b>Shifted up one place on 2026-10-10, when tiers 1-4 began to aim like
-    /// people</b> (<see cref="HumanAim"/>, D3). Human aim costs about one step, so
-    /// the old skills under it doubled the 4-to-5 step. Each lower tier now plays
-    /// the skill the tier above it used to, plus human aim: tier 4 is tier 5's
-    /// skill aiming like a person, and the ladder keeps its even steps.
-    /// <c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, D3, has both ladders.
-    /// </para>
-    /// <para>
-    /// <b>Tiers 1-3 spread on 2026-10-11, when tiers 1-4 began to move like people</b>
-    /// (<see cref="HumanizeOptions.Tracking7"/>, D10). Tier 4 already plays the top
-    /// skill, so the legs' cost widened the 4-to-5 step and no skill could close it;
-    /// tiers 1-3 were spaced further apart (from 0.30, 0.42, 0.67) so every step is
-    /// within half a step of the others. Easy got easier.
-    /// </para>
-    /// <para>
-    /// <b>D12 replaced those legs with a reversal cooldown</b>
-    /// (<see cref="HumanizeOptions.Tracking9"/>, <see cref="ReversalCooldownTicks"/>),
-    /// because D10's averaging made a bot run a second or more past its opponent.
-    /// <c>docs/TRAPS-BOTS.md</c>, the difficulty chain, has the ladder it measured.
-    /// </para>
+    /// Tiers 1-4 aim like people; tier 5 is <see cref="BotLevel.Max"/> and does
+    /// not, by the user's call on 2026-10-10: "Max" is the best possible strength.
     /// </remarks>
-    public static ReadOnlySpan<double> TierSkills => [0.20, 0.37, 0.61, 0.95, 0.95];
-
-    /// <summary>The server's 1-5 difficulty as a skill, from <see cref="TierSkills"/>.</summary>
-    /// <remarks>
-    /// Tiers 1-4 aim like people (<see cref="HumanAim"/>); tier 5 does not, by the
-    /// user's call on 2026-10-10: "Max" is the best possible strength.
-    /// </remarks>
-    public static BotSkill ForTier(int tier)
-    {
-        var clamped = Math.Clamp(tier, BotConstants.TierMin, BotConstants.TierMax);
-
-        return For(TierSkills[clamped - BotConstants.TierMin]).Human(clamped < BotConstants.TierMax);
-    }
+    public static BotSkill ForTier(int tier) => BotLevel.Skill(BotLevel.OfTier(tier));
 
     /// <summary>
     /// The shortest reaction to a projectile a bot that plays like a person has:

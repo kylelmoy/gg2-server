@@ -54,7 +54,7 @@ public sealed partial class BotPopulationService
     private const int LadderSweepTicks = 60 * GameConstants.TickRate;
 
     /// <summary>Every duel human's rating, by address, name and class. <see cref="DuelLadder"/>.</summary>
-    internal DuelLadder Ladder { get; } = DuelLadder.ForDuel();
+    internal DuelLadder Ladder { get; } = new();
 
     private long _duelTick;
 
@@ -284,7 +284,7 @@ public sealed partial class BotPopulationService
         var rating = Ladder.For(LadderKey(slot, human), human.Class, _server.Options.DuelLadderStartLevel, _duelTick);
 
         if (ScriptedBot.Of(_server.SourceOf(bot)) is { } scripted)
-            scripted.Skill = DuelLadder.DuelSkillOf(rating.Value);
+            scripted.Skill = BotLevel.Skill(rating.Value);
 
         if (rename)
         {

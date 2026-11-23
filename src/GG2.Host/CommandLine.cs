@@ -607,7 +607,7 @@ internal static class CommandLine
                     break;
 
                 case "--duel-ladder-start":
-                    options.DuelLadderStartLevel = Math.Clamp(cursor.TakeInt(), DuelLadder.DuelMinLevel, DuelLadder.DuelMaxLevel);
+                    options.DuelLadderStartLevel = Math.Clamp(cursor.TakeInt(), DuelLadder.MinLevel, DuelLadder.MaxLevel);
                     break;
 
                 case "--duel-ladder-win-percent":

@@ -94,10 +94,15 @@ public static class Tiers
             ? focus.Split(',')
             : PerMapEval.Maps;
 
+    // `lv:<level>` arms play the subject at a BotLevel rather than a tier (matches only).
     private static (string Name, int Tier, bool HandicapOnly)[] ArmsWanted() =>
         Environment.GetEnvironmentVariable("BENCH_TIER_ARMS") is { Length: > 0 } wanted
-            ? [.. ArmList.Where(a => wanted.Split(',').Contains(a.Name))]
+            ? [.. ArmList.Where(a => wanted.Split(',').Contains(a.Name)),
+               .. wanted.Split(',').Where(w => w.StartsWith("lv:", StringComparison.Ordinal)).Select(w => (w, 5, false))]
             : ArmList;
+
+    private static double? LevelOf(string arm) =>
+        arm.StartsWith("lv:", StringComparison.Ordinal) ? double.Parse(arm[3..], CultureInfo.InvariantCulture) : null;
 
     /// <summary>
     /// Duels: two characters of one class placed 80-200px apart, the subject's
@@ -259,6 +264,8 @@ public static class Tiers
                 Brain = brains.Value,
                 RedDifficulty = subject == Team.Red ? arm.Tier : 5,
                 BlueDifficulty = subject == Team.Blue ? arm.Tier : 5,
+                RedLevel = subject == Team.Red ? LevelOf(arm.Name) : null,
+                BlueLevel = subject == Team.Blue ? LevelOf(arm.Name) : null,
                 HandicapOnly = arm.HandicapOnly,
                 HumanizeTeam = Humanized(arm.Name) ? subject : null,
                 HumanizeWith = HumanizeFor(arm.Name),

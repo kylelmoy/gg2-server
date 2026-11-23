@@ -14,7 +14,7 @@ namespace Bench;
 /// <remarks>
 /// <b>What the duel server builds</b>: <c>maps/duel</c>, the duel nets sampled and
 /// always driving, every bot wrapped in <see cref="HumanizedBot.ByTier"/> as
-/// <c>[Bots] HumanAim</c> does, its skill <see cref="DuelLadder.DuelSkillOf"/> of the
+/// <c>[Bots] HumanAim</c> does, its skill <see cref="BotLevel.Skill"/> of the
 /// level. The subject plays each level in <c>BENCH_DUEL_LEVELS</c> (default 1-10;
 /// fractions allowed) against an opponent at level 10, same class, on the same
 /// placements, so every level is paired per duel against the mirror,
@@ -91,7 +91,7 @@ internal static class DuelLevels
             IInputSource Bot(Team team, int slot, double rating)
             {
                 IInputSource bot = policy.Value!.Wrap(
-                    new ScriptedBot(world.Nav, new NavQuery(team), DuelLadder.DuelSkillOf(rating), slot) { Distances = distances });
+                    new ScriptedBot(world.Nav, new NavQuery(team), BotLevel.Skill(rating), slot) { Distances = distances });
                 return humanize ? HumanizedBot.ByTier(bot, (uint)slot, preset) : bot;
             }
 

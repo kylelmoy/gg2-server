@@ -39,6 +39,11 @@ namespace GG2.Bots;
 /// than two batches each compared to the all-scripted arm.
 /// </param>
 /// <param name="BlueBrain">Blue's, as <paramref name="RedBrain"/>.</param>
+/// <param name="RedLevel">
+/// Red's <see cref="BotLevel"/> in place of its tier, or null to play the tier.
+/// What places the tiers on the level scale is a match between levels.
+/// </param>
+/// <param name="BlueLevel">Blue's, as <paramref name="RedLevel"/>.</param>
 /// <param name="HandicapOnly">
 /// A team's own tier reaches only <see cref="HybridBot.HandicapSkill"/>, and every
 /// scripted layer plays at <see cref="Difficulty"/>. Isolates how much of a tier
@@ -87,7 +92,9 @@ public readonly record struct HeadlessMatchOptions(
     bool HumanAimByTier = false,
     HumanizeOptions? HumanAimWith = null,
     BotBrainSpec? RedBrain = null,
-    BotBrainSpec? BlueBrain = null)
+    BotBrainSpec? BlueBrain = null,
+    double? RedLevel = null,
+    double? BlueLevel = null)
 {
     /// <summary>
     /// A short match on <c>ctf_truefort</c> with twelve bots. ⚠️ The values are
@@ -139,6 +146,12 @@ public readonly record struct HeadlessMatchOptions(
         Team.Blue => BlueBrain ?? Brain,
         _ => Brain,
     };
+
+    /// <summary>The skill <paramref name="team"/> plays: its level if it has one, else its tier's.</summary>
+    public BotSkill SkillOf(Team team) =>
+        (team == Team.Red ? RedLevel : team == Team.Blue ? BlueLevel : null) is { } level
+            ? BotLevel.Skill(level)
+            : BotSkill.ForTier(DifficultyOf(team));
 
     /// <summary>The tier <paramref name="team"/> plays at.</summary>
     public int DifficultyOf(Team team) => team switch

@@ -28,14 +28,14 @@ namespace GG2.Server;
 /// </para>
 /// <para>
 /// Bot against bot plays <c>[Bots] Difficulty</c>, and a new human's rating
-/// starts on its level (<see cref="DuelLadder.LevelOfTier"/>), so a server that
+/// starts on its level (<see cref="BotLevel.OfTier"/>), so a server that
 /// turns this on starts out playing as it did.
 /// </para>
 /// </remarks>
 public sealed partial class BotPopulationService
 {
     /// <summary>Every human's auto-difficulty rating, by address and name, one per human.</summary>
-    internal DuelLadder AutoRatings { get; } = new();
+    internal DuelLadder AutoRatings { get; } = DuelLadder.ForAuto();
 
     /// <summary>
     /// The skill bots play at against each human this tick; empty with auto
@@ -71,7 +71,7 @@ public sealed partial class BotPopulationService
         Opponents.Clear();
         _opponentsSet = true;
 
-        var start = DuelLadder.LevelOfTier(options.Difficulty);
+        var start = BotLevel.OfTier(options.Difficulty);
         for (var slot = 1; slot < _server.RosterCount; slot++)
         {
             var entry = _server.EntryOf(slot);
@@ -79,7 +79,7 @@ public sealed partial class BotPopulationService
                 continue;
 
             var rating = AutoRatings.For(LadderKey(slot, entry), null, start, _autoTick);
-            Opponents.Set(slot, DuelLadder.SkillOf(rating.Value));
+            Opponents.Set(slot, BotLevel.Skill(rating.Value));
         }
     }
 
@@ -94,7 +94,7 @@ public sealed partial class BotPopulationService
             return;
 
         var target = _server.Options.AutoDifficultyWinPercent / 100.0;
-        var start = DuelLadder.LevelOfTier(_server.Options.Bots.Difficulty);
+        var start = BotLevel.OfTier(_server.Options.Bots.Difficulty);
 
         for (var victim = 1; victim < count; victim++)
         {
@@ -116,7 +116,7 @@ public sealed partial class BotPopulationService
     }
 
     /// <summary>
-    /// A human's auto-difficulty level, 1-8, or 0 with auto difficulty off or
+    /// A human's auto-difficulty level (<see cref="BotLevel"/>, tier 1's level to 10), or 0 with auto difficulty off or
     /// for a slot that is not a human with a rating. For the admin panel.
     /// </summary>
     internal double AutoRatingOf(int slot)

@@ -4,23 +4,18 @@ using GG2.Protocol;
 namespace GG2.Server;
 
 /// <summary>
-/// The duel server's difficulty ladder: each human's bot plays at a rating that
-/// rises when the human wins and falls when they lose, one rating per human and
-/// class. <c>docs/DUEL.md</c>, "The difficulty ladder".
+/// A difficulty staircase on <see cref="BotLevel"/>'s scale: a bot plays at a
+/// rating that rises when its human wins and falls when they lose. The duel
+/// server keeps one per human and class (<c>docs/DUEL.md</c>, "The difficulty
+/// ladder"); auto difficulty one per human (<c>docs/BOTS.md</c>, "Auto difficulty").
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Eleven levels on the duel server (0-10), eight for auto difficulty.</b> The
-/// duel's are <see cref="DuelSkillOf"/>'s own table, with only level 10 a tier (5)
-/// and levels 0-2 below anything a tier plays (<see cref="BotSkill.Novice"/>), for
-/// players on cumbersome controls; level 0 never fires. For auto difficulty, <see cref="SkillOf"/>:
-/// tiers 1-4 sit on levels 1, 3, 5 and 7 and the levels between interpolate their
-/// skill; tier 5 is level 8.
-/// Tier 5 differs from tier 4 only in playing like a person, and
-/// <see cref="BotSkill.Human(double)"/> fades that out between levels 7 and 8, so
-/// that step is a slope too rather than a cliff at 7.5. The tiers were tuned to
-/// be evenly spaced in play (<see cref="BotSkill.TierSkills"/>), which is why
-/// they sit on every other level rather than at even skill intervals.
+/// <b>Both run on the one level scale every bot plays</b>, so a level means the
+/// same bot everywhere and a server tier is a level (<see cref="BotLevel.OfTier"/>).
+/// The duel's ladder runs the whole scale, 0-10; auto difficulty's stops at
+/// tier 1's level, since a bot that never fires or barely does is a fix for
+/// cumbersome controls in a 1v1, not a team-mate (<see cref="ForAuto"/>).
 /// </para>
 /// <para>
 /// <b>The rating is continuous and the bot plays it exactly</b>; the name shows
@@ -41,20 +36,11 @@ namespace GG2.Server;
 /// </remarks>
 public sealed class DuelLadder
 {
-    /// <summary>The lowest level auto difficulty has.</summary>
-    public const int MinLevel = 1;
+    /// <summary>The lowest level: Dummy. <see cref="BotLevel.Min"/>.</summary>
+    public const int MinLevel = BotLevel.Min;
 
-    /// <summary>The duel server's lowest level: Dummy, a bot that never fires (<see cref="BotSkill.NeverFires"/>).</summary>
-    public const int DuelMinLevel = 0;
-
-    /// <summary>The highest level auto difficulty has: tier 5, the nets as trained.</summary>
-    public const int MaxLevel = 8;
-
-    /// <summary>
-    /// The duel server's highest level, also tier 5: its ladder has two Novice
-    /// levels below auto difficulty's level 1, so every level there is two higher.
-    /// </summary>
-    public const int DuelMaxLevel = 10;
+    /// <summary>The highest level: Haxton, tier 5. <see cref="BotLevel.Max"/>.</summary>
+    public const int MaxLevel = BotLevel.Max;
 
     /// <summary>The step a new rating starts with, in levels.</summary>
     public const double FirstStep = 1.0;
@@ -77,9 +63,6 @@ public sealed class DuelLadder
     /// <summary>How long a rating outlives its last duel: an hour of ticks.</summary>
     public const long ForgetTicks = 60L * 60 * GameConstants.TickRate;
 
-    // Levels 1, 3, 5, 7 are tiers 1-4 (BotSkill.TierSkills); 8 is tier 5.
-    private static ReadOnlySpan<double> AnchorSkills => [0.20, 0.37, 0.61, 0.95];
-
     // A null class is one rating for every class: auto difficulty's.
     private readonly Dictionary<(string Player, PlayerClass? Class), Rating> _ratings = [];
 
@@ -90,8 +73,8 @@ public sealed class DuelLadder
         Top = maxLevel;
     }
 
-    /// <summary>A ladder for the duel server: <see cref="DuelMinLevel"/> to <see cref="DuelMaxLevel"/>.</summary>
-    public static DuelLadder ForDuel() => new(DuelMinLevel, DuelMaxLevel);
+    /// <summary>A ladder for auto difficulty: tier 1's level to the top.</summary>
+    public static DuelLadder ForAuto() => new(BotLevel.LowestTier, MaxLevel);
 
     /// <summary>The lowest level this ladder's ratings reach.</summary>
     public int Bottom { get; }
@@ -210,95 +193,8 @@ public sealed class DuelLadder
         return (int)Math.Ceiling((RunLength * Math.Log(1 - p) / Math.Log(p)) - 1e-9);
     }
 
-    /// <summary>
-    /// The level a server difficulty tier sits on: tiers 1-4 on levels 1, 3, 5
-    /// and 7, tier 5 on level 8.
-    /// </summary>
-    public static int LevelOfTier(int tier)
-    {
-        var tiers = BotSkill.TierSkills.Length;
-        var clamped = Math.Clamp(tier, 1, tiers);
-        return clamped == tiers ? MaxLevel : (2 * clamped) - 1;
-    }
-
-    /// <summary>The level a duel rating shows as.</summary>
-    public static int LevelOf(double rating) =>
-        Math.Clamp((int)Math.Floor(rating + 0.5), DuelMinLevel, DuelMaxLevel);
-
-    /// <summary>The skill a rating plays at: the tiers' skills, interpolated between their levels.</summary>
-    public static BotSkill SkillOf(double rating)
-    {
-        var r = Math.Clamp(rating, MinLevel, MaxLevel);
-
-        double skill;
-        if (r >= 7)
-        {
-            skill = AnchorSkills[3];
-        }
-        else
-        {
-            // Anchors on levels 1, 3, 5, 7.
-            var segment = Math.Min(2, (int)((r - 1) / 2));
-            var t = (r - 1 - (2 * segment)) / 2;
-            skill = AnchorSkills[segment] + ((AnchorSkills[segment + 1] - AnchorSkills[segment]) * t);
-        }
-
-        // Tier 5 is tier 4's skill without playing like a person, so the top
-        // level fades that out: fully human at 7, not at all at 8.
-        return BotSkill.For(skill).Human(MaxLevel - r);
-    }
-
-    /// <summary>The duel server's skill at levels 0-10 (index 0 is level 0).</summary>
-    private static ReadOnlySpan<double> DuelSkills => [0.15, 0.15, 0.15, 0.15, 0.27, 0.40, 0.55, 0.70, 0.85, 0.95, 0.95];
-
-    /// <summary>How much like a person each duel level plays (<see cref="BotSkill.Human(double)"/>), 1 fully to 0 not at all.</summary>
-    private static ReadOnlySpan<double> DuelHuman => [1, 1, 1, 1, 0.85, 0.68, 0.50, 0.33, 0.20, 0.08, 0];
-
-    /// <summary>
-    /// How far below the skill floor each duel level plays (<see cref="BotSkill.Novice"/>):
-    /// the Dummy level and the two Novice levels. A rating under 0.5 never fires.
-    /// </summary>
-    private static ReadOnlySpan<double> DuelNovice => [3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0];
-
-    /// <summary>The skill a duel bot plays at for its human's rating.</summary>
-    /// <remarks>
-    /// <b>Not <see cref="SkillOf"/>, which auto difficulty plays on team servers.</b>
-    /// Human aim costs about one tier in a match and several in a duel: with the
-    /// tiers' mapping, levels 1-7 scored 0.36-0.61 against level 4 and level 8 0.94.
-    /// So here the human aim fades over the whole ladder, and the skill under it
-    /// was refitted (<c>BENCH_DUEL_LADDER=160 BENCH_DUEL_OPPONENT=4</c>) for even
-    /// steps in log-odds: 0.46-0.71 a level on the tuning seeds and on
-    /// <c>BENCH_SEED_BASE=500000</c>, against 0.22-0.88 before.
-    /// <c>docs/TRAPS-BOTS.md</c>, "The duel ladder". Those were levels 1-8 and are
-    /// 3-10 now: level 0 (never fires) and levels 1 and 2 are under them, the floor's skill
-    /// pushed further down (<see cref="BotSkill.Novice"/>). Level 10 is exactly tier
-    /// 5; no level below is a tier. What would show it stale: a retrained duel net,
-    /// a change to <see cref="HumanizeOptions.Tracking9"/> or to <see cref="BotSkill.For"/>.
-    /// </remarks>
-    public static BotSkill DuelSkillOf(double rating)
-    {
-        var r = Math.Clamp(rating, DuelMinLevel, DuelMaxLevel) - DuelMinLevel;
-        var i = Math.Min((int)r, DuelMaxLevel - DuelMinLevel - 1);
-        var t = r - i;
-
-        var skill = DuelSkills[i] + ((DuelSkills[i + 1] - DuelSkills[i]) * t);
-        var human = DuelHuman[i] + ((DuelHuman[i + 1] - DuelHuman[i]) * t);
-        var novice = DuelNovice[i] + ((DuelNovice[i + 1] - DuelNovice[i]) * t);
-
-        return BotSkill.For(skill).Human(human).Novice(novice);
-    }
-
-    /// <summary>The word a duel level is shown with.</summary>
-    public static string LabelOf(int level) => level switch
-    {
-        <= 0 => "Dummy",
-        <= 2 => "Novice",
-        <= 4 => "Easy",
-        <= 6 => "Normal",
-        <= 8 => "Hard",
-        9 => "Expert",
-        _ => "Haxton",
-    };
+    /// <summary>The level a duel rating shows as: <see cref="BotLevel.Round"/>.</summary>
+    public static int LevelOf(double rating) => BotLevel.Round(rating);
 
     /// <summary>
     /// A duel bot's name: its level and label, "Lv 5 (Normal)". No class: with it
@@ -308,6 +204,6 @@ public sealed class DuelLadder
     public static string NameOf(double rating)
     {
         var level = LevelOf(rating);
-        return $"Lv {level} ({LabelOf(level)})";
+        return $"Lv {level} ({BotLevel.Label(level)})";
     }
 }

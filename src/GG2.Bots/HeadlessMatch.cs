@@ -403,9 +403,9 @@ public sealed class HeadlessMatch : DrivenWorld
             // tick's alarm stage, which is what the reference does.
             State.Players[slot].RespawnTimer = 1;
 
-            var tier = Options.HandicapOnly ? Options.Difficulty : Options.DifficultyOf(team);
+            var skill = Options.HandicapOnly ? BotSkill.ForTier(Options.Difficulty) : Options.SkillOf(team);
 
-            Drive(slot, new ScriptedBot(Nav, new NavQuery(team), BotSkill.ForTier(tier), slot)
+            Drive(slot, new ScriptedBot(Nav, new NavQuery(team), skill, slot)
             {
                 Distances = distances,
             });
@@ -480,7 +480,7 @@ public sealed class HeadlessMatch : DrivenWorld
             var hybrid = brain.Wrap(scripted);
 
             if (Options.HandicapOnly)
-                hybrid.HandicapSkill = BotSkill.ForTier(Options.DifficultyOf(State.Players[slot].Team));
+                hybrid.HandicapSkill = Options.SkillOf(State.Players[slot].Team);
 
             Drive(slot, hybrid);
         }

@@ -85,7 +85,7 @@ public sealed class AutoDifficultyTests
         var human = Join(harness, "human", Team.Red);
         harness.Tick();
 
-        Assert.Equal(5, RatingOf(harness, human).Value);
+        Assert.Equal(BotLevel.OfTier(3), RatingOf(harness, human).Value);
         Assert.True(Population(harness).Opponents.TryGet(human, out var skill));
         Assert.Equal(BotSkill.ForTier(3), skill);
     }
@@ -105,19 +105,19 @@ public sealed class AutoDifficultyTests
         harness.Tick();
 
         var rating = RatingOf(harness, red);
-        Assert.Equal(5, rating.Value);
+        Assert.Equal(BotLevel.OfTier(3), rating.Value);
 
         // Human against human, a suicide and a death with no killer: nothing.
         Kill(harness, blue, red);
         Kill(harness, red, red);
         Kill(harness, red, CharacterState.Nobody);
-        Assert.Equal(5, rating.Value);
+        Assert.Equal(BotLevel.OfTier(3), rating.Value);
         Assert.Equal(0, rating.Duels);
 
         // A win at full health: a whole step, the first one.
         var margin = 0.5 + (0.5 * harness.Server.HealthFractionOf(red));
         Kill(harness, bot, red);
-        Assert.Equal(5 + margin, rating.Value, 9);
+        Assert.Equal(BotLevel.OfTier(3) + margin, rating.Value, 9);
 
         // A loss: the step halves on the reversal, and a loss at 60% moves 1.5
         // times a win.
@@ -144,17 +144,17 @@ public sealed class AutoDifficultyTests
         harness.TickUntil(() => harness.Server.BotSlots.Count == 2, "two bots", maxTicks: 60);
         harness.Tick();
 
-        RatingOf(harness, weak).Value = 1;
-        RatingOf(harness, strong).Value = 8;
+        RatingOf(harness, weak).Value = 3;
+        RatingOf(harness, strong).Value = 10;
         harness.Tick();
 
         var bot = Assert.IsType<ScriptedBot>(ScriptedBot.Of(harness.Server.SourceOf(harness.Server.BotSlots[0])));
 
         bot.Combat.Target = new BotTarget(BotTargetKind.Character, weak, 0, 0, true);
-        Assert.Equal(DuelLadder.SkillOf(1), bot.Skill);
+        Assert.Equal(BotLevel.Skill(3), bot.Skill);
 
         bot.Combat.Target = new BotTarget(BotTargetKind.Sentry, strong, 0, 0, true);
-        Assert.Equal(DuelLadder.SkillOf(8), bot.Skill);
+        Assert.Equal(BotLevel.Skill(10), bot.Skill);
 
         // Another bot, the generator and nothing: the bot's own tier.
         bot.Combat.Target = new BotTarget(BotTargetKind.Character, harness.Server.BotSlots[1], 0, 0, true);
@@ -164,7 +164,7 @@ public sealed class AutoDifficultyTests
         bot.Combat.Target = BotTarget.None;
         Assert.Equal(BotSkill.ForTier(3), bot.Skill);
 
-        Assert.Equal(1, Population(harness).AutoRatingOf(weak));
+        Assert.Equal(3, Population(harness).AutoRatingOf(weak));
         Assert.Equal(0, Population(harness).AutoRatingOf(harness.Server.BotSlots[0]));
     }
 
@@ -210,6 +210,6 @@ public sealed class AutoDifficultyTests
 
         var rating = RatingOf(harness, human);
         Assert.True(rating.Duels >= 1, "the death was not scored");
-        Assert.True(rating.Value < 5, $"rating {rating.Value} did not fall");
+        Assert.True(rating.Value < BotLevel.OfTier(3), $"rating {rating.Value} did not fall");
     }
 }

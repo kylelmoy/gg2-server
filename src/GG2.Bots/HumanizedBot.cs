@@ -773,7 +773,7 @@ public sealed record HumanizeOptions(
     /// Fitted with <c>BENCH_TURNS</c>'s grounded share at tier 4 (<c>gg2-rl</c>
     /// <c>docs/PLAN.md</c> phase 5, D10). <b>What tiers 1-4 used until D12</b>, through
     /// <see cref="HumanizedBot.ByTier"/>, adopted by the user on 2026-10-11 over its
-    /// bars, with <see cref="BotSkill.TierSkills"/> respread: at tier 4 against D9, O2
+    /// bars, with the tier skills respread: at tier 4 against D9, O2
     /// 0.753 to 0.712 and the fleet discriminator better at 150px (−0.020, −0.011 on
     /// two recordings) and worse at 300px (+0.007, +0.012).
     /// </summary>

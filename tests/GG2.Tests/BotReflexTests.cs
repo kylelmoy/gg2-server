@@ -631,13 +631,13 @@ public sealed class BotReflexTests(ITestOutputHelper output)
     /// </summary>
     /// <remarks>
     /// Tier 5 having none is what keeps every pinned policy measurement where it
-    /// was; tier 4 having the human floor is what stops it dodging like tier 5.
+    /// was; tiers 1-4 never react faster than the human floor, so none dodges like tier 5.
     /// </remarks>
     [Fact]
     public void ThePerceptionIsTheSkillsReflexes()
     {
         Assert.True(RocketPerception.Of(BotSkill.ForTier(5)).IsNone);
-        Assert.Equal(BotSkill.HumanReflexFloorTicks, RocketPerception.Of(BotSkill.ForTier(4)).LagTicks);
+        Assert.True(RocketPerception.Of(BotSkill.ForTier(4)).LagTicks >= BotSkill.HumanReflexFloorTicks);
 
         for (var tier = BotConstants.TierMin; tier < BotConstants.TierMax; tier++)
         {
