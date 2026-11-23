@@ -57,8 +57,17 @@ public sealed class NetworkInputSource : IInputSource
             _pressed |= value.Keys & ~_latest.Keys;
             _released |= ~value.Keys & _latest.Keys;
             _latest = value;
+            Received++;
         }
     }
+
+    /// <summary>
+    /// Every <c>INPUTSTATE</c> delivered, queued or not. A stock client sends
+    /// none while it has no character (<c>PlayerControl.events/Begin Step.xml</c>,
+    /// <c>global.myself.object != -1</c>), so after a death <see cref="Latest"/>
+    /// is what was held as the character died until this moves.
+    /// </summary>
+    public uint Received { get; private set; }
 
     public PlayerInput Poll(in WorldView world, int slot, int tick) => _latest;
 
@@ -130,6 +139,7 @@ public sealed class NetworkInputSource : IInputSource
             ~input.Keys & _lastQueued.Keys,
             1);
         _lastQueued = input;
+        Received++;
 
         if (_count == QueueCapacity)
             MergeOldest();

@@ -104,7 +104,7 @@ public sealed partial class BotPopulationService
                 human.DuelBotDeaths = -1;
                 human.DuelBotKillIn = 0;
                 human.DuelMoveIn = 0;
-                human.DuelEngaged = false;
+                Disengage(slot, human);
                 _server.PinSpawn(slot, null);
                 continue;
             }
@@ -131,7 +131,7 @@ public sealed partial class BotPopulationService
             // ladder's own rating needs it on.
             var leveled = ladder || setting.Mode == DuelDifficultyMode.Fixed;
 
-            var bot =human.DuelPartner is { } partner && _server.SlotOf(partner) is var at and > 0 ? at : -1;
+            var bot = human.DuelPartner is { } partner && _server.SlotOf(partner) is var at and > 0 ? at : -1;
 
             if (bot < 0)
             {
@@ -145,6 +145,10 @@ public sealed partial class BotPopulationService
                 human.DuelMoveIn = 0;
                 Retarget();
                 human.DuelSettingChanged = false;
+
+                // A new bot, a new duel: a human here may have just typed
+                // /difficulty to bring it back.
+                Disengage(slot, human);
 
                 if (leveled)
                     ApplyLadder(slot, human, bot, rename: true);
@@ -231,6 +235,7 @@ public sealed partial class BotPopulationService
                 // fight it meanwhile and sit in a cell another pair may draw.
                 _server.ExecuteFor(slot, new PlayerCommand(PlayerCommandKind.DestroySentry, 0));
                 human.DuelBotKillIn = KillCamTicks;
+                Disengage(slot, human);
             }
 
             if (human.DuelBotKillIn > 0)
@@ -277,7 +282,10 @@ public sealed partial class BotPopulationService
             {
                 human.DuelMoveIn--;
                 if (human.DuelMoveIn == 0)
+                {
                     _server.RelocateDuelist(slot, Spawns!, human.DuelCell);
+                    Disengage(slot, human);
+                }
             }
             else if (_server.ClassOf(bot) != human.Class)
             {
@@ -292,10 +300,17 @@ public sealed partial class BotPopulationService
                     _server.RenameBot(bot, options.NamePrefix + human.Class.ToString());
             }
 
-            // Once per stay on red: the class menu a join opens sends no keys, so
-            // the first key is the human ready to fight. Reopening the menu later
-            // is indistinguishable from standing still and does not re-arm it.
-            if (!human.DuelEngaged && _server.IsAlive(slot) && _server.KeysOf(slot) != PlayerKeys.None)
+            // In every new cell, after a death or a win's move: the class menu a
+            // join opens sends no keys, and nor does a player typing in chat, so
+            // the first key since arriving is the human ready to fight. It has to
+            // be in an input sent since then, or a key held as they died would
+            // engage the bot the moment they respawn, and holding Attack through
+            // a death would never let it go. Reopening the menu mid-duel is
+            // indistinguishable from standing still and does not re-arm it.
+            if (!human.DuelEngaged
+                && _server.IsAlive(slot)
+                && _server.KeysOf(slot) != PlayerKeys.None
+                && (_server.InputsReceivedOf(slot) is not { } received || received != human.DuelArmedAt))
                 human.DuelEngaged = true;
 
             human.DuelBotDeaths = _server.DeathsOf(bot);
@@ -321,6 +336,16 @@ public sealed partial class BotPopulationService
         }
 
         _server.SetOpponents(opponents);
+    }
+
+    /// <summary>
+    /// Holds the human's bot still until the human presses a key in an input
+    /// sent from now on.
+    /// </summary>
+    private void Disengage(int slot, RosterEntry human)
+    {
+        human.DuelEngaged = false;
+        human.DuelArmedAt = _server.InputsReceivedOf(slot) ?? 0;
     }
 
     /// <summary>

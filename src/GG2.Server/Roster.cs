@@ -84,13 +84,22 @@ public sealed class RosterEntry
     internal int DuelMoveIn { get; set; }
 
     /// <summary>
-    /// Whether a duel human has pressed any key since joining red. Until then
+    /// Whether a duel human has pressed any key since arriving in their cell
+    /// (joining red, a death, a win's move, a new bot). Until then
     /// their bot has nobody to fight: a stock client sends a key byte of zero
     /// while the team or class menu is open (<c>PlayerControl.events/Begin
     /// Step.xml</c>, <c>if(!menuOpen)</c>), and joining red spawns them as the
     /// default class with the class menu still up.
     /// </summary>
     internal bool DuelEngaged { get; set; }
+
+    /// <summary>
+    /// The human's <see cref="NetworkInputSource.Received"/> when
+    /// <see cref="DuelEngaged"/> was last cleared: only a key in an input after
+    /// it engages, since a dead client sends nothing and its last input is
+    /// whatever it held as it died.
+    /// </summary>
+    internal uint DuelArmedAt { get; set; }
 
     /// <summary>
     /// The class a duel human was when last looked at: a death that changed it

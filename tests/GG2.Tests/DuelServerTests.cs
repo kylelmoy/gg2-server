@@ -123,6 +123,86 @@ public sealed class DuelServerTests
             maxTicks: 30);
     }
 
+    /// <summary>
+    /// The wait re-arms in every new cell: after a death the bot stands still
+    /// until a key arrives, so a player can type in chat before fighting.
+    /// </summary>
+    [Fact]
+    public void AfterADeathTheBotWaitsForAKeyAgain()
+    {
+        using var harness = Duel();
+        var client = JoinAndPlay(harness, Team.Red, PlayerClass.Soldier);
+        var server = harness.Server;
+        var human = HumanSlot(server);
+
+        client.SendChangeClass(PlayerClass.Heavy);
+        harness.TickUntil(() => server.DeathsOf(human) > 0, "the human to die", maxTicks: 5);
+        Assert.False(server.EntryOf(human).DuelEngaged);
+
+        harness.TickUntil(() => server.IsAlive(human) && server.IsAlive(BotSlot(server)), "both to respawn", maxTicks: 120);
+        var bot = BotSlot(server);
+        var start = server.WorldForTests.Characters[bot].X;
+        for (var t = 0; t < 120; t++)
+        {
+            harness.Tick();
+            Assert.Equal(PlayerKeys.None, server.WorldForTests.Characters[bot].KeyState);
+        }
+
+        Assert.Equal(start, server.WorldForTests.Characters[bot].X);
+        Engage(harness, client);
+    }
+
+    /// <summary>
+    /// A key held as the human died is not a key pressed since: a stock client
+    /// sends nothing while dead, so the server still holds that input when the
+    /// human respawns, and taking it for a fresh press would let a player who
+    /// holds Attack through a death keep the bot frozen for good.
+    /// </summary>
+    [Fact]
+    public void AKeyHeldThroughADeathDoesNotEngage()
+    {
+        using var harness = Duel();
+        var client = JoinAndPlay(harness, Team.Red, PlayerClass.Soldier);
+        var server = harness.Server;
+        var human = HumanSlot(server);
+
+        client.SendInputState(new PlayerInput(PlayerKeys.Down, 0, 0));
+        harness.Tick(2);
+        client.SendChangeClass(PlayerClass.Heavy);
+        harness.TickUntil(() => server.DeathsOf(human) > 0, "the human to die", maxTicks: 5);
+        harness.TickUntil(() => server.IsAlive(human), "the human to respawn", maxTicks: 120);
+        harness.Tick(30);
+
+        Assert.Equal(PlayerKeys.Down, server.KeysOf(human));
+        Assert.False(server.EntryOf(human).DuelEngaged);
+
+        // The same keys, sent again from the new life, do engage.
+        client.SendInputState(new PlayerInput(PlayerKeys.Down, 0, 0));
+        harness.TickUntil(() => server.EntryOf(human).DuelEngaged, "a fresh input to engage", maxTicks: 5);
+    }
+
+    /// <summary>After a win the human is moved to a new cell, and the bot there waits for a key too.</summary>
+    [Fact]
+    public void AfterAWinsMoveTheBotWaitsForAKeyAgain()
+    {
+        using var harness = Duel(respawnSeconds: 5);
+        var client = JoinAndPlay(harness, Team.Red, PlayerClass.Soldier);
+        var server = harness.Server;
+        var human = HumanSlot(server);
+        var bot = BotSlot(server);
+
+        server.WorldForTests.Characters[bot].Hp = 0;
+        harness.TickUntil(() => server.EntryOf(human).DuelMoveIn > 0, "the win", maxTicks: 5);
+        harness.TickUntil(() => server.EntryOf(human).DuelMoveIn == 0, "the move", maxTicks: BotPopulationService.WinMoveTicks + 10);
+        Assert.False(server.EntryOf(human).DuelEngaged);
+
+        harness.Tick(60);
+        Assert.False(server.EntryOf(human).DuelEngaged);
+        Assert.Equal(PlayerKeys.None, server.WorldForTests.Characters[bot].KeyState);
+
+        Engage(harness, client);
+    }
+
     private static SpawnPoints Spawns(ServerHarness harness)
     {
         var path = Path.Combine(harness.Options.MapDirectory, harness.Options.Map + ".png");

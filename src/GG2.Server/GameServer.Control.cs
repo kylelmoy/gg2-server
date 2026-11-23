@@ -648,6 +648,13 @@ public sealed partial class GameServer
     /// </summary>
     public PlayerKeys KeysOf(int slot) => (uint)slot < (uint)_inputs.Length ? _inputs[slot].Keys : PlayerKeys.None;
 
+    /// <summary>
+    /// <see cref="NetworkInputSource.Received"/> for a socket's slot, or null for
+    /// a slot with another source, whose every poll is fresh.
+    /// </summary>
+    internal uint? InputsReceivedOf(int slot) =>
+        (uint)slot < (uint)RosterCount && _roster[slot].Source is NetworkInputSource network ? network.Received : null;
+
     /// <summary>The scoreboard's death count for <paramref name="slot"/> this map.</summary>
     public double DeathsOf(int slot) => Scoring.Get(in _world, slot, StatIndex.Deaths);
 
