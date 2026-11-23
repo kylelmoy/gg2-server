@@ -119,10 +119,10 @@ public sealed partial class GameServer
         // is appended from inside that. A carrier killed by a pit returns the
         // flag AFTER its own PLAYER_DEATH, never before.
         if (_events.ReturnedRedIntelInEndStep)
-            ServerMessages.ReturnIntel(_broadcast, Team.Red);
+            _broadcast.ReturnIntel(Team.Red);
 
         if (_events.ReturnedBlueIntelInEndStep)
-            ServerMessages.ReturnIntel(_broadcast, Team.Blue);
+            _broadcast.ReturnIntel(Team.Blue);
 
         BroadcastEndStepSentryDestructions(count);
 
@@ -221,13 +221,13 @@ public sealed partial class GameServer
     private void BroadcastArena()
     {
         if (_events.ArenaRestarted)
-            ServerMessages.ArenaRestart(_broadcast);
+            _broadcast.ArenaRestart();
 
         if (_events.ArenaRoundStarted)
-            ServerMessages.ArenaStartRound(_broadcast);
+            _broadcast.ArenaStartRound();
 
         if (_events.ArenaWaitingForPlayers)
-            ServerMessages.ArenaWaitForPlayers(_broadcast);
+            _broadcast.ArenaWaitForPlayers();
 
         if (!_events.ArenaRoundEnded)
             return;
@@ -242,8 +242,7 @@ public sealed partial class GameServer
         var redCount = Scoring.SelectMvps(ref _world, Team.Red, red);
         var blueCount = Scoring.SelectMvps(ref _world, Team.Blue, blue);
 
-        ServerMessages.ArenaEndRound(
-            _broadcast,
+        _broadcast.ArenaEndRound(
             _events.ArenaRoundWinner,
             WireQuantise.ToUByte(_world.ArenaRedWins),
             WireQuantise.ToUByte(_world.ArenaBlueWins),
@@ -267,7 +266,7 @@ public sealed partial class GameServer
         if (!_world.UnlockedControlPointsThisTick)
             return;
 
-        ServerMessages.UnlockControlPoints(_broadcast);
+        _broadcast.UnlockControlPoints();
         _world.UnlockedControlPointsThisTick = false;
     }
 
@@ -284,7 +283,7 @@ public sealed partial class GameServer
     {
         for (var slot = 0; slot < count; slot++)
             if (_events.DroppedIntel[slot])
-                ServerMessages.DropIntel(_broadcast, (byte)slot);
+                _broadcast.DropIntel((byte)slot);
     }
 
     /// <summary>
@@ -301,10 +300,10 @@ public sealed partial class GameServer
         // reference has already flushed — see TickEvents.ReturnedRedIntelInEndStep
         // and BroadcastEndStepEvents.
         if (_events.ReturnedRedIntel && !_events.ReturnedRedIntelInEndStep)
-            ServerMessages.ReturnIntel(_broadcast, Team.Red);
+            _broadcast.ReturnIntel(Team.Red);
 
         if (_events.ReturnedBlueIntel && !_events.ReturnedBlueIntelInEndStep)
-            ServerMessages.ReturnIntel(_broadcast, Team.Blue);
+            _broadcast.ReturnIntel(Team.Blue);
     }
 
     /// <summary>
@@ -325,7 +324,7 @@ public sealed partial class GameServer
     {
         if (_events.BalanceNoticed)
         {
-            ServerMessages.BalanceNotice(_broadcast);
+            _broadcast.BalanceNotice();
             _events.BalanceNoticed = false;
         }
 
@@ -337,7 +336,7 @@ public sealed partial class GameServer
             _roster[slot].Team = _world.Players[slot].Team;
             _roster[slot].Class = _events.BalancedClass[slot];
 
-            ServerMessages.BalanceSwitch(_broadcast, (byte)slot, _events.BalancedClass[slot]);
+            _broadcast.BalanceSwitch((byte)slot, _events.BalancedClass[slot]);
             _events.Balanced[slot] = false;
         }
     }
@@ -360,10 +359,10 @@ public sealed partial class GameServer
     private void BroadcastGeneratorDestructions()
     {
         if (_events.RedGeneratorDestroyed)
-            ServerMessages.GeneratorDestroy(_broadcast, Team.Red);
+            _broadcast.GeneratorDestroy(Team.Red);
 
         if (_events.BlueGeneratorDestroyed)
-            ServerMessages.GeneratorDestroy(_broadcast, Team.Blue);
+            _broadcast.GeneratorDestroy(Team.Blue);
     }
 
     /// <summary>
@@ -380,12 +379,12 @@ public sealed partial class GameServer
         for (var slot = 0; slot < count; slot++)
         {
             if (_events.GrabbedIntel[slot])
-                ServerMessages.GrabIntel(_broadcast, (byte)slot);
+                _broadcast.GrabIntel((byte)slot);
 
             if (!_events.ScoredIntel[slot])
                 continue;
 
-            ServerMessages.ScoreIntel(_broadcast, (byte)slot);
+            _broadcast.ScoreIntel((byte)slot);
             _capsSyncPending = true;
         }
     }
@@ -468,7 +467,7 @@ public sealed partial class GameServer
                 continue;
 
             var spawn = _events.Spawns[slot];
-            ServerMessages.PlayerSpawn(_broadcast, (byte)slot, spawn.SpawnPointId, spawn.Group);
+            _broadcast.PlayerSpawn((byte)slot, spawn.SpawnPointId, spawn.Group);
         }
     }
 
@@ -489,8 +488,7 @@ public sealed partial class GameServer
                 continue;
 
             ref readonly var sentry = ref _world.Sentries[slot];
-            ServerMessages.SentryPosition(
-                _broadcast,
+            _broadcast.SentryPosition(
                 (byte)slot,
                 WireQuantise.ToUShort(Gml.Round(sentry.X * 5)),
                 WireQuantise.ToUShort(Gml.Round(sentry.Y * 5)));
@@ -527,8 +525,7 @@ public sealed partial class GameServer
             }
 
             var destruction = _events.SentryDestructions[slot];
-            ServerMessages.DestroySentry(
-                _broadcast,
+            _broadcast.DestroySentry(
                 (byte)slot,
                 destruction.Killer,
                 destruction.Assistant,
@@ -571,8 +568,7 @@ public sealed partial class GameServer
                 continue;
 
             var fire = _events.Fires[slot];
-            ServerMessages.WeaponFire(
-                _broadcast, (byte)slot, fire.X, fire.Y, fire.HSpeed, fire.VSpeed, fire.Seed);
+            _broadcast.WeaponFire((byte)slot, fire.X, fire.Y, fire.HSpeed, fire.VSpeed, fire.Seed);
         }
     }
 
@@ -608,8 +604,7 @@ public sealed partial class GameServer
                 continue;
 
             var death = _events.Deaths[slot];
-            ServerMessages.PlayerDeath(
-                _broadcast, (byte)slot, death.Killer, death.Assistant, death.Source);
+            _broadcast.PlayerDeath((byte)slot, death.Killer, death.Assistant, death.Source);
         }
     }
 
@@ -642,10 +637,10 @@ public sealed partial class GameServer
         for (var slot = 0; slot < count; slot++)
         {
             if (_events.UberCharged[slot])
-                ServerMessages.UberCharged(_broadcast, (byte)slot);
+                _broadcast.UberCharged((byte)slot);
 
             if (_events.Ubered[slot])
-                ServerMessages.Uber(_broadcast, (byte)slot);
+                _broadcast.Uber((byte)slot);
         }
     }
 
@@ -826,7 +821,7 @@ public sealed partial class GameServer
         // CapsSyncPhaseTests is the gate.
         if (_capsSyncPending || _frame % 3600 == 0)
         {
-            _stateWriter.Write(_broadcast, MessageType.CapsUpdate);
+            _broadcast.StateUpdate(_stateWriter, MessageType.CapsUpdate);
             _capsSyncPending = false;
         }
 
@@ -846,7 +841,7 @@ public sealed partial class GameServer
         }
 
         var tier = quick ? MessageType.QuickUpdate : MessageType.InputState;
-        _stateWriter.Write(_broadcast, tier);
+        _broadcast.StateUpdate(_stateWriter, tier);
     }
 
     private void FlushBroadcast()
@@ -867,12 +862,13 @@ public sealed partial class GameServer
 
         _flushes++;
 
-        // One identical byte stream to every client: one serialisation, N sends.
-        // Keep it that way — it is why the send path is nearly free.
-        var bytes = _broadcast.WrittenSpan;
-
+        // One identical byte stream to every client OF A PROTOCOL: one
+        // serialisation per protocol in use, N sends. Keep it that way — it is
+        // why the send path is nearly free. ServerBroadcast has the two streams.
         foreach (var client in _clients)
         {
+            var bytes = _broadcast.Written(client.Protocol);
+
             // A client that joined during the PREVIOUS tick skips whatever was
             // already in this buffer when its join burst was written, because
             // the burst's FULL_UPDATE already carries the world those messages
@@ -896,8 +892,10 @@ public sealed partial class GameServer
 
         // ⚠️ The recording tees HERE and nowhere else, which is what makes it
         // exactly what the clients saw rather than a reconstruction of it.
-        // docs/BOTAI.md item 3: one recorder, not a second logging path.
-        _recorder?.Append(bytes);
+        // docs/BOTAI.md item 3: one recorder, not a second logging path. It
+        // keeps the LEGACY stream: a trace is legacy-format by definition, and
+        // that stream is written whether or not a legacy client is connected.
+        _recorder?.Append(_broadcast.LegacyWritten);
 
         _broadcast.Reset();
     }

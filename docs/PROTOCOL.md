@@ -6,6 +6,93 @@ Extracted from the reference implementation at GG2 v2.9.2 (`VERSION = 29200`),
 `Scripts/Client/ClientBeginStep.gml` disagree, the client is right and this file
 has a bug — fix it here.
 
+Everything below describes the **legacy** protocol. The server also speaks a
+second, the **native** protocol, to the native client; the next section is all
+of what differs.
+
+## Two protocols
+
+| | Legacy | Native |
+|---|---|---|
+| Spoken by | the stock GM8 client | the native client (gg2-client) |
+| Chosen by | HELLO + `PROTOCOL_UUID` | HELLO + `NativeProtocol.Uuid` + `ushort` version |
+| Owned by | GG2 v2.9.2; frozen | this project; changes under a version number |
+| Server encoder | `ServerEncoder` (`src/GG2.Server/Wire/`), every body `ServerMessages` | `NativeServerEncoder`, overriding what differs |
+| Client command table | `ClientCommandTable.Legacy` | `ClientCommandTable.Native` |
+
+A connection's protocol is chosen once, by its HELLO, and held on
+`ClientConnection.Protocol` for the life of the connection. Everything sent
+after the HELLO goes through that protocol's encoder: per client through
+`ServerEncoder.For`, and for the broadcast through `ServerBroadcast`, which
+keeps **one byte stream per protocol**, each serialised once a tick and sent to
+every client of that protocol. The legacy stream is always written (the match
+recorder tees it, and a trace is legacy-format); the native stream is written
+only while a native client is connected, so a server with none pays nothing.
+
+### The native HELLO
+
+```
+client -> server   HELLO (0x00) + 16 bytes of NativeProtocol.Uuid + ushort version   (19 bytes)
+```
+
+`NativeProtocol.Uuid` is `31ad383f-df45-449b-9bb7-63869ac81345`, in textual
+order like `PROTOCOL_UUID`.
+
+| Server | Answer |
+|---|---|
+| serves that native version | exactly what it would send after a legacy HELLO: `PASSWORD_REQUEST`, or the greeting |
+| does not (a stock server, an older gg2-server, a version outside `NativeProtocol.MinVersion`..`Version`) | `INCOMPATIBLE_PROTOCOL` and a close |
+
+So acceptance needs no message of its own, and the native client's fallback
+is one rule: on `INCOMPATIBLE_PROTOCOL` in reply to a native HELLO, reconnect
+with the legacy one. A stock server reads only the first 17 bytes, so the
+version it never reads costs nothing. The room host's front door
+(`RoomFrontDoor`) classifies the HELLO the same way (`ProtocolHello.Classify`)
+and the room inherits the protocol with the connection.
+
+**Shared by both and frozen with the legacy wire:** the HELLO's first 17 bytes,
+and every reply that can go out before a HELLO is classified —
+`INCOMPATIBLE_PROTOCOL`, and the `SERVER_FULL` or `KICK` that refuses a
+connection at accept time. Neither end knows the protocol yet, so the native
+client reads them the stock way.
+
+### Native protocol versions
+
+| Version | What changed |
+|---|---|
+| 1 | Nothing after the HELLO: the native wire is the legacy wire, byte for byte. `WireProtocolTests` pins that, in two tests meant to be replaced by the first change. |
+
+### Changing the native protocol
+
+1. Bump `NativeProtocol.Version` and add a row above. A released client meets
+   servers of other builds, and the version is what turns a misread stream into
+   a clean fallback.
+2. A changed or new **server message**: override it in `NativeServerEncoder`. A
+   native-only message is a new virtual on `ServerEncoder` whose legacy body
+   writes nothing, or writes whatever existing message carries the same news,
+   plus a method on `ServerBroadcast` if it is broadcast. **Never edit a legacy
+   body to change the native wire**: it is `ServerMessages`, and it reaches every
+   GM8 client.
+3. A changed or new **client command**: its framing in
+   `ClientCommandTable.BuildNative`, its handling in `GameServer.Handle`. A
+   command only the native table frames can never arrive from a stock client,
+   because the legacy table skips its id as an unrecognised byte.
+4. The **client side** reads the server's stream with `ServerStream`, which
+   frames the legacy wire only. A native server message needs a case there (or
+   a native reader) in the same change, and the native client has to send the
+   native HELLO to receive any of it.
+5. Prediction (`docs/PREDICTION.md`) is negotiated in-band with `PREDICT_HELLO`
+   on either protocol; a native version may make it unconditional.
+
+**What the native protocol does not free.** It frees the encoding. It does not
+free the simulation: a stock client on the same server still has to simulate
+what the server does, so a change to observable simulation answers to "The
+rule" in `CONTRIBUTING.md` whichever protocol carries its news.
+
+**Not protocol-aware yet:** the lobby registration advertises the legacy UUID
+alone, so a server browser cannot tell a native-capable server from a stock
+one before connecting; and the match recorder keeps only the legacy stream.
+
 ## Transport
 
 - Plain TCP. No encryption, no compression, no framing beyond what is described

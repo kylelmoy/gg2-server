@@ -6,6 +6,7 @@ using GG2.Protocol;
 using GG2.Simulation;
 using GG2.Bots;
 using GG2.Server.Plugins;
+using GG2.Server.Wire;
 
 namespace GG2.Server;
 
@@ -135,7 +136,8 @@ public sealed partial class GameServer : IDisposable, IPluginHost
 
     /// <summary>Simulation steps still owed to a <c>step</c> while frozen.</summary>
     private int _stepsOwed;
-    private readonly NetWriter _broadcast = new(8192);
+    /// <summary>The tick's broadcast, one stream per wire protocol in use.</summary>
+    private readonly ServerBroadcast _broadcast = new();
 
     /// <summary>
     /// The server-sent plugins this server advertises and runs the host half of.
@@ -667,6 +669,13 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     /// would reduce the deficit it was added for.
     /// </remarks>
     public int HumanCount => OccupiedSlots();
+
+    /// <summary>
+    /// Joined clients speaking the native protocol, which is also whether the
+    /// native broadcast stream is being written at all. docs/PROTOCOL.md, "Two
+    /// protocols".
+    /// </summary>
+    public int NativeClientCount => _broadcast.NativeListeners;
 
     /// <summary>Every bot's roster slot, ascending.</summary>
     /// <remarks>
@@ -1310,6 +1319,7 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         foreach (var client in _clients)
             client.Connection.Dispose();
         _clients.Clear();
+        _broadcast.ClearListeners();
 
         foreach (var joining in _joining)
             joining.Connection.Dispose();

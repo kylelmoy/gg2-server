@@ -17,24 +17,51 @@ public enum CommandLength
 }
 
 /// <summary>
-/// The payload-length table for client-to-server commands, transcribed from
-/// <c>Scripts/GameServer/GameServerDefineCommands.gml</c>.
+/// The payload-length table for client-to-server commands: one instance per
+/// <see cref="WireProtocol"/>.
 /// </summary>
 /// <remarks>
-/// Every byte not listed there is <c>commandBytesInvalidCommand</c>, and the
-/// reference's response to one is to <b>ignore it and try the next byte</b> —
-/// it does not resynchronise and it does not kick. Reproduce that: a stricter
-/// port disconnects clients the reference tolerates.
+/// <see cref="Legacy"/> is transcribed from
+/// <c>Scripts/GameServer/GameServerDefineCommands.gml</c>. Every byte not listed
+/// there is <c>commandBytesInvalidCommand</c>, and the reference's response to
+/// one is to <b>ignore it and try the next byte</b> — it does not resynchronise
+/// and it does not kick. Reproduce that: a stricter port disconnects clients
+/// the reference tolerates.
+/// <para>
+/// <see cref="Native"/> starts as a copy of the legacy table and is where a
+/// native-only command is added. ⚠️ <b>A command added only there can never
+/// reach the server from a stock client</b>, because the legacy table frames
+/// its id as an unrecognised byte. That is the gate that keeps a native
+/// feature off the legacy wire, so do not add a native command to
+/// <see cref="Legacy"/> to keep the two in step.
+/// </para>
 /// </remarks>
-public static class ClientCommands
+public sealed class ClientCommandTable
 {
-    private static readonly sbyte[] Lengths = BuildTable();
-
     private const sbyte InvalidCommand = -1;
     private const sbyte PrefixLength1 = -2;
     private const sbyte PrefixLength2 = -3;
 
-    private static sbyte[] BuildTable()
+    private readonly sbyte[] _lengths;
+
+    private ClientCommandTable(WireProtocol protocol, sbyte[] lengths)
+    {
+        Protocol = protocol;
+        _lengths = lengths;
+    }
+
+    /// <summary>The stock client's commands, and the port's bare <c>PREDICT_HELLO</c>.</summary>
+    public static ClientCommandTable Legacy { get; } = new(WireProtocol.Legacy, BuildLegacy());
+
+    /// <summary>The native client's commands. Identical to <see cref="Legacy"/> at native version 1.</summary>
+    public static ClientCommandTable Native { get; } = new(WireProtocol.Native, BuildNative());
+
+    public static ClientCommandTable For(WireProtocol protocol) =>
+        protocol == WireProtocol.Native ? Native : Legacy;
+
+    public WireProtocol Protocol { get; }
+
+    private static sbyte[] BuildLegacy()
     {
         var table = new sbyte[256];
         Array.Fill(table, InvalidCommand);
@@ -63,8 +90,18 @@ public static class ClientCommands
         return table;
     }
 
+    private static sbyte[] BuildNative()
+    {
+        var table = BuildLegacy();
+
+        // Native-only commands go here, each with a NativeProtocol.Version bump
+        // and a case in GameServer.Handle. docs/PROTOCOL.md, "Two protocols".
+
+        return table;
+    }
+
     /// <summary>How the payload of <paramref name="command"/> is framed.</summary>
-    public static CommandLength KindOf(byte command) => Lengths[command] switch
+    public CommandLength KindOf(byte command) => _lengths[command] switch
     {
         InvalidCommand => CommandLength.Invalid,
         PrefixLength1 => CommandLength.Prefixed1,
@@ -76,9 +113,26 @@ public static class ClientCommands
     /// Payload byte count for a <see cref="CommandLength.Fixed"/> command.
     /// Meaningless for the others.
     /// </summary>
-    public static int FixedLengthOf(byte command) => Lengths[command];
+    public int FixedLengthOf(byte command) => _lengths[command];
 
-    public static bool IsValid(byte command) => Lengths[command] != InvalidCommand;
+    public bool IsValid(byte command) => _lengths[command] != InvalidCommand;
+}
+
+/// <summary>
+/// The legacy table's lookups, and the flood limit both protocols share.
+/// </summary>
+public static class ClientCommands
+{
+    /// <summary>How the payload of <paramref name="command"/> is framed on the legacy wire.</summary>
+    public static CommandLength KindOf(byte command) => ClientCommandTable.Legacy.KindOf(command);
+
+    /// <summary>
+    /// Payload byte count for a legacy <see cref="CommandLength.Fixed"/>
+    /// command. Meaningless for the others.
+    /// </summary>
+    public static int FixedLengthOf(byte command) => ClientCommandTable.Legacy.FixedLengthOf(command);
+
+    public static bool IsValid(byte command) => ClientCommandTable.Legacy.IsValid(command);
 
     /// <summary>
     /// Commands processed per player per tick before the rest are left buffered

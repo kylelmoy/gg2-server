@@ -293,6 +293,12 @@ trajectories must match. Byte layouts and update cadence must match (the
 default cadence does; `QuickUpdateInterval` and `ExplosionUpdateTicks` can only
 add position updates, `docs/PREDICTION.md`). Roster indexing must match.
 
+**That is the legacy wire.** The server also speaks a native protocol to the
+native client, chosen by the HELLO, owned by this project and free to change
+under `NativeProtocol.Version` (`docs/PROTOCOL.md`, "Two protocols"). A native
+change goes in `NativeServerEncoder` or `ClientCommandTable.Native`, never in
+`ServerMessages` or the legacy table, which are the stock client's.
+
 Nothing else does. Objects, events, `with()` loops, alarms, GM8 data
 structures, per-frame recomputation, server-side RNG — all of it is Game Maker
 8 showing through and should be replaced with whatever is fastest and clearest
@@ -325,7 +331,9 @@ If neither, the server and the client simulate different outcomes with nothing
 on the wire to reconcile them — a divergence, however much the feature is
 wanted. **A new message type is not a way round that**: in the in-game loop a
 stock client silently ignores an id it does not know (`docs/PROTOCOL.md`), so
-the server would act and no client would. What is free is everything no
+the server would act and no client would. The native protocol does not change
+that answer either: it can carry a new message to a native client, but a stock
+client on the same server still simulates without it. What is free is everything no
 simulation depends on — the admin panel, analytics, the control port, `eval`,
 the recorder — and that is where the features have gone.
 

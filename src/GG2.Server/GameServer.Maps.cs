@@ -186,7 +186,7 @@ public sealed partial class GameServer
         Rounds.BeginMapChange(ref _world);
         _mapChangeCountdown = Rounds.MapChangeDelay;
 
-        ServerMessages.MapEnd(_broadcast, _nextMap, _world.Winner, (byte)_nextArea);
+        _broadcast.MapEnd(_nextMap, _world.Winner, (byte)_nextArea);
     }
 
     /// <summary>
@@ -258,7 +258,7 @@ public sealed partial class GameServer
         // ⚠️ The md5 the map was loaded WITH. ServerChangeMap.gml carries the
         // same pair the greeting does, so a client already connected across a
         // rotation onto a custom map learns it has to download.
-        ServerMessages.ChangeMap(_broadcast, map.Name, _currentMapMd5);
+        _broadcast.ChangeMap(map.Name, _currentMapMd5);
         _log.Info($"now playing {map.Name} ({_match.GameMode}), area {_nextArea}");
 
         // GameServerBeginStep.gml:142-143 — "message lobby to update map name".

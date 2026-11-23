@@ -302,7 +302,7 @@ public sealed partial class GameServer
             return KickOutcome.NotAConnection;
 
         var writer = new NetWriter(2);
-        ServerMessages.Kick(writer, KickReason.Operator);
+        Wire.ServerEncoder.For(connection.Protocol).Kick(writer, KickReason.Operator);
         connection.Send(writer.WrittenSpan);
         connection.Flush();
         connection.Close(reason.Length == 0 ? "kicked by the operator" : reason);
@@ -613,7 +613,7 @@ public sealed partial class GameServer
         if (!_world.Spawn(spawns, slot, player.Class, player.Team, spawnPoint, 0))
             return false;
 
-        ServerMessages.PlayerSpawn(_broadcast, (byte)slot, (byte)spawnPoint, 0);
+        _broadcast.PlayerSpawn((byte)slot, (byte)spawnPoint, 0);
         return true;
     }
 

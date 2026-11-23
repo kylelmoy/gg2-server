@@ -46,6 +46,28 @@ public sealed class ClientConnection : IDisposable
 
     public IPAddress RemoteAddress { get; }
 
+    /// <summary>
+    /// The wire protocol this connection's HELLO chose, and so how everything
+    /// sent to it alone is encoded (<see cref="Wire.ServerEncoder.For"/>).
+    /// </summary>
+    /// <remarks>
+    /// <see cref="WireProtocol.Legacy"/> until the handshake accepts a native
+    /// HELLO, which sets it once; nothing changes it after. On the connection
+    /// rather than the player because a refusal, a kick and a plugin packet are
+    /// all written by code that holds only the socket.
+    /// </remarks>
+    public WireProtocol Protocol { get; private set; }
+
+    /// <summary>The native version agreed on; 0 on the legacy wire.</summary>
+    public ushort NativeVersion { get; private set; }
+
+    /// <summary>Records the protocol a HELLO was accepted for. The handshake's to call, once.</summary>
+    internal void Speak(WireProtocol protocol, ushort nativeVersion)
+    {
+        Protocol = protocol;
+        NativeVersion = protocol == WireProtocol.Native ? nativeVersion : (ushort)0;
+    }
+
     /// <summary>The limits this connection is held to.</summary>
     public ConnectionLimits Limits => _limits;
 

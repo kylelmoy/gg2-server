@@ -1,4 +1,5 @@
 using GG2.Protocol;
+using GG2.Server.Wire;
 using GG2.Simulation;
 
 namespace GG2.Server;
@@ -13,9 +14,21 @@ public sealed partial class GameServer
 
         public required RosterEntry Entry { get; init; }
 
+        /// <summary>
+        /// The wire protocol this connection's HELLO asked for, fixed for its
+        /// life. Picks its broadcast stream, its encoder and its command table.
+        /// </summary>
+        public WireProtocol Protocol => Connection.Protocol;
+
+        /// <summary>How every message addressed to this connection alone is written.</summary>
+        public ServerEncoder Encoder => ServerEncoder.For(Protocol);
+
         public ReceiveBuffer Received { get; } = new();
 
-        public CommandStream Commands { get; } = new();
+        /// <summary>Frames this connection's commands against its protocol's table.</summary>
+        public CommandStream Commands => _commands ??= new CommandStream(ClientCommandTable.For(Protocol));
+
+        private CommandStream? _commands;
 
         /// <summary>
         /// Whether this connection's unrecognised bytes have been reported.
@@ -43,8 +56,8 @@ public sealed partial class GameServer
         public bool Predicting { get; set; }
 
         /// <summary>
-        /// Bytes already standing in the broadcast buffer when this client
-        /// joined, which its next flush must skip.
+        /// Bytes already standing in this client's protocol's broadcast stream
+        /// when it joined, which its next flush must skip.
         /// </summary>
         /// <remarks>
         /// ⚠️ <b>Everything appended between a tick's flush and its join burst
@@ -287,7 +300,7 @@ public sealed partial class GameServer
         // ⚠️ AFTER AddPlayer, which writes PlayerState.Fresh over the slot.
         _world.Players[slot].IsBot = true;
 
-        ServerMessages.PlayerJoin(_broadcast, entry.Name);
+        _broadcast.PlayerJoin(entry.Name);
 
         // botAdd.gml:26 — the class it counts with is the one checkClasslimits
         // handed back, not the one asked for.
@@ -298,8 +311,8 @@ public sealed partial class GameServer
         _world.Players[slot].Team = team;
         _world.Players[slot].Class = allowed;
 
-        ServerMessages.PlayerChangeTeam(_broadcast, (byte)slot, team);
-        ServerMessages.PlayerChangeClass(_broadcast, (byte)slot, allowed);
+        _broadcast.PlayerChangeTeam((byte)slot, team);
+        _broadcast.PlayerChangeClass((byte)slot, allowed);
 
         if (team != Team.Spectator)
             _world.Players[slot].RespawnTimer = 1;
@@ -336,7 +349,7 @@ public sealed partial class GameServer
         _world.RemoveSlot(slot);
         _aimAnalysis.Remove(slot);
 
-        ServerMessages.PlayerLeave(_broadcast, (byte)slot);
+        _broadcast.PlayerLeave((byte)slot);
 
         // GameServerBeginStep.gml:70's ServerBalanceTeams() after a departure,
         // which botRemove reaches through removePlayer for the same reason.
@@ -624,7 +637,7 @@ public sealed partial class GameServer
                 }
 
                 var kick = new NetWriter(2);
-                ServerMessages.Kick(kick, KickReason.BadPluginPacket);
+                client.Encoder.Kick(kick, KickReason.BadPluginPacket);
                 client.Connection.Send(kick.WrittenSpan);
 
                 // ⚠️ Flush BEFORE closing, or the kick is buffered and thrown

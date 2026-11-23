@@ -32,7 +32,7 @@ public sealed partial class GameServer
         ((NetworkInputSource)client.Entry.Source).StartQueueing(client.InputsRead);
 
         _predictionWriter.Reset();
-        ServerMessages.PredictWelcome(_predictionWriter, client.InputsRead);
+        client.Encoder.PredictWelcome(_predictionWriter, client.InputsRead);
         client.Connection.Send(_predictionWriter.WrittenSpan);
     }
 
@@ -57,7 +57,7 @@ public sealed partial class GameServer
                 continue;
 
             _predictionWriter.Reset();
-            ServerMessages.PredictAck(
+            client.Encoder.PredictAck(
                 _predictionWriter, ((NetworkInputSource)client.Entry.Source).InputsApplied);
             client.Connection.Send(_predictionWriter.WrittenSpan);
         }

@@ -20,7 +20,7 @@ second list and it is the more useful one.
 
 | Surface | Exposure | Auth |
 |---|---|---|
-| **the game port** (`--port`, default 8190) | `[::]` dual-stack, plus `0.0.0.0` through it (IPv4-only where the host cannot bind IPv6), as the stock server listens. An IPv4 peer's `::ffff:` address is mapped down at capture, so bans and limits see plain IPv4 (`GameListener`). This is the one that has to be open. | optional `--password`, checked before anything but the protocol handshake |
+| **the game port** (`--port`, default 8190) | `[::]` dual-stack, plus `0.0.0.0` through it (IPv4-only where the host cannot bind IPv6), as the stock server listens. An IPv4 peer's `::ffff:` address is mapped down at capture, so bans and limits see plain IPv4 (`GameListener`). This is the one that has to be open. Two HELLOs are accepted (`docs/PROTOCOL.md`, "Two protocols"); the native one adds a two-byte version step under the same idle timeout and handshake deadline. | optional `--password`, checked before anything but the protocol handshake |
 | **the web panel** (`--web`) | off unless asked for; `127.0.0.1` unless `--web-bind` | mandatory password, generated if unset |
 | **the control port** (`--control-port`) | off unless asked for; **`IPAddress.Loopback`, never `Any`** | none — reaching it means already being on the machine |
 | **the room host's game port** (`gg2-server rooms --port`, default 8300) | as the game port. One port for every room; `RoomFrontDoor` reads HELLO and the password, then hands the connection to the room the password names. Accept rate, ban list and the joining cap apply once, at the door (`docs/ROOMS.md`) | the room's code is its password; a code naming no room is `PASSWORD_WRONG` and the connection is closed |

@@ -124,8 +124,7 @@ public sealed partial class GameServer
             ref _world, slot, team, ref _events, out var reclassed);
 
         if (death is PlayerDeathEvent died)
-            ServerMessages.PlayerDeath(
-                _broadcast, (byte)slot, died.Killer, died.Assistant, died.Source);
+            _broadcast.PlayerDeath((byte)slot, died.Killer, died.Assistant, died.Source);
 
         // ⚠️ checkClasslimits runs *before* the team message and is
         // announced separately, and only when it actually moved the
@@ -133,11 +132,11 @@ public sealed partial class GameServer
         if (reclassed is PlayerClass forced)
         {
             entry.Class = forced;
-            ServerMessages.PlayerChangeClass(_broadcast, (byte)slot, forced);
+            _broadcast.PlayerChangeClass((byte)slot, forced);
         }
 
         entry.Team = team;
-        ServerMessages.PlayerChangeTeam(_broadcast, (byte)slot, team);
+        _broadcast.PlayerChangeTeam((byte)slot, team);
 
         // And ServerBalanceTeams(), which ChangeTeamWithBalance has
         // already run into _events — the messages it produced go out
@@ -155,11 +154,10 @@ public sealed partial class GameServer
         // characterless player is queued to spawn in this same tick's
         // alarm stage.
         if (PlayerCommands.ChangeClass(ref _world, slot, requested, _collision) is PlayerDeathEvent death)
-            ServerMessages.PlayerDeath(
-                _broadcast, (byte)slot, death.Killer, death.Assistant, death.Source);
+            _broadcast.PlayerDeath((byte)slot, death.Killer, death.Assistant, death.Source);
 
         entry.Class = requested;
-        ServerMessages.PlayerChangeClass(_broadcast, (byte)slot, requested);
+        _broadcast.PlayerChangeClass((byte)slot, requested);
     }
 
     /// <summary>
@@ -180,7 +178,7 @@ public sealed partial class GameServer
         entry.QueueJump = queueJump;
         _world.Players[slot].QueueJump = queueJump;
 
-        ServerMessages.ClientSettings(_broadcast, (byte)slot, queueJump);
+        _broadcast.ClientSettings((byte)slot, queueJump);
     }
 
     /// <summary>
@@ -209,7 +207,7 @@ public sealed partial class GameServer
         if (payload.Length > GameConstants.MaxPlayerNameLength)
         {
             var kick = new NetWriter(2);
-            ServerMessages.Kick(kick, KickReason.Name);
+            client.Encoder.Kick(kick, KickReason.Name);
             client.Connection.Send(kick.WrittenSpan);
 
             // Flush before closing, or the reason is buffered and discarded and
@@ -231,7 +229,7 @@ public sealed partial class GameServer
         entry.LastNameChangeMs = _nowMs;
         entry.Name = GG2Text.Decode(payload);
 
-        ServerMessages.PlayerChangeName(_broadcast, IdOf(entry), entry.Name);
+        _broadcast.PlayerChangeName(IdOf(entry), entry.Name);
     }
 
     /// <summary>
@@ -275,7 +273,7 @@ public sealed partial class GameServer
         }
 
         entry.LastChatBubbleMs = _nowMs;
-        ServerMessages.ChatBubble(_broadcast, IdOf(entry), image);
+        _broadcast.ChatBubble(IdOf(entry), image);
     }
 
     /// <summary>
@@ -307,7 +305,7 @@ public sealed partial class GameServer
         // everybody would leak it and hand every other client a message its
         // stream cannot parse.
         var writer = new NetWriter(1 + RewardAuth.ChallengeBytes);
-        ServerMessages.RewardChallengeCode(writer, entry.RewardChallenge);
+        client.Encoder.RewardChallengeCode(writer, entry.RewardChallenge);
         client.Connection.Send(writer.WrittenSpan);
     }
 
@@ -382,7 +380,7 @@ public sealed partial class GameServer
             // carries.
             result.Player.Rewards = result.Rewards;
 
-            ServerMessages.RewardUpdate(_broadcast, (byte)slot, result.Rewards);
+            _broadcast.RewardUpdate((byte)slot, result.Rewards);
             _log.Info($"rewards for {LogText.Safe(result.Player.Name)} authenticated");
         }
     }
@@ -396,8 +394,7 @@ public sealed partial class GameServer
 
         ref readonly var builder = ref _world.Characters[slot];
 
-        ServerMessages.BuildSentry(
-            _broadcast,
+        _broadcast.BuildSentry(
             (byte)slot,
             WireQuantise.ToUShort(Gml.Round(builder.X * 5)),
             WireQuantise.ToUShort(Gml.Round(builder.Y * 5)),
@@ -431,7 +428,7 @@ public sealed partial class GameServer
         // MatchSimulation.Tick — the same shape as BUILD_SENTRY, and
         // the reason Intel.Drop is public.
         if (Intel.Drop(ref _world, slot))
-            ServerMessages.DropIntel(_broadcast, (byte)slot);
+            _broadcast.DropIntel((byte)slot);
     }
 
     private void ExecuteEatSandvich(int slot)
@@ -446,7 +443,7 @@ public sealed partial class GameServer
         // this message sees a heavy healing for no reason, not a desynchronised
         // one.
         if (PlayerCommands.EatSandvich(ref _world, slot))
-            ServerMessages.Omnomnomnom(_broadcast, (byte)slot);
+            _broadcast.Omnomnomnom((byte)slot);
     }
 
     private void ExecuteToggleZoom(int slot)
@@ -456,7 +453,7 @@ public sealed partial class GameServer
         // in the input byte, which is the whole reason the reference
         // extracted it into a script a bot can call.
         if (PlayerCommands.ToggleZoom(ref _world, slot))
-            ServerMessages.ToggleZoom(_broadcast, (byte)slot);
+            _broadcast.ToggleZoom((byte)slot);
     }
 
     private byte IdOf(RosterEntry entry) => checked((byte)_roster.IndexOf(entry));
@@ -485,6 +482,7 @@ public sealed partial class GameServer
         client.Analytics = null;
 
         _clients.RemoveAt(clientIndex);
+        _broadcast.Unlisten(client.Protocol);
 
         if (rosterIndex > 0)
         {
@@ -501,7 +499,7 @@ public sealed partial class GameServer
             _world.RemoveSlot(rosterIndex);
             _aimAnalysis.Remove(rosterIndex);
 
-            ServerMessages.PlayerLeave(_broadcast, (byte)rosterIndex);
+            _broadcast.PlayerLeave((byte)rosterIndex);
 
             // GameServerBeginStep.gml:70: ServerBalanceTeams() immediately after
             // the PLAYER_LEAVE, because a departure is the commonest way for the

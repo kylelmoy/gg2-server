@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using GG2.Protocol;
+using GG2.Server.Wire;
 
 namespace GG2.Server.Rooms;
 
@@ -33,6 +34,7 @@ public sealed class RoomFrontDoor : IDisposable
     private enum Stage
     {
         Hello,
+        NativeVersion,
         PasswordLength,
         Password,
     }
@@ -42,7 +44,7 @@ public sealed class RoomFrontDoor : IDisposable
         public ClientConnection Connection { get; } = connection;
         public ReceiveBuffer Received { get; } = new(64);
         public Stage Stage { get; set; } = Stage.Hello;
-        public int Expected { get; set; } = 17;
+        public int Expected { get; set; } = ProtocolHello.Length;
         public DateTime StartedAt { get; } = now;
         public DateTime LastContact { get; set; } = now;
     }
@@ -162,26 +164,33 @@ public sealed class RoomFrontDoor : IDisposable
             switch (pending.Stage)
             {
                 case Stage.Hello:
-                {
-                    var sameProtocol = payload[0] == (byte)MessageType.Hello
-                                       && payload[1..17].SequenceEqual(GameConstants.ProtocolUuidBytes);
-
-                    var reply = new NetWriter(2);
-
-                    if (!sameProtocol)
+                    // The same classification JoiningConnection makes, so a room
+                    // host and a plain server tell the protocols apart one way.
+                    switch (ProtocolHello.Classify(payload))
                     {
-                        ServerMessages.IncompatibleProtocol(reply);
-                        connection.Send(reply.WrittenSpan);
-                        connection.Flush();
-                        connection.Close("protocol uuid mismatch");
-                        return Drop(pending);
+                        case HelloKind.Legacy:
+                            AskForPassword(pending);
+                            break;
+
+                        case HelloKind.Native:
+                            pending.Stage = Stage.NativeVersion;
+                            pending.Expected = 2;
+                            break;
+
+                        default:
+                            return Incompatible(pending, "protocol uuid mismatch");
                     }
 
-                    ServerMessages.PasswordRequest(reply);
-                    connection.Send(reply.WrittenSpan);
-                    connection.Flush();
-                    pending.Stage = Stage.PasswordLength;
-                    pending.Expected = 1;
+                    break;
+
+                case Stage.NativeVersion:
+                {
+                    var version = NativeProtocol.ReadVersion(payload);
+                    if (!NativeProtocol.Supports(version))
+                        return Incompatible(pending, $"native protocol version {version} not served");
+
+                    connection.Speak(WireProtocol.Native, version);
+                    AskForPassword(pending);
                     break;
                 }
 
@@ -198,6 +207,28 @@ public sealed class RoomFrontDoor : IDisposable
         return false;
     }
 
+    /// <summary>A protocol this host speaks: ask which room, in that protocol.</summary>
+    private static void AskForPassword(Pending pending)
+    {
+        var reply = new NetWriter(2);
+        ServerEncoder.For(pending.Connection.Protocol).PasswordRequest(reply);
+        pending.Connection.Send(reply.WrittenSpan);
+        pending.Connection.Flush();
+        pending.Stage = Stage.PasswordLength;
+        pending.Expected = 1;
+    }
+
+    /// <summary>Neither protocol, or a native version this build does not serve.</summary>
+    private static bool Incompatible(Pending pending, string why)
+    {
+        var reply = new NetWriter(2);
+        ServerMessages.IncompatibleProtocol(reply);
+        pending.Connection.Send(reply.WrittenSpan);
+        pending.Connection.Flush();
+        pending.Connection.Close(why);
+        return Drop(pending);
+    }
+
     private bool HandOver(Pending pending, string password)
     {
         var connection = pending.Connection;
@@ -205,7 +236,7 @@ public sealed class RoomFrontDoor : IDisposable
         if (_findRoom(password) is not { } room)
         {
             var wrong = new NetWriter(2);
-            ServerMessages.PasswordWrong(wrong);
+            ServerEncoder.For(connection.Protocol).PasswordWrong(wrong);
             connection.Send(wrong.WrittenSpan);
             connection.Flush();
             connection.Close("wrong password");

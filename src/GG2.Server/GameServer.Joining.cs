@@ -2,16 +2,17 @@ using System.Diagnostics;
 using System.Net;
 using GG2.Bots;
 using GG2.Protocol;
+using GG2.Server.Wire;
 
 namespace GG2.Server;
 
 public sealed partial class GameServer
 {
-    /// <summary>The join burst as a fresh array, for <see cref="MatchRecorder"/>.</summary>
+    /// <summary>The legacy join burst as a fresh array, for <see cref="MatchRecorder"/>.</summary>
     private byte[] JoinBurstBytes()
     {
         var writer = new NetWriter(2048);
-        WriteJoinBurst(writer);
+        WriteJoinBurst(writer, ServerEncoder.Legacy);
         return writer.WrittenSpan.ToArray();
     }
 
@@ -467,13 +468,17 @@ public sealed partial class GameServer
     /// from what a real client is sent would replay differently from the game it
     /// recorded, and nothing would say so.
     /// </remarks>
-    private void WriteJoinBurst(NetWriter writer)
+    /// <param name="encoder">
+    /// The joiner's protocol. The recorder passes the legacy one, because a
+    /// trace is legacy-format whoever was connected.
+    /// </param>
+    private void WriteJoinBurst(NetWriter writer, ServerEncoder encoder)
     {
         // The joiner's id is the roster size *before* it is added, and
         // everything here has to arrive before the FULL_UPDATE that follows it —
         // that update's player count is checked against the client's own roster.
         var playerId = checked((byte)_roster.Count);
-        ServerMessages.JoinUpdate(writer, playerId, _match.CurrentMapArea);
+        encoder.JoinUpdate(writer, playerId, _match.CurrentMapArea);
 
         // The CHANGE_MAP is what makes the client load the map.
         // ⚠️ _currentMap, not _options.Map. They are the same until the first
@@ -491,26 +496,28 @@ public sealed partial class GameServer
         // Measured live 2026-09-05 on gg_debug2: two stock clients, both killed
         // on arrival. The HELLO already carried the right hash, which is why the
         // handshake tests passed throughout.
-        ServerMessages.ChangeMap(writer, _currentMap, _currentMapMd5);
+        encoder.ChangeMap(writer, _currentMap, _currentMapMd5);
 
         for (var i = 0; i < _roster.Count; i++)
         {
             var existing = _roster[i];
-            ServerMessages.PlayerJoin(writer, existing.Name);
-            ServerMessages.PlayerChangeClass(writer, (byte)i, existing.Class);
-            ServerMessages.PlayerChangeTeam(writer, (byte)i, existing.Team);
+            encoder.PlayerJoin(writer, existing.Name);
+            encoder.PlayerChangeClass(writer, (byte)i, existing.Class);
+            encoder.PlayerChangeTeam(writer, (byte)i, existing.Team);
         }
 
-        _stateWriter.Write(writer, MessageType.FullUpdate);
+        encoder.StateUpdate(writer, _stateWriter, MessageType.FullUpdate);
     }
 
     private void CompleteJoin(JoiningConnection joining)
     {
         var connection = joining.Connection;
+        var protocol = joining.Protocol;
+        var encoder = ServerEncoder.For(protocol);
         var writer = new NetWriter(2048);
 
-        // 1. The whole join burst, on this socket alone.
-        WriteJoinBurst(writer);
+        // 1. The whole join burst, on this socket alone, in its own protocol.
+        WriteJoinBurst(writer, encoder);
 
         connection.Send(writer.WrittenSpan);
 
@@ -528,11 +535,16 @@ public sealed partial class GameServer
         // Everything appended from here on, starting with this player's own
         // PLAYER_JOIN, is news the joiner has to have.
         // ClientPlayer.SkipBroadcastBytes has the two failures this prevents.
+        //
+        // The mark is into THIS client's protocol's stream, and the client
+        // starts listening on it only now, so a native joiner on a server whose
+        // native stream was idle takes a mark of 0 — correct, since nothing
+        // stood in it. ServerBroadcast has the rule.
         var client = new ClientPlayer
         {
             Connection = connection,
             Entry = entry,
-            SkipBroadcastBytes = _broadcast.WrittenSpan.Length,
+            SkipBroadcastBytes = _broadcast.Length(protocol),
         };
 
         // ⛔ Whatever the handshake read and did not consume is the first of
@@ -546,6 +558,7 @@ public sealed partial class GameServer
         client.Received.Append(joining.Unconsumed);
 
         _clients.Add(client);
+        _broadcast.Listen(protocol);
         JoinsSinceStart++;
 
         // ⚠️ AFTER the add, so `_clients.Count` is the concurrency this join
@@ -562,13 +575,13 @@ public sealed partial class GameServer
 
         // 3. Broadcast to everyone *including* the joiner, which is how the
         //    joiner learns about itself — after the replay of everyone else.
-        ServerMessages.PlayerJoin(_broadcast, entry.Name);
+        _broadcast.PlayerJoin(entry.Name);
 
         // 4. The welcome message, to this socket only.
         if (_options.WelcomeMessage.Length != 0)
         {
             writer.Reset();
-            ServerMessages.MessageString(writer, _options.WelcomeMessage);
+            encoder.MessageString(writer, _options.WelcomeMessage);
             connection.Send(writer.WrittenSpan);
         }
 
@@ -599,11 +612,11 @@ public sealed partial class GameServer
         //    Sending the pending broadcast here and advancing the mark past it
         //    reproduces that: identical bytes in identical order, one write,
         //    and FlushBroadcast will not send them twice.
-        var pending = _broadcast.WrittenSpan[client.SkipBroadcastBytes..];
+        var pending = _broadcast.Written(protocol)[client.SkipBroadcastBytes..];
         if (!pending.IsEmpty)
             connection.Send(pending);
 
-        client.SkipBroadcastBytes = _broadcast.WrittenSpan.Length;
+        client.SkipBroadcastBytes = _broadcast.Length(protocol);
 
         // 6. ⛔ AND IF THE ROUND IS ALREADY OVER, THIS PLAYER'S OWN MAP_END —
         //    AFTER the PLAYER_JOIN above, never before it.
@@ -631,7 +644,7 @@ public sealed partial class GameServer
         if (_world.MapChanging)
         {
             writer.Reset();
-            ServerMessages.MapEnd(writer, _nextMap, _world.Winner, (byte)_nextArea);
+            encoder.MapEnd(writer, _nextMap, _world.Winner, (byte)_nextArea);
             connection.Send(writer.WrittenSpan);
         }
 
@@ -642,7 +655,8 @@ public sealed partial class GameServer
         if (_churnLog.ShouldLog(_nowMs, out var suppressed))
         {
             _log.Info(
-                $"{LogText.Safe(entry.Name)} joined as player {_roster.Count - 1}; "
+                $"{LogText.Safe(entry.Name)} joined as player {_roster.Count - 1}"
+                + (protocol == WireProtocol.Native ? $" (native v{joining.NativeVersion}); " : "; ")
                 + $"{_roster.Count - 1} of {_options.PlayerLimit} slots used"
                 + Suffix(suppressed));
         }

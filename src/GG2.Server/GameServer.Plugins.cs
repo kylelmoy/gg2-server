@@ -226,7 +226,7 @@ public sealed partial class GameServer
             name = name[..GameConstants.MaxPlayerNameLength];
 
         _roster[slot].Name = name;
-        ServerMessages.PlayerChangeName(_broadcast, checked((byte)slot), name);
+        _broadcast.PlayerChangeName(checked((byte)slot), name);
     }
 
     /// <summary>
@@ -234,7 +234,7 @@ public sealed partial class GameServer
     /// this tick's flush and in order with everything else appended this tick.
     /// </summary>
     void IPluginHost.SendPluginPacketToAll(int packetId, ReadOnlySpan<byte> data) =>
-        ServerMessages.PluginPacket(_broadcast, checked((byte)packetId), data);
+        _broadcast.PluginPacket(checked((byte)packetId), data);
 
     /// <summary>
     /// <c>PluginPacketSendTo</c>: onto one client's own queue.
@@ -257,7 +257,7 @@ public sealed partial class GameServer
             return;
 
         var writer = new NetWriter(data.Length + 4);
-        ServerMessages.PluginPacket(writer, checked((byte)packetId), data);
+        Wire.ServerEncoder.For(connection.Protocol).PluginPacket(writer, checked((byte)packetId), data);
         connection.Send(writer.WrittenSpan);
     }
 
@@ -322,7 +322,7 @@ public sealed partial class GameServer
         if (notice.Length > MaxSayLength)
             notice = notice[..MaxSayLength];
 
-        ServerMessages.MessageString(_broadcast, notice);
+        _broadcast.MessageString(notice);
         _chatHistory?.Add(name, Team.Spectator, text, teamOnly: false);
         _log.Info($"[notice] {LogText.Safe(name)}: {LogText.Safe(text)}");
         return "notice";

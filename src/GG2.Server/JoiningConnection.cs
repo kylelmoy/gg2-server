@@ -1,4 +1,5 @@
 using GG2.Protocol;
+using GG2.Server.Wire;
 
 namespace GG2.Server;
 
@@ -27,6 +28,13 @@ public enum JoinState
 
     /// <summary>Streaming a custom map. Never entered by a built-in-maps-only server.</summary>
     ClientDownloading = 7,
+
+    /// <summary>
+    /// The two version bytes after a native HELLO. Not the reference's: a stock
+    /// client never reaches it, because only <see cref="NativeProtocol.Uuid"/>
+    /// leads here. docs/PROTOCOL.md, "Two protocols".
+    /// </summary>
+    ExpectNativeVersion = 8,
 
     /// <summary>
     /// The connection is finished — either it joined, or it fell through a case
@@ -88,6 +96,18 @@ public sealed class JoiningConnection(
 
     public JoinState State { get; private set; } = JoinState.ExpectHello;
 
+    /// <summary>
+    /// The wire protocol the HELLO asked for. <see cref="WireProtocol.Legacy"/>
+    /// until a native HELLO has been read and its version accepted.
+    /// </summary>
+    public WireProtocol Protocol => Connection.Protocol;
+
+    /// <summary>The native version agreed on; 0 on the legacy wire.</summary>
+    public ushort NativeVersion => Connection.NativeVersion;
+
+    /// <summary>How everything after the HELLO is written to this connection.</summary>
+    private ServerEncoder Encoder => ServerEncoder.For(Protocol);
+
     /// <summary>The name claimed by <c>RESERVE_SLOT</c>, truncated to 20 bytes.</summary>
     public string Name { get; private set; } = string.Empty;
 
@@ -140,6 +160,10 @@ public sealed class JoiningConnection(
     /// The same state <see cref="HandlePassword"/> leaves behind on a match, so
     /// everything from the greeting on is the ordinary path.
     /// </remarks>
+    /// <para>
+    /// The protocol is the connection's, which the front door set when it read
+    /// the HELLO (<see cref="ClientConnection.Protocol"/>).
+    /// </para>
     public void MarkAuthenticated(ReadOnlySpan<byte> carried)
     {
         if (State != JoinState.ExpectHello)
@@ -224,6 +248,10 @@ public sealed class JoiningConnection(
                 next = HandleHello(payload, context);
                 break;
 
+            case JoinState.ExpectNativeVersion:
+                next = HandleNativeVersion(payload, context);
+                break;
+
             case JoinState.ExpectMessageLength:
                 _expectedBytes = payload[0];
                 next = _messageState;
@@ -259,21 +287,49 @@ public sealed class JoiningConnection(
 
     private JoinState HandleHello(ReadOnlySpan<byte> payload, in JoinContext context)
     {
-        // 17 bytes: the HELLO byte and all 16 of PROTOCOL_UUID. The reference
-        // compares every one of them and answers a single byte on any mismatch.
-        var sameProtocol = payload[0] == (byte)MessageType.Hello
-                           && payload[1..17].SequenceEqual(GameConstants.ProtocolUuidBytes);
+        // 17 bytes: the HELLO byte and all 16 of a UUID. The reference compares
+        // every one of them and answers a single byte on any mismatch; a native
+        // UUID is the one other value that gets further.
+        switch (ProtocolHello.Classify(payload))
+        {
+            case HelloKind.Legacy:
+                return AcceptHello(context);
 
-        if (!sameProtocol)
+            case HelloKind.Native:
+                _expectedBytes = 2;
+                return JoinState.ExpectNativeVersion;
+
+            default:
+                ServerMessages.IncompatibleProtocol(_out);
+                Connection.Close("protocol uuid mismatch");
+                return JoinState.Done;
+        }
+    }
+
+    private JoinState HandleNativeVersion(ReadOnlySpan<byte> payload, in JoinContext context)
+    {
+        var version = NativeProtocol.ReadVersion(payload);
+
+        // The same one-byte answer as a wrong UUID, because it is the one a
+        // native client already has to handle from a stock server, and its
+        // response to either is the same: reconnect with the legacy HELLO.
+        if (!NativeProtocol.Supports(version))
         {
             ServerMessages.IncompatibleProtocol(_out);
-            Connection.Close("protocol uuid mismatch");
+            Connection.Close($"native protocol version {version} not served");
             return JoinState.Done;
         }
 
+        Connection.Speak(WireProtocol.Native, version);
+        return AcceptHello(context);
+    }
+
+    /// <summary>The HELLO named a protocol this server speaks: on to the password or the greeting.</summary>
+    private JoinState AcceptHello(in JoinContext context)
+    {
         if (context.Password.Length != 0)
         {
-            ServerMessages.PasswordRequest(_out);
+            Encoder.PasswordRequest(_out);
             _messageState = JoinState.ExpectPassword;
             _expectedBytes = 1;
             return JoinState.ExpectMessageLength;
@@ -295,7 +351,7 @@ public sealed class JoiningConnection(
 
         // Not retryable: the reference writes PASSWORD_WRONG and falls through
         // with no next state, and the client destroys itself on receiving it.
-        ServerMessages.PasswordWrong(_out);
+        Encoder.PasswordWrong(_out);
         Connection.Close("wrong password");
         return JoinState.Done;
     }
@@ -345,7 +401,7 @@ public sealed class JoiningConnection(
                 // own — the client reads exactly this many and then stops. It is
                 // written before the state changes so it precedes the first
                 // chunk in the stream.
-                _out.WriteUInt(checked((uint)_transfer.Length));
+                Encoder.MapDownloadLength(_out, checked((uint)_transfer.Length));
                 FlushOut();
 
                 return JoinState.ClientDownloading;
@@ -360,7 +416,7 @@ public sealed class JoiningConnection(
     {
         if (context.OccupiedSlots >= context.PlayerLimit)
         {
-            ServerMessages.ServerFull(_out);
+            Encoder.ServerFull(_out);
             Connection.Close("server full");
             return JoinState.Done;
         }
@@ -372,7 +428,7 @@ public sealed class JoiningConnection(
             ? name[..GameConstants.MaxPlayerNameLength]
             : name;
 
-        ServerMessages.ReserveSlot(_out);
+        Encoder.ReserveSlot(_out);
 
         _expectedBytes = 1;
         return JoinState.ExpectCommand;
@@ -388,7 +444,7 @@ public sealed class JoiningConnection(
         // rejects.
         _mapFile = context.MapFile;
 
-        ServerMessages.Hello(
+        Encoder.Greeting(
             _out,
             context.ServerName,
             context.CurrentMap,

@@ -63,9 +63,12 @@ still means the *simulation* never special-cases a bot.
   `PlayerInput` records and pushed onto a single-producer queue per connection;
   the tick thread drains them at the top of each tick. Outbound, the tick thread
   writes one broadcast buffer and hands it to the I/O side to fan out.
-- Because the server sends **one identical byte stream to every client**
-  (`PROTOCOL.md`), the fan-out is a single buffer written to N sockets — not N
-  serialisations. Keep it that way; it is why the send path is nearly free.
+- Because the server sends **one identical byte stream to every client of a
+  protocol** (`PROTOCOL.md`, "Two protocols"), the fan-out is one buffer per
+  protocol in use written to N sockets — not N serialisations.
+  `ServerBroadcast` holds the buffers and writes the native one only while a
+  native client is connected. Keep it that way; it is why the send path is
+  nearly free.
 - Nothing in the simulation touches a lock.
 
 ## Data layout
