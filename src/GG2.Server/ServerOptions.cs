@@ -878,6 +878,10 @@ public sealed class ServerOptions
     /// <see cref="Autobalance"/> says, because it would move a human onto the bots'
     /// team. Serve it on <c>maps/duel</c>; on any other map the pairs share that
     /// map's spawn points as cells. Read every tick.
+    /// <para>
+    /// It also changes five settings' defaults to what the duel nets were trained
+    /// under — <see cref="DuelDefaults"/>, which an explicit setting overrides.
+    /// </para>
     /// </remarks>
     public bool Duel { get; set; }
 
@@ -1165,6 +1169,18 @@ public sealed class ServerOptions
     /// </para>
     /// </remarks>
     public IReadOnlyList<string> CommandLineOverrides { get; set; } = [];
+
+    /// <summary>
+    /// The <see cref="ServerOptions"/> property names a config-file key or a flag
+    /// set explicitly, so <see cref="DuelDefaults"/> can tell "not given" from
+    /// "given the global default".
+    /// </summary>
+    /// <remarks>
+    /// Get-only, so it is not a setting and has no row: it is DERIVED from what
+    /// was read. <see cref="ServerConfigFile"/> adds every key a file carries, and
+    /// <c>CommandLine</c> adds the flags whose setting a duel server defaults.
+    /// </remarks>
+    public HashSet<string> ExplicitSettings { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
     /// A fresh options object carrying this codebase's defaults, including the

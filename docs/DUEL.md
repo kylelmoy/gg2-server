@@ -196,19 +196,21 @@ gg2-sim trains one net per class for this server (`docs/HANDOFF-SERVER-DUEL.md`
 there): same-class 1v1 starts in these cells and in generated ones, spawn
 protection 0, driving the whole cell. They are terrain-layout nets
 (`docs/BOTS.md`, "gg2-sim policies"), and they were scored sampled. The settings
-they were trained and scored under:
+they were trained and scored under are **a duel server's defaults**
+(`DuelDefaults`, gated by `DuelDefaultsTests`), so `--duel` alone runs them:
 
-```ini
-[Bots]
-Policy=checkpoints/duel/ppo-duels2-soldier-s1.gg2p,...   ; all ten in checkpoints/duel/
-ClassPolicy=Soldier=ppo-duels2-soldier-s1,...
-HandoverRule=distance
-HandoverRange=100000    ; past a cell's 1,082 px diagonal: the net always drives
-PolicySampled=1
-```
+| Setting | On a duel server | Elsewhere |
+|---|---|---|
+| `[Bots] Policy`, `ClassPolicy` | the ten nets in `checkpoints/duel/`, one per class (`MapDirectory.ShippedDuelCheckpoints`) | the nine shipped team nets |
+| `[Bots] HandoverRule` | `distance` | `macrotask` |
+| `[Bots] HandoverRange` | `100000`, past a cell's 1,082 px diagonal: the net always drives | `150` |
+| `[Bots] PolicySampled` | `1` | `0` |
+| `[Server] Team Deathmatch Invulnerability Seconds` | `0` | `5` |
 
-and `[Server] Team Deathmatch Invulnerability Seconds=0`, which the live duel
-server already runs. The sniper's net is gg2-sim's 1B checkpoint
+**Defaults, not overrides**: a key in the config file or a flag for any of these
+wins, including one that names the global default (`PolicySampled=0` runs greedy
+on a duel server). `--policy` replaces the duel bundle as it replaces the team
+one, and `--bot-class-policy` entries apply over the bundle's assignment. The sniper's net is gg2-sim's 1B checkpoint
 (`ppo-duel2-sniper-s1-1000M`), six are fine-tunes against a search opponent
 (`ppo-duels2-*`, the engineer's `ppo-duels-engineer-s1`), and Quote's is
 `ppo-duelq-quote-s1-1000M` (`ClassPolicy=...,Quote=ppo-duelq-quote-s1-1000M`):

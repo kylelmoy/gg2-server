@@ -83,7 +83,7 @@ public sealed partial class GameServer
         // buys, because the countdown is spent at 0.2 a tick. ⚠️ Its own floor
         // is max(0, ...) and not max(1, ...) — zero really does mean "no spawn
         // protection" here, so there is nothing to escape.
-        _world.TdmInvulnerabilityTicks = (int)(_options.TdmInvulnerabilitySeconds * 30 * 0.2);
+        _world.TdmInvulnerabilityTicks = (int)(DuelDefaults.TdmInvulnerabilitySeconds(_options) * 30 * 0.2);
 
         _world.Autobalance = _options.Autobalance && !_options.Duel; // a duel server pins humans to red; docs/DUEL.md
 

@@ -27,11 +27,24 @@ public sealed class DuelServerTests
             o.NavCacheDirectory = Path.Combine(ReferenceTree.RepositoryRoot, "nav", "duel");
             o.Duel = true;
             o.RespawnTimeSeconds = respawnSeconds;
+            ProtectSpawns(o);
 
             // These are about the pairing, at the server's Difficulty;
             // DuelLadderTests has the ladder.
             o.DuelLadder = false;
         });
+
+    /// <summary>
+    /// Team Deathmatch spawn protection at the global default, set explicitly so
+    /// the duel server's own default of none (<see cref="DuelDefaults"/>) does not
+    /// apply. These tests are about pairing under protection: a class change while
+    /// protected is a death, and the hold-fire rule only exists while it lasts.
+    /// </summary>
+    private static void ProtectSpawns(ServerOptions o)
+    {
+        o.TdmInvulnerabilitySeconds = 5;
+        o.ExplicitSettings.Add(nameof(ServerOptions.TdmInvulnerabilitySeconds));
+    }
 
     private static int HumanSlot(GameServer server)
     {
@@ -536,6 +549,7 @@ public sealed class DuelServerTests
             o.NavCacheDirectory = Path.Combine(ReferenceTree.RepositoryRoot, "nav", "duel");
             o.Duel = true;
             o.DuelLadder = false;
+            ProtectSpawns(o);
         });
 
         JoinAndPlay(harness, Team.Red, playerClass);

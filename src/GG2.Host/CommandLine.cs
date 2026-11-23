@@ -351,6 +351,7 @@ internal static class CommandLine
                 // this group with nothing to escape.
                 case "--tdm-invuln":
                     options.TdmInvulnerabilitySeconds = cursor.TakeInt();
+                    options.ExplicitSettings.Add(nameof(ServerOptions.TdmInvulnerabilitySeconds));
                     break;
 
                 // Either one number for every class, or `scout=1,medic=2`.
@@ -643,11 +644,13 @@ internal static class CommandLine
                 // A behaviour switch: ServerOptions.BotHandoverRule.
                 case "--bot-handover-rule":
                     options.BotHandoverRule = ServerSettings.ParseHandoverRule(cursor.Take());
+                    options.ExplicitSettings.Add(nameof(ServerOptions.BotHandoverRule));
                     break;
 
                 // A behaviour switch: ServerOptions.BotHandoverRange.
                 case "--bot-handover-range":
                     options.BotHandoverRange = int.Parse(cursor.Take(), CultureInfo.InvariantCulture);
+                    options.ExplicitSettings.Add(nameof(ServerOptions.BotHandoverRange));
                     break;
 
                 // A behaviour switch: ServerOptions.BotPolicySampled.
@@ -1240,6 +1243,8 @@ internal static class CommandLine
           --duel            the duel server: each human on red fights one blue
                             bot of their own class, both pinned to one cell.
                             Replaces the --bots fill and holds autobalance off.
+                            The bots default to the ten duel nets, sampled,
+                            driving the whole cell, with no spawn protection.
                             Serve --maps maps/duel --botnav nav/duel.
                             docs/DUEL.md
           --no-duel-ladder  every duel bot plays --bot-difficulty instead of

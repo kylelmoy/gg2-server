@@ -137,7 +137,10 @@ losses. The arenas ship in `maps/duel/`:
 gg2-server --duel --maps maps/duel --botnav nav/duel --map duel_01
 ```
 
-See [`docs/DUEL.md`](docs/DUEL.md).
+`--duel` also switches the bots to the ten duel nets in `checkpoints/duel/`,
+one per class, under the settings they were trained with: the net drives the
+whole fight, its decisions are sampled, and there is no spawn protection. Any
+of those you set yourself still applies. See [`docs/DUEL.md`](docs/DUEL.md).
 
 ### Admin panel and analytics
 

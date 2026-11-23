@@ -108,6 +108,7 @@ public static class ServerConfigFile
                 && entries.TryGetValue(setting.Key, out var value))
             {
                 setting.Set(options, value);
+                options.ExplicitSettings.Add(setting.Property);
             }
         }
 

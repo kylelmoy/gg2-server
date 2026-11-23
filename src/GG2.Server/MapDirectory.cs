@@ -188,6 +188,40 @@ public static class MapDirectory
     ];
 
     /// <summary>
+    /// The ten duel nets, one per class including Quote, relative to
+    /// <c>checkpoints/</c>: what a duel server loads when no <c>--policy</c>
+    /// names a checkpoint. <c>docs/DUEL.md</c>, "The duel nets".
+    /// </summary>
+    public static readonly IReadOnlyList<string> ShippedDuelCheckpoints =
+    [
+        "duel/ppo-duels2-soldier-s1.gg2p",
+        "duel/ppo-duels2-scout-s1.gg2p",
+        "duel/ppo-duels2-heavy-s1.gg2p",
+        "duel/ppo-duel2-sniper-s1-1000M.gg2p",
+        "duel/ppo-duel2-demoman-s1.gg2p",
+        "duel/ppo-duels2-pyro-s1.gg2p",
+        "duel/ppo-duel2-medic-s1.gg2p",
+        "duel/ppo-duels-engineer-s1.gg2p",
+        "duel/ppo-duels2-spy-s1.gg2p",
+        "duel/ppo-duelq-quote-s1-1000M.gg2p",
+    ];
+
+    /// <summary>Which class each of <see cref="ShippedDuelCheckpoints"/> drives.</summary>
+    public static readonly IReadOnlyList<string> ShippedDuelClassPolicies =
+    [
+        "Soldier=ppo-duels2-soldier-s1",
+        "Scout=ppo-duels2-scout-s1",
+        "Heavy=ppo-duels2-heavy-s1",
+        "Sniper=ppo-duel2-sniper-s1-1000M",
+        "Demoman=ppo-duel2-demoman-s1",
+        "Pyro=ppo-duels2-pyro-s1",
+        "Medic=ppo-duel2-medic-s1",
+        "Engineer=ppo-duels-engineer-s1",
+        "Spy=ppo-duels2-spy-s1",
+        "Quote=ppo-duelq-quote-s1-1000M",
+    ];
+
+    /// <summary>
     /// The shipped bundle's full paths — <c>checkpoints/</c> beside the
     /// executable or above it — or empty when any file of it is missing.
     /// </summary>
@@ -203,22 +237,32 @@ public static class MapDirectory
         ResolveCheckpoints(AppContext.BaseDirectory);
 
     /// <summary>
+    /// <see cref="ShippedDuelCheckpoints"/>' full paths, found the way
+    /// <see cref="ResolveCheckpoints()"/> finds the main bundle, or empty.
+    /// </summary>
+    public static IReadOnlyList<string> ResolveDuelCheckpoints() =>
+        ResolveCheckpoints(AppContext.BaseDirectory, ShippedDuelCheckpoints);
+
+    /// <summary>
     /// <inheritdoc cref="ResolveCheckpoints()"/>, probing upward from
     /// <paramref name="start"/>.
     /// </summary>
-    public static IReadOnlyList<string> ResolveCheckpoints(string start)
+    public static IReadOnlyList<string> ResolveCheckpoints(string start) =>
+        ResolveCheckpoints(start, ShippedCheckpoints);
+
+    private static IReadOnlyList<string> ResolveCheckpoints(string start, IReadOnlyList<string> bundle)
     {
         for (var directory = new DirectoryInfo(start);
              directory is not null;
              directory = directory.Parent)
         {
             var candidate = Path.Combine(directory.FullName, "checkpoints");
-            var paths = new string[ShippedCheckpoints.Count];
+            var paths = new string[bundle.Count];
             var complete = true;
 
             for (var i = 0; i < paths.Length && complete; i++)
             {
-                paths[i] = Path.Combine(candidate, ShippedCheckpoints[i]);
+                paths[i] = Path.Combine(candidate, bundle[i]);
                 complete = File.Exists(paths[i]);
             }
 

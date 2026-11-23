@@ -73,7 +73,9 @@ public static class BotBrain
         // this machine's install directory into the config.
         if (mode.UsesPolicy() && policyPaths.Count == 0)
         {
-            policyPaths = MapDirectory.ResolveCheckpoints();
+            // A duel server's bundle is the ten duel nets (DuelDefaults).
+            policyPaths = options.Duel ? MapDirectory.ResolveDuelCheckpoints() : MapDirectory.ResolveCheckpoints();
+            var bundleClasses = options.Duel ? MapDirectory.ShippedDuelClassPolicies : MapDirectory.ShippedClassPolicies;
 
             // The bundle's assignment, with the operator's entries applied OVER it
             // class by class: `Soldier=scripted` alone hands the soldier back to the
@@ -83,7 +85,7 @@ public static class BotBrain
 
             classPolicies =
             [
-                .. MapDirectory.ShippedClassPolicies.Where(entry =>
+                .. bundleClasses.Where(entry =>
                     !overridden.Contains(Enum.Parse<PlayerClass>(entry[..entry.IndexOf('=')]))),
                 .. classPolicies,
             ];
@@ -116,7 +118,7 @@ public static class BotBrain
                 labels.Add(label);
 
                 tiers.Add(SimTier(policyPath, label, assigned, report, loadPolicy ?? SimPolicyNetwork.Load)
-                    with { Sampled = options.BotPolicySampled });
+                    with { Sampled = DuelDefaults.Sampled(options) });
             }
 
             // ⛔ AFTER the loop, so the message can name the labels that DO exist.
@@ -146,8 +148,8 @@ public static class BotBrain
                 : new BotBrainSpec
                 {
                     Tiers = tiers,
-                    Rule = options.BotHandoverRule,
-                    Range = options.BotHandoverRange,
+                    Rule = DuelDefaults.Rule(options),
+                    Range = DuelDefaults.Range(options),
 
                     // ⛔ The server's default is the OPPOSITE of BotBrainSpec's,
                     // deliberately — see ServerOptions.BotEngagesBotsToo.
