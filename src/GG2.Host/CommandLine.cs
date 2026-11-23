@@ -284,6 +284,7 @@ internal static class CommandLine
                     break;
                 case "--map":
                     options.Map = cursor.Take();
+                    options.ExplicitSettings.Add(nameof(ServerOptions.Map));
                     break;
                 case "--password":
                     options.Password = cursor.Take();
@@ -316,6 +317,7 @@ internal static class CommandLine
                     break;
                 case "--maps":
                     options.MapDirectory = cursor.Take();
+                    options.ExplicitSettings.Add(nameof(ServerOptions.MapDirectory));
                     break;
 
                 // Consumed by the pre-pass above; here only so it is not an
@@ -333,6 +335,7 @@ internal static class CommandLine
                 // it. ServerOptions.Map says why.
                 case "--rotation":
                     options.MapRotation = ParseRotation(name, cursor.Take());
+                    options.ExplicitSettings.Add(nameof(ServerOptions.MapRotation));
                     break;
 
                 case "--shuffle":
@@ -522,6 +525,7 @@ internal static class CommandLine
                 // a quiet "these bots do not navigate", never an error.
                 case "--botnav":
                     options.NavCacheDirectory = cursor.Take();
+                    options.ExplicitSettings.Add(nameof(ServerOptions.NavCacheDirectory));
                     break;
 
                 // ⚠️ Generation is ON by default and this turns it off, rather
@@ -1244,8 +1248,9 @@ internal static class CommandLine
                             bot of their own class, both pinned to one cell.
                             Replaces the --bots fill and holds autobalance off.
                             The bots default to the ten duel nets, sampled,
-                            driving the whole cell, with no spawn protection.
-                            Serve --maps maps/duel --botnav nav/duel.
+                            driving the whole cell, with no spawn protection,
+                            on maps/duel and nav/duel from duel_01, unless
+                            --maps, --botnav, --map or --rotation says otherwise.
                             docs/DUEL.md
           --no-duel-ladder  every duel bot plays --bot-difficulty instead of
                             a level that follows its human's wins and losses

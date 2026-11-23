@@ -18,7 +18,9 @@ always red and bots always blue, so the team score reads as humans against bots.
 | A difficulty ladder: each human's bot follows their wins and losses, per class | **Built**: `[Bots] DuelLadder`, on by default. See "The difficulty ladder". Gated by `DuelLadderTests` |
 | A bot targets only its partner | **Built**: every bot view carries an opponents table (`WorldView.MayOppose`) that the duel service fills each tick, and every place the bot layer picks an enemy asks it. Gated by `OpponentFilterTests` and `DuelServerTests` |
 
-Run it with `gg2-server --duel --maps maps/duel --botnav nav/duel --map duel_01`.
+Run it with `gg2-server --duel`. A duel server defaults to the shipped
+`maps/duel/` and `nav/duel/` and to `duel_01`, wherever no map directory, nav
+directory, map or rotation is given (`DuelDefaults.ApplyPaths`).
 
 ## The pairing
 

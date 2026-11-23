@@ -89,6 +89,58 @@ public sealed class DuelDefaultsTests
         Assert.Equal(options.TdmInvulnerabilitySeconds, DuelDefaults.TdmInvulnerabilitySeconds(options));
     }
 
+    /// <summary>
+    /// <c>--duel</c> alone serves the shipped duel maps and nav graphs, opening
+    /// on <c>duel_01</c>.
+    /// </summary>
+    [Fact]
+    public void DuelAloneServesTheShippedDuelMaps()
+    {
+        var options = CommandLine.Parse(["--duel"]);
+        DuelDefaults.ApplyPaths(options);
+
+        Assert.Equal(Path.Combine(MapDirectory.Resolve(), "duel"), options.MapDirectory);
+        Assert.Equal(Path.Combine(MapDirectory.ResolveNav(), "duel"), options.NavCacheDirectory);
+        Assert.Equal(DuelDefaults.Map, options.Map);
+        Assert.True(File.Exists(Path.Combine(options.MapDirectory, options.Map + ".png")));
+    }
+
+    /// <summary>A map, a rotation or a directory given explicitly is kept.</summary>
+    [Theory]
+    [InlineData("--map", "duel_02")]
+    [InlineData("--rotation", "duel_03,duel_04")]
+    public void AnExplicitMapChoiceIsKept(string flag, string value)
+    {
+        var options = CommandLine.Parse(["--duel", flag, value]);
+        DuelDefaults.ApplyPaths(options);
+
+        Assert.NotEqual(DuelDefaults.Map, options.Map);
+        Assert.Equal(Path.Combine(MapDirectory.Resolve(), "duel"), options.MapDirectory);
+    }
+
+    [Fact]
+    public void ExplicitDirectoriesAreKept()
+    {
+        var maps = MapDirectory.Resolve();
+        var nav = MapDirectory.ResolveNav();
+        var options = CommandLine.Parse(["--duel", "--maps", maps, "--botnav", nav, "--map", "ctf_truefort"]);
+        DuelDefaults.ApplyPaths(options);
+
+        Assert.Equal(maps, options.MapDirectory);
+        Assert.Equal(nav, options.NavCacheDirectory);
+        Assert.Equal("ctf_truefort", options.Map);
+    }
+
+    [Fact]
+    public void AServerThatIsNotADuelServerKeepsItsMaps()
+    {
+        var options = CommandLine.Parse([]);
+        DuelDefaults.ApplyPaths(options);
+
+        Assert.Equal(MapDirectory.Resolve(), options.MapDirectory);
+        Assert.Equal(ServerOptions.DefaultMap, options.Map);
+    }
+
     /// <summary>The world a duel server builds carries no spawn protection.</summary>
     [Fact]
     public void TheDuelWorldHasNoSpawnProtection()

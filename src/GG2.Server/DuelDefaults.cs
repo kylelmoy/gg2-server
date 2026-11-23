@@ -51,6 +51,59 @@ public static class DuelDefaults
     public static int TdmInvulnerabilitySeconds(ServerOptions options) =>
         Applies(options, nameof(ServerOptions.TdmInvulnerabilitySeconds)) ? 0 : options.TdmInvulnerabilitySeconds;
 
+    /// <summary>The map a duel server opens on when none is given.</summary>
+    public const string Map = "duel_01";
+
+    /// <summary>
+    /// Points a duel server at the shipped <c>maps/duel/</c> and <c>nav/duel/</c>,
+    /// and at <see cref="Map"/>, wherever nothing else was chosen.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Written into the options, once, by the <see cref="GameServer"/>
+    /// constructor</b>, unlike the settings above: the directories are read in a
+    /// dozen places, and the constructor is the one funnel every server passes
+    /// through before any of them runs.
+    /// </para>
+    /// <para>
+    /// <b>Three conditions on each</b>: a duel server, a setting nobody gave
+    /// (<see cref="ServerOptions.ExplicitSettings"/>), and a value still at the
+    /// built-in default — so a directory set in code, as the tests do, is left
+    /// alone, and the subdirectory is only taken when it exists.
+    /// </para>
+    /// </remarks>
+    public static void ApplyPaths(ServerOptions options)
+    {
+        if (!options.Duel)
+            return;
+
+        var maps = Path.Combine(MapDirectory.Resolve(), "duel");
+
+        if (Applies(options, nameof(ServerOptions.MapDirectory))
+            && options.MapDirectory == MapDirectory.Resolve()
+            && Directory.Exists(maps))
+        {
+            options.MapDirectory = maps;
+        }
+
+        if (options.NavCacheDirectory.Length > 0
+            && Applies(options, nameof(ServerOptions.NavCacheDirectory))
+            && options.NavCacheDirectory == MapDirectory.ResolveNav()
+            && Directory.Exists(Path.Combine(options.NavCacheDirectory, "duel")))
+        {
+            options.NavCacheDirectory = Path.Combine(options.NavCacheDirectory, "duel");
+        }
+
+        if (Applies(options, nameof(ServerOptions.Map))
+            && !options.ExplicitSettings.Contains(nameof(ServerOptions.MapRotation))
+            && options.MapRotation.Count == 0
+            && options.Map == ServerOptions.DefaultMap
+            && File.Exists(Path.Combine(options.MapDirectory, Map + ".png")))
+        {
+            options.Map = Map;
+        }
+    }
+
     private static bool Applies(ServerOptions options, string property) =>
         options.Duel && !options.ExplicitSettings.Contains(property);
 }

@@ -579,6 +579,7 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     public GameServer(ServerOptions options, IServerLog log)
     {
         options.Validate();
+        DuelDefaults.ApplyPaths(options);
         _options = options;
 
         // The web panel shows the server's log, so the log has to be captured

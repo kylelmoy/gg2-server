@@ -131,13 +131,14 @@ gg2-server --bots 12 --bot-class-policy Sniper=scripted
 
 `--duel` pairs every human with a bot of their own class, alone in a small arena
 cut from a shipped map, with a difficulty that follows each player's wins and
-losses. The arenas ship in `maps/duel/`:
+losses:
 
 ```sh
-gg2-server --duel --maps maps/duel --botnav nav/duel --map duel_01
+gg2-server --duel
 ```
 
-`--duel` also switches the bots to the ten duel nets in `checkpoints/duel/`,
+It serves the arenas that ship in `maps/duel/` and `nav/duel/`, opening on
+`duel_01`, and switches the bots to the ten duel nets in `checkpoints/duel/`,
 one per class, under the settings they were trained with: the net drives the
 whole fight, its decisions are sampled, and there is no spawn protection. Any
 of those you set yourself still applies. See [`docs/DUEL.md`](docs/DUEL.md).
