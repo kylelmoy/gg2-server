@@ -236,6 +236,48 @@ public readonly record struct BotSkill(
     public BotSkill Human(bool human) => Human(human ? 1.0 : 0.0);
 
     /// <summary>
+    /// This skill pushed past <see cref="Lerp"/>'s floor by <paramref name="depth"/>,
+    /// 0 (unchanged) to 2: the duel ladder's Novice levels.
+    /// </summary>
+    /// <remarks>
+    /// <b>Why a separate knob</b>: every ramp in <see cref="For"/> is flat below
+    /// skill 0.15, so the bottom of a ladder cannot be made weaker by skill. These
+    /// are the knobs that reach a bot whose net always drives (the duel server's):
+    /// <see cref="HybridBot"/>'s handicap (the delay before the first shot, the held
+    /// aim error, the hold-fire roll), the turn-around and the rocket perception.
+    /// At depth 1 the bot holds fire half the time and aims up to 18 degrees off; at
+    /// depth 2, 70% and 36 degrees, and it waits two and a half seconds before its
+    /// first shot. The aim error and hold-fire grow faster than linearly because a
+    /// linear ramp flattened between depths 1.5 and 2. The net's movement is
+    /// otherwise untouched. Applied after <see cref="Human(double)"/>, so the
+    /// turn-around it lengthens is the human one.
+    /// <para>
+    /// Fitted by <c>BENCH_DUEL_LADDER=160 BENCH_DUEL_OPPONENT=3</c> (1,280 duels a
+    /// level, against the old bottom level): depth 1 scores 0.336 and depth 2 0.167
+    /// (0.336 and 0.168 on <c>BENCH_SEED_BASE=500000</c>), steps of 0.75 and 0.92 in
+    /// log-odds against the ladder's 0.5-0.7 above. Bot against bot; what would show
+    /// it wrong is a Novice player still losing most duels at level 1.
+    /// </para>
+    /// </remarks>
+    public BotSkill Novice(double depth)
+    {
+        if (depth <= 0)
+            return this;
+
+        var d = Math.Min(2.0, depth);
+
+        return this with
+        {
+            FireDelayTicks = FireDelayTicks + (int)Math.Floor((15 * d) + 0.5),
+            PolicyAimErrorDeg = PolicyAimErrorDeg + (6 * d * d),
+            HoldFireChance = Math.Min(0.9, HoldFireChance + (0.025 * d * (5 + d))),
+            ReversalCooldownTicks = ReversalCooldownTicks + (int)Math.Floor((3 * d) + 0.5),
+            PolicyReflexTicks = PolicyReflex + (1.5 * d),
+            ReflexMissChance = Math.Min(0.9, ReflexMissChance + (0.1 * d)),
+        };
+    }
+
+    /// <summary>
     /// This skill played that much like a person, from 0 (not at all: tier 5) to 1
     /// (fully: tiers 1-4).
     /// </summary>

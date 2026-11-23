@@ -896,16 +896,28 @@ model.** Four gates, all off `BotSkill`:
   every jump) scored 0.13 and the shipped `tracking9` 0.09, so the aim lag is
   most of it and the halved jumps about 0.04. It predates the rocket perception
   (the same at 550ae80, within noise).
-  - **`DuelLadder.DuelSkillOf` fades the human aim over all eight levels**
+  - **`DuelLadder.DuelSkillOf` fades the human aim over levels 3-10**
     (`BotSkill.Human(double)`: 1, 0.85, 0.68, 0.50, 0.33, 0.20, 0.08, 0) under
     skills 0.15, 0.27, 0.40, 0.55, 0.70, 0.85, 0.95, 0.95, fitted by
-    `BENCH_DUEL_LADDER=160 BENCH_DUEL_OPPONENT=4` (1,280 duels a level) for even
-    steps in log-odds. Held out (`BENCH_SEED_BASE=500000`): 0.15 / 0.25 / 0.34 /
-    0.51 / 0.65 / 0.75 / 0.83 / 0.90 against level 4, steps 0.46-0.70; against
-    level 8, 0.02 / 0.04 / 0.06 / 0.09 / 0.15 / 0.24 / 0.33 / 0.50, steps
-    0.35-0.70. A linear fade under the tiers' skills read 0.22-0.88 a step, the
-    top half twice the bottom's. Level 1 sits at `BotSkill.Lerp`'s floor (0.15),
-    so the bottom cannot be spread further by skill.
+    `BENCH_DUEL_LADDER=160` (1,280 duels a level) for even steps in log-odds,
+    when these were levels 1-8; the numbers below use the current numbering.
+    Held out (`BENCH_SEED_BASE=500000`): 0.15 / 0.25 / 0.34 / 0.51 / 0.65 /
+    0.75 / 0.83 / 0.90 against level 6, steps 0.46-0.70; against level 10,
+    0.02 / 0.04 / 0.06 / 0.09 / 0.15 / 0.24 / 0.33 / 0.50, steps 0.35-0.70. A
+    linear fade under the tiers' skills read 0.22-0.88 a step, the top half
+    twice the bottom's.
+  - **Level 3 sits at `BotSkill.Lerp`'s floor (0.15), so the bottom cannot be
+    spread further by skill**: the two Novice levels below it are
+    `BotSkill.Novice(depth)` at depths 1 and 2, which lengthen the handicaps
+    that reach an always-driving net past their floor values (hold-fire 0.35 ->
+    0.50 -> 0.70, policy aim error 12 -> 18 -> 36 degrees, fire delay 45 -> 60
+    -> 75 ticks, turn-around +3 ticks a depth, rocket lag +1.5 ticks a depth).
+    `BENCH_DUEL_LADDER=160 BENCH_DUEL_OPPONENT=3`: levels 3 / 2 / 1 score
+    0.507 / 0.336 / 0.167 (held out 0.517 / 0.336 / 0.168), steps 0.75 and 0.92
+    in log-odds. **Linear ramps in aim error and hold-fire flattened** (depth
+    1.5 to 2 moved 0.03, level 1 at 0.233); hold-fire capped near 0.9 overshot
+    the other way (level 1 at 0.101, a 1.4 step). Against level 6 the Novice
+    levels read 0.08 and 0.06, saturated, so tune them against level 3.
   - Single-level steps carry about ±0.15 of noise in log-odds even at 1,280
     duels; read pairs of levels when tuning. **A bot against a bot**: this says
     the levels are evenly apart, not where a person settles. What would show it

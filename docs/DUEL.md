@@ -92,42 +92,50 @@ already in flight stay in the old cell.
 
 On by default (`[Bots] DuelLadder`, `--no-duel-ladder` turns it off). Each
 human's bot plays at a rating that follows their results, kept per human and
-per class, and the bot is named for it: `Soldier 3 (Normal)`. `[Bots]
+per class, and the bot is named for it: `Soldier 5 (Normal)`. `[Bots]
 Difficulty` is not read for duel bots while it is on. `DuelLadder` in
 `src/GG2.Server/` is the whole of the arithmetic; `BotPopulationService.Duel.cs`
 applies it.
 
-**Levels.** Eight, with their own table (`DuelLadder.DuelSkillOf`); only level 8
-is a server tier (5, the nets as trained). Human-like aim costs a duel several
-tiers where it costs a match about one, so on the tiers' own mapping levels 1-7
-bunched far below level 8. Here the human aim fades over the whole ladder
+**Levels.** Ten, with their own table (`DuelLadder.DuelSkillOf`); only level 10
+is a server tier (5, the nets as trained). Levels 1-2 are Novice, for players on
+cumbersome controls such as a phone: every ramp in `BotSkill.For` is flat below
+skill 0.15, so they push the handicaps past that floor instead
+(`BotSkill.Novice`). Auto difficulty on team servers keeps its own eight levels.
+Human-like aim costs a duel several tiers where it costs a match about one, so
+on the tiers' own mapping the levels bunched far below the top. Here the human
+aim fades over levels 3-10
 (`BotSkill.Human(double)`: the aim lag's share, the reflex floor and the
 reversal cooldown together) and the skill under it is refitted, so each level is
-an even step in log-odds against a level-4 bot (`BENCH_DUEL_LADDER`, about 0.6 a
-level; `docs/TRAPS-BOTS.md`, "The duel ladder"). Auto difficulty on team servers
+an even step in log-odds against a level-6 bot (`BENCH_DUEL_LADDER`, about 0.6 a
+level; `docs/TRAPS-BOTS.md`, "The duel ladder"). The Novice levels step a little
+wider, 0.75 and 0.92. Auto difficulty on team servers
 keeps the tiers' mapping (`DuelLadder.SkillOf`).
 
-| Level | Skill | Human | Label | Score vs level 4 |
-|---|---|---|---|---|
-| 1 | 0.15 | 1.00 | Easy | 0.15 |
-| 2 | 0.27 | 0.85 | Easy | 0.25 |
-| 3 | 0.40 | 0.68 | Normal (a new player's start) | 0.34 |
-| 4 | 0.55 | 0.50 | Normal | 0.51 |
-| 5 | 0.70 | 0.33 | Hard | 0.65 |
-| 6 | 0.85 | 0.20 | Hard | 0.75 |
-| 7 | 0.95 | 0.08 | Expert | 0.83 |
-| 8 | 0.95 | 0 | Max | 0.90 |
+| Level | Skill | Human | Label | Score vs level 6 | Score vs level 3 |
+|---|---|---|---|---|---|
+| 1 | 0.15, Novice 2: holds fire 70%, aim error to 36 degrees, 2.5 s to the first shot | 1.00 | Novice | | 0.17 |
+| 2 | 0.15, Novice 1: holds fire 50%, aim error to 18 degrees | 1.00 | Novice | | 0.34 |
+| 3 | 0.15 | 1.00 | Easy | 0.15 | 0.52 |
+| 4 | 0.27 | 0.85 | Easy | 0.25 | |
+| 5 | 0.40 | 0.68 | Normal (a new player's start) | 0.34 | |
+| 6 | 0.55 | 0.50 | Normal | 0.51 | |
+| 7 | 0.70 | 0.33 | Hard | 0.65 | |
+| 8 | 0.85 | 0.20 | Hard | 0.75 | |
+| 9 | 0.95 | 0.08 | Expert | 0.83 | |
+| 10 | 0.95 | 0 | Max | 0.90 | |
 
 The rating is continuous and the bot plays it exactly; the name shows it
 rounded. On this server the nets always drive, so a level reaches them only
 through `HybridBot`'s handicap (the delay before the first shot, a held aim
-error, the hold-fire roll), human-like aim, and at levels 1-7 a reversal
+error, the hold-fire roll), human-like aim, and at levels 1-9 a reversal
 cooldown on the net's legs (`BotSkill.ReversalCooldownTicks`, scaled by the
 level's human share; `HumanizeOptions.Tracking9`), and a late view of enemy
 rockets (`RocketPerception`). Apart from those a net's movement is the same at
-every level, so level 1 is not as weak
-against a new player as tier 1 is on the main servers. That has not been
-measured against a person.
+every level, so even level 1 dodges like the net it is; the Novice levels are
+weak by not shooting, not by standing still. None of it has been measured
+against a person; what would show the Novice levels still too strong is a
+player sitting at level 1 and losing most of their duels there.
 
 **The staircase.**
 

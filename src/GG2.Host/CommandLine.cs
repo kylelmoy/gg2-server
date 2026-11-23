@@ -607,7 +607,7 @@ internal static class CommandLine
                     break;
 
                 case "--duel-ladder-start":
-                    options.DuelLadderStartLevel = Math.Clamp(cursor.TakeInt(), DuelLadder.MinLevel, DuelLadder.MaxLevel);
+                    options.DuelLadderStartLevel = Math.Clamp(cursor.TakeInt(), DuelLadder.MinLevel, DuelLadder.DuelMaxLevel);
                     break;
 
                 case "--duel-ladder-win-percent":
@@ -1293,9 +1293,9 @@ internal static class CommandLine
                             docs/DUEL.md
           --no-duel-ladder  every duel bot plays --bot-difficulty instead of
                             a level that follows its human's wins and losses
-          --duel-ladder-start <1-8>
+          --duel-ladder-start <1-10>
                             the ladder level a human starts each class at
-                            (default 3, tier 2's skill)
+                            (default 5, the first Normal; 1-2 are Novice)
           --duel-ladder-win-percent <50-90>
                             the share of duels the ladder settles a human at
                             winning (default 60)

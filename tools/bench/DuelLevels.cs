@@ -14,9 +14,9 @@ namespace Bench;
 /// <remarks>
 /// <b>What the duel server builds</b>: <c>maps/duel</c>, the duel nets sampled and
 /// always driving, every bot wrapped in <see cref="HumanizedBot.ByTier"/> as
-/// <c>[Bots] HumanAim</c> does, its skill <see cref="DuelLadder.SkillOf"/> of the
-/// level. The subject plays each level in <c>BENCH_DUEL_LEVELS</c> (default 1-8;
-/// fractions allowed) against an opponent at level 8, same class, on the same
+/// <c>[Bots] HumanAim</c> does, its skill <see cref="DuelLadder.DuelSkillOf"/> of the
+/// level. The subject plays each level in <c>BENCH_DUEL_LEVELS</c> (default 1-10;
+/// fractions allowed) against an opponent at level 10, same class, on the same
 /// placements, so every level is paired per duel against the mirror,
 /// which must read 0.5. Every class a duel net drives, cycling per duel.
 /// <para>
@@ -33,10 +33,10 @@ internal static class DuelLevels
         var cap = int.Parse(Environment.GetEnvironmentVariable("BENCH_DUEL_TICKS") ?? "900", CultureInfo.InvariantCulture);
         double[] levels = Environment.GetEnvironmentVariable("BENCH_DUEL_LEVELS") is { Length: > 0 } listed
             ? [.. listed.Split(',').Select(t => double.Parse(t, CultureInfo.InvariantCulture))]
-            : [8, 7, 6, 5, 4, 3, 2, 1];
-        // BENCH_DUEL_OPPONENT sets the opponent's level (default 8); the subject's
+            : [10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+        // BENCH_DUEL_OPPONENT sets the opponent's level (default 10); the subject's
         // levels are paired against the subject at that same level, the mirror.
-        var opponent = double.Parse(Environment.GetEnvironmentVariable("BENCH_DUEL_OPPONENT") ?? "8", CultureInfo.InvariantCulture);
+        var opponent = double.Parse(Environment.GetEnvironmentVariable("BENCH_DUEL_OPPONENT") ?? "10", CultureInfo.InvariantCulture);
         if (!levels.Contains(opponent))
             levels = [opponent, .. levels];
 

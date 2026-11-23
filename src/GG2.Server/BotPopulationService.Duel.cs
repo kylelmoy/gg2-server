@@ -54,7 +54,7 @@ public sealed partial class BotPopulationService
     private const int LadderSweepTicks = 60 * GameConstants.TickRate;
 
     /// <summary>Every duel human's rating, by address, name and class. <see cref="DuelLadder"/>.</summary>
-    internal DuelLadder Ladder { get; } = new();
+    internal DuelLadder Ladder { get; } = new(DuelLadder.DuelMaxLevel);
 
     private long _duelTick;
 

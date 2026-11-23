@@ -129,7 +129,7 @@ public sealed class CliCoverageTests
         ("BotOccupancy", ["--no-bot-occupancy"], o => o.BotOccupancy),
         ("Duel", ["--duel"], o => o.Duel),
         ("DuelLadder", ["--no-duel-ladder"], o => o.DuelLadder),
-        ("DuelLadderStartLevel", ["--duel-ladder-start", "5"], o => o.DuelLadderStartLevel),
+        ("DuelLadderStartLevel", ["--duel-ladder-start", "7"], o => o.DuelLadderStartLevel),
         ("DuelLadderWinPercent", ["--duel-ladder-win-percent", "70"], o => o.DuelLadderWinPercent),
         ("AutoDifficulty", ["--auto-difficulty"], o => o.AutoDifficulty),
         ("AutoDifficultyWinPercent", ["--auto-difficulty-win-percent", "70"], o => o.AutoDifficultyWinPercent),
