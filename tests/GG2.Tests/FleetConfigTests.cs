@@ -229,7 +229,7 @@ public sealed class FleetConfigTests : IDisposable
         const string CharacterClass = "[^A-Za-z0-9._@-]";
 
         var rule = new Regex(CharacterClass);
-        string[] destinations = ["barbara", "kyle@203.0.113.7", "host:2222", "[::1]", "a b", "Ω"];
+        string[] destinations = ["barbara", "admin@203.0.113.7", "host:2222", "[::1]", "a b", "Ω"];
 
         foreach (var destination in destinations)
             Assert.Equal(rule.Replace(destination, "_") + ".ini", FleetConfig.OverlayFileName(destination));

@@ -1,7 +1,7 @@
 # gg2-server
 
 A headless [Gang Garrison 2](https://www.ganggarrison.com/) server in C#,
-wire-compatible with the stock Game Maker 8 client- with bots!
+wire-compatible with the stock Game Maker 8 client, with bots.
 
 Stock GG2 v2.9.2 clients connect and play a normal game with no patches. It
 supports all ten classes and all eight gamemodes. The shipped maps and bot nav
@@ -115,7 +115,10 @@ version (`:1.0.1`) and `:latest`. Arguments after the image name are ordinary
 server options.
 
 ```bash
-docker run -d --name gg2 --restart on-failure   -p 8190:8190 -p 127.0.0.1:8191:8191   -v /srv/gg2:/data   ghcr.io/kylelmoy/gg2-server:latest --config /data/gg2.ini --bots 8 --lobby
+docker run -d --name gg2 --restart on-failure \
+  -p 8190:8190 -p 127.0.0.1:8191:8191 \
+  -v /srv/gg2:/data \
+  ghcr.io/kylelmoy/gg2-server:latest --config /data/gg2.ini --bots 8 --lobby
 ```
 
 | | |
