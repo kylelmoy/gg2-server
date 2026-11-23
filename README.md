@@ -1,38 +1,78 @@
 # gg2-server
 
-A headless [Gang Garrison 2](https://www.ganggarrison.com/) server in C#,
-wire-compatible with the stock Game Maker 8 client, with bots.
+A dedicated server for [Gang Garrison 2](https://www.ganggarrison.com/), written
+in C#, with bots.
 
-Stock GG2 v2.9.2 clients connect and play a normal game with no patches. It
-supports all ten classes and all eight gamemodes. The shipped maps and bot nav
-graphs are included, so a fresh clone runs with no other files.
+Stock GG2 v2.9.2 clients connect and play a normal game with no patches: all
+ten classes, all eight gamemodes, the shipped maps and custom ones. It uses
+about a twelfth of the CPU of the stock Game Maker 8 server and runs headless
+on Linux, Windows and macOS. Bots fill empty seats, walk the maps and play the
+objective.
 
 ## Quick start
 
-Download the archive for your platform from
-[Releases](https://github.com/kylelmoy/gg2-server/releases), extract it, and run
-`gg2-server` (`gg2-server.exe` on Windows). It needs nothing else installed.
+### Linux and macOS
 
-```bash
-./gg2-server --map koth_valley --bots 12
+```sh
+curl -fsSL https://raw.githubusercontent.com/kylelmoy/gg2-server/master/install.sh | sh
+./gg2-server/gg2-server --bots 8
 ```
 
-Or run the container image, which needs only Docker:
-
-```bash
-docker run -d --name gg2 -p 8190:8190 ghcr.io/kylelmoy/gg2-server:latest --map koth_valley --bots 12
-```
-
-To build from source instead, you need the **.NET 10 SDK**:
+### Windows (PowerShell)
 
 ```powershell
-git clone https://github.com/kylelmoy/gg2-server.git
-cd gg2-server
-dotnet run -c Release --project src/GG2.Host -- --map koth_valley --bots 12
+irm https://raw.githubusercontent.com/kylelmoy/gg2-server/master/install.ps1 | iex
+.\gg2-server\gg2-server.exe --bots 8
 ```
 
-Then connect a GG2 client to `127.0.0.1:8190` (Join Game → Direct Connect).
-`gg2-server --help` lists every option.
+Windows Firewall asks whether to allow the server the first time it starts.
+Allow it if players on other machines should be able to join.
+
+### Docker
+
+The same on every OS with Docker installed. In an empty directory:
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/kylelmoy/gg2-server/master/compose.yaml
+docker compose up -d
+```
+
+In Windows PowerShell, type `curl.exe` instead of `curl`. Without Compose:
+
+```sh
+docker run -d --name gg2 -p 8190:8190 ghcr.io/kylelmoy/gg2-server:latest --bots 8
+```
+
+### Connecting
+
+In Gang Garrison 2, choose **Join Game**, then **Direct Connect** to
+`127.0.0.1` port `8190`. Players on other machines connect to this machine's
+address; from the internet, forward TCP port 8190 to it.
+
+`gg2-server --help` lists every option. Running the install script again
+updates the server in place and keeps any files you added, such as a `gg2.ini`.
+
+### Platforms
+
+| Platform | Release archive | Install |
+|---|---|---|
+| Linux x64 | `gg2-server-<version>-linux-x64.tar.gz` | `install.sh` |
+| macOS, Apple Silicon | `gg2-server-<version>-osx-arm64.tar.gz` | `install.sh` |
+| macOS, Intel | `gg2-server-<version>-osx-x64.tar.gz` | `install.sh` |
+| Windows x64 (and Windows on Arm, emulated) | `gg2-server-<version>-win-x64.zip` | `install.ps1` |
+| Docker, `linux/amd64` (Apple Silicon runs it emulated) | `ghcr.io/kylelmoy/gg2-server` | `compose.yaml` |
+
+Every archive is self-contained, so nothing else needs to be installed. To
+install by hand, download one from
+[Releases](https://github.com/kylelmoy/gg2-server/releases) and extract it.
+On macOS, an archive downloaded with a browser is quarantined, and Gatekeeper
+refuses to start the server. Clear the flag with
+`xattr -dr com.apple.quarantine gg2-server`. The install script downloads with
+curl or wget, which do not set it.
+
+The install scripts read three environment variables: `GG2_DIR` (where to
+install, default `./gg2-server`), `GG2_VERSION` (a release tag such as
+`v1.1.0`, default the latest) and `GG2_REPO` (a fork's `owner/name`).
 
 ## Options
 
@@ -55,6 +95,9 @@ Then connect a GG2 client to `127.0.0.1:8190` (Join Game → Direct Connect).
 | `--lobby` | off | List the server publicly at ganggarrison.com. |
 | `--config <path>` | | Read settings from a reference-format `gg2.ini`. Every setting can be set there; a command-line flag always overrides the file. See [`docs/CONFIG.md`](docs/CONFIG.md). |
 
+`--speed` and `--control-port` are development tools. Never use them on a server
+with players connected: they desynchronise every client.
+
 ### Bots
 
 | Option | Default | What |
@@ -66,18 +109,30 @@ Then connect a GG2 client to `127.0.0.1:8190` (Join Game → Direct Connect).
 
 A custom map gets a nav graph built automatically when the server changes to it.
 
-To use trained bots, add `--bot-mode policy`, pass one or more gg2-sim nets
-from `checkpoints/`, and assign each the classes it drives. They control combat
-for those classes, and the scripted bots handle everything else:
+To use trained bots, add `--bot-mode policy`, pass one or more nets from
+`checkpoints/`, and assign each the classes it drives. They control combat for
+those classes, and the scripted bots handle everything else:
 
-```powershell
-gg2-server --bots 12 --bot-mode policy `
-  --policy checkpoints/ppo-warm-soldier-s1.gg2p `
-  --policy checkpoints/ppo-finetune-scout-s1.gg2p `
+```sh
+gg2-server --bots 12 --bot-mode policy \
+  --policy checkpoints/ppo-warm-soldier-s1.gg2p \
+  --policy checkpoints/ppo-finetune-scout-s1.gg2p \
   --bot-class-policy Soldier=ppo-warm-soldier-s1,Scout=ppo-finetune-scout-s1
 ```
 
 `checkpoints/README.md` lists all nine and the class each drives.
+
+### Duel server
+
+`--duel` pairs every human with a bot of their own class, alone in a small arena
+cut from a shipped map, with a difficulty that follows each player's wins and
+losses. The arenas ship in `maps/duel/`:
+
+```sh
+gg2-server --duel --maps maps/duel --botnav nav/duel --map duel_01
+```
+
+See [`docs/DUEL.md`](docs/DUEL.md).
 
 ### Admin panel and analytics
 
@@ -87,34 +142,13 @@ gg2-server --bots 12 --bot-mode policy `
 | `--analytics <path>` | Tracks unique players, playtime and peak concurrency across restarts. Addresses are stored only as salted hashes. Add `--geoip <path>` with a database you download yourself to show locations. See [`docs/ANALYTICS.md`](docs/ANALYTICS.md). |
 | `--tick-stats` | Logs a tick-timing histogram every 30 seconds. |
 
-### Duel maps
-
-`maps/duel/` holds generated maps of 24 small sealed arenas, each cut from a
-shipped map, for a server where every player fights a bot alone. Serve them with
-`--maps maps/duel --botnav nav/duel`; `gg2-server cellgen` regenerates them.
-The pairing of players with bots is not built yet. See [`docs/DUEL.md`](docs/DUEL.md).
-
-## Deploying
-
-A release archive is ready to copy to a host as it is. To build one yourself:
-
-```bash
-dotnet publish src/GG2.Host/GG2.Host.csproj -c Release -r linux-x64 --self-contained false -o out/
-```
-
-The published output includes the maps, nav graphs and checkpoints. Copy `out/` to the host
-and run `gg2-server`. The server also runs on Windows.
-
-Pushing a tag named `v<version>` builds and tests both platforms and publishes a
-release (`.github/workflows/release.yml`).
-
-### Docker
+## Running in Docker
 
 Each release pushes an image to `ghcr.io/kylelmoy/gg2-server`, tagged with its
-version (`:1.0.1`) and `:latest`. Arguments after the image name are ordinary
-server options.
+version (`:1.1.0`) and `:latest`. Arguments after the image name are ordinary
+server options; in `compose.yaml` they are the `command:` list.
 
-```bash
+```sh
 docker run -d --name gg2 --restart on-failure \
   -p 8190:8190 -p 127.0.0.1:8191:8191 \
   -v /srv/gg2:/data \
@@ -124,23 +158,44 @@ docker run -d --name gg2 --restart on-failure \
 | | |
 |---|---|
 | Ports | `8190/tcp` is the game. `8191/tcp` is the admin panel, which is always on in the image. |
-| Admin panel | Plain HTTP, and listening on every interface inside the container. Publishing it as `127.0.0.1:8191:8191` (as above) keeps it off the network; reach it with `ssh -N -L 8191:127.0.0.1:8191 <host>`. Publish it as `8191:8191` only behind TLS (`--web-tls`, or a reverse proxy). |
-| Password | Printed in `docker logs gg2` unless `[Web] Password` in the config file sets one. A generated one changes every time the container is recreated. |
+| Admin panel | Plain HTTP, and listening on every interface inside the container. Publishing it as `127.0.0.1:8191:8191` (as above and in `compose.yaml`) keeps it off the network; reach it remotely with `ssh -N -L 8191:127.0.0.1:8191 <host>`. Publish it as `8191:8191` only behind TLS (`--web-tls`, or a reverse proxy). |
+| Password | Printed in `docker logs gg2` (`docker compose logs`) unless `[Web] Password` in the config file sets one. A generated one changes every time the container is recreated. |
 | Config | `--config` pointing into a mounted directory, so the panel's settings page can save it. The file must exist. |
 | Lobby | Not listed unless `--lobby` is passed. |
-| Updating | `docker pull ghcr.io/kylelmoy/gg2-server:latest`, then remove and re-run the container. |
+| Updating | `docker compose pull && docker compose up -d`, or `docker pull` and re-create the container. |
 | Stopping | `docker stop gg2` shuts down cleanly and takes the lobby listing down. |
-
-[`docs/DEPLOY.md`](docs/DEPLOY.md), "Running in Docker", has the rest. To build
-the image yourself: `docker build -t gg2-server .`
 
 [`docs/DEPLOY.md`](docs/DEPLOY.md) covers hardware sizing, a systemd unit,
 shutting down with SIGTERM, and updating several hosts. Read
 [`docs/HARDENING.md`](docs/HARDENING.md) before putting the server on the public
 internet.
 
-Never use `--speed` or `--control-port` on a server with clients connected. They
-are development tools, and they desync every client.
+## Building from source
+
+You need the [.NET 10 SDK](https://dotnet.microsoft.com/download).
+
+```sh
+git clone https://github.com/kylelmoy/gg2-server.git
+cd gg2-server
+dotnet run -c Release --project src/GG2.Host -- --bots 8
+```
+
+The maps, nav graphs and bot checkpoints are in the repository, so a clone
+runs with no other files. To build a directory you can copy to a host:
+
+```sh
+dotnet publish src/GG2.Host/GG2.Host.csproj -c Release -r linux-x64 --self-contained true -o out/
+```
+
+Use `win-x64`, `osx-arm64` or `osx-x64` for the other platforms. Build a macOS
+target on a Mac: only there does the SDK sign the executable, and Apple Silicon
+refuses to start an unsigned one. `docker build -t gg2-server .` builds the
+image.
+
+`dotnet test GG2.sln` runs the test suite. The first run clones stock GG2 at a
+pinned commit for the files the tests read, so it needs git and the network
+once. Pushing a tag named `v<version>` tests, builds every platform and
+publishes a release (`.github/workflows/release.yml`).
 
 ## Performance
 
@@ -169,6 +224,15 @@ second. The gap between broadcasts had a p99 of 34–36 ms and a maximum of
 
 Stock GM8 has no bots, so there is no bot comparison. On its own, this server
 runs twelve bots at 0.151 ms a tick (Release), 0.5% of the 33.3 ms budget.
+
+## How it works
+
+The stock client re-simulates the physics itself between position updates, so
+this server reproduces the game's arithmetic exactly and its structure not at
+all. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) is the map of the code,
+[`docs/SIMULATION.md`](docs/SIMULATION.md) the determinism contract,
+[`docs/PARITY.md`](docs/PARITY.md) how it is checked against the running game,
+and [`docs/BOTS.md`](docs/BOTS.md) the bot layer.
 
 ## Compatibility
 

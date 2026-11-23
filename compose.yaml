@@ -1,0 +1,20 @@
+# gg2-server under Docker Compose. Download this file into an empty directory
+# and run `docker compose up -d`; `docker compose logs` prints the admin
+# panel's password. README.md, "Quick start", and docs/DEPLOY.md, "Running in
+# Docker", have the rest.
+services:
+  gg2:
+    image: ghcr.io/kylelmoy/gg2-server:latest
+    # The image is built for x86-64 only. Saying so lets Apple Silicon run it
+    # under emulation without a platform-mismatch warning.
+    platform: linux/amd64
+    # Not `always`: exit 0 is an operator stopping the server on purpose, and
+    # exit 3 is the tick-fault budget, which a restart does fix.
+    restart: on-failure
+    ports:
+      # The game.
+      - "8190:8190"
+      # The admin panel, plain HTTP, so reachable from this machine only.
+      - "127.0.0.1:8191:8191"
+    # Ordinary server options; `gg2-server --help` lists them all.
+    command: ["--bots", "8"]
