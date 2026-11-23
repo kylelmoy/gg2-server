@@ -438,7 +438,9 @@ public static partial class Projectiles
     /// </para>
     /// <para>
     /// There is no knockback and no <c>dealFlicker</c>: a bubble deals 0.75 and
-    /// moves nobody.
+    /// moves nobody. It does reset <c>timeUnscathed</c> and shorten a sandvich,
+    /// because the event's damage line is <c>damageCharacter</c>
+    /// (<c>Collision with Character.xml:6</c>), which does both.
     /// </para>
     /// </remarks>
     private static bool BubbleHitCharacter(
@@ -453,7 +455,7 @@ public static partial class Projectiles
         if (victim.Team == bubble.Team || victim.Ubered || !Gml.Greater(victim.Hp, 0))
             return false;
 
-        DamageApi.Deal(ref events, slot, bubble.OwnerSlot, ref victim, bubble.HitDamage);
+        DamageApi.DamageCharacter(ref events, slot, bubble.OwnerSlot, ref victim, bubble.HitDamage);
 
         if (victim.LastDamageDealer != bubble.OwnerSlot && victim.LastDamageDealer != slot)
         {
@@ -465,9 +467,6 @@ public static partial class Projectiles
         victim.LastDamageDealer = bubble.OwnerSlot;
         victim.LastDamageSource = bubble.Source;
 
-        // ⚠️ No `timeUnscathed = 0`. Every other damaging collision event in the
-        // game resets it and this one does not, so a Quote's bubbles cannot stop
-        // a medic's healing ramp climbing or a medic's own regeneration.
         state.FreeProjectile(handle);
         return true;
     }

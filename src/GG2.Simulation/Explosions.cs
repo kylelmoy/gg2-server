@@ -329,8 +329,7 @@ public static class Explosions
             return;
 
         // damageAuto -> damageCharacter -> dealDamage.
-        DamageApi.Deal(ref events, victimSlot, rocket.OwnerSlot, ref victim, rocket.HitDamage);
-        victim.TimeUnscathed = 0;
+        DamageApi.DamageCharacter(ref events, victimSlot, rocket.OwnerSlot, ref victim, rocket.HitDamage);
 
         // The same assist bookkeeping a pellet does, and the demoted dealer
         // inherits what is left of the finish-off window rather than a fresh one.
@@ -478,10 +477,9 @@ public static class Explosions
     {
         ref var victim = ref state.Characters[slot];
 
-        DamageApi.Deal(
+        DamageApi.DamageCharacter(
             ref events, slot, rocket.OwnerSlot, ref victim,
             ExplosionDamageFor(rocket.Kind) * (1 - falloff));
-        victim.TimeUnscathed = 0;
 
         if (slot == ownerCharacter
             && victim.LastDamageDealer != CharacterState.Nobody
@@ -770,8 +768,7 @@ public static class Explosions
                 if (slot == ownerCharacter)
                     dealt *= MineSelfDamage;
 
-                DamageApi.Deal(ref events, slot, mine.OwnerSlot, ref victim, dealt);
-                victim.TimeUnscathed = 0;
+                DamageApi.DamageCharacter(ref events, slot, mine.OwnerSlot, ref victim, dealt);
 
                 Attribute(ref victim, in mine, slot, ownerCharacter);
 

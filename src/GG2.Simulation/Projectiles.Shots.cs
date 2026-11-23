@@ -102,13 +102,10 @@ public static partial class Projectiles
             return false;
         }
 
-        // damageCharacter -> dealDamage. ⚠️ The return value is deliberately
-        // ignored: a Team Deathmatch spawn bubble stops the hit points moving
-        // and nothing else, so the timeUnscathed reset below and the assist
-        // bookkeeping under it both still run — which is exactly what
-        // damageCharacter.gml:3-7 does.
-        DamageApi.Deal(ref events, slot, projectile.OwnerSlot, ref victim, projectile.HitDamage);
-        victim.TimeUnscathed = 0;
+        // damageCharacter. ⚠️ The return value is deliberately ignored: a
+        // Team Deathmatch spawn bubble stops the hit points moving and nothing
+        // else, so the assist bookkeeping below still runs.
+        DamageApi.DamageCharacter(ref events, slot, projectile.OwnerSlot, ref victim, projectile.HitDamage);
 
         // Assist bookkeeping. The demoted dealer inherits what is *left* of the
         // finish-off window rather than getting a fresh one — `alarm[4] =

@@ -3216,6 +3216,7 @@ and only starts the animation; **every hit point comes from
 |---|---|
 | duration | `omnomnomnomindex` 0 → 32 at **0.25/tick** = **128 ticks**. No timer is involved |
 | heal | **1.6 hp/tick**, so 204.8 over a full eat — more than a heavy's 200 |
+| a hit | advances the index by `damage/1.6*0.25`, capped at 32: one tick of heal lost per 1.6 damage attempted, blocked or not (`damageCharacter.gml:5-6`) |
 | cooldown | **1350 ticks (45 s)**, `alarm[6]` |
 
 ⚠️ **The reference's own comment says "10 second cooldown" and is wrong** —

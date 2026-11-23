@@ -171,7 +171,7 @@ public static partial class Projectiles
             return true;
         }
 
-        DamageApi.Deal(ref events, slot, mask.OwnerSlot, ref victim, mask.HitDamage);
+        DamageApi.DamageCharacter(ref events, slot, mask.OwnerSlot, ref victim, mask.HitDamage);
 
         if (victim.LastDamageDealer != mask.OwnerSlot && victim.LastDamageDealer != slot)
         {
@@ -268,8 +268,7 @@ public static partial class Projectiles
 
         if (!victim.Ubered)
         {
-            DamageApi.Deal(ref events, slot, blade.OwnerSlot, ref victim, blade.HitDamage);
-            victim.TimeUnscathed = 0;
+            DamageApi.DamageCharacter(ref events, slot, blade.OwnerSlot, ref victim, blade.HitDamage);
 
             if (victim.LastDamageDealer != blade.OwnerSlot && victim.LastDamageDealer != slot)
             {

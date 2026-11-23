@@ -70,6 +70,45 @@ public static class DamageApi
         return true;
     }
 
+    /// <summary>
+    /// <c>Scripts/Damage API/damageCharacter.gml</c>, all of it: <see cref="Deal(ref TickEvents, int, int, ref CharacterState, double)"/>,
+    /// then a hit shortens a sandvich, then <c>timeUnscathed</c> resets.
+    /// </summary>
+    /// <remarks>
+    /// Every damaging collision with a character in the reference calls this
+    /// script (or <c>damageAuto</c>, which calls it), so every such site here
+    /// calls this and never <c>Deal</c> plus a hand-copied tail. The tail is
+    /// where the misses were: a site that wrote its own <c>timeUnscathed</c>
+    /// reset carried no sandvich line, and two sites carried neither.
+    /// Afterburn is the exception, because it calls <c>dealDamage</c> directly.
+    /// <para>
+    /// Both lines after the damage run even when the damage did not land
+    /// (Team Deathmatch spawn protection): the script ignores
+    /// <c>dealDamage</c>'s result. The sandvich line uses the damage
+    /// <em>attempted</em>, <c>argument2</c>, not the hit points lost.
+    /// </para>
+    /// </remarks>
+    public static bool DamageCharacter(
+        ref TickEvents events,
+        int victimSlot,
+        int dealerSlot,
+        ref CharacterState victim,
+        double amount)
+    {
+        var landed = Deal(ref events, victimSlot, dealerSlot, ref victim, amount);
+
+        // damageCharacter.gml:5-6. Each hit point of damage costs the eat one
+        // tick's worth of its 1.6 hp/tick heal. GML evaluates
+        // `argument2/1.6*0.25` left to right.
+        if (victim.Omnomnomnom)
+            victim.OmnomnomnomIndex = Math.Min(
+                CharacterState.OmnomnomnomEnd, victim.OmnomnomnomIndex + amount / 1.6 * 0.25);
+
+        // damageCharacter.gml:7.
+        victim.TimeUnscathed = 0;
+        return landed;
+    }
+
     private static bool Deal(ref CharacterState victim, double amount)
     {
         // `if(argument1.deathmatch_invulnerable != 0) return 0;`

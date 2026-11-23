@@ -4150,8 +4150,10 @@ connecting |= !collision_line_bulletblocking(x, y-12, other.x, other.y);
   test**, which the character and sentry arms both do. The reference says why:
   "map designers might put walls behind the generator". It is the only place in
   the game a damage figure is scaled for the generator.
-- ⚠️ **No `timeUnscathed = 0` and no `dealFlicker`** — the knife is the one
-  character damage path with neither.
+- **No `dealFlicker`**, but the damage line is `damageCharacter`
+  (`StabMask.events/Collision with Character.xml:13`), so a stab that leaves its
+  victim alive still resets `timeUnscathed` and shortens a sandvich, like every
+  other character damage path except afterburn.
 
 **Not modelled**, and each is drawing: the `Impact` a knife's Destroy makes, the
 `Shell` ejection on `Alarm 7` and its `ejected` counter, the recoil and reload

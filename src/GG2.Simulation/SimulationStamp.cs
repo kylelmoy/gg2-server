@@ -189,6 +189,12 @@ public static class SimulationStamp
     /// them, all as the reference does. Damage and trajectory outcomes, so a
     /// bump by the rule above, and unstamped nets are the only kind loaded.
     /// </para>
+    /// <para>
+    /// <b>NOT bumped, for the same reason: <c>damageCharacter</c>'s tail.</b>
+    /// <see cref="DamageApi.DamageCharacter"/> now shortens a sandvich on every
+    /// hit, and bubbles and the knife now reset <c>timeUnscathed</c>, as the
+    /// reference does.
+    /// </para>
     /// </remarks>
     public const int SimulationBehaviourVersion = 4;
 

@@ -89,8 +89,7 @@ public static partial class Projectiles
         if ((flame.EnemiesHit & bit) != 0)
             return false;
 
-        DamageApi.Deal(ref events, slot, flame.OwnerSlot, ref victim, flame.HitDamage);
-        victim.TimeUnscathed = 0;
+        DamageApi.DamageCharacter(ref events, slot, flame.OwnerSlot, ref victim, flame.HitDamage);
 
         if (victim.LastDamageDealer != flame.OwnerSlot && victim.LastDamageDealer != slot)
         {

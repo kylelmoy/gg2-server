@@ -748,12 +748,14 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// <b>And it does not reset <c>timeUnscathed</c></b>, which every other
-    /// damaging collision event in the game does — so bubbles cannot hold a
-    /// medic's healing ramp down.
+    /// <b>And it resets <c>timeUnscathed</c></b>, like every other damaging
+    /// collision: the event's damage line is <c>damageCharacter</c>
+    /// (<c>Bubble.events/Collision with Character.xml:6</c>), and
+    /// <c>damageCharacter.gml:7</c> is the reset. Reading the event alone
+    /// misses it, because the line is inside the script.
     /// </summary>
     [Fact]
-    public void ABubbleDoesNotResetTimeUnscathed()
+    public void ABubbleResetsTimeUnscathed()
     {
         var state = default(WorldState);
         Put(ref state, 1, keys: PlayerKeys.Attack);
@@ -763,7 +765,7 @@ public sealed class BladeTests
         Attack(ref state, 1);
         Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
-        Assert.Equal(200, state.Characters[2].TimeUnscathed);
+        Assert.Equal(0, state.Characters[2].TimeUnscathed);
     }
 
     /// <summary>

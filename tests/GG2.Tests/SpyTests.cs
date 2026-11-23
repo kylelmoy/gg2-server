@@ -720,6 +720,29 @@ public sealed class SpyTests
     }
 
     /// <summary>
+    /// <b>A stab resets <c>timeUnscathed</c></b>: the knife's damage line is
+    /// <c>damageCharacter</c> (<c>StabMask.events/Collision with Character.xml:13</c>),
+    /// and <c>damageCharacter.gml:7</c> is the reset. Visible on a victim the
+    /// knife does not kill, which Team Deathmatch spawn protection guarantees.
+    /// </summary>
+    [Fact]
+    public void AStabResetsTimeUnscathed()
+    {
+        var state = default(WorldState);
+        Put(ref state, 1);
+        Put(ref state, 2, x: ClearX + 10, y: ClearY, team: Team.Blue, playerClass: PlayerClass.Heavy);
+        state.Characters[2].TimeUnscathed = 200;
+        state.Characters[2].DeathmatchInvulnerable = 1;
+
+        Weapons.CreateStabMask(ref state, 1);
+        Projectiles.StabStep(ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
+
+        Assert.Equal(200, state.Characters[2].Hp);
+        Assert.Equal(0, state.Characters[2].TimeUnscathed);
+    }
+
+    /// <summary>
     /// <b>The two facings agreeing is what makes it a backstab</b> — the
     /// victim's against the <em>knife's</em>, which is the direction the spy
     /// committed to and not where they are looking now.

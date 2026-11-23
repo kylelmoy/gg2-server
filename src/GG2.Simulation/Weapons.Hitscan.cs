@@ -296,8 +296,7 @@ public static partial class Weapons
         if (victim.Ubered || victim.Team == state.Characters[shooter].Team)
             return;
 
-        DamageApi.Deal(ref events, victimSlot, shooter, ref victim, damage);
-        victim.TimeUnscathed = 0;
+        DamageApi.DamageCharacter(ref events, victimSlot, shooter, ref victim, damage);
 
         // The same demote-and-inherit the other weapons do.
         if (victim.LastDamageDealer != shooter && victim.LastDamageDealer != victimSlot)

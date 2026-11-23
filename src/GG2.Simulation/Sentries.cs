@@ -943,9 +943,8 @@ public static class Sentries
                 // Credited to the sentry's OWNER, not to the sentry. A
                 // sentry belongs to a player and outlives their character, so
                 // the slot here is the one a DESTROY_SENTRY would name.
-                DamageApi.Deal(
+                DamageApi.DamageCharacter(
                     ref events, targetSlot, slot, ref victim, SentryState.TurretHitDamage);
-                victim.TimeUnscathed = 0;
 
                 // The same assist bookkeeping every weapon performs, spelled
                 // with the turret's own guards: the demoted dealer inherits

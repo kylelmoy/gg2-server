@@ -304,4 +304,56 @@ public sealed class SandvichTests
         CharacterPhysics.EndStep(World1, ref state.Characters[1]);
         Assert.NotEqual(facing, state.Characters[1].Facing);
     }
+
+    /// <summary>
+    /// <b>A hit shortens the eat</b> by <c>damage/1.6*0.25</c> of its index
+    /// (<c>damageCharacter.gml:5-6</c>): each hit point taken costs one tick of
+    /// the 1.6 hp/tick heal, so a heavy who takes 40 while eating stops 25 ticks
+    /// early and is frozen 25 ticks less.
+    /// </summary>
+    [Fact]
+    public void AHitShortensTheEatByOneTickPerHealTickOfDamage()
+    {
+        var state = World(hp: 1);
+        Assert.True(PlayerCommands.EatSandvich(ref state, 1));
+        state.Characters[1].Hp = 150;
+
+        var events = default(TickEvents);
+        DamageApi.DamageCharacter(ref events, 1, 2, ref state.Characters[1], 40);
+        Assert.Equal(40 / 1.6 * 0.25, state.Characters[1].OmnomnomnomIndex, 12);
+
+        var ticks = 0;
+
+        while (state.Characters[1].Omnomnomnom)
+        {
+            CharacterPhysics.EndStep(World1, ref state.Characters[1]);
+            ticks++;
+        }
+
+        Assert.Equal(128 - 25, ticks);
+    }
+
+    /// <summary>
+    /// <b>The damage attempted counts, not the hit points lost</b>: the script
+    /// ignores <c>dealDamage</c>'s result, so a hit Team Deathmatch spawn
+    /// protection blocks still shortens the eat, and a hit bigger than what is
+    /// left ends it on the next tick without going past the end.
+    /// </summary>
+    [Fact]
+    public void ABlockedHitStillShortensTheEatAndNeverPastItsEnd()
+    {
+        var state = World(hp: 100);
+        Assert.True(PlayerCommands.EatSandvich(ref state, 1));
+        state.Characters[1].DeathmatchInvulnerable = 1;
+
+        var events = default(TickEvents);
+        Assert.False(DamageApi.DamageCharacter(ref events, 1, 2, ref state.Characters[1], 500));
+
+        Assert.Equal(100, state.Characters[1].Hp);
+        Assert.Equal(CharacterState.OmnomnomnomEnd, state.Characters[1].OmnomnomnomIndex);
+        Assert.Equal(0, state.Characters[1].TimeUnscathed);
+
+        CharacterPhysics.EndStep(World1, ref state.Characters[1]);
+        Assert.False(state.Characters[1].Omnomnomnom);
+    }
 }

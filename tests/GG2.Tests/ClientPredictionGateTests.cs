@@ -196,10 +196,13 @@ public class ClientPredictionGateTests
     [InlineData("reference-ctf_truefort-bots", 2, 3)]
     [InlineData("reference-ctf_truefort-closedairblast", 9, 2)]
     [InlineData("reference-ctf_truefort-closedcombat", 2, 2)]
-    [InlineData("reference-ctf_truefort-closedheavy", 15, 2)]
+    // closedheavy 15 -> 12 and closedsandvich 8 -> 7 when a hit began
+    // shortening a sandvich (damageCharacter.gml:5-6): both record heavies hit
+    // while eating, so the port moved TOWARD the reference.
+    [InlineData("reference-ctf_truefort-closedheavy", 12, 2)]
     [InlineData("reference-ctf_truefort-closedquote", 8, 2)]
     [InlineData("reference-ctf_truefort-closedsentrykill", 2, 2)]
-    [InlineData("reference-ctf_truefort-closedsandvich", 8, 2)]
+    [InlineData("reference-ctf_truefort-closedsandvich", 7, 2)]
     [InlineData("reference-ctf_truefort-closedsentryteam", 2, 2)]
     [InlineData("reference-ctf_truefort-closedsniper", 25, 3)]
     [InlineData("reference-ctf_truefort-closedspy", 2, 2)]
