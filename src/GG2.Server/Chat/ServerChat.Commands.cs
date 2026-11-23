@@ -49,6 +49,7 @@ public sealed partial class ServerChat
         ["ignore"] = "/ignore [name]: hide a player's chat on your screen, or list who you ignore.",
         ["unignore"] = "/unignore <name>: show a player's chat again.",
         ["bots"] = "/bots [off|on]: how many bots are playing, or turn them off for a while.",
+        ["difficulty"] = "/difficulty [off|auto|0-10]: your duel bot's level. auto follows your results; off is no bot.",
     };
 
     private Dictionary<string, CommandEntry> Commands => _commands ??= new(StringComparer.Ordinal)
@@ -70,6 +71,7 @@ public sealed partial class ServerChat
         ["votenextround"] = new(VoteNextRoundCommand, false),
         ["votemap"] = new(VoteMapCommand, false),
         ["bots"] = new(BotsCommand, false),
+        ["difficulty"] = new(DifficultyCommand, false),
     };
 
     /// <summary><c>host/command.gml</c>: <paramref name="text"/> starts with <c>/</c>.</summary>
@@ -244,6 +246,10 @@ public sealed partial class ServerChat
         var admin = new StringBuilder();
         foreach (var name in Help.Keys)
         {
+            // Listed only where it does something: a duel server, to a human.
+            if (name == "difficulty" && Host.DuelDifficultyOf(sender) is null)
+                continue;
+
             var target = Commands.TryGetValue(name, out var entry) && entry.AdminOnly ? admin : list;
             target.Append(" /").Append(name);
         }
@@ -500,6 +506,68 @@ public sealed partial class ServerChat
                 break;
         }
     }
+
+    /// <summary>
+    /// <c>/difficulty</c>, <c>/difficulty auto|off|0-10</c>: a duel human's own
+    /// bot. No GML behind it. <c>docs/DUEL.md</c>, "Choosing a level".
+    /// </summary>
+    /// <remarks>
+    /// The player's alone, so the reply is the sender's and nobody else hears it.
+    /// A fixed level is one for every class and moves no rating; auto picks up the
+    /// rating where it was left.
+    /// </remarks>
+    private void DifficultyCommand(int sender, List<string> args, string rest)
+    {
+        if (Host.DuelDifficultyOf(sender) is not { } current)
+        {
+            Reply(sender, "/difficulty is for duel servers.");
+            return;
+        }
+
+        if (args.Count == 0)
+        {
+            Reply(sender, DifficultyReport(current, "Your bot is ") + " /difficulty off, auto or 0-10 changes it.");
+            return;
+        }
+
+        var word = args[0].ToLowerInvariant();
+        DuelDifficulty wanted;
+        if (word == "auto")
+        {
+            wanted = DuelDifficulty.Auto;
+        }
+        else if (word == "off")
+        {
+            wanted = new DuelDifficulty(DuelDifficultyMode.Off);
+        }
+        else if (word.Length is 1 or 2 && Digits(word) == word
+            && int.TryParse(word, NumberStyles.None, CultureInfo.InvariantCulture, out var level)
+            && level is >= DuelLadder.MinLevel and <= DuelLadder.MaxLevel)
+        {
+            wanted = new DuelDifficulty(DuelDifficultyMode.Fixed, level);
+        }
+        else
+        {
+            Reply(sender, Help["difficulty"]);
+            return;
+        }
+
+        if (!Host.SetDuelDifficulty(sender, wanted) || Host.DuelDifficultyOf(sender) is not { } now)
+        {
+            Reply(sender, "/difficulty is for duel servers.");
+            return;
+        }
+
+        Reply(sender, DifficultyReport(now, "Your bot is now "));
+    }
+
+    private static string DifficultyReport(DuelDifficulty setting, string lead) => setting.Mode switch
+    {
+        DuelDifficultyMode.Off => lead + "off: you have your cell to yourself.",
+        DuelDifficultyMode.Fixed => lead + "fixed at " + DuelLadder.NameOf(setting.Level) + " for every class.",
+        _ when setting.Level >= 0 => lead + "on auto, at " + DuelLadder.NameOf(setting.Level) + " for this class.",
+        _ => lead + "on auto, at the server's difficulty.",
+    };
 
     private static string BotReport(BotStatus bots)
     {

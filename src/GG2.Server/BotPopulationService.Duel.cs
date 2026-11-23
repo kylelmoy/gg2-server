@@ -1,5 +1,6 @@
 using GG2.Bots;
 using GG2.Protocol;
+using GG2.Server.Plugins;
 using GG2.Simulation;
 
 namespace GG2.Server;
@@ -58,13 +59,23 @@ public sealed partial class BotPopulationService
 
     private long _duelTick;
 
+    /// <summary>
+    /// Every <c>/difficulty</c> other than auto, by <see cref="LadderKey"/>, kept
+    /// as long as a rating is and for the same reason: a stock client reconnects
+    /// at every map change.
+    /// </summary>
+    private readonly Dictionary<string, (DuelDifficulty Setting, long LastSeen)> _duelSettings = [];
+
     private void ServiceDuel(in BotPopulationOptions options)
     {
         var cells = Spawns is null ? 0 : Math.Min(Spawns.Count(Team.Red, 0), Spawns.Count(Team.Blue, 0));
         var ladder = _server.Options.DuelLadder;
 
         if (++_duelTick % LadderSweepTicks == 0)
+        {
             Ladder.Forget(_duelTick);
+            ForgetSettings();
+        }
 
         // Humans first: team, cell, bot, death. Indexed, and re-read through the
         // entry after anything that can move the roster (adding a bot appends, so
@@ -101,7 +112,26 @@ public sealed partial class BotPopulationService
             if (human.DuelCell < 0 || human.DuelCell >= cells)
                 human.DuelCell = PickFreeCell(cells, human);
 
-            var bot = human.DuelPartner is { } partner && _server.SlotOf(partner) is var at and > 0 ? at : -1;
+            // /difficulty off: the cell and no bot, which the removal below takes
+            // away for having no human. Pairing again starts from no death seen.
+            var setting = SettingOf(slot, human);
+            if (setting.Mode == DuelDifficultyMode.Off)
+            {
+                human.DuelPartner = null;
+                human.DuelDeaths = -1;
+                human.DuelBotDeaths = -1;
+                human.DuelBotKillIn = 0;
+                human.DuelMoveIn = 0;
+                human.DuelSettingChanged = false;
+                _server.PinSpawn(slot, human.DuelCell);
+                continue;
+            }
+
+            // A fixed level is a level whether or not the ladder runs; only the
+            // ladder's own rating needs it on.
+            var leveled = ladder || setting.Mode == DuelDifficultyMode.Fixed;
+
+            var bot =human.DuelPartner is { } partner && _server.SlotOf(partner) is var at and > 0 ? at : -1;
 
             if (bot < 0)
             {
@@ -114,9 +144,27 @@ public sealed partial class BotPopulationService
                 human.DuelBotKillIn = 0;
                 human.DuelMoveIn = 0;
                 Retarget();
+                human.DuelSettingChanged = false;
 
-                if (ladder)
+                if (leveled)
                     ApplyLadder(slot, human, bot, rename: true);
+            }
+            else if (human.DuelSettingChanged)
+            {
+                // At once and mid-duel: a fixed level moves no rating, so a reset
+                // of the fight would buy nothing.
+                human.DuelSettingChanged = false;
+                if (leveled)
+                {
+                    ApplyLadder(slot, human, bot, rename: true);
+                }
+                else
+                {
+                    if (ScriptedBot.Of(_server.SourceOf(bot)) is { } scripted)
+                        scripted.Skill = BotSkill.ForTier(options.Difficulty);
+
+                    _server.RenameBot(bot, options.NamePrefix + human.Class.ToString());
+                }
             }
 
             // Every death scores one (PlayerCommands.BidFarewell included), and a
@@ -139,7 +187,7 @@ public sealed partial class BotPopulationService
             if (died || won)
                 human.DuelCell = PickFreeCell(cells, human);
 
-            if (ladder)
+            if (ladder && setting.Mode == DuelDifficultyMode.Auto)
             {
                 // A loss is a death that was not a class or team change, with the
                 // bot alive to have won it: a trade, or a death while the bot is
@@ -209,7 +257,7 @@ public sealed partial class BotPopulationService
                     // this late kill.
                     _server.ArmBotRespawn(bot, alive ? 1 : Math.Max(1, respawn));
 
-                    if (ladder)
+                    if (leveled)
                         ApplyLadder(slot, human, bot, rename: true);
                     else
                         _server.RenameBot(bot, options.NamePrefix + human.Class.ToString());
@@ -238,7 +286,7 @@ public sealed partial class BotPopulationService
                 // the matching class.
                 _server.RequestBotClass(bot, human.Class);
 
-                if (ladder)
+                if (leveled)
                     ApplyLadder(slot, human, bot, rename: true);
                 else
                     _server.RenameBot(bot, options.NamePrefix + human.Class.ToString());
@@ -276,22 +324,101 @@ public sealed partial class BotPopulationService
     }
 
     /// <summary>
-    /// Sets a duel bot's skill to its human's rating for the human's class and,
-    /// when asked, names it for the level.
+    /// Sets a duel bot's skill to its human's fixed level, or else their rating
+    /// for the human's class, and, when asked, names it for the level.
     /// </summary>
     private void ApplyLadder(int slot, RosterEntry human, int bot, bool rename)
     {
-        var rating = Ladder.For(LadderKey(slot, human), human.Class, _server.Options.DuelLadderStartLevel, _duelTick);
+        var level = SettingOf(slot, human) is { Mode: DuelDifficultyMode.Fixed } setting
+            ? setting.Level
+            : Ladder.For(LadderKey(slot, human), human.Class, _server.Options.DuelLadderStartLevel, _duelTick).Value;
 
         if (ScriptedBot.Of(_server.SourceOf(bot)) is { } scripted)
-            scripted.Skill = BotLevel.Skill(rating.Value);
+            scripted.Skill = BotLevel.Skill(level);
 
         if (rename)
         {
-            var name = DuelLadder.NameOf(rating.Value);
+            var name = DuelLadder.NameOf(level);
             if (_server.NameOf(bot) != name)
                 _server.RenameBot(bot, name);
         }
+    }
+
+    /// <summary>
+    /// A human's <c>/difficulty</c>, with auto's level filled in: their rating for
+    /// the class they are now, or -1 with the ladder off.
+    /// </summary>
+    internal DuelDifficulty DuelDifficultyOf(int slot)
+    {
+        var human = _server.EntryOf(slot);
+        var setting = SettingOf(slot, human);
+        if (setting.Mode != DuelDifficultyMode.Auto)
+            return setting;
+
+        if (!_server.Options.DuelLadder)
+            return DuelDifficulty.Auto;
+
+        var rating = Ladder.TryGet(LadderKey(slot, human), human.Class, out var held)
+            ? held.Value
+            : _server.Options.DuelLadderStartLevel;
+        return new DuelDifficulty(DuelDifficultyMode.Auto, DuelLadder.LevelOf(rating));
+    }
+
+    /// <summary>Sets a human's <c>/difficulty</c>; the next tick applies it.</summary>
+    internal void SetDuelDifficulty(int slot, DuelDifficulty setting)
+    {
+        var human = _server.EntryOf(slot);
+        setting = setting.Mode switch
+        {
+            DuelDifficultyMode.Fixed => setting with { Level = Math.Clamp(setting.Level, DuelLadder.MinLevel, DuelLadder.MaxLevel) },
+            DuelDifficultyMode.Off => new DuelDifficulty(DuelDifficultyMode.Off),
+            _ => DuelDifficulty.Auto,
+        };
+
+        human.DuelSetting = setting;
+        human.DuelSettingChanged = true;
+
+        var key = LadderKey(slot, human);
+        if (setting.Mode == DuelDifficultyMode.Auto)
+            _duelSettings.Remove(key);
+        else
+            _duelSettings[key] = (setting, _duelTick);
+    }
+
+    /// <summary>A human's <c>/difficulty</c>: what their address and name last set, auto by default.</summary>
+    private DuelDifficulty SettingOf(int slot, RosterEntry human) =>
+        human.DuelSetting ??= _duelSettings.TryGetValue(LadderKey(slot, human), out var held)
+            ? held.Setting
+            : DuelDifficulty.Auto;
+
+    /// <summary>
+    /// Forgets every <c>/difficulty</c> not held by a human here for
+    /// <see cref="DuelLadder.ForgetTicks"/>, the ladder's own memory.
+    /// </summary>
+    private void ForgetSettings()
+    {
+        if (_duelSettings.Count == 0)
+            return;
+
+        for (var slot = 1; slot < _server.RosterCount; slot++)
+        {
+            var human = _server.EntryOf(slot);
+            if (!human.IsBot && human.RatingKey is { } key && _duelSettings.ContainsKey(key))
+                _duelSettings[key] = (_duelSettings[key].Setting, _duelTick);
+        }
+
+        List<string>? stale = null;
+        foreach (var (key, held) in _duelSettings)
+        {
+            if (_duelTick - held.LastSeen > DuelLadder.ForgetTicks)
+                (stale ??= []).Add(key);
+        }
+
+        if (stale is null)
+            return;
+
+        foreach (var key in stale)
+            _duelSettings.Remove(key);
     }
 
     /// <summary>

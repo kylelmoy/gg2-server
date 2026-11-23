@@ -128,6 +128,9 @@ and Lorgan3's local vote plugins:
 and run in the native client. A vote command with no name opens a private picker
 vote, which remembers stable ids, never slots. **`/bots`** is described in
 `docs/PLUGINS.md`, "The bot suspension and the join line", and works the same here.
+**`/difficulty [off|auto|0-10]`** exists on a duel server only, where `/help`
+lists it; elsewhere it answers "/difficulty is for duel servers." and is not
+listed (`docs/DUEL.md`, "Choosing a level").
 
 ## Where it differs from the native reference host
 
@@ -137,7 +140,7 @@ vote, which remembers stable ids, never slots. **`/bots`** is described in
 - **A map vote calls `SetNextMap`**, and map votes and the map picker offer
   `VotableMaps`, so a single-map server can vote on a map. `/map` is one path.
 - **Scramble uses `SetTeam`**, the server's own team switch.
-- **`/bots` and the admin panel's chat box** (`IServerChat.SayAsServer`, a line
+- **`/bots`, `/difficulty` and the admin panel's chat box** (`IServerChat.SayAsServer`, a line
   from slot 0 that is never a command and never rate limited) have no GML.
   `/help` lists `/bots` first, so its text differs from the reference host's.
 

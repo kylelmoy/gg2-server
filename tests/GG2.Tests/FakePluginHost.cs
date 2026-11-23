@@ -128,6 +128,26 @@ public sealed class FakePluginHost : IPluginHost
         return true;
     }
 
+    /// <summary>
+    /// Each human's <c>/difficulty</c>, by slot, when this is a duel server; null
+    /// is not one. Set calls are recorded in it as the real host records them.
+    /// </summary>
+    public Dictionary<int, DuelDifficulty>? DuelSettings { get; set; }
+
+    public DuelDifficulty? DuelDifficultyOf(int slot) =>
+        DuelSettings is { } settings && slot > 0 && slot < PlayerCount
+            ? settings.GetValueOrDefault(slot, DuelDifficulty.Auto)
+            : null;
+
+    public bool SetDuelDifficulty(int slot, DuelDifficulty setting)
+    {
+        if (DuelDifficultyOf(slot) is null)
+            return false;
+
+        DuelSettings![slot] = setting;
+        return true;
+    }
+
     public bool ResumeBots()
     {
         if (BotSuspendSecondsLeft == 0)

@@ -106,6 +106,15 @@ public sealed class RosterEntry
     internal string? RatingKey { get; set; }
 
     /// <summary>
+    /// A duel human's <c>/difficulty</c>, or null before it is first looked up
+    /// from what their address and name last set (<c>BotPopulationService.Duel.cs</c>).
+    /// </summary>
+    internal Plugins.DuelDifficulty? DuelSetting { get; set; }
+
+    /// <summary>A <c>/difficulty</c> not yet applied to the bot.</summary>
+    internal bool DuelSettingChanged { get; set; }
+
+    /// <summary>
     /// Where this player's per-tick input comes from.
     /// </summary>
     /// <remarks>

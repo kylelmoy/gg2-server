@@ -169,6 +169,27 @@ The admin panel's `bot-difficulty` sets every bot's skill, duel bots included;
 on a duel server with the ladder on, each bot returns to its human's rating at
 the next result or class change.
 
+### Choosing a level
+
+`/difficulty` in chat sets a player's own bot, and only on a duel server
+(`ServerChat.DifficultyCommand`, through `IPluginHost.SetDuelDifficulty` to
+`BotPopulationService.Duel.cs`). The reply goes to that player alone.
+
+| Typed | Effect |
+|---|---|
+| `/difficulty` | reports the setting and, on auto, the level the bot plays for the current class |
+| `/difficulty 0`-`10` | one fixed level for every class, applied to the live bot at once (skill and name; the fight is not restarted). No result moves a rating while it holds, and it applies with the ladder off too |
+| `/difficulty auto` | back to the ladder, at the rating where it was left; with the ladder off, the server's `Difficulty` and the `[BOT] <Class>` name |
+| `/difficulty off` | no bot: the human stays on red in their cell, and a death there scores nothing. `auto` or a level brings a bot back |
+| anything else | the help line, nothing changed |
+
+The setting is kept like a rating: by address and name, in memory, forgotten an
+hour after its human was last on the server, so the reconnect a stock client
+makes at each duel map change keeps it. `DuelDifficultyTests` drives each row
+through a v6 chat client on a loopback socket. **It needs chat on**: a duel
+server with `[Chat] Enabled=0` has no way to type it. Not yet seen with a stock
+GM8 client.
+
 ## The duel nets
 
 gg2-sim trains one net per class for this server (`docs/HANDOFF-SERVER-DUEL.md`

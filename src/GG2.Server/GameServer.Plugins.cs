@@ -171,6 +171,20 @@ public sealed partial class GameServer
 
     bool IPluginHost.ResumeBots() => ResumeBots();
 
+    DuelDifficulty? IPluginHost.DuelDifficultyOf(int slot) =>
+        _options.Duel && _population is { } population && slot > 0 && slot < RosterCount && !EntryOf(slot).IsBot
+            ? population.DuelDifficultyOf(slot)
+            : null;
+
+    bool IPluginHost.SetDuelDifficulty(int slot, DuelDifficulty setting)
+    {
+        if (((IPluginHost)this).DuelDifficultyOf(slot) is null)
+            return false;
+
+        _population!.SetDuelDifficulty(slot, setting);
+        return true;
+    }
+
     /// <summary>
     /// ⛔ <b>NOT <see cref="WorldState.Random"/>.</b> That stream is observable
     /// simulation; a plugin drawing from it would move every client's re-derived

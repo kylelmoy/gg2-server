@@ -236,6 +236,23 @@ public interface IPluginHost
     bool ResumeBots();
 
     /// <summary>
+    /// A human's <c>/difficulty</c> setting on a duel server, or null when this
+    /// is not one or <paramref name="slot"/> is not a human.
+    /// </summary>
+    /// <remarks>
+    /// Like <see cref="SuspendBots"/>, it moves the population manager and not
+    /// the simulation: a level is a bot's skill and a name, and no bot is a
+    /// removal, the path a disconnection takes.
+    /// </remarks>
+    DuelDifficulty? DuelDifficultyOf(int slot);
+
+    /// <summary>
+    /// Sets a human's <c>/difficulty</c>, applied at the next population tick.
+    /// </summary>
+    /// <returns>False, and nothing changed, where <see cref="DuelDifficultyOf"/> is null.</returns>
+    bool SetDuelDifficulty(int slot, DuelDifficulty setting);
+
+    /// <summary>
     /// A line of player chat was delivered: record it for the admin panel's chat
     /// window.
     /// </summary>
