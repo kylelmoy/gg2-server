@@ -337,8 +337,7 @@ public static class MovingPlatforms
             if (!collider.Meets(box, character.X - stepX, character.Y - stepY))
                 continue;
 
-            PushOut(world, ref state, in definition, ref platform, ref character, slot,
-                stepX, stepY, in collider);
+            PushOut(world, ref character, stepX, stepY, in collider);
         }
     }
 
@@ -393,11 +392,7 @@ public static class MovingPlatforms
     /// </remarks>
     private static void PushOut(
         CollisionWorld world,
-        ref WorldState state,
-        in MovingPlatformDefinition definition,
-        ref MovingPlatformState platform,
         ref CharacterState character,
-        int slot,
         double stepX,
         double stepY,
         in PreciseCollision.PlatformCollider collider)
@@ -431,20 +426,13 @@ public static class MovingPlatforms
             carried = true;
         }
 
+        // No trigger here: MovingPlatform End Step only pulls it in the
+        // standing branch, never after a push from below.
         if (!carried)
         {
             character.X = originalX;
             character.Y = originalY;
-            return;
         }
-
-        if (platform.MovementState != Stopped)
-            return;
-
-        var carriesIntel = state.Characters[slot].CarryingIntel;
-
-        if (definition.Trigger == 1 || (definition.Trigger == 2 && carriesIntel))
-            platform.MovementState = Up;
     }
 
     /// <summary>

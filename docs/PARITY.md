@@ -1569,7 +1569,10 @@ reads are matched by name only.
 | Generator: its Create variables, and every site naming the object | `Generator` | 2026-11-23 | clean; all eleven damage sites go through `damageGenerator` |
 | ControlPoint: its User Event 0 variables, `cappingPoint`, `capStrength`, `cpUnlock`, `baseCapTime`, and the four gamemode HUDs that read them | `ControlPoint` | 2026-11-23 | `areSetupGatesClosed`'s `with(FauxCPHUD)` override, fixed (setup gates on Arena, KotH and DKotH follow `cpUnlock`); the rest ported |
 
-Not yet censused: the intel objects, `MovingPlatform`'s own variables, and every `global.*` the simulation reads.
+| Intel objects, by every site naming `Intelligence*`, and the four `doEvent*Intel` scripts line by line | `Objects/Map elements/Gamemode-specific/CTF` | 2026-11-23 | clean; `doEventReturnIntel`'s forced drop is dead in the reference (no Character has a User Event 5) |
+| `MovingPlatform`'s own variables, and its End Step's writes into Character | `MovingPlatform` | 2026-11-23 | the port's push-from-below branch also pulled the trigger, which the reference does only for a rider; removed. No reachable state was found to exercise it, so no test |
+
+Not yet censused: every `global.*` the simulation reads.
 
 `--declared` reads Create only. An object that declares its variables in a user event (ControlPoint's `User Event 0`) has to be listed by hand.
 
