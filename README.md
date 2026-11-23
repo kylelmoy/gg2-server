@@ -103,24 +103,29 @@ with players connected: they desynchronise every client.
 | Option | Default | What |
 |---|---|---|
 | `--bots <n>` | `0` | Target player count. Bots fill the seats humans leave empty, so a target of 8 with 3 humans connected runs 5 bots. |
-| `--bot-difficulty <1-5>` | `5` | Lower levels miss more and react more slowly. |
+| `--bot-difficulty <1-5>` | `5` | Skill tier. 5 plays the trained nets exactly; lower tiers aim like people (they lag a target and sit off it), take longer to pick a target up, and hold fire more often. |
+| `--auto-difficulty` | off | Each bot plays at the level of the human it is shooting at. Every human gets a rating that moves with their fights against bots, starting at `--bot-difficulty`'s level, so a player who keeps winning meets harder bots. |
 | `--bot-suspend-minutes <n>` | `0` | Lets any player type `/bots off` in chat to remove the bots for this many minutes. `0` turns the command off. |
-| `--bot-class-limit <list>` | | The maximum number of bots per class on each team, e.g. `medic=1,spy=0`. |
+| `--bot-class-limit <list>` | `spy=0` | The maximum number of bots per class on each team, e.g. `medic=1`. Bots never play spy unless you allow it. |
 
 A custom map gets a nav graph built automatically when the server changes to it.
 
-To use trained bots, add `--bot-mode policy`, pass one or more nets from
-`checkpoints/`, and assign each the classes it drives. They control combat for
-those classes, and the scripted bots handle everything else:
+Bots fight with trained policy nets, nine of them in `checkpoints/`, one per
+class. The nets drive combat, and a scripted layer handles movement, routing and
+the objective. To run your own nets, pass them with `--policy` and assign each
+the classes it drives; to hand a class back to the scripted layer, assign it
+`scripted`:
 
 ```sh
-gg2-server --bots 12 --bot-mode policy \
+gg2-server --bots 12 \
   --policy checkpoints/ppo-warm-soldier-s1.gg2p \
   --policy checkpoints/ppo-finetune-scout-s1.gg2p \
   --bot-class-policy Soldier=ppo-warm-soldier-s1,Scout=ppo-finetune-scout-s1
+
+gg2-server --bots 12 --bot-class-policy Sniper=scripted
 ```
 
-`checkpoints/README.md` lists all nine and the class each drives.
+`checkpoints/README.md` lists the nine and the class each drives.
 
 ### Duel server
 

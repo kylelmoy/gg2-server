@@ -63,7 +63,7 @@ public sealed partial class GameServer
                 // controller on a bot row would read as a bot whose mode went
                 // unrecorded.
                 slot == 0 ? "reserved"
-                    : entry.IsBot ? _options.BotMode.ToString()
+                    : entry.IsBot ? (_options.Bots.Brain is null ? nameof(BotMode.Scripted) : nameof(BotMode.Policy))
                     : string.Empty,
                 entry.Name));
         }

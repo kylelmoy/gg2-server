@@ -175,56 +175,6 @@ public sealed class LiveSettingsTests
         Assert.Equal(1, State(harness).GetProperty("bots").GetProperty("difficulty").GetInt32());
     }
 
-    [Fact]
-    public void SwappingTheBrainReplacesEveryBot()
-    {
-        using var harness = new ServerHarness(options =>
-            options.Bots = options.Bots with { Enabled = true, FillToPlayers = 3, MaxBots = 3, MinHumans = 0 });
-
-        harness.TickUntil(() => harness.Server.BotSlots.Count == 3, "three bots");
-
-        AssertOk(Run(harness, """{"cmd":"bot-brain","mode":"policy"}"""));
-        Assert.Empty(harness.Server.BotSlots);
-        Assert.Equal("policy", State(harness).GetProperty("bots").GetProperty("mode").GetString());
-
-        harness.TickUntil(() => harness.Server.BotSlots.Count == 3, "the bots back");
-    }
-
-    /// <summary>
-    /// A brain that fails to build is refused and changes nothing: the mode, the
-    /// options and the bots are all as they were.
-    /// </summary>
-    /// <remarks>
-    /// Driven by a configured checkpoint deleted after startup — the one way left
-    /// to make a policy build fail once the shipped bundle is the fallback.
-    /// </remarks>
-    [Fact]
-    public void ABrainThatFailsToBuildIsRefusedAndChangesNothing()
-    {
-        var checkpoint = Path.Combine(Path.GetTempPath(), $"gg2-gone-{Guid.NewGuid():N}.gg2p");
-        File.Copy(PolicyFixture.Checkpoint, checkpoint);
-
-        var parsed = GG2.Host.CommandLine.Parse(["--bot-mode", "policy", "--policy", checkpoint]);
-
-        using var harness = new ServerHarness(options =>
-        {
-            options.BotMode = parsed.BotMode;
-            options.PolicyPaths = parsed.PolicyPaths;
-            options.Bots = parsed.Bots with { Enabled = true, FillToPlayers = 3, MaxBots = 3, MinHumans = 0 };
-        });
-
-        File.Delete(checkpoint);
-        harness.TickUntil(() => harness.Server.BotSlots.Count == 3, "three bots");
-
-        AssertOk(Run(harness, """{"cmd":"bot-brain","mode":"scripted"}"""));
-        harness.TickUntil(() => harness.Server.BotSlots.Count == 3, "the bots back");
-
-        Assert.False(Run(harness, """{"cmd":"bot-brain","mode":"policy"}""").GetProperty("ok").GetBoolean());
-        Assert.Equal("scripted", State(harness).GetProperty("bots").GetProperty("mode").GetString());
-        Assert.Equal([checkpoint], harness.Server.Options.PolicyPaths);
-        Assert.Equal(3, harness.Server.BotSlots.Count);
-    }
-
     /// <summary>
     /// Offline drops everybody, refuses a new connection outright rather than
     /// leaving it in the backlog, and holds the bots at zero — and coming back
@@ -255,43 +205,11 @@ public sealed class LiveSettingsTests
         Assert.False(State(harness).GetProperty("server").GetProperty("offline").GetBoolean());
     }
 
-    /// <summary>
-    /// A server started with no checkpoint can still be switched to a policy brain
-    /// live, and what it loads is the shipped bundle.
-    /// </summary>
-    /// <remarks>
-    /// The verb takes a mode and never a path, so the bundle is the only thing it
-    /// could load. The options keep saying what was CONFIGURED — nothing — which
-    /// is why <c>PolicyPaths</c> stays empty after the switch.
-    /// </remarks>
-    [Fact]
-    public void APolicyBrainCanBeChosenLiveWithoutACheckpointAtStartup()
-    {
-        using var harness = new ServerHarness();
-
-        Assert.Empty(harness.Server.Options.PolicyPaths);
-        Assert.True(State(harness).GetProperty("server").GetProperty("policy").GetBoolean());
-
-        AssertOk(Run(harness, """{"cmd":"bot-brain","mode":"policy"}"""));
-
-        var bots = State(harness).GetProperty("bots");
-
-        Assert.Equal("policy", bots.GetProperty("mode").GetString());
-        Assert.Equal(
-            MapDirectory.ShippedCheckpoints.Select(f => "gg2-sim:" + Path.GetFileNameWithoutExtension(f)).ToArray(),
-            bots.GetProperty("tiers").EnumerateArray().Select(t => t.GetProperty("name").GetString()!).ToArray());
-        Assert.Empty(harness.Server.Options.PolicyPaths);
-
-        // And back: scripted still builds with no checkpoint given.
-        AssertOk(Run(harness, """{"cmd":"bot-brain","mode":"scripted"}"""));
-        Assert.Equal("scripted", State(harness).GetProperty("bots").GetProperty("brain").GetString());
-    }
-
     /// <summary>The bundle resolves all or nothing.</summary>
     /// <remarks>
     /// Half a bundle would drive a different class set from the one documented,
-    /// so a directory missing any file is no bundle and the live switch to a
-    /// policy brain is refused instead.
+    /// so a directory missing any file is no bundle and the bots run scripted
+    /// instead.
     /// </remarks>
     [Fact]
     public void TheShippedBundleResolvesWholeOrNotAtAll()

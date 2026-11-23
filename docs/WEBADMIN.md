@@ -289,7 +289,7 @@ commands instead.
 | Host-local keys | Removed from the incoming text and the member's current values put back, so a push never changes a path or `[Web]`. The page never offers them; this is what makes that true for a caller that uses the verb directly. |
 | `expected` | The hash of the member's file that the dry run reported. A file that changed since is refused, forced or not. |
 | `force` | Needed when the file was never pushed or was edited since its last push — `deploy.sh`'s two refusals. The page labels that button *Overwrite*. |
-| Validation | `ServerOptions.Validate`, which includes the bot-mode checks, before anything is written. |
+| Validation | `ServerOptions.Validate`, which includes the bot-brain checks, before anything is written. |
 | The diff | Computed by the member with secrets masked, so no secret leaves it. |
 | Rendering | The hub renders `common.ini` + `hosts/<member>.ini` exactly as `FleetConfig.Render` does for `deploy.sh`. |
 
@@ -351,7 +351,7 @@ All JSON, all under the session cookie except the first four.
 | `POST /api/logout` | — | clears it |
 | `GET /api/state` | — | one fresh state object, run on the tick thread |
 | `GET /api/events` | — | server-sent events: `state` snapshots, `log` lines and `perf` samples |
-| `POST /api/command` | a control-port command | freeze, resume, step, speed, bots, bots-suspend, map, teleport, kick, command, say, ban, unban, bans, analytics, config-set, restart, offline, password, player-limit, autobalance, end-round, restart-round, rotation, team, bot-limit, bot-brain, bot-difficulty |
+| `POST /api/command` | a control-port command | freeze, resume, step, speed, bots, bots-suspend, map, teleport, kick, command, say, ban, unban, bans, analytics, config-set, restart, offline, password, player-limit, autobalance, end-round, restart-round, rotation, team, bot-limit, bot-difficulty |
 | `GET /api/config` | — | every setting, its value **in the config file**, and which are pinned or pending |
 | `GET /api/analytics` | — | who has played here, for how long and from where — `docs/ANALYTICS.md`. On a hub the sheet can also show any member, or all of them added together; "The whole fleet" there |
 | `GET /api/maps` | — | what this server could change to, plus its rotation |
@@ -579,7 +579,7 @@ card answers all three because no one of them is enough on its own:
 
 | | Where | What it is |
 |---|---|---|
-| What was **configured** | `bots.mode`, `bots.brain` | The mode as given, and `BotBrainSpec.Name` — the same string `tools/bench` prints in a result table, so a bot watched here and a number read off the bench name the same arm. The mode alone is not enough: a reconcile that leaves no controller clears the brain, and a policy server whose bots are all scripted still reports mode `policy`. |
+| What was **built** | `bots.brain` | `BotBrainSpec.Name` — the same string `tools/bench` prints in a result table, so a bot watched here and a number read off the bench name the same arm. A server that found no checkpoint shows `scripted`. |
 | What each tier is **allowed** to drive | `bots.tiers[].classes` | Read off a live controller through `IMicroController.Drives`, never re-derived — that interface is the one place a tier's class set is decided, narrowed by `[Bots] ClassPolicy`. A server with no bots on it therefore sends no class sets, which is honest: with nothing built there is nothing to ask. |
 | What a brain has **actually done** | the share beside each tier | Ticks a controller drove over ticks it was polled on, summed over the bots it drives. It is the only one of the three that says the brain is consulted at all — a tier can be loaded, named on this card and never take the wheel. |
 
@@ -652,7 +652,6 @@ which is the whole test for belonging on this list (`GameServer.Live`):
 | `rotation` `{maps}` | a round ends | Refused whole if any entry is not on disk. The index follows the current map when it is in the new list; otherwise the next round is the first entry. `state` carries `rotation` and `rotationIndex` (-1 when the current map is not the rotation's). |
 | `team` `{slot, team}` | now | `ForceTeam`: skips the balance refusal a client's request meets, nothing else. Not slot 0. |
 | `bot-limit` `{max}` | every tick | `MaxBots`; the fill is separate. |
-| `bot-brain` `{mode}` | bot add | Rebuilt by `BotBrain.Build`, then every bot is removed and re-added with it, because a bot keeps its brain for life. A policy mode uses the checkpoints the server started with; a server started with none loads the shipped bundle (`MapDirectory.ShippedCheckpoints`, from `checkpoints/` beside the executable or above it), and is refused only when that is missing too. The verb takes a mode and never a path, so nothing on the network names a file to open. Loading a checkpoint runs on the tick thread and can make that tick late. |
 | `bot-difficulty` `{tier}` | every combat decision | 1..5, `Bots.Difficulty`. Sets `ScriptedBot.Skill` on every running bot in place, so nobody is replaced, and a hybrid bot's controller reads the same skill (`docs/TRAPS-BOTS.md`, the difficulty chain); a delay already counting down finishes on the old tier. `state` carries it as `bots.difficulty`. |
 
 **Freeze, step and speed stay off the page**, as above.

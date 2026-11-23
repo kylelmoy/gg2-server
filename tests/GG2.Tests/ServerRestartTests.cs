@@ -254,33 +254,6 @@ public sealed class ServerRestartTests : IDisposable
         Assert.Equal(before, File.ReadAllText(ConfigPath));
     }
 
-    /// <summary>
-    /// A bot mode that disagrees with the checkpoint list is refused at the save,
-    /// not at the restart.
-    /// </summary>
-    /// <remarks>
-    /// ⛔ <b>This took a live server down.</b> An operator switched <c>Mode</c>
-    /// from policy to a mode that consults no checkpoint on a host whose file
-    /// still carried <c>Policy</c>;
-    /// the save validated, the restart reached <c>BotBrain.Build</c>, and the
-    /// process exited 2 into a systemd crash loop. The file here carries no
-    /// <c>Mode</c>, so the server starts, and the save supplies both halves.
-    /// </remarks>
-    [Theory]
-    [InlineData("""{"Bots.Mode":"scripted","Bots.Policy":"checkpoints/a.gg2p"}""", "never consults one")]
-    [InlineData("""{"Bots.Mode":"policy"}""", "none was given")]
-    public void ABotModeTheServerWouldRefuseIsRefusedAtTheSave(string settings, string expected)
-    {
-        using var server = Start("[Server]\nServerName=safe\n");
-        var before = File.ReadAllText(ConfigPath);
-
-        var reply = Run(server, $$"""{"cmd":"config-set","settings":{{settings}}}""");
-
-        Assert.False(reply.GetProperty("ok").GetBoolean(), reply.ToString());
-        Assert.Contains(expected, reply.GetProperty("error").GetString()!, StringComparison.Ordinal);
-        Assert.Equal(before, File.ReadAllText(ConfigPath));
-    }
-
     /// <summary>An unknown setting id is refused rather than silently dropped.</summary>
     [Fact]
     public void AnUnknownSettingIsRefusedByName()

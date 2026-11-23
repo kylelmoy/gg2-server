@@ -46,7 +46,6 @@ public sealed class BotClassPolicyTests
     public void EachNetDrivesExactlyItsAssignedClasses()
     {
         var options = Parse(
-            "--bot-mode", "policy",
             "--policy", PolicyFixture.Checkpoint,
             "--policy", PolicyFixture.Second,
             "--bot-class-policy", PolicyFixture.SoldierAssignment + ",Heavy=" + PolicyFixture.Label,
@@ -61,7 +60,6 @@ public sealed class BotClassPolicyTests
     public void AClassCanBeLeftToTheScriptedLayer()
     {
         var options = Parse(
-            "--bot-mode", "policy",
             "--policy", PolicyFixture.Checkpoint,
             "--bot-class-policy", PolicyFixture.SoldierAssignment + ",Scout=scripted");
 

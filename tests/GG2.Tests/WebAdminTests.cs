@@ -321,7 +321,6 @@ public sealed class WebAdminTests : IDisposable
     [InlineData("""{"cmd":"rotation","maps":[]}""")]
     [InlineData("""{"cmd":"team","slot":1,"team":"red"}""")]
     [InlineData("""{"cmd":"bot-limit","max":8}""")]
-    [InlineData("""{"cmd":"bot-brain","mode":"scripted"}""")]
     [InlineData("""{"cmd":"bot-difficulty","tier":3}""")]
     [InlineData("""{"cmd":"ban","address":"198.51.100.7","minutes":1}""")]
     [InlineData("""{"cmd":"unban","address":"198.51.100.7"}""")]

@@ -192,10 +192,8 @@ public static class MapDirectory
     /// executable or above it — or empty when any file of it is missing.
     /// </summary>
     /// <remarks>
-    /// <b>Only the live <c>bot-brain</c> switch reads this.</b> A server STARTED
-    /// in a policy mode still has to name its checkpoints, so what it loads is in
-    /// its command line or config file; the panel's switch, which can take no
-    /// path at all, falls back to this when the server was started without one.
+    /// <b>What a server loads when no <c>--policy</c> names a checkpoint</b>
+    /// (<see cref="BotBrain.Build"/>).
     /// <para>
     /// <b>All or nothing</b>: half a bundle would drive a different class set
     /// from the one the panel's operator was told about.

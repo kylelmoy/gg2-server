@@ -200,7 +200,6 @@ they were trained and scored under:
 
 ```ini
 [Bots]
-Mode=policy
 Policy=checkpoints/duel/ppo-duels2-soldier-s1.gg2p,...   ; all ten in checkpoints/duel/
 ClassPolicy=Soldier=ppo-duels2-soldier-s1,...
 HandoverRule=distance

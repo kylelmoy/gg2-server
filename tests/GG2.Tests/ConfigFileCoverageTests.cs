@@ -43,6 +43,11 @@ public sealed class ConfigFileCoverageTests : IDisposable
     /// </remarks>
     private static readonly Dictionary<string, string> NotInTheConfigFile = new()
     {
+        ["BotMode"] =
+            "is the scripted control arm the bench harness and the recorder compare "
+            + "against. A server always runs the policy brain; an old [Bots] Mode key is "
+            + "an unknown key, which a config file ignores.",
+
         ["RandomSeed"] =
             "forces the simulation's random stream, which a live server must never do — the "
             + "reference's randomize() is what stops every server on a machine scattering its "

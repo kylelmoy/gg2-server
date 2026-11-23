@@ -202,8 +202,6 @@ public static class ControlCommands
 
         "bot-limit" => Do(() => server.SetBotLimit(Int(request, "max", -1))),
 
-        "bot-brain" => Do(() => server.SetBotBrain(ServerSettings.ParseBotMode(Text(request, "mode")))),
-
         "bot-difficulty" => Do(() => server.SetBotDifficulty(Int(request, "tier", -1))),
 
         _ => Error($"unknown cmd \"{cmd}\""),
@@ -668,11 +666,6 @@ public static class ControlCommands
         return Ok($"\"suspendedSeconds\":{server.BotSuspensionSecondsLeft}");
     }
 
-    // Probed once: the panel polls `state` every second, and a directory walk per
-    // poll is file I/O for an answer that only a redeploy changes.
-    private static readonly Lazy<bool> ShippedCheckpointsPresent =
-        new(() => MapDirectory.ResolveCheckpoints().Count > 0);
-
     public static string State(GameServer server)
     {
         var json = new StringBuilder(4096);
@@ -728,11 +721,6 @@ public static class ControlCommands
         json.Append(",\"bansActive\":").Append(server.Bans.Entries.Count);
         json.Append(",\"botFill\":").Append(server.Options.Bots.FillToPlayers);
         json.Append(",\"botLimit\":").Append(server.Options.Bots.MaxBots);
-
-        // Whether a policy brain can be chosen live: with a checkpoint the server
-        // was started with, or else the shipped bundle — GameServer.SetBotBrain.
-        json.Append(",\"policy\":")
-            .Append(server.Options.PolicyPaths.Count > 0 || ShippedCheckpointsPresent.Value ? "true" : "false");
 
         // ⛔ Whether there IS a join password, never the password: the panel is
         // reachable from the network, and this is the config verb's rule too.
@@ -800,12 +788,11 @@ public static class ControlCommands
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>The mode is what was CONFIGURED and the tiers are what was BUILT</b>,
-    /// and both are sent because they can disagree — <c>BotBrain.Build</c> clears
-    /// the brain when a reconcile leaves no controller, so a panel showing the
-    /// mode alone would report a policy server whose bots are all scripted. That
-    /// is the failure this whole block exists to make visible: a controller that
-    /// is configured, reported and never consulted.
+    /// <b>The tiers are what was BUILT</b>, not what was configured —
+    /// <c>BotBrain.Build</c> leaves no brain when it finds no checkpoint, so the
+    /// panel shows a scripted server as scripted. That is the failure this whole
+    /// block exists to make visible: a controller that is configured, reported
+    /// and never consulted.
     /// </para>
     /// <para>
     /// <b>The class sets are read off a live controller, never re-derived.</b>
@@ -820,13 +807,10 @@ public static class ControlCommands
     {
         var brain = server.Options.Bots.Brain;
 
-        json.Append(",\"bots\":{\"mode\":\"")
-            .Append(server.Options.BotMode.ToString().ToLowerInvariant()).Append('"');
-
         // The 1-5 tier, which is the scripted layer's combat skill whatever the
         // brain: a policy tier drives inside an engagement, the scripted aim
         // chain outside it.
-        json.Append(",\"difficulty\":").Append(server.Options.Bots.Difficulty);
+        json.Append(",\"bots\":{\"difficulty\":").Append(server.Options.Bots.Difficulty);
 
         // BotBrainSpec.Name — the same string tools/bench prints in a result
         // table, so a bot watched on the panel and a number read off the bench
@@ -838,7 +822,7 @@ public static class ControlCommands
         // (BotBrainSpec's own is Anyone), so on a server with no humans on it no
         // controller is ever handed the wheel — a fact that looks exactly like a
         // broken checkpoint from the outside.
-        // ⚠️ Absent, not "humans", when there is no brain: mode `scripted` has no
+        // ⚠️ Absent, not "humans", when there is no brain: scripted bots have no
         // gate at all, and a field naming one would describe a restriction that
         // does not exist.
         if (brain is not null)
@@ -1070,8 +1054,7 @@ public static class ControlCommands
     /// What the state calls the macro layer driving alone.
     /// </summary>
     /// <remarks>
-    /// <b>The same word <c>--bot-mode</c> takes and <c>BotBrainSpec.Name</c>
-    /// would never produce</b>, so a reader can compare a slot's brain against the
+    /// <b>A word <c>BotBrainSpec.Name</c> would never produce</b>, so a reader can compare a slot's brain against the
     /// server's tier list without a second vocabulary. It is a bot brain, not the
     /// absence of one.
     /// </remarks>

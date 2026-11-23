@@ -56,23 +56,6 @@ internal static class CommandLine
     }
 
     /// <summary>
-    /// <c>--bot-mode</c>: a name or the enum's number.
-    /// </summary>
-    /// <remarks>
-    /// ⚠️ <b>Numbers are part of the contract</b>, so <see cref="BotMode"/>'s
-    /// values must not be renumbered. Names are the readable form and both are
-    /// accepted.
-    /// </remarks>
-    private static BotMode ParseBotMode(string flag, string text) => text.ToLowerInvariant() switch
-    {
-        "scripted" or "0" => BotMode.Scripted,
-        "policy" or "hybrid-policy" or "2" => BotMode.Policy,
-        _ => throw new ArgumentException(BotModes.Removed(text) is { } removed
-            ? $"{flag}: {removed}"
-            : $"{flag}: '{text}' is not a bot mode. scripted (0) or policy (2)."),
-    };
-
-    /// <summary>
     /// <c>--shuffle</c>: the ini's 0/1/2, or the names this port gives them.
     /// </summary>
     private static ShuffleMode ParseShuffle(string flag, string text) => text.ToLowerInvariant() switch
@@ -249,18 +232,8 @@ internal static class CommandLine
         // refused by name after the loop rather than silently doing nothing.
         string? webSetting = null;
 
-        // ⚠️ Only --bot-mode's "was it given" survives as a local: the ONE
-        // inference below — a --policy with no mode means policy mode — has to be
-        // able to tell "not given" from "given as scripted", and
-        // ServerOptions.BotMode cannot carry that. Everything else the brain
-        // needs is now an option, because a config file has to be able to set it
-        // and a settings page has to be able to write it back.
-        BotMode? botMode = null;
-
-        // Whether --policy appeared on the COMMAND LINE, which is not the same as
-        // options.PolicyPaths being non-empty: a config file's [Bots] Policy is a
-        // checkpoint named beside a mode in the same file, and inferring a mode
-        // from it would silently overrule the Mode key sitting two lines above it.
+        // Whether --policy has appeared on the COMMAND LINE yet: the first one
+        // replaces a config file's [Bots] Policy list, and later ones append.
         var policyOnCommandLine = false;
 
         // ⛔ --config is applied BEFORE the loop, in its own pass, so a flag
@@ -648,13 +621,12 @@ internal static class CommandLine
                     break;
                 }
 
-                // Which brain this server runs -- see BotMode.
-                //
-                // ⚠️ The mode ALONE decides; nothing below infers a controller from
-                // another flag being present, except the one documented fallback
-                // where --policy is given and no mode is (see the reconcile below).
+                // Retired: bots always run the policy brain (ServerOptions.BotMode).
+                // Still accepted, and its value ignored, so an existing script or
+                // systemd unit that passes it keeps starting.
                 case "--bot-mode":
-                    botMode = ParseBotMode(name, cursor.Take());
+                    cursor.Take();
+                    Console.WriteLine("--bot-mode is ignored: bots always run the policy nets.");
                     break;
 
                 // ⛔ Restores the pre-2026-09-02 behaviour, and it is what every
@@ -663,7 +635,7 @@ internal static class CommandLine
                 // bot-vs-bot fight on a live server stays on the scripted layer --
                 // which is a cost saving, not a skill one. ⚠️ A measurement taken
                 // WITHOUT this flag and without humans present is measuring the
-                // scripted layer whatever --bot-mode said.
+                // scripted layer whatever the brain.
                 case "--bot-engages-bots":
                     options.BotEngagesBotsToo = true;
                     break;
@@ -965,19 +937,6 @@ internal static class CommandLine
         // above -- and that place is BotBrain.Build, shared with the config file.
         // Collecting first and building once keeps the flags order-independent.
         //
-        // ⚠️ THE ONE INFERENCE, and it exists to keep `--policy <path>` working on
-        // its own the way docs/BOTS.md documents it: a --policy with no --bot-mode
-        // means policy mode. It is order-independent because both were collected
-        // before this line, and it applies ONLY when no --bot-mode was given -- an
-        // explicit one always wins, and a --policy it cannot use is refused by
-        // BotBrain.Build rather than quietly ignored.
-        //
-        // ⚠️ It reads policyOnCommandLine, NOT options.PolicyPaths. A checkpoint
-        // named by the config file sits beside that file's own Mode key, and
-        // inferring a mode from it would overrule the line two above it.
-        options.BotMode = botMode
-            ?? (policyOnCommandLine ? BotMode.Policy : options.BotMode);
-
         BotBrain.Build(options, Console.WriteLine);
 
         // ⚠️ Which settings a save from the admin panel will NOT be able to change,
@@ -1178,18 +1137,10 @@ internal static class CommandLine
                             lower tiers are a handicap ladder - aim error, an
                             acquire delay, a hold-fire roll - so pass a lower
                             one for beatable bots.
-          --bot-mode <mode> which brain the bots run (default: scripted):
-                              scripted (0)  the scripted layer alone. A complete
-                                            bot, and the control every comparison
-                                            is made against.
-                              policy   (2)  + trained checkpoints inside the
-                                            engagement window. Needs --policy.
-                            --policy on its own means policy mode.
-          --policy <path>   a trained checkpoint --bot-mode policy runs: a
-                            gg2-sim .gg2p, which drives only the classes
-                            --bot-class-policy names. Given on
-                            its own it selects policy mode. Given to a mode that
-                            cannot consult it, it is REFUSED rather than ignored.
+          --policy <path>   a trained gg2-sim .gg2p checkpoint for the bots,
+                            repeatable; it drives only the classes
+                            --bot-class-policy names. With none, the nine
+                            shipped nets in checkpoints/ drive one class each.
           --bots-min-humans <n>
                             humans who must be connected before any bot spawns
                             (default 0 with --bots). Below it the target is ZERO
@@ -1235,15 +1186,15 @@ internal static class CommandLine
           --bot-engages-bots
                             let bots run their expensive micro-controller against
                             each other too. Without this a bot only hands the
-                            wheel to --bot-mode's controller for a HUMAN enemy and
+                            wheel to the policy for a HUMAN enemy and
                             a bot-vs-bot fight stays scripted, which is a COST
                             saving and not a skill one. Every recorded arm
                             measurement was taken with this behaviour.
           --bot-handover-rule macrotask|distance|headsplit
-                            when a bot hands the wheel to --bot-mode's
-                            controller. macrotask by default; distance (an
-                            enemy within 150px, kept to 300px) is what gg2-sim
-                            policies are evaluated under.
+                            when a bot hands the wheel to the policy.
+                            macrotask by default; distance (an enemy within
+                            150px, kept to 300px) is what gg2-sim policies are
+                            evaluated under.
           --bot-handover-range <px>
                             how near the nearest opponent must be for that
                             handover; 150 by default. Very large with
@@ -1254,7 +1205,7 @@ internal static class CommandLine
                             instead of taking the argmax: how the duel nets
                             were trained and scored. Off (greedy) by default.
           --bot-brain-team both|red|blue
-                            the one team whose bots --bot-mode's brain drives;
+                            the one team whose bots the policy drives;
                             the other team's bots are plain scripted bots. Both
                             by default; red is how gg2-sim's matches are played.
           --bot-class-limit <n|class=n,...>

@@ -1,97 +1,138 @@
 using GG2.Bots;
 using GG2.Host;
+using GG2.Protocol;
 using GG2.Server;
 
 namespace GG2.Tests;
 
 /// <summary>
-/// <c>--bot-mode</c>: the two shipped brains, reachable and distinguishable, and
-/// the two removed ones refused.
+/// A server always runs the policy brain: the shipped bundle when nothing names
+/// a checkpoint, the named checkpoints when something does, and the retired
+/// <c>--bot-mode</c> flag and <c>[Bots] Mode</c> key change neither.
 /// </summary>
 /// <remarks>
-/// <b>These assert the TIERS a mode builds, not that the flag parses.</b> A
-/// mode that is accepted and then builds the same brain as another is exactly
-/// the failure the flag was meant to remove, and a parse test cannot see it —
-/// which is why every case below reads <c>Brain.Tiers</c>.
+/// <b>These assert the TIERS that get built, not that a flag parses.</b> A setting
+/// that is accepted and then builds a different brain from the one documented is
+/// exactly what a parse test cannot see, which is why every case reads
+/// <c>Brain.Tiers</c>.
 /// </remarks>
 public sealed class BotModeTests
 {
-    /// <summary>A shipped net, so these test the flag wiring and not a checkpoint.</summary>
-    private static string[] WithPolicy(params string[] args) =>
-        [.. args, "--policy", PolicyFixture.Checkpoint];
-
     private static BotBrainSpec? BrainOf(params string[] args) =>
         CommandLine.Parse(args).Bots.Brain;
 
-    [Fact]
-    public void ScriptedIsTheDefaultAndBuildsNoBrainAtAll()
-    {
-        // Null is the all-scripted arm, NOT a broken configuration — see
-        // BotBrainSpec's remarks. An empty tier list would be the broken one.
-        Assert.Null(BrainOf());
-        Assert.Null(BrainOf("--bot-mode", "scripted"));
-        Assert.Null(BrainOf("--bot-mode", "0"));
-    }
-
-    [Fact]
-    public void PolicyBuildsOnePolicyTier()
-    {
-        var brain = Assert.IsType<BotBrainSpec>(BrainOf(WithPolicy("--bot-mode", "policy")));
-
-        Assert.IsType<SimPolicyMicroSpec>(Assert.Single(brain.Tiers));
-    }
-
-    /// <summary>Numbers and names name the same modes.</summary>
-    [Fact]
-    public void NumbersAndNamesAgree()
-    {
-        Assert.Null(BrainOf("--bot-mode", "0"));
-
-        var byNumber = Assert.IsType<BotBrainSpec>(BrainOf(WithPolicy("--bot-mode", "2")));
-        var byName = Assert.IsType<BotBrainSpec>(BrainOf(WithPolicy("--bot-mode", "policy")));
-
-        Assert.Equal(byName.Name, byNumber.Name);
-    }
-
-    // ------------------------------------------------------------------
-    // The refusals
-    // ------------------------------------------------------------------
+    private static SimPolicyMicroSpec[] Tiers(BotBrainSpec? brain) =>
+        Assert.IsType<BotBrainSpec>(brain).Tiers.Select(Assert.IsType<SimPolicyMicroSpec>).ToArray();
 
     /// <summary>
-    /// The removed search and tiered modes are refused by name and by number,
-    /// with a message naming the replacement.
+    /// With no settings at all, the nine shipped nets drive one class each.
     /// </summary>
     /// <remarks>
-    /// <b>The numbers matter most.</b> 1 and 3 must never come to mean something
-    /// else: a script that still says <c>--bot-mode 3</c> has to fail, not run a
-    /// different brain.
+    /// ⛔ <b>Each class exactly once</b>, so a default that loaded the bundle and
+    /// dropped its class assignment — nine nets that drive nothing, the failure a
+    /// <c>.gg2p</c> invites because it names no classes — goes red here.
     /// </remarks>
-    [Theory]
-    [InlineData("search")]
-    [InlineData("hybrid-search")]
-    [InlineData("1")]
-    [InlineData("tiered")]
-    [InlineData("3")]
-    public void ARemovedModeIsRefusedWithItsReplacement(string mode)
+    [Fact]
+    public void TheDefaultRunsTheShippedBundle()
     {
-        var thrown = Assert.Throws<ArgumentException>(
-            () => CommandLine.Parse(WithPolicy("--bot-mode", mode)));
+        var tiers = Tiers(BrainOf());
 
-        Assert.Contains("removed", thrown.Message, StringComparison.Ordinal);
-        Assert.Contains("policy", thrown.Message, StringComparison.Ordinal);
+        Assert.Equal(
+            MapDirectory.ShippedCheckpoints.Select(Path.GetFileNameWithoutExtension),
+            tiers.Select(tier => tier.Label));
+
+        PlayerClass[] driven = [.. tiers.SelectMany(tier => tier.Drives).Order()];
+        PlayerClass[] expected =
+        [
+            .. MapDirectory.ShippedClassPolicies
+                .Select(entry => Enum.Parse<PlayerClass>(entry[..entry.IndexOf('=')]))
+                .Order(),
+        ];
+
+        Assert.Equal(expected, driven);
+        Assert.Equal(9, driven.Length);
     }
 
-    /// <summary>The same refusal from a config file, which is how a fleet host names its mode.</summary>
+    /// <summary>
+    /// The retired flag is accepted, so an existing script still starts, and
+    /// changes nothing — scripted included.
+    /// </summary>
     [Theory]
+    [InlineData("scripted")]
+    [InlineData("policy")]
     [InlineData("search")]
-    [InlineData("tiered")]
-    public void ARemovedModeInAConfigFileIsRefused(string mode)
+    [InlineData("0")]
+    public void TheRetiredModeFlagIsIgnored(string mode)
     {
-        var setting = ServerSettings.All.Single(s => s.Section == "Bots" && s.Key == "Mode");
+        Assert.Equal(
+            Tiers(BrainOf()).Select(tier => tier.Name),
+            Tiers(BrainOf("--bot-mode", mode)).Select(tier => tier.Name));
+    }
 
-        var thrown = Assert.Throws<FormatException>(() => setting.Set(ServerOptions.CreateDefault(), mode));
+    /// <summary>
+    /// An old config file's <c>[Bots] Mode</c> is an unknown key, which a config
+    /// file ignores — the fleet's files carry <c>Mode=policy</c>.
+    /// </summary>
+    [Fact]
+    public void AnOldModeKeyInAConfigFileIsIgnored()
+    {
+        var config = CliCoverageTests.WriteConfig("[Bots]\nMode=scripted\n");
 
-        Assert.Contains("removed", thrown.Message, StringComparison.Ordinal);
+        Assert.Equal(9, Tiers(BrainOf("--config", config)).Length);
+        Assert.DoesNotContain(ServerSettings.All, s => s.Section == "Bots" && s.Key == "Mode");
+    }
+
+    /// <summary>A named checkpoint replaces the bundle rather than joining it.</summary>
+    [Fact]
+    public void ANamedCheckpointReplacesTheBundle()
+    {
+        var tier = Assert.Single(Tiers(BrainOf("--policy", PolicyFixture.Checkpoint)));
+
+        Assert.Equal(PolicyFixture.Label, tier.Label);
+    }
+
+    /// <summary>
+    /// A class assignment with no checkpoint applies over the bundle, so a class
+    /// can be handed back to the scripted layer without naming nine files.
+    /// </summary>
+    [Fact]
+    public void AClassPolicyAloneAppliesToTheBundle()
+    {
+        var tiers = Tiers(BrainOf("--bot-class-policy", "Soldier=scripted"));
+
+        Assert.Equal(9, tiers.Length);
+        Assert.DoesNotContain(tiers, tier => tier.Drives.Contains(PlayerClass.Soldier));
+        Assert.Contains(tiers, tier => tier.Drives.Contains(PlayerClass.Scout));
+    }
+
+    /// <summary>
+    /// The scripted control arm the bench and the recorder compare against builds
+    /// no brain at all — null is that arm, not a broken configuration.
+    /// </summary>
+    [Fact]
+    public void TheScriptedControlArmBuildsNoBrain()
+    {
+        var options = ServerOptions.CreateDefault();
+        options.BotMode = BotMode.Scripted;
+
+        BotBrain.Build(options);
+
+        Assert.Null(options.Bots.Brain);
+    }
+
+    /// <summary>
+    /// A checkpoint handed to the scripted arm is refused, not loaded and ignored.
+    /// </summary>
+    [Fact]
+    public void ACheckpointGivenToTheScriptedArmIsRefused()
+    {
+        var options = ServerOptions.CreateDefault();
+        options.BotMode = BotMode.Scripted;
+        options.PolicyPaths = [PolicyFixture.Checkpoint];
+
+        var thrown = Assert.Throws<ArgumentException>(() => BotBrain.Build(options));
+
+        Assert.Contains("never consults one", thrown.Message, StringComparison.Ordinal);
     }
 
     /// <summary>The flags that configured the search and the arbiter are gone, and say so by failing.</summary>
@@ -105,71 +146,5 @@ public sealed class BotModeTests
         var thrown = Assert.Throws<ArgumentException>(() => CommandLine.Parse(args));
 
         Assert.Contains(args[0], thrown.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// A mode that needs a checkpoint and was given none is refused, by name.
-    /// </summary>
-    [Fact]
-    public void APolicyModeWithoutACheckpointIsRefused()
-    {
-        var thrown = Assert.Throws<ArgumentException>(() => CommandLine.Parse(["--bot-mode", "policy"]));
-
-        Assert.Contains("--policy", thrown.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// A checkpoint handed to a mode that cannot consult it is REFUSED, not
-    /// ignored.
-    /// </summary>
-    /// <remarks>
-    /// A checkpoint loaded, printed and never consulted is a server saying it is
-    /// doing something it is not. This is the assertion most likely to be
-    /// "relaxed" by someone who hits it — the fix is to name the mode you meant,
-    /// not to make the flag silent.
-    /// </remarks>
-    [Fact]
-    public void ACheckpointGivenToAModeThatCannotUseItIsRefused()
-    {
-        var thrown = Assert.Throws<ArgumentException>(
-            () => CommandLine.Parse(WithPolicy("--bot-mode", "scripted")));
-
-        Assert.Contains("never consults", thrown.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// <c>--policy</c> on its own still means policy mode — the one inference,
-    /// kept because <c>docs/BOTS.md</c> documents that invocation.
-    /// </summary>
-    [Fact]
-    public void APolicyOnItsOwnStillSelectsPolicyMode()
-    {
-        var brain = Assert.IsType<BotBrainSpec>(BrainOf(WithPolicy()));
-
-        Assert.IsType<SimPolicyMicroSpec>(Assert.Single(brain.Tiers));
-    }
-
-    /// <summary>
-    /// And the inference is ORDER-INDEPENDENT, because both flags are
-    /// collected before anything reconciles them.
-    /// </summary>
-    [Fact]
-    public void ModeAndPolicyDoNotDependOnFlagOrder()
-    {
-        var before = BrainOf("--bot-mode", "policy", "--policy", PolicyFixture.Checkpoint);
-        var after = BrainOf("--policy", PolicyFixture.Checkpoint, "--bot-mode", "policy");
-
-        Assert.Equal(before?.Name, after?.Name);
-        Assert.NotNull(before);
-    }
-
-    [Fact]
-    public void AnUnknownModeNamesTheTwo()
-    {
-        var thrown = Assert.Throws<ArgumentException>(() => CommandLine.Parse(["--bot-mode", "clever"]));
-
-        Assert.Contains("scripted", thrown.Message, StringComparison.Ordinal);
-        Assert.Contains("policy", thrown.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("removed", thrown.Message, StringComparison.Ordinal);
     }
 }

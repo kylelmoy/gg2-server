@@ -807,7 +807,7 @@ public sealed class ServerOptions
     /// <b>Turning this on does not make the bots better.</b> It makes
     /// bot-vs-bot fights cheaper and slightly worse. Any measurement of a
     /// controller taken with this true and no humans present is measuring the
-    /// scripted layer, whatever <c>--bot-mode</c> said.
+    /// scripted layer, whatever the brain.
     /// </para>
     /// </remarks>
     public bool BotEngagesBotsToo { get; set; }
@@ -1091,22 +1091,18 @@ public sealed class ServerOptions
     public string ConfigFile { get; set; } = string.Empty;
 
     /// <summary>
-    /// Which bot brain this server runs — <c>--bot-mode</c>.
+    /// Which bot brain this server runs. Always <see cref="BotMode.Policy"/> for a
+    /// server; only tooling sets it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>An INPUT to <see cref="BotPopulationOptions.Brain"/>, not a copy of
-    /// it.</b> <see cref="BotBrain.Build"/> is the one place these inputs
-    /// become a <see cref="BotBrainSpec"/>, and it is called once at the end of
-    /// parsing — so setting this afterwards changes nothing, which is why nothing
-    /// outside the two parsers writes it.
-    /// <para>
-    /// It is an option rather than a local in <c>CommandLine</c> because the
-    /// brain cannot be written back to a config file: a <see cref="BotBrainSpec"/>
-    /// holds a loaded <c>SimPolicyNetwork</c>, megabytes of weights with no textual
-    /// form. The inputs have one, so the inputs are what round-trips.
-    /// </para>
+    /// <b>No flag, config key or panel control sets this.</b> A server always runs
+    /// the policy brain, from <see cref="PolicyPaths"/> or else the shipped bundle
+    /// (<see cref="BotBrain.Build"/>). <see cref="BotMode.Scripted"/> is the
+    /// control arm the bench harness and the recorder compare against. The old
+    /// <c>--bot-mode</c> flag is accepted and ignored; an old <c>[Bots] Mode</c>
+    /// key is an unknown key, which a config file ignores.
     /// </remarks>
-    public BotMode BotMode { get; set; } = BotMode.Scripted;
+    public BotMode BotMode { get; set; } = BotMode.Policy;
 
     /// <summary>
     /// The gg2-sim <c>.gg2p</c> nets a policy-driven mode loads — <c>--policy</c>,

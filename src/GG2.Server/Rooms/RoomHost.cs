@@ -248,12 +248,6 @@ public sealed class RoomHost : IDisposable
 
     private void BuildBrain(ServerOptions options)
     {
-        if (options.BotMode == BotMode.Policy && options.PolicyPaths.Count == 0)
-        {
-            options.PolicyPaths = MapDirectory.ResolveCheckpoints();
-            options.BotClassPolicies = MapDirectory.ShippedClassPolicies;
-        }
-
         // Fresh per room; only the weights are shared.
         BotBrain.Build(options, report: null, _sharedPolicies.Load);
     }

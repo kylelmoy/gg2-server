@@ -91,7 +91,6 @@ public sealed class SimPolicyTests : IDisposable
         var path = Write("kill.gg2p", SimPolicyObservation.TeamSize, SimPolicyController.TeamAimActions);
         var options = CommandLine.Parse(
         [
-            "--bot-mode", "policy",
             "--policy", path,
             "--bot-class-policy", "Soldier=kill",
             "--bot-handover-rule", "distance",
@@ -129,7 +128,7 @@ public sealed class SimPolicyTests : IDisposable
     [Fact]
     public void TheHandoverRuleDefaultsToMacroTask()
     {
-        var options = CommandLine.Parse(["--bot-mode", "policy", "--policy", PolicyFixture.Checkpoint]);
+        var options = CommandLine.Parse(["--policy", PolicyFixture.Checkpoint]);
 
         Assert.Equal(HandoverRule.MacroTask, options.Bots.Brain!.Rule);
     }
@@ -673,7 +672,7 @@ public sealed class SimPolicyTests : IDisposable
     public void PolicySampledReachesEveryGg2pTier()
     {
         var path = Write("kill.gg2p", SimPolicyObservation.TeamSize, SimPolicyController.TeamAimActions);
-        string[] args = ["--bot-mode", "policy", "--policy", path, "--bot-class-policy", "Soldier=kill"];
+        string[] args = ["--policy", path, "--bot-class-policy", "Soldier=kill"];
 
         var greedy = Assert.IsType<SimPolicyMicroSpec>(Assert.Single(CommandLine.Parse(args).Bots.Brain!.Tiers));
         var sampled = Assert.IsType<SimPolicyMicroSpec>(Assert.Single(CommandLine.Parse([.. args, "--bot-policy-sampled"]).Bots.Brain!.Tiers));

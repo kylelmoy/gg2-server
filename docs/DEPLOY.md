@@ -74,8 +74,8 @@ VPS. `ctf_truefort`, `--no-idle-when-empty`, no clients connected.
 
 | Configuration | CPU per tick | % of one core | Working set |
 |---|---|---|---|
-| 12 bots, `--bot-mode scripted` | **0.156 ms** | **0.5%** | 55 MB |
-| 24 bots, 24 slots, `--bot-mode scripted` | **0.226 ms** | **0.7%** | 55 MB |
+| 12 bots, scripted layer alone | **0.156 ms** | **0.5%** | 55 MB |
+| 24 bots, 24 slots, scripted layer alone | **0.226 ms** | **0.7%** | 55 MB |
 
 **Pacing numbers (p99, worst tick) are not reliable evidence of the
 server's own cost** — scheduling latency from other processes on the box can
@@ -222,7 +222,8 @@ by repeating the ramp above; capped `fps` alone cannot show headroom.
 
 ### The one setting that changes the answer
 
-**`--bot-mode policy` is the one bot setting with a real cost.** A gg2-sim
+**The policy nets are the one bot cost that matters**, and a server always
+runs them. A gg2-sim
 decision is 57-110 µs (`docs/BOTS.md`, "There is no search controller"), so
 twelve bots deciding on the same tick is about 1.3 ms of a 33.3 ms tick on a
 13700K core. Nothing throttles it. It has not been measured on a VPS core; a

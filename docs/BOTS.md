@@ -119,12 +119,11 @@ retrain first**, and would not look broken without one.
 
 ### There is no search controller, and no controller budget
 
-The server runs two brains: `scripted` (0) and `policy` (2). The rollout-search
-controller (`--bot-mode search`, 1) and the tiered mode that put it ahead of a
-policy under a per-tick arbiter (`tiered`, 3) are removed, along with the
-arbiter, the adaptive budget and their flags and keys. Both numbers are refused
-by name and by number with a message naming `policy`, so an old config file
-fails at startup rather than running something else (`BotModeTests`).
+A server runs one brain, the policy nets over the scripted layer. The rollout-search
+controller and the tiered mode that put it ahead of a policy under a per-tick
+arbiter are removed, along with the arbiter, the adaptive budget and their flags
+and keys. `--bot-mode` is accepted and ignored, whatever value it names, and an
+old `[Bots] Mode` key is an unknown key (`BotModeTests`).
 
 Why: the shipped nets match or beat the search, and the search cost ~4.8 ms a
 decision against a 33.3 ms tick. The head-to-head that settled it (`39cdd24`,
@@ -152,7 +151,7 @@ release band); the fleet runs `HandoverRule=distance`, which is what gg2-sim
 measures its nets under.
 
 ```powershell
-dotnet run --project src/GG2.Host -- --map ctf_truefort --bots 12 --bot-mode policy `
+dotnet run --project src/GG2.Host -- --map ctf_truefort --bots 12 `
   --bot-handover-rule distance `
   --policy checkpoints/ppo-warm-soldier-s1.gg2p --policy checkpoints/ppo-finetune-scout-s1.gg2p `
   --bot-class-policy Soldier=ppo-warm-soldier-s1,Scout=ppo-finetune-scout-s1
@@ -161,9 +160,13 @@ dotnet run --project src/GG2.Host -- --map ctf_truefort --bots 12 --bot-mode pol
 `--policy` is repeatable and appends, one tier per checkpoint; `[Bots] Policy`
 takes the same list comma-separated. A `.gg2p` names no classes, so every class
 a net drives has to be assigned, and a net nobody assigned a class is warned
-about at startup. The panel's live `bot-brain` switch, on a server started with
-no checkpoint, loads all nine with the fleet's assignment
-(`MapDirectory.ShippedClassPolicies`).
+about at startup. **With no `--policy` the server loads all nine shipped nets**
+with the fleet's assignment (`MapDirectory.ShippedClassPolicies`), and any
+`--bot-class-policy` entries apply over it class by class — `Soldier=scripted`
+alone hands the soldier back to the scripted layer. There is no mode switch: a
+server always runs this brain, and only tooling's control arm
+(`ServerOptions.BotMode`) runs the scripted layer alone. `--bot-mode` is
+accepted and ignored.
 
 Two settings decide what plays, and they answer different questions:
 
@@ -232,7 +235,7 @@ purpose:
 **Every arm number in this document was measured under `Anyone`**, the only
 setting under which a bot-vs-bot match exercises a controller at all. A
 controller measurement taken under `HumansOnly` with no humans present measures
-the scripted layer regardless of `--bot-mode`, and both arms converge — a
+the scripted layer regardless of the brain, and both arms converge — a
 result that looks like a finding rather than a mistake.
 `HumanOnlyHandoverTests.TheLibraryDefaultIsAnyoneSoHeadlessMeasurementsStillEngage`
 guards this. **What the human-only default buys is cost, not skill** — cheaper
@@ -383,7 +386,7 @@ policies) exports `.gg2p` files, the only checkpoint format the server loads.
 `--policy x.gg2p` loads one as a `SimPolicyMicroSpec` tier:
 
 ```powershell
-gg2-server --bots 8 --bot-mode policy --bot-handover-rule distance --bot-engages-bots `
+gg2-server --bots 8 --bot-handover-rule distance --bot-engages-bots `
   --bot-brain-team red `
   --policy ppo-kill1-6b-s2.gg2p --policy ppo-mixscout-s1.gg2p `
   --bot-class-policy Soldier=ppo-kill1-6b-s2,Scout=ppo-mixscout-s1

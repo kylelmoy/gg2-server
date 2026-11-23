@@ -19,11 +19,17 @@ namespace GG2.Server;
 /// the same argument <see cref="ControlCommands"/> makes for the operator verbs.
 /// </para>
 /// <para>
-/// ⚠️ <b>This is why <see cref="ServerOptions.BotMode"/> and the settings
+/// ⚠️ <b>This is why <see cref="ServerOptions.PolicyPaths"/> and the settings
 /// beside it exist as options at all.</b> A brain holds a loaded
 /// <c>SimPolicyNetwork</c> — megabytes of weights with no textual form — so it
 /// cannot be written back to a config file and cannot round-trip. Its inputs
 /// can, so the inputs are the configuration and the brain is derived.
+/// </para>
+/// <para>
+/// <b>A server always runs the policy brain.</b> With no <c>--policy</c> it
+/// loads the shipped bundle (<see cref="MapDirectory.ShippedCheckpoints"/>) and,
+/// with no <c>--bot-class-policy</c> either, the bundle's class assignment. Only
+/// tooling's control arm sets <see cref="ServerOptions.BotMode"/> to scripted.
 /// </para>
 /// </remarks>
 public static class BotBrain
@@ -40,8 +46,8 @@ public static class BotBrain
     /// it into the log an operator is actually reading.
     /// </param>
     /// <exception cref="ArgumentException">
-    /// A mode that needs a checkpoint was given none, or a checkpoint was given
-    /// to a mode that never consults one. ⛔ <b>Refused rather than ignored</b>:
+    /// A checkpoint was given to the scripted control arm, which never consults
+    /// one. ⛔ <b>Refused rather than ignored</b>:
     /// a checkpoint loaded, printed and never used is a server saying it is doing
     /// something it is not.
     /// </exception>
@@ -59,13 +65,45 @@ public static class BotBrain
 
         var mode = options.BotMode;
         var policyPaths = options.PolicyPaths;
+        var classPolicies = options.BotClassPolicies;
+
+        // No checkpoint configured: the shipped bundle. Resolved here and NOT
+        // written back, because the options say what was CONFIGURED and the panel
+        // writes them to the file — a resolved absolute path saved there would pin
+        // this machine's install directory into the config.
+        if (mode.UsesPolicy() && policyPaths.Count == 0)
+        {
+            policyPaths = MapDirectory.ResolveCheckpoints();
+
+            // The bundle's assignment, with the operator's entries applied OVER it
+            // class by class: `Soldier=scripted` alone hands the soldier back to the
+            // scripted layer and leaves the other eight nets driving. Replacing the
+            // list instead would load nine nets that drive nothing.
+            var overridden = ParseClassPolicies(classPolicies).Keys.ToHashSet();
+
+            classPolicies =
+            [
+                .. MapDirectory.ShippedClassPolicies.Where(entry =>
+                    !overridden.Contains(Enum.Parse<PlayerClass>(entry[..entry.IndexOf('=')]))),
+                .. classPolicies,
+            ];
+
+            if (policyPaths.Count == 0)
+            {
+                // ⚠️ Said out loud rather than refused: a build without the
+                // checkpoints still runs a complete bot, just not the trained one.
+                report?.Invoke(
+                    "WARNING: no checkpoints/ directory with the shipped policy nets was found, "
+                    + "so the bots run the scripted layer alone.");
+            }
+        }
 
         var tiers = new List<MicroControllerSpec>();
 
         // The operator's per-class assignments, parsed and validated before a
         // single checkpoint is opened so a typo costs no file I/O and, more to the
         // point, so the error names the setting rather than a load failure.
-        var assigned = ParseClassPolicies(options.BotClassPolicies);
+        Dictionary<PlayerClass, string> assigned = policyPaths.Count == 0 ? new() : ParseClassPolicies(classPolicies);
 
         if (mode.UsesPolicy())
         {
@@ -190,14 +228,6 @@ public static class BotBrain
         var mode = options.BotMode;
         var policyPaths = options.PolicyPaths;
 
-        if (mode.UsesPolicy() && policyPaths.Count == 0)
-        {
-            throw new ArgumentException(
-                $"bot mode '{mode.ToString().ToLowerInvariant()}' drives bots with a trained "
-                + "checkpoint and none was given; add --policy <path> (or a [Bots] Policy key), "
-                + "or use bot mode scripted.");
-        }
-
         // Only gg2-sim nets are loaded. Refused here, from the name alone, so the
         // panel and the fleet renderer refuse it before a restart does.
         foreach (var policyPath in policyPaths)
@@ -212,8 +242,8 @@ public static class BotBrain
         if (!mode.UsesPolicy() && policyPaths.Count > 0)
         {
             throw new ArgumentException(
-                $"a policy checkpoint was given but bot mode '{mode.ToString().ToLowerInvariant()}' "
-                + "never consults one; use bot mode policy, or drop the checkpoint.");
+                "a policy checkpoint was given to the scripted control arm, which never "
+                + "consults one; drop the checkpoint.");
         }
 
         var assigned = ParseClassPolicies(options.BotClassPolicies);
@@ -224,9 +254,8 @@ public static class BotBrain
             // setting that is read, validated and then cannot possibly apply is a
             // server saying it is doing something it is not.
             throw new ArgumentException(
-                $"bot class policies were configured but bot mode "
-                + $"'{mode.ToString().ToLowerInvariant()}' runs no policy; use bot mode policy, "
-                + "or drop them.");
+                "bot class policies were given to the scripted control arm, which runs no "
+                + "policy; drop them.");
         }
     }
 

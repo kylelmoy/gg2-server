@@ -38,7 +38,6 @@ public sealed class PolicyTierWiringTests
     {
         var options = CommandLine.Parse(
         [
-            "--bot-mode", "policy",
             "--policy", PolicyFixture.Checkpoint,
             "--policy", PolicyFixture.Second,
         ]);
@@ -70,7 +69,6 @@ public sealed class PolicyTierWiringTests
     {
         var options = CommandLine.Parse(
         [
-            "--bot-mode", "policy",
             "--policy", PolicyFixture.Checkpoint,
             "--policy", PolicyFixture.Second,
         ]);

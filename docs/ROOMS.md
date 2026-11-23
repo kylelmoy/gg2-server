@@ -317,7 +317,7 @@ Bold is the default. Fixed for every room:
 | `Time Limit`, `CapLimit`, respawn, `AutoBalance` | stock | One set of rules everybody already knows |
 | `UseLobby` | 0 | Private |
 | `Password` | the code | The code is the invitation |
-| `[Bots] Mode` and nets | the base `--config`'s; scripted or policy only | Same bots as the public servers when the base is the fleet's `common.ini` |
+| Bot nets | the base `--config`'s, or the shipped bundle | Same bots as the public servers when the base is the fleet's `common.ini` |
 | `ServerName` | the base's, or `Private room` where it names none | |
 | `[Chat] Enabled` | 1 | the native client has native chat |
 | `QuickUpdateInterval` | 7 (stock) | |

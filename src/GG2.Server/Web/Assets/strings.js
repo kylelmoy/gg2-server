@@ -64,10 +64,7 @@ const STRINGS = {
       "loading": "Loading"
     },
     "bots": {
-      "brain": "Brain",
-      "brainChange": "Changing it replaces all bots.",
       "brainKey": "brain",
-      "brainLabel": "Bot brain",
       "difficulty": "Difficulty",
       "difficultyHint": "Aim and reaction speed. 5 is full strength. Applies to running bots immediately.",
       "difficultyLabel": "Bot difficulty",
@@ -78,9 +75,7 @@ const STRINGS = {
       "limitHint": "Max concurrent bots, regardless of fill.",
       "lowerLimit": "Lower bot limit",
       "more": "More bots",
-      "policy": "Policy",
       "raiseLimit": "Raise bot limit",
-      "scripted": "Scripted",
       "title": "Bots"
     },
     "brand": "gg2-server",
@@ -273,7 +268,6 @@ const STRINGS = {
       "rotation": "Rotation updated",
       "team": "Moved to {team}",
       "botLimit": "Bot limit: {max}",
-      "botBrain": "Brain: {mode}; bots replaced",
       "botDifficulty": "Bot difficulty: {tier}",
       "teleport": "Teleported",
       "configSet": "Saved",
@@ -336,10 +330,7 @@ const STRINGS = {
         "other": "{count} bots"
       },
       "tierShare": "{driving} driving now. {micro} of {polls} ticks driven since spawn.",
-      "tierScripted": "Macro layer only; no controller accepts these classes.",
-      "needsPolicy": "Requires --policy at startup",
-      "changeTitle": "Change bot brain?",
-      "changeBody": "All bots are removed and re-added running {mode}. Search and policy brains cost more tick time than scripted."
+      "tierScripted": "Macro layer only; no controller accepts these classes."
     },
     "roster": {
       "noMatch": "No players match.",
@@ -817,8 +808,7 @@ const STRINGS = {
       "PolicySampled": "Draw each gg2-sim policy decision from its softmax instead of the argmax. How the duel nets were trained and scored; greedy can freeze on a still target. Behavioural.",
       "BrainTeam": "The one team whose bots the brain drives; the other team's bots are plain scripted bots. Both by default; red is how gg2-sim plays its matches.",
       "HandoverBubbles": "Chat bubble on brain handover: z1 policy, z2 scripted. Debug only; each bubble is a broadcast.",
-      "Mode": "Which brain runs: scripted alone, or policy nets inside the engagement window.",
-      "Policy": "gg2-sim .gg2p nets for the policy mode, one per tier. A net drives only the classes ClassPolicy assigns it."
+      "Policy": "gg2-sim .gg2p nets the bots run, one per tier; empty runs the nine shipped nets. A net drives only the classes ClassPolicy assigns it."
     },
     "BotClasslimits": {
       "Scout": "Per-team bot limit for Scout. 255 = unlimited; 0 = disabled.",

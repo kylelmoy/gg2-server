@@ -298,21 +298,9 @@
             <p class="hint" data-t="page.bots.difficultyHint"></p>
           </div>
 
-          <div class="control">
-            <label data-t="page.bots.brain"></label>
-            <div class="seg" id="brain-seg" role="group" data-t-aria-label="page.bots.brainLabel">
-              <button class="seg-btn" data-mode="scripted" type="button" data-t="page.bots.scripted"></button>
-              <button class="seg-btn" data-mode="policy" type="button" data-t="page.bots.policy"></button>
-            </div>
-            <p class="hint" id="brain-seg-note" data-t="page.bots.brainChange"></p>
-          </div>
-
           <!--
-            Which brain the bots run. The mode is what was configured and the
-            tiers are what was built, and both are shown because they can
-            disagree — a reconcile that leaves no controller clears the brain,
-            and a panel showing the mode alone would report a policy server whose
-            bots are all scripted.
+            Which brain the bots run, as BUILT: a server that found no
+            checkpoint shows scripted rather than claiming a policy.
           -->
           <div class="brain" id="brain">
             <div class="brain-head">

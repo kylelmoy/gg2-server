@@ -43,6 +43,11 @@ public sealed class CliCoverageTests
     /// </remarks>
     private static readonly Dictionary<string, string> NotOnTheCommandLine = new()
     {
+        ["BotMode"] =
+            "is the scripted control arm the bench harness and the recorder compare "
+            + "against. A server always runs the policy brain, so no flag selects it; "
+            + "--bot-mode is accepted and ignored for old scripts.",
+
         ["Chat"] =
             "is the [Chat] section, nine settings of the server's own chat, configured "
             + "from the file like the rest of a subsystem's tuning rather than per launch; "
@@ -142,12 +147,11 @@ public sealed class CliCoverageTests
 
         // The five brain INPUTS. They became ServerOptions properties when
         // BotBrain.Build was pulled out of this file so a config file could reach
-        // the same reconcile — see ServerOptions.BotMode for why the inputs rather
+        // the same reconcile — see BotBrain for why the inputs rather
         // than the BotBrainSpec are the configuration.
         //
         // ⚠️ --policy needs a checkpoint that actually LOADS, because the brain is
         // built inside Parse. PolicyFixture's is a shipped net.
-        ("BotMode", ["--bot-mode", "policy", "--policy", PolicyFixture.Checkpoint], o => o.BotMode),
         ("PolicyPaths", ["--policy", PolicyFixture.Checkpoint],
             o => string.Join(',', o.PolicyPaths)),
 
@@ -161,7 +165,7 @@ public sealed class CliCoverageTests
         // WHICH CONTROLLER DRIVES A CLASS. This row is about the flag reaching the
         // option; BotClassPolicyTests is where the resolution lives.
         ("BotClassPolicies",
-            ["--bot-mode", "policy", "--policy", PolicyFixture.Checkpoint,
+            ["--policy", PolicyFixture.Checkpoint,
              "--bot-class-policy", "Sniper=scripted"],
             o => string.Join(',', o.BotClassPolicies)),
 

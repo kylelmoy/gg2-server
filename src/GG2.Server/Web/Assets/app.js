@@ -84,7 +84,6 @@ function describe(body) {
     case 'rotation': return t('app.done.rotation');
     case 'team': return t('app.done.team', { team: body.team });
     case 'bot-limit': return t('app.done.botLimit', { max: body.max });
-    case 'bot-brain': return t('app.done.botBrain', { mode: body.mode });
     case 'bot-difficulty': return t('app.done.botDifficulty', { tier: body.tier });
     case 'teleport': return t('app.done.teleport');
     case 'config-set': return t('app.done.configSet');
@@ -1590,14 +1589,6 @@ function controls(s) {
     button.classList.toggle('is-on', s.bots.difficulty === Number(button.dataset.tier));
   }
 
-  for (const button of document.querySelectorAll('#brain-seg .seg-btn')) {
-    const mode = button.dataset.mode;
-    button.classList.toggle('is-on', s.bots.mode === mode);
-
-    // A policy brain needs a checkpoint: the server's own, or the shipped bundle.
-    button.disabled = mode === 'policy' && !s.server.policy;
-    button.title = button.disabled ? t('app.brain.needsPolicy') : '';
-  }
 }
 
 async function loadMaps() {
@@ -2214,17 +2205,6 @@ for (const button of document.querySelectorAll('#difficulty-seg .seg-btn')) {
     const tier = Number(button.dataset.tier);
     if (!state || state.bots.difficulty === tier) return;
     send({ cmd: 'bot-difficulty', tier });
-  });
-}
-
-for (const button of document.querySelectorAll('#brain-seg .seg-btn')) {
-  button.addEventListener('click', async () => {
-    const mode = button.dataset.mode;
-    if (!state || state.bots.mode === mode) return;
-
-    if (await ask(t('app.brain.changeTitle'), t('app.brain.changeBody', { mode }))) {
-      send({ cmd: 'bot-brain', mode });
-    }
   });
 }
 

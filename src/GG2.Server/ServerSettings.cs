@@ -756,13 +756,6 @@ public static class ServerSettings
             "Bots", "HandoverBubbles", nameof(ServerOptions.BotHandoverBubbles),
             o => o.BotHandoverBubbles, (o, v) => o.BotHandoverBubbles = v));
 
-        settings.Add(ChoiceRow(
-            "Bots", "Mode", nameof(ServerOptions.BotMode),
-            ["scripted", "policy"],
-            o => o.BotMode.ToString().ToLowerInvariant(),
-            (o, v) => o.BotMode = Mode(v),
-            "policy"));
-
         // ⚠️ A LIST, not a path, since 2026-09-07 — the shipped bundle is two
         // checkpoints driving disjoint class sets, and one file cannot express two
         // sets. ⛔ Which means a checkpoint whose path contains a COMMA cannot be
@@ -1079,13 +1072,6 @@ public static class ServerSettings
             + "none, arena-last (shuffle but do not open on an arena map), or any."),
     };
 
-    /// <summary>
-    /// ⚠️ <b>The numbers are part of the contract</b> — a sweep over 0..3 is how a
-    /// bench harness asks for each arm in turn, so <see cref="BotMode"/>'s values
-    /// must not be renumbered.
-    /// </summary>
-    internal static BotMode ParseBotMode(string value) => Mode(value);
-
     public static HandoverRule ParseHandoverRule(string value) => value.Trim().ToLowerInvariant() switch
     {
         "macrotask" => HandoverRule.MacroTask,
@@ -1101,15 +1087,6 @@ public static class ServerSettings
         "red" => Team.Red,
         "blue" => Team.Blue,
         _ => throw new FormatException($"Bots.BrainTeam: '{value}' is not a brain team. both, red or blue."),
-    };
-
-    private static BotMode Mode(string value) => value.Trim().ToLowerInvariant() switch
-    {
-        "scripted" or "0" => BotMode.Scripted,
-        "policy" or "hybrid-policy" or "2" => BotMode.Policy,
-        _ => throw new FormatException(BotModes.Removed(value) is { } removed
-            ? $"Bots.Mode: {removed}"
-            : $"Bots.Mode: '{value}' is not a bot mode. scripted (0) or policy (2)."),
     };
 
     /// <summary>

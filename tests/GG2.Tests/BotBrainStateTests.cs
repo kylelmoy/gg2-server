@@ -27,8 +27,8 @@ public sealed class BotBrainStateTests
 {
     /// <summary>An all-scripted server names the scripted brain, and no tier.</summary>
     /// <remarks>
-    /// <b>A brain, not the absence of one.</b> Bot mode <c>scripted</c> is arm 1
-    /// and a complete bot; an empty or missing field here would read on the panel
+    /// <b>A brain, not the absence of one.</b> The scripted layer is a complete
+    /// bot, and what a server runs when it finds no checkpoint; an empty or missing field here would read on the panel
     /// as a server whose brain could not be determined.
     /// </remarks>
     [Fact]
@@ -41,11 +41,10 @@ public sealed class BotBrainStateTests
 
         var bots = Bots(harness);
 
-        Assert.Equal("scripted", bots.GetProperty("mode").GetString());
         Assert.Equal("scripted", bots.GetProperty("brain").GetString());
         Assert.Empty(bots.GetProperty("tiers").EnumerateArray());
 
-        // ⛔ Absent, not "humans". Mode `scripted` has no engagement gate at all,
+        // ⛔ Absent, not "humans". Scripted bots have no engagement gate at all,
         // and a field naming one would describe a restriction that does not exist.
         Assert.False(bots.TryGetProperty("engage", out _));
 
@@ -70,7 +69,6 @@ public sealed class BotBrainStateTests
 
         var bots = Bots(harness);
 
-        Assert.Equal("policy", bots.GetProperty("mode").GetString());
         Assert.Equal("gg2-sim:" + PolicyFixture.Label, bots.GetProperty("brain").GetString());
 
         var tier = Assert.Single(bots.GetProperty("tiers").EnumerateArray());
@@ -133,7 +131,6 @@ public sealed class BotBrainStateTests
 
         var parsed = CommandLine.Parse(
         [
-            "--bot-mode", "policy",
             "--policy", checkpoints[0],
             "--policy", checkpoints[1],
             "--bot-class-policy", PolicyFixture.SoldierAssignment + "," + PolicyFixture.ScoutAssignment,
@@ -178,7 +175,7 @@ public sealed class BotBrainStateTests
     {
         string[] arguments =
         [
-            "--bot-mode", "policy", "--policy", PolicyFixture.Checkpoint,
+            "--policy", PolicyFixture.Checkpoint,
             "--bot-class-policy", PolicyFixture.SoldierAssignment + ",Heavy=" + PolicyFixture.Label + ",Quote=" + PolicyFixture.Label,
             .. engagesBots ? new[] { "--bot-engages-bots" } : [],
         ];
