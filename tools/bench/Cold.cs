@@ -5,8 +5,8 @@ using GG2.Maps;
 namespace Bench;
 
 /// <summary>
-/// The FIRST load in a cold process — which is what a worker pays, because
-/// gg2-rl rebuilds its whole pool every iteration.
+/// The FIRST load in a cold process — which is what a training worker pays
+/// when it rebuilds its whole pool every iteration.
 /// </summary>
 /// <remarks>
 /// Everything else in this bench warms up first and so measures steady state.

@@ -6,11 +6,11 @@ namespace GG2.Tests;
 /// <summary>
 /// Phase 0's exit criterion: decode every built-in map and match
 /// the JavaScript walkmask decoder cell-for-cell on all of them
-/// (docs/PLAN.md).
+/// (docs/STATUS.md).
 /// </summary>
 /// <remarks>
 /// This is a real test with a real oracle. <c>walkmask.js</c> is the decoder
-/// <c>gg2-nav-gen</c> builds nav graphs with, and a window of its output was
+/// the original nav generator builds nav graphs with, and a window of its output was
 /// checked against <c>collision_point</c> in the live game — so agreement here
 /// is agreement with the engine, not just with another guess at the format.
 /// </remarks>

@@ -72,7 +72,7 @@ internal readonly record struct NavInstance(
 /// sizes appear here as well as in <c>ColliderSprites</c>, and
 /// <c>NavInstanceTests</c> asserts the two agree and that the reference's own
 /// sprite XML still declares origin (0, 0) with a full-image RECTANGLE mask.
-/// That last check is what <c>gg2-nav-gen</c> did at run time by reading the
+/// That last check is what the original nav generator did at run time by reading the
 /// checkout; this port cannot, because it ships without one.
 /// </para>
 /// <para>
@@ -209,7 +209,7 @@ internal static class NavInstances
         //
         // ⚠️ ROUNDED, the way GM8 rounds an instance's position before deriving
         // its bbox — `SolidRect.FromEntity` does the same, and NavInstanceTests
-        // asserts the two agree. gg2-nav-gen used the raw doubles, which differs
+        // asserts the two agree. The original nav generator used the raw doubles, which differs
         // by up to a pixel on a FRACTIONAL scale (a 60x6 bar at yscale 0.3 ends
         // at 607.8, not 608). Measured 2026-09-03: rounding changes NOTHING on
         // any of the 25 shipped graphs, so the two were free to differ and did.

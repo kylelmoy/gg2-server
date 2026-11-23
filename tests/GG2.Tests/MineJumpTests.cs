@@ -9,7 +9,7 @@ namespace GG2.Tests;
 /// <see cref="NavEdgeType.StickyJump"/> edge is an arc of.
 /// </summary>
 /// <remarks>
-/// <b>Why this exists.</b> `gg2-nav-gen` built the sticky-jump edge fan on a
+/// <b>Why this exists.</b> The original nav generator built the sticky-jump edge fan on a
 /// <em>derived</em> impulse (<c>NAV_SJ_IMPULSE = 10</c>, giving
 /// <c>NAV_JUMP_V0 + NAV_SJ_IMPULSE = 18.3</c> px/tick and a claimed ~310 px
 /// apex), flagged as the one thing to measure before trusting the edges to a
@@ -51,7 +51,6 @@ public sealed class MineJumpTests
 
         // A real spawn point, not a coordinate: an arbitrary point can land the
         // demoman inside terrain, sitting at terminal velocity going nowhere.
-        // Same lesson as gg2-rl/docs/ENV.md's sampled placement.
         var slot = world.PlaceAtSpawn(PlayerClass.Demoman, Team.Red, 0);
 
         world.Drive(slot, null);
@@ -105,7 +104,7 @@ public sealed class MineJumpTests
     /// maps agreeing to three decimals is what says so.
     /// <para>
     /// <b>Pinned exactly, because a generator is costing arcs against it.</b>
-    /// If this moves, `gg2-nav-gen`'s sticky-jump envelope is stale and every
+    /// If this moves, the original nav generator's sticky-jump envelope is stale and every
     /// type-7 edge it has emitted needs regenerating — that is the whole reason
     /// the number is written down rather than merely bounded.
     /// </para>
@@ -134,7 +133,7 @@ public sealed class MineJumpTests
     /// <see cref="ClassStats.RocketJumpGravity"/> and the apex is
     /// <c>v² / 2g</c> — the same arithmetic <c>RocketModel</c> uses.
     /// <para>
-    /// <b>This is a finding for `gg2-nav-gen`, not a bug here.</b> Its
+    /// <b>This is a finding for the original nav generator, not a bug here.</b> Its
     /// <c>NAV_SJ_IMPULSE = 10</c> was derived, it says so, and it asked for this
     /// number before its edges were trusted to a bot. The answer is that the
     /// envelope is about 60% too generous, so some fraction of its 6,497 edges

@@ -189,7 +189,7 @@ public sealed class PathFollowerFixtureTests(Xunit.Abstractions.ITestOutputHelpe
         //
         // Pinned figures: 1,786 ticks, 39 re-plans, 0 stuck fires, 10 off-route
         // events, 0 blacklists. This is one of the project's exactly-pinned
-        // end-to-end bot measurements (see CLAUDE.md); a failure here is a
+        // end-to-end bot measurements (see CONTRIBUTING.md); a failure here is a
         // re-record, not a broken test — confirm the change was intended before
         // updating the numbers.
         //

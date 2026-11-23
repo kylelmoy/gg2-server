@@ -120,7 +120,7 @@ across `Player`, `Character`, weapons, `MovingPlatform` and `HUD`.
 `github.com/kylelmoy/Gang-Garrison-2` (branch `bot-route-variety`) — the
 reference checkout is stock upstream GG2 and has none of `Scripts/Bots/`,
 `Scripts/BotNav/`, the `BOT_*`/`NAV_*` constants, or `Documentation/Bots.md`. See
-CLAUDE.md, "Reading the reference", for the full picture. This port's bot layer
+CONTRIBUTING.md, "Reading the reference", for the full picture. This port's bot layer
 has since diverged from the fork's, so nothing here is a specification; it is a
 map of where the ideas came from. Every other section of this file indexes the
 stock tree and is accurate.
@@ -141,7 +141,7 @@ obvious format. Do not re-derive it by hand.
 | Bot behaviour scenarios (port the suite) | `tools/bot-scenarios.js`, `tools/botscenario.js` |
 | Nav method and measured results | `docs/NAVMETHOD.md`, `docs/NAVLOG.md` |
 | GM8/GML gotchas that cost real debugging time | `GML.md` |
-| Live-game control (bridge, MCP tools) | `CLAUDE.md` |
+| Live-game control (bridge, MCP tools) | `docs/TRAPS-LIVEGAME.md` |
 
 The bridge's GML notes are worth reading once even though no GML is being written
 here: several entries are about engine behaviour the port has to reproduce, not

@@ -18,7 +18,7 @@ namespace GG2.Tests;
 /// every hit is decided against.
 /// <para>
 /// Measured over all seven projectile sprites at 144 angles each. Regenerate
-/// with <c>node gg2-samplers/sample-rotated-box.js</c>.
+/// with a live-game sampler.
 /// </para>
 /// </remarks>
 public sealed class RotatedBoxSampleTests

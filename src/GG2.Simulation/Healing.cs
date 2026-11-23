@@ -340,10 +340,9 @@ public static class Healing
             // "chosen, not swept" — constants and tables rather than branch
             // conditions — so a bump here would be a hand-made claim that every
             // existing checkpoint is now dated. Skipped because the change
-            // cannot reach training: nothing in gg2-rl's GG2.Env sets SetupTimer or
+            // cannot reach training: no training environment sets SetupTimer or
             // AttackDefend, so both sit at their default(WorldState) values and
-            // this branch is unreachable there, and the gg2-rl nets trained no
-            // Medic. Those nets are retired; a gg2-sim net carries no stamp, so
+            // this branch is unreachable there. A .gg2p net carries no stamp, so
             // the question no longer has a checkpoint to protect.
             var setup = state.AttackDefend && state.SetupGatesClosed;
 

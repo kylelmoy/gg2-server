@@ -944,7 +944,7 @@ public sealed class PathFollowerTests
     /// gate that demands readiness on every tick closes on the tick after the
     /// placement, the abandon branch throws the setup away, and the bot never
     /// jumps. Measured across 48 real edges on four maps from
-    /// <c>gg2-nav-gen</c>'s sticky cache: <b>zero sticky jumps taken</b>.
+    /// the original nav generator's sticky cache: <b>zero sticky jumps taken</b>.
     /// <para>
     /// <b>The synthetic tests could not see it because their fixture weapon is
     /// permanently ready</b> — <c>Loaded()</c> sets <c>ReadyToShoot</c> once and
@@ -1004,7 +1004,7 @@ public sealed class PathFollowerTests
     /// <para>
     /// <b>Fixing it did not change any real flight</b>, which is recorded
     /// rather than hidden: it is a correct policy and it was not the thing
-    /// refusing `gg2-nav-gen`'s edges. See docs/TRAPS-BOTS.md.
+    /// refusing the original nav generator's edges. See docs/TRAPS-BOTS.md.
     /// </para>
     /// </remarks>
     [Fact]

@@ -7,8 +7,7 @@ namespace GG2.Tests;
 /// in the air and held for the ground, paired by edge.
 /// </summary>
 /// <remarks>
-/// A measurement, not a gate; skipped in the suite. <c>gg2-rl</c>
-/// <c>docs/PLAN.md</c>, N13. ⚠️ The sweep places a bot a few pixels above some
+/// A measurement, not a gate; skipped in the suite. ⚠️ The sweep places a bot a few pixels above some
 /// nodes, so a held timer can plan from the node it lands on rather than the
 /// one it was placed over: those flights are counted apart, as a change of
 /// what the sweep measures and not of how the bot flies.

@@ -6,7 +6,7 @@ Both arguments are BENCH_PERMAP tables, taken at different match counts.
 
 WHY THIS EXISTS
 ---------------
-`gg2-rl` asked whether a per-map sign test at 40 matches an arm is supported,
+The question was whether a per-map sign test at 40 matches an arm is supported,
 because phase 4 had three maps flip between 40 and 400 -- one reversing sign.
 Those were WIN share, whose unit is decided matches (~38 at n=40, so twelve
 points is five matches).  Death share counts DEATHS, so its per-map denominator
@@ -14,7 +14,7 @@ is in the hundreds and may be perfectly stable.  Nobody had checked.
 
 THE REFINEMENT THAT DECIDES WHAT TO RECORD
 ------------------------------------------
-`gg2-rl` again, and it changes the output rather than the method:
+A second point, and it changes the output rather than the method:
 
     DIRECTION STABILITY IS NOT A PROPERTY OF n.  It is a property of EFFECT SIZE
     relative to noise.  So "directions agreed at n=40" licenses only a comparison

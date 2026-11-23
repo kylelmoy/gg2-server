@@ -935,7 +935,7 @@ public sealed class RocketTests
     /// The set of already-passed team-mates is renumbered when somebody leaves.
     /// </summary>
     /// <remarks>
-    /// CLAUDE.md's rule: anything that names a roster slot has to move with the
+    /// CONTRIBUTING.md's rule: anything that names a roster slot has to move with the
     /// roster. Without it a rocket that had already flown through slot 3 would
     /// start charging slot 3's replacement — or stop charging the stranger who
     /// slid into the index.

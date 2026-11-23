@@ -14,7 +14,7 @@ namespace GG2.Bots;
 /// <b>re-parsing the nav cache</b> — 5.1 ms on <c>ctf_truefort</c>, of which
 /// 4.8 ms is the 2 MB nav text. An episode of 120 decisions is about 0.9 ms of
 /// simulation, so the reload cost several times more than the episode it
-/// started. See <c>gg2-rl/docs/ENV.md</c>, "the reset reload".
+/// started.
 /// <para>
 /// <b>What is shared is exactly what is deeply immutable, and nothing
 /// else.</b> <see cref="LevelMap"/> is <c>init</c>-only throughout — its
@@ -67,7 +67,7 @@ public sealed class ScenarioResources
     /// <remarks>
     /// <b>The nav directory is part of the key.</b> Two callers asking for the
     /// same map with different nav directories want different graphs, and a
-    /// caller passing null wants none — <c>gg2-nav-gen</c> edits the reference
+    /// caller passing null wants none — the original nav generator edits the reference
     /// tree, so "the nav directory" is not a constant of the process.
     /// </remarks>
     public (LevelMap Map, NavGraph? Nav) Get(string map, int area, string mapDirectory, string? navDirectory)

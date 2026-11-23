@@ -35,7 +35,7 @@ public static class DamageApi
     /// healing ramp to a shot that did nothing to it.
     /// </returns>
     /// <summary>
-    /// <c>dealDamage</c>, plus the per-tick accumulation `gg2-rl/gg2-rl/docs/ENV.md` needs.
+    /// <c>dealDamage</c>, plus the per-tick accumulation a reward signal needs.
     /// </summary>
     /// <remarks>
     /// <b>The parameters are required rather than optional deliberately.</b>

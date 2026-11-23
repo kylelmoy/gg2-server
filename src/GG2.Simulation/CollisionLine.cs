@@ -23,7 +23,7 @@ namespace GG2.Simulation;
 /// <para>
 /// Measured across 13,702 samples on <c>ctf_truefort</c> —
 /// <c>tests/GG2.Tests/Fixtures/collision-line-samples.json</c>, regenerate with
-/// <c>node gg2-samplers/sample-collision-line.js</c> — covering seven probe boxes at
+/// a live-game sampler — covering seven probe boxes at
 /// both coordinate parities, positive, fractional and <b>negative</b> scales,
 /// an off-centre sprite origin, four classes of live character at both facings,
 /// and the map's own precise 6× mask. Exact on all of them, with no
@@ -31,7 +31,7 @@ namespace GG2.Simulation;
 /// </para>
 /// <para>
 /// The structure follows GM8's, which the rest of this repo would normally
-/// refuse to do (CLAUDE.md: "transcribe GML arithmetic, not GML structure").
+/// refuse to do (CONTRIBUTING.md: "transcribe GML arithmetic, not GML structure").
 /// It is transcribed here because the walk <em>is</em> the arithmetic: the
 /// order of clip, round and step decides the answer, and there is no closed
 /// form that reproduces it.

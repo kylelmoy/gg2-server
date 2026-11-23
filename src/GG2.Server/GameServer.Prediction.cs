@@ -10,7 +10,7 @@ namespace GG2.Server;
 /// <b>Everything here is per connection and only for a connection that sent
 /// <c>PREDICT_HELLO</c>.</b> A stock client never sends one, so it receives the
 /// same bytes and its inputs coalesce exactly as before; that is the "cannot see
-/// the difference at all" arm of the rule in CLAUDE.md.
+/// the difference at all" arm of the rule in CONTRIBUTING.md.
 /// <para>
 /// ⚠️ <b>The ack's meaning rests on <see cref="Tick"/>'s order</b>: consume, then
 /// gather and apply, then <c>WriteStateUpdate</c>, then the ack, then the flush.

@@ -787,7 +787,7 @@ public sealed class BotObjective
     /// "where this bot stands is the objective layer's decision rather than this
     /// one's". <b>So a goal of "walk onto the enemy" walks a soldier to point
     /// blank and leaves it there, permanently, not firing</b>: measured in
-    /// <c>GG2.Env</c>'s duels as 250 decisions of walking, arrival 59px away
+    /// training duels as 250 decisions of walking, arrival 59px away
     /// against a band of 110, and zero shots.
     /// </para>
     /// <para>
@@ -829,7 +829,7 @@ public sealed class BotObjective
         {
             // NearestEnemies is ordered, so the first live one is the nearest.
             // It skips empty slots inside its own sweep, so this costs the same
-            // whatever the population — see gg2-rl/docs/ENV.md's extraction measurement.
+            // whatever the population.
             Span<int> nearest = stackalloc int[4];
             var count = world.NearestEnemies(slot, nearest);
 
@@ -1012,8 +1012,8 @@ public sealed class BotObjective
         // contests the enemy's hill at all. docs/TRAPS-BOTS.md, "Dual King of the
         // Hill is unwinnable by bots".
         //
-        // THE ONE PLACE THIS FILE READS GameMode, and the reason is the one
-        // `gg2-rl` drew: entity identification works while the objective is a
+        // THE ONE PLACE THIS FILE READS GameMode, and the reason is this:
+        // entity identification works while the objective is a
         // property of the LAYOUT, and dkoth's is a property of the SCORING.
         // Two capture points is an identical entity signature to a two-point
         // Control Points map; what differs is that Rounds.StepDkoth runs your

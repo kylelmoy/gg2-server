@@ -106,7 +106,7 @@ two ticks of staleness:
 
 **No cheap rule beats repeat-last-key**, and one of them cannot differ from it
 at all: `HoldNoJump` is byte-identical because a jump fires on the PRESSED edge
-(`CLAUDE.md`), so a held jump key never fires twice. A missed jump is always a
+(`CONTRIBUTING.md`), so a held jump key never fires twice. A missed jump is always a
 press the predictor did not know about, never a stale one it kept holding.
 
 Dropping the attack bits does not move a character either, which is the

@@ -1,6 +1,6 @@
 # Private rooms
 
-A player in gg2-client asks for a server for themselves and their friends,
+A player in the native client asks for a server for themselves and their friends,
 gets a short code to share, and the room goes away once everybody has left.
 Nobody hosts from a phone. This is the industry's session-based dedicated
 server pattern (Agones allocation, GameLift game sessions, PlayFab
@@ -15,20 +15,20 @@ each. Nothing else in this file exists until its row says so.
 | 2 | The room host: one process, one port, many rooms | **Built** as a library (`RoomHost`, `RoomFrontDoor`, `SharedNav`, `SharedPolicies`). `RoomHostTests` drive real sockets through the one port. **Live, 2026-11-22**: a stock GM8 client joined a room created over the API (`gg2-server rooms` with the fleet's `common.ini`, Windows, loopback) with the code as its password, in lower case with spaces; got the room's map, its policy bots filled to six, chat, a character on blue; a code naming no room showed the stock "Incorrect Password."; the emptied room ended 120 s after the client left and its code went 404. Not yet run on a VPS or from another machine |
 | 3 | The dispatcher API, inside the room host | **Built**: `gg2-server rooms`. `RoomApiTests` create over real HTTP and join with the returned code over the game port. No authentication; a create is limited per address (`RoomCreateLimitTests`) |
 | 4 | Device check and the ban list | **deferred** (no Apple developer key yet); the per-address create limits stand in |
-| 5 | gg2-client: create, join by code | not started |
+| 5 | the native client: create, join by code | not started |
 | 6 | Fleet rollout: one unit and one port per VPS | **Drain built**: `--drain-file`, exit 4, `deploy.sh` drains a `<service>-rooms` sibling instead of restarting it, `deploy.sh --print-rooms-unit` (`RoomHostTests`' drain tests, `RoomApiTests.ADrainingHostRefusesCreates`; live on Windows loopback: an old marker ignored at startup, a fresh one refused creates and the host exited 4 when its room ended). Not installed on any VPS; no TLS proxy |
 
 ## Where rooms run
 
 **On the three VPSes only**: `gg2-us-west`, `gg2-us-east`, `gg2-de`. Not on
-barbara, which is a home connection. Each VPS also runs its public fleet
+the home server, which is a home connection. Each VPS also runs its public fleet
 server, and that server's slots come first: the room host's capacity check is
 what protects them.
 
 ## The shape
 
 ```
-gg2-client ──HTTPS──> room host (one process per VPS) ──in memory──> room
+the native client ──HTTPS──> room host (one process per VPS) ──in memory──> room
      │                    │ game port: the front door
      └─── GG2 TCP ────────┘ routes each connection by its password
 ```
@@ -319,7 +319,7 @@ Bold is the default. Fixed for every room:
 | `Password` | the code | The code is the invitation |
 | `[Bots] Mode` and nets | the base `--config`'s; scripted or policy only | Same bots as the public servers when the base is the fleet's `common.ini` |
 | `ServerName` | the base's, or `Private room` where it names none | |
-| `[Chat] Enabled` | 1 | gg2-client has native chat |
+| `[Chat] Enabled` | 1 | the native client has native chat |
 | `QuickUpdateInterval` | 7 (stock) | |
 | `[Analytics]`, recording, `[Web]`, control port | off | A private room records nothing about who played |
 | `ExitWhenEmptySeconds`, `MaxLifetimeMinutes` | 120, 360 | Step 1 |
@@ -327,7 +327,7 @@ Bold is the default. Fixed for every room:
 **Shipped maps only**: a custom map would need a download for stock clients
 and a nav graph built at the map change, and neither is worth it for this.
 
-### 5. gg2-client
+### 5. the native client
 
 "Create private game" (region picker, map or rotation, bots, team size) and
 "Join by code". Joining answers the password request with the code. The
@@ -444,7 +444,7 @@ handover, not during.
 ### When hosts belong to different people
 
 Copying the Apple key to every host is the right call while all hosts are
-Kyle's. If hosts ever belong to several people, each copy is a key that can
+The maintainer's. If hosts ever belong to several people, each copy is a key that can
 read and set every device's ban bits, held by someone else. The change then is
 **one token service** that holds the Apple key, verifies a device once, and
 issues a short-lived signed room token. Every host, whoever runs it, checks
@@ -487,6 +487,6 @@ hitting is unlikely even before the rate limit.
 
 ## Open questions
 
-- **Android**, if gg2-client ever ships there: Play Integrity is the
+- **Android**, if the native client ever ships there: Play Integrity is the
   equivalent of App Attest, but nothing like DeviceCheck's reinstall-proof
   bits exists, so a ban there would be weaker.

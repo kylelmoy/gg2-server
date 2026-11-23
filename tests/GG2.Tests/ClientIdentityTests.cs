@@ -23,7 +23,7 @@ namespace GG2.Tests;
 /// <b>Nothing in this repo modelled that before.</b> <c>ServerStream</c> read
 /// <c>JOIN_UPDATE</c> into <c>OwnPlayerId</c> and then left it alone, so it went
 /// stale the moment a lower slot left — a dormant accessor nothing consumed,
-/// which is exactly the shape <c>CLAUDE.md</c> warns about: no test could go red
+/// which is exactly the shape <c>CONTRIBUTING.md</c> warns about: no test could go red
 /// over it. docs/PARITY.md, "The gap every automated gate has".
 /// </para>
 /// <para>

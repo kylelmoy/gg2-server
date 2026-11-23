@@ -1,18 +1,18 @@
 # What is built, and what proves it
 
-The phase-by-phase record: what each phase of [`PLAN.md`](PLAN.md) landed, and
-the evidence that says so. `PLAN.md` is the plan and the exit criteria,
-[`PARITY.md`](PARITY.md) is the method, and this file is the result.
+The phase-by-phase record: what each phase of the port landed, and
+the evidence that says so. [`PARITY.md`](PARITY.md) is the method, and this
+file is the result.
 
 **This is a record, not a log.** It carries the claims a reader might act on —
 "the trace replays with zero error", "the bots cost half a percent of a tick" —
 and each should say what would show it has gone stale.
 
 **The port is finished.** Phases 0 to 8 are done and every exit criterion is
-met. Phase 9's environment seam moved to `gg2-rl`; what remains here is the
-in-process policy runner, and its section below is what has been measured
-about it. [`PLAN.md`](PLAN.md) is closed, and the work from here is bug fixes
-and new features rather than phases.
+met. Phase 9's training-environment seam moved out of this repository; what
+remains here is the in-process policy runner, and its section below is what
+has been measured about it. The work from here is bug fixes and new features
+rather than phases.
 
 | Phase | What landed | State |
 |---|---|---|

@@ -247,5 +247,4 @@ if (Environment.GetEnvironmentVariable("BENCH_RESET") == "1")
 }
 
 Console.Error.WriteLine("no mode selected: set one of the BENCH_* variables in README.md.");
-Console.Error.WriteLine("The GG2.Env throughput benchmark this used to run lives in gg2-rl, env/bench.");
 return;

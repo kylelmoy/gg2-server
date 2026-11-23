@@ -9,7 +9,7 @@
 #   dotnet run --project src/GG2.Host -- navgen
 #   dotnet test GG2.sln
 #
-# What is left for this script is the OTHER generator. gg2-nav-gen (the Node
+# What is left for this script is the OTHER generator. The original nav generator (the Node
 # one, still its own repository) writes <map>_a<area>.txt straight into
 # gg2-server/nav — the same directory that holds the checked-in .txt.gz files.
 # The loader prefers the plain file (NavCache.FindFile: what somebody just wrote

@@ -35,7 +35,7 @@
 //                  multi-area map is the combination neither plan reaches alone.
 //   --plan churn   roster churn: bot fill up and down, which adds and removes
 //                  players from the MIDDLE of the roster. That is the
-//                  compaction path — CLAUDE.md's "roster indices are positional
+//                  compaction path — CONTRIBUTING.md's "roster indices are positional
 //                  and shift on PLAYER_LEAVE ... intermittently" — and it is
 //                  only observable to a client watching some OTHER slot move,
 //                  so it wants two real clients attached, not one.

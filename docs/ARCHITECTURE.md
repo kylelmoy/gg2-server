@@ -138,7 +138,7 @@ shape.** `tools/bench/README.md` has the measurement traps.
   pixel of travel, which is why the walkmask layout above was chosen: the cost
   is the call count, not the call. `Movement.GoodMoveContactSolid` deliberately
   stops when a step leaves both coordinates unchanged rather than looping
-  forever — see "Non-negotiables" in `CLAUDE.md` and `docs/TRAPS-SIMULATION.md`,
+  forever — see "Non-negotiables" in `CONTRIBUTING.md` and `docs/TRAPS-SIMULATION.md`,
   "the crawl that could not finish". A binary search on the crawl is unsound:
   the free/blocked predicate along a path is not monotone (a character can pass
   a pillar and land in open space beyond it), so only a *conservative* pre-test
@@ -186,7 +186,7 @@ shape.** `tools/bench/README.md` has the measurement traps.
   sooner. The two only work together — inflating the heuristic without the
   closed-set skip makes the search slower, not faster, because an inconsistent
   heuristic re-opens far more nodes. This is a behaviour change (not just a
-  speed win) and is allowed: `CLAUDE.md` puts `src/GG2.Bots/` outside "the
+  speed win) and is allowed: `CONTRIBUTING.md` puts `src/GG2.Bots/` outside "the
   reference is the specification". Route *completeness* is unaffected (every
   reachable goal still finds a route); only which equal-or-near-cost route comes
   back can differ. `NavRouteIdentityTests` digests every route over all shipped
@@ -323,7 +323,7 @@ is the claim the project actually needs.
 Two things carried over rather than reinvented:
 
 - **The nav graph generator lives outside the game**, and the port **reads its
-  cache** (phase 7 item 2): `gg2-nav-gen` builds `botnav/<map>_a<area>.txt`
+  cache** (phase 7 item 2): the original nav generator builds `botnav/<map>_a<area>.txt`
   offline — checked into this repo's `nav/` (gzipped) — and `GG2.Bots.NavCache`
   loads it and `GG2.Bots.NavGraph` is the model, with the coordinate
   conversions, the node lookup, the gate rules and the two indices
@@ -416,7 +416,7 @@ the accept, the joining state machine and the flush all still running.
 
 ⚠️ **Anything a client can also do goes through `Execute(RosterEntry,
 PlayerCommand)`** — the `command` verb — rather than being reimplemented.
-CLAUDE.md's "three places" rule, honoured by not adding a fourth. What is
+CONTRIBUTING.md's "three places" rule, honoured by not adding a fourth. What is
 control-port-only is the operator actions no client can ask for: freeze, step,
 teleport, map change, bot count, speed.
 

@@ -81,9 +81,9 @@ public sealed record ChatSettings
 /// <para>
 /// <b>Two formats on that id.</b> A stock client speaks v6 (<c>plugin.gml</c>,
 /// <c>chat_api.gml</c>, <c>vote_api.gml</c> in that zip). A native client
-/// (gg2-client) sends <see cref="Envelope"/> followed by a HELLO, and from then on
+/// sends <see cref="Envelope"/> followed by a HELLO, and from then on
 /// every message to and from it is one native message behind that byte. The
-/// native format is <c>PROTOCOL.md</c> version 1 in gg2-chat2026, which is the
+/// native format is version 1 of the native chat protocol, which is the
 /// spec both ends cite. v6's client kinds are 0-3 and its host ignores any other
 /// first byte (<c>plugin.gml</c> user event 0 has no <c>default</c>), so a native
 /// client may greet any <c>chat</c> server this way.
@@ -104,7 +104,7 @@ public sealed record ChatSettings
 /// <para>
 /// ⛔ <b>Nothing is sent to a player who has not greeted</b>, in either format. A
 /// GM8 client without the plugin raises a fatal error on a plugin packet it has no
-/// queue for, and a client that joined without chat (gg2-client on iOS) must stay
+/// queue for, and a native client that joined without chat must stay
 /// silent. And <b>an enveloped frame never reaches a v6 player</b>: v6 would read
 /// <see cref="Envelope"/> as player 128.
 /// </para>
@@ -116,7 +116,7 @@ public sealed record ChatSettings
 /// v6 at both ends.
 /// </para>
 /// <para>
-/// The host half's logic is transcribed from the GML host in gg2-chat2026
+/// The host half's logic is transcribed from the native chat plugin's GML host
 /// (<c>src/host/</c>, <c>src/commands/</c>, <c>src/votes/</c>); a method citing a
 /// <c>host/*.gml</c> file names the file it stands for.
 /// </para>

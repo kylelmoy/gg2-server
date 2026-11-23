@@ -10,8 +10,7 @@ namespace GG2.Tests;
 /// why the search from where they stand fails.
 /// </summary>
 /// <remarks>
-/// A measurement, not a gate; skipped in the suite. <c>gg2-rl</c>
-/// <c>docs/PLAN.md</c>, N10: 94 stalls of 2 seconds or more in these 24 matches
+/// A measurement, not a gate; skipped in the suite. 94 stalls of 2 seconds or more in these 24 matches
 /// before, none after.
 /// </remarks>
 public sealed class OffRouteStallCensus(Xunit.Abstractions.ITestOutputHelper output)

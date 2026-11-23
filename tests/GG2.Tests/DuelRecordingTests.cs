@@ -5,9 +5,9 @@ using Xunit;
 namespace GG2.Tests;
 
 /// <summary>
-/// Recordings of a person (Kyle) playing barbara's duel server, kept in
-/// <c>Fixtures/duel/</c> as a corpus for gg2-client's replay tests, with the
-/// values that client asserts against pinned here so the two cannot drift.
+/// Recordings of a person playing a duel server, kept in
+/// <c>Fixtures/duel/</c> as a replay corpus, with the values a replaying
+/// client asserts against pinned here so the two cannot drift.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,17 +18,17 @@ namespace GG2.Tests;
 /// spawn rules.
 /// </para>
 /// <para>
-/// What each one holds. All four are TDM on a cell map, Kyle at slot 1 on red
-/// and his bot at slot 2 on blue, and each starts at the map change, so the
+/// What each one holds. All four are TDM on a cell map, the player at slot 1 on red
+/// and their bot at slot 2 on blue, and each starts at the map change, so the
 /// counts start at zero.
 /// </para>
 /// <list type="table">
-/// <item><c>20261119-duel_08</c>: 6c07968, Kyle on the iOS port as pyro; the
+/// <item><c>20261119-duel_08</c>: 6c07968, the player on a native client as pyro; the
 /// session that showed the client's double deaths. The ladder (renames to
 /// <c>Pyro N (Label)</c>), <c>QUICK_UPDATE</c> every 3rd tick, wins as a
 /// <c>PLAYER_SPAWN</c> for a live player, losses ending in the bot's
 /// BidFarewell class change, five <c>CAPS_UPDATE</c>s.</item>
-/// <item><c>20261113-duel_01</c>, <c>_02</c>, <c>_06</c>: 9a86ba1, Kyle as
+/// <item><c>20261113-duel_01</c>, <c>_02</c>, <c>_06</c>: 9a86ba1, the player as
 /// "Vindicator" on the stock client; no ladder (the bot is <c>[BOT] Class</c>),
 /// <c>QUICK_UPDATE</c> every 7th tick, wins and BidFarewell losses as above.</item>
 /// </list>

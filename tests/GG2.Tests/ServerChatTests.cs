@@ -10,7 +10,7 @@ namespace GG2.Tests;
 /// <see cref="ServerChat.Envelope"/>, against a host that is not a server.
 /// </summary>
 /// <remarks>
-/// The native wire's reference host is the GML host in gg2-chat2026, verified live
+/// The native wire's reference host is the chat plugin's GML host, verified live
 /// against a GM8 server with its <c>tests/live.js</c>; every expected string below
 /// is one that run read back out of a real client or the reply text the GML sends,
 /// so a native client cannot tell the two hosts apart. <c>ServerChatV6Tests</c>

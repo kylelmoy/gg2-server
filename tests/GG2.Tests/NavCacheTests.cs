@@ -225,7 +225,7 @@ public sealed class NavCacheTests
     /// The edge index groups a node's outgoing edges into one contiguous slice.
     /// </summary>
     /// <remarks>
-    /// The cache guarantees the edge list is sorted by from-node — gg2-nav-gen
+    /// The cache guarantees the edge list is sorted by from-node — the original nav generator
     /// counting-sorts it as its last step — which is what lets the index be two
     /// numbers instead of a list. A node with no outgoing edges is an empty
     /// span, not a slice starting at edge 0: <c>navEdgeIndex.gml</c> defaults

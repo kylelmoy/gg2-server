@@ -526,7 +526,7 @@ internal static class CommandLine
 
                 // The round rules. Without these a round cannot be played to
                 // completion in a session — the default clock is fifteen
-                // minutes — which is what docs/PLAN.md's phase 6 exit criterion
+                // minutes — which is what docs/STATUS.md's phase 6 exit criterion
                 // asks for. ⚠️ Both limits are floored at 1 here, exactly as
                 // game_init.gml floors the ini, so --time-limit 0 is a ONE-MINUTE
                 // round and not an endless one. The "0 means no limit" escape
@@ -1437,7 +1437,7 @@ internal static class CommandLine
         asked for, because it executes commands against a live game.
 
         The world is simulated: characters, weapons, all eight gamemodes and the
-        map rotation. See docs/PLAN.md.
+        map rotation. See docs/STATUS.md.
         """);
 
     /// <summary>

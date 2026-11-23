@@ -64,7 +64,7 @@ public readonly record struct NavQuery(
     /// <c>canSticky</c>, so a cache containing type-7 edges routes <em>every
     /// class</em> over them in the stock game — a medic walking to a takeoff to
     /// wait for a mine boost no medic can produce. That asymmetry is the whole
-    /// argument for `gg2-nav-gen` emitting them only behind a flag, into a cache
+    /// argument for the original nav generator emitting them only behind a flag, into a cache
     /// the game never reads. See its NOTES-STICKYJUMP.md.
     /// </remarks>
     public static bool CanAffordStickyJump(double hp) => hp > NavConstants.SjDamage;

@@ -52,11 +52,11 @@ public static class Tiers
         ("hum:5", 5, false),
 
         // Tier 5 wrapped in HumanizedBot's v5 preset, lazy between shots
-        // (HumanizeOptions.Lazy): gg2-rl phase 5, v5.
+        // (HumanizeOptions.Lazy).
         ("lazy:5", 5, false),
 
         // Tier 5 wrapped in HumanizedBot's D2 preset, the aim held while there is
-        // no target (HumanizeOptions.Hold): gg2-rl phase 5, D2.
+        // no target (HumanizeOptions.Hold).
         ("hold:5", 5, false),
     ];
 

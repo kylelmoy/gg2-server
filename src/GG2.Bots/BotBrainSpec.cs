@@ -81,7 +81,7 @@ public sealed record BotBrainSpec
     /// control share rises from 4.44% to 5.97%, death share improves by 0.60 ± 0.18
     /// points, and win share moves −0.87 ± 2.12 points. That is inside the
     /// pre-registered 1-point bar, but the interval cannot exclude a cost of about 3.
-    /// <c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, B2. NaN turns the band off.
+    /// NaN turns the band off.
     /// </remarks>
     public double ReleaseRange { get; init; } = DefaultReleaseRange;
 

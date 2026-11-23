@@ -7,7 +7,7 @@ namespace GG2.Tests;
 /// running engine: <c>AirBlastMaskS</c>'s reported box at both
 /// <c>image_xscale</c> signs, and <c>collision_circle</c> with a fractional
 /// centre. Every row below is a raw probe output
-/// (<c>gg2-samplers/probes/probe-airblast.js</c>, <c>probe-airblast2.js</c>) — none is
+/// (a live-game probe) — none is
 /// derived from the model it gates.
 /// </summary>
 /// <remarks>

@@ -18,7 +18,7 @@ namespace GG2.Tests;
 /// these.
 /// <para>
 /// <b>Six of one class each, three a side</b>, rather than one mixed roster.
-/// That is CLAUDE.md's bisect-the-roster shape: a framing error never points at
+/// That is CONTRIBUTING.md's bisect-the-roster shape: a framing error never points at
 /// its cause, so a stream that desynchronises in a single-class recording names
 /// the class by construction. The roster is forced with <c>botAdd</c> after
 /// <c>global.botsEnabled = 0</c> — <c>[Classlimits]</c> narrows what a bot

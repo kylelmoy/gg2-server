@@ -139,7 +139,7 @@ internal static class Evaluate
                 // match comes back 0-0 and unfinished — which reads exactly like a
                 // bot change that broke capturing. `eval` is where a bot change is
                 // MEASURED, so "the map had no graph" has to be the one thing it
-                // cannot quietly be measuring. CLAUDE.md: a match that ends is not
+                // cannot quietly be measuring. CONTRIBUTING.md: a match that ends is not
                 // a match that happened.
                 //
                 // The column still says which graphs were built rather than read,

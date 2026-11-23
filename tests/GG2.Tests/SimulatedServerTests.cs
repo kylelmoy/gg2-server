@@ -478,7 +478,7 @@ public sealed class SimulatedServerTests
     /// The roster compacts on <c>PLAYER_LEAVE</c> and so must the world: a slot
     /// index <em>is</em> a roster index. Getting this wrong hands a character to
     /// the wrong player, but only after somebody disconnects — the intermittent
-    /// off-by-one CLAUDE.md warns about, and one no static check catches.
+    /// off-by-one CONTRIBUTING.md warns about, and one no static check catches.
     /// </remarks>
     [Fact]
     public void ACharacterFollowsItsPlayerWhenTheRosterCompacts()

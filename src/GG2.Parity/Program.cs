@@ -57,7 +57,7 @@ internal static partial class Program
     /// that type for why the probe order is what it is. This project does not
     /// reference <c>GG2.Server</c>, and the resolver cannot live in
     /// <c>GG2.Maps</c> because <c>GG2.Simulation</c> references that and
-    /// CLAUDE.md keeps file access out of everything the simulation can reach.
+    /// CONTRIBUTING.md keeps file access out of everything the simulation can reach.
     /// <b>Change one, change the other.</b>
     /// </remarks>
     private static string DefaultMapDirectory()

@@ -593,7 +593,7 @@ public sealed class BladeTests
     /// <b>Measured against the running game</b>, by putting a
     /// real <c>Bubble</c> and a real <c>Shot</c> on the same point in open space
     /// and reading back which survived one frame later
-    /// (<c>gg2-samplers/probes/probe-bubble-pair.js</c>). All four rows agreed with
+    /// (a live-game probe). All four rows agreed with
     /// the port. That settles the question docs/SIMULATION.md had open: <b>GM8
     /// runs both instances' collision events</b>, and a projectile that
     /// destroyed itself in its own event is still seen by the other side's, so

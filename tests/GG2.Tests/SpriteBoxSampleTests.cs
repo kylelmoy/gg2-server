@@ -16,7 +16,7 @@ namespace GG2.Tests;
 /// and the briefcase's box from the PNGs' alpha, and
 /// <see cref="Generators.Box"/> from <c>GeneratorRedS</c>. This test asks the
 /// engine directly and pins all four to its answer. Regenerate the fixture with
-/// <c>node gg2-samplers/probes/probe-sprite-boxes.js</c>.
+/// a live-game probe.
 /// <para>
 /// The briefcase mattered most: <c>IntelTests</c> pins only
 /// <see cref="Intel.BoxLeft"/>, and docs/PARITY.md records that its other three

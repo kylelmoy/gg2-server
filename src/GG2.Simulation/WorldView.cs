@@ -29,7 +29,7 @@ namespace GG2.Simulation;
 /// <b>Nothing here is observable simulation.</b> A bot's arithmetic is not on
 /// the wire and no client re-derives it, so the queries below use ordinary
 /// doubles and squared distances rather than <see cref="Gml"/>'s fuzzy
-/// comparisons — CLAUDE.md, "compatible on the wire and in observable
+/// comparisons — CONTRIBUTING.md, "compatible on the wire and in observable
 /// simulation, free everywhere else". What they must be is <em>deterministic</em>,
 /// which is why every tie below is broken by roster index.
 /// </para>

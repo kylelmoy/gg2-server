@@ -189,7 +189,7 @@ came off the running game and have no bots in them.
 
 ### From a trace to training rows
 
-`gg2-env dataset <trace|dir>... --out <dir>` replays a recording through
+The trainer's dataset tool replays a recording through
 `GG2.Parity`'s `Replayer` — the same replay the parity fixtures run, so there
 is one path from a trace to a world — and writes `(observation, action)` as
 `.npy`. Human rows only unless `--include-bots`, and every row carries its own
@@ -361,7 +361,7 @@ incidental; the observation layout version; the action encoding version. Bumped
 whenever any of those changes — which will be often and early, and every bump
 invalidates every checkpoint. That is correct.
 
-**Where it lands.** Naturally with phase 4 in `PLAN.md`, since there is nothing
+**Where it lands.** Naturally with phase 4, since there is nothing
 to stamp before the physics exists. Do not defer it past that: a stamp added
 after the first checkpoints are trained cannot tell you which ones were valid.
 
@@ -381,8 +381,7 @@ for a change to control flow (e.g. in `Movement.cs`) that is real physics but
 touches no constant, so nothing else on the stamp's surface would move for it.
 **Bump it when you knowingly change what the simulation does**; do not bump it
 for a refactor, and exempt a change only when it has been *demonstrated*
-unobservable rather than argued to be. `gg2-rl/gg2-rl/docs/ENV.md`, "the third hand-bumped
-number", has the rule and the exemption that was used.
+unobservable rather than argued to be.
 
 **Round-trip formatting, so a one-ULP change moves it** — `Gml.PointSix` and
 its four siblings *are* gravity and the friction factors, and fifteen digits
@@ -394,7 +393,7 @@ policy after a restart.
 a broken test.** The question to answer before editing that line is which
 checkpoints it just invalidated.
 
-## 10. A `GG2.Env` project
+## 10. A training-environment project
 
 **Requirement.** A batch-stepping surface: N worlds advanced by one decision
 step per call, observations and rewards returned as one contiguous block; reset
@@ -412,9 +411,9 @@ Start with a local socket and length-prefixed binary frames. Shared memory is an
 optimisation to make once there is a measurement that justifies it.
 
 **Built and scoped.** Items 1, 2 and 6 — its three hard preconditions — all
-hold. Scope: duels only; v0 observation layout built to `gg2-rl/docs/DESIGN.md`'s
-sketch; action heads decoded server-side; rewards as components. Design is
-**`gg2-rl/gg2-rl/docs/ENV.md`**. Item 7's damage half — per-tick damage amounts via
+hold. Scope: duels only; a v0 observation layout; action heads decoded
+server-side; rewards as components. It lives with the trainer, outside this
+repository. Item 7's damage half — per-tick damage amounts via
 accumulators — was the one precondition gap found, and it is closed
 (see item 7).
 
@@ -443,13 +442,13 @@ observable at one instant each.
 the world, plays candidate short action sequences forward 15-30 ticks, scores
 each from the emitted damage events, restores, and plays the first action of the
 best sequence - replanning next decision rather than committing to the plan. Its
-action space is the same `EnvAction` heads `GG2.Env` decodes, so a decision it
+action space is the same `EnvAction` heads the training environment decodes, so a decision it
 logs is valid data for a policy and vice versa.
 
-**Why it is here and not in `gg2-rl`.** **It is a bot in its own right.** It
+**Why it is here and not in the trainer.** **It is a bot in its own right.** It
 is a better bot than this repo currently ships, it is the permanent evaluation
-baseline every later policy is measured against, and it is useful with `gg2-rl`
-deleted. It also wants `WorldState` internals and has to be fast in the tick
+baseline every later policy is measured against, and it is useful with the
+trainer deleted. It also wants `WorldState` internals and has to be fast in the tick
 loop, which is this document's own test for which side of the seam a thing lives
 on. Putting it in the trainer would make the trainer non-deletable.
 
@@ -457,7 +456,7 @@ on. Putting it in the trainer would make the trainer non-deletable.
 it for free. It is a **parity fuzzer**: a search systematically tries what no
 human would, so it finds physics-port bugs by exploiting them, and each exploit
 is a finding for `docs/PARITY.md` rather than something to suppress. And it gives
-`gg2-rl` phase 1 an exit criterion that can be checked - beat the ported scripted
+the trainer's first phase an exit criterion that can be checked - beat the ported scripted
 bot over 500 duels per class matchup at p < 0.01 - which is the cheapest possible
 test of whether the whole learning programme is worth continuing.
 
@@ -480,8 +479,8 @@ client prediction forks the world the same way (`docs/PREDICTION.md`).
   `SimPolicyController`) — a dense loop and an argmax per head, no tensor
   library and no dependency.
 - **No training loop, replay buffer, or environment API. Those live outside the
-  server.** `gg2-rl/env/GG2.Env/` is a *seam* — a socket and an observation writer —
-  not a trainer; the loop is `gg2-rl`'s.
+  server.** The training environment is a *seam* — a socket and an observation
+  writer — not a trainer; the loop is the trainer's.
 - **No end-to-end learned bot. The realistic target is a hybrid**: the scripted
   macro layer keeps objective selection, class choice and routing - roughly 2,000
   working lines in `botObjectiveUpdate.gml` and `botPathKeys.gml` - and only the
@@ -490,19 +489,18 @@ client prediction forks the world the same way (`docs/PREDICTION.md`).
   This is what shipped, and the measurement went further than the prediction:
   the policy is most valuable holding about **7%** of ticks, and widening its
   window past ~150px *loses the objective* while still improving combat. **The
-  narrow scope is not a cautious first step — it is the result.** `docs/BOTS.md`,
-  and `gg2-rl/gg2-rl/docs/ENV.md`, "Phase 4 re-measured".
+  narrow scope is not a cautious first step — it is the result.** `docs/BOTS.md`.
 - Nothing here changes the wire protocol or the simulation's observable
   behaviour. Every constraint above is on structure, not on what the game does.
 
 ## Where items 9-12 came from
 
-They are `gg2-rl/docs/CONTRACT.md`'s "What gg2-server does not yet promise".
-That repo is the trainer; this one owns the simulation, the env surface, the
-observation layout and the version stamp. The split is deliberate and the
-asymmetry is the point: anything needing `WorldState` internals, or needing to
-be fast in the tick loop, belongs here, and `gg2-rl` should be deletable without
-this repo losing a feature.
+They are what the trainer asked this repository to promise. The trainer lives
+elsewhere; this one owns the simulation, the env surface, the observation
+layout and the version stamp. The split is deliberate and the asymmetry is the
+point: anything needing `WorldState` internals, or needing to be fast in the
+tick loop, belongs here, and the trainer should be deletable without this repo
+losing a feature.
 
 ## Reference
 

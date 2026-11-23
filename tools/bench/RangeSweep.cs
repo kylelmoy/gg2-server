@@ -9,7 +9,7 @@ namespace Bench;
 /// Does decidedness fall as the policy's share of control rises?
 /// </summary>
 /// <remarks>
-/// <b><c>gg2-rl</c>'s hypothesis, made separable.</b> The 21-map table showed
+/// <b>A hypothesis, made separable.</b> The 21-map table showed
 /// the policy arm deciding 54 fewer matches than the control across 19 maps —
 /// 0.7 points in aggregate, which reads as nothing — and <c>gen_destroy</c>
 /// losing <b>22%</b> of its decided matches on its own: "matches get more
@@ -19,7 +19,7 @@ namespace Bench;
 /// one point against one point; if decidedness falls MONOTONICALLY as the
 /// engagement range (and with it the policy's share of ticks) rises, the policy's
 /// control is the cause. If it does not, something specific to that map is, and
-/// <c>gen_destroy</c> was already the closest miss in `gg2-rl`'s own duel audit
+/// <c>gen_destroy</c> was already the closest miss in the duel audit
 /// — 6.2% dead duels against a 5% tolerance — so a map-specific cause has a
 /// standing candidate.
 /// </para>

@@ -526,7 +526,7 @@ public sealed class BotPathState
     /// <remarks>
     /// Set when the bot launched because <see cref="FlightPredictor"/> said a
     /// held jump from here lands on the edge's destination, and cleared on the
-    /// ground or a change of edge. <c>gg2-rl</c> <c>docs/PLAN.md</c>, navigation.
+    /// ground or a change of edge.
     /// </remarks>
     public int HeldDir { get; set; }
 

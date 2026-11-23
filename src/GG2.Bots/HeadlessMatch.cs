@@ -12,7 +12,7 @@ namespace GG2.Bots;
 /// <remarks>
 /// <para>
 /// <b>This is the step function an environment wraps, not a win-rate harness.</b>
-/// <c>docs/PLAN.md</c>'s phase 9 records the decision and why it reaches back
+/// <c>docs/STATUS.md</c>'s phase 9 records the decision and why it reaches back
 /// into this file: retrofitting a batch harness into a stepped environment runs
 /// the expensive direction, which is the same asymmetry <c>docs/BOTAI.md</c>
 /// item 1 warns about for <c>WorldState</c>. So the surface here is
@@ -441,7 +441,7 @@ public sealed class HeadlessMatch : DrivenWorld
     /// Puts each bot's micro-controllers in front of its scripted layer.
     /// </summary>
     /// <remarks>
-    /// <b><c>gg2-rl</c>'s phase 4 architecture.</b> <b>AFTER
+    /// <b>AFTER
     /// <see cref="AssignRoles"/>, not instead of it.</b> The roles, the spread and
     /// the objective are configured on a <c>ScriptedBot</c> by type, and the
     /// scripted layer keeps every one of those jobs — a controller only takes keys

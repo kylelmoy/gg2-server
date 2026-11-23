@@ -9,7 +9,7 @@ namespace GG2.Simulation;
 /// </summary>
 /// <remarks>
 /// <b>The two primitives disagree about the same pair of instances, and the
-/// split is measured</b> (<c>gg2-samplers/sample-rotated-mask.js</c>, nine sprites by
+/// split is measured</b> (a live-game sampler, nine sprites by
 /// eighteen angles):
 /// <list type="bullet">
 /// <item><c>distance_to_object</c> — every splash radius and its falloff — is

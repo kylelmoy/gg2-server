@@ -17,7 +17,7 @@ namespace GG2.Bots;
 /// a fraction of the load time.
 /// </para>
 /// <para>
-/// ⚠️ <b>This is a binary format, and <c>CLAUDE.md</c>'s rule against one does
+/// ⚠️ <b>This is a binary format, and <c>CONTRIBUTING.md</c>'s rule against one does
 /// not cover it.</b> That rule is about re-encoding the GRAPH, where a binary
 /// layout was measured to save ~0.1% because deflate already removes what it
 /// would. This is an N² table of hop indices that no text encoding survives:

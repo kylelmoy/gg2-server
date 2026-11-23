@@ -45,7 +45,7 @@ internal delegate bool NavCanFly(int takeoff, double vx, double ticks, int landX
 /// of a drop), and not where it first arrives level with the target (true
 /// seventeen ticks before a steep climb lands).
 /// <para>
-/// ⚠️ <b><c>gg2-nav-gen</c> kept three copies of this — one per manoeuvre — and
+/// ⚠️ <b>The original nav generator kept three copies of this — one per manoeuvre — and
 /// this port has one.</b> That is a real departure and it was made on the
 /// strength of an oracle the JavaScript did not have: <c>NavGeneratorTests</c>
 /// regenerates all 25 checked-in graphs and compares them <em>byte for byte</em>

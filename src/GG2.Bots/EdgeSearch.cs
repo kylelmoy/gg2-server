@@ -9,8 +9,7 @@ namespace GG2.Bots;
 /// steps <see cref="FlightPredictor"/> takes.
 /// </summary>
 /// <remarks>
-/// A measurement first (<c>gg2-rl</c> <c>docs/PLAN.md</c>, "Navigation by search",
-/// NS): how far the follower is from the fastest inputs on an edge.
+/// A measurement first: how far the follower is from the fastest inputs on an edge.
 /// <para>
 /// ⚠️ <b>A beam is not exhaustive.</b> A found plan is an upper bound on the
 /// fastest, and a plan not found is "not found", not "impossible".

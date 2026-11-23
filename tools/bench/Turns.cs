@@ -10,7 +10,7 @@ namespace Bench;
 /// Where a bot's aim turns come from, in range: <c>BENCH_TURNS</c>.
 /// </summary>
 /// <remarks>
-/// <b>A diagnostic for <c>gg2-rl</c> phase 5, D.</b> Within 150px a bot turns about
+/// <b>A diagnostic.</b> Within 150px a bot turns about
 /// 1.7 times as much a tick as a person, and twice as often by more than 10°,
 /// though its targets move no faster. This attributes every turn of a red bot with
 /// a visible enemy within 150px to what the brain was doing on that tick:
@@ -126,7 +126,7 @@ public static class Turns
                     wasGrounded[slot] = alive && body.OnGround;
 
                     // O2's reversal: a direction held until the speed passes 2.5px
-                    // a tick the other way (gg2-rl scripts/human_style.py).
+                    // a tick the other way.
                     var accel = Math.Abs(body.HSpeed - speed[slot]);
                     speed[slot] = body.HSpeed;
                     var now = body.HSpeed > 2.5 ? 1 : body.HSpeed < -2.5 ? -1 : 0;

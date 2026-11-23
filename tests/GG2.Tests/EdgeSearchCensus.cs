@@ -12,8 +12,7 @@ namespace GG2.Tests;
 /// same arrival test.
 /// </summary>
 /// <remarks>
-/// A measurement, not a gate; skipped in the suite. <c>gg2-rl</c>
-/// <c>docs/PLAN.md</c>, "Navigation by search", NS.
+/// A measurement, not a gate; skipped in the suite.
 /// </remarks>
 public sealed class EdgeSearchCensus(Xunit.Abstractions.ITestOutputHelper output)
 {

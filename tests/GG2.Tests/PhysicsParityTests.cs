@@ -280,7 +280,7 @@ public sealed class PhysicsParityTests
     /// six fields that name a roster slot — not with slot 0.
     /// </summary>
     /// <remarks>
-    /// <b>The trap CLAUDE.md names, from the direction it is easy to miss.</b>
+    /// <b>The trap CONTRIBUTING.md names, from the direction it is easy to miss.</b>
     /// <c>Nobody</c> is <b>255</b>, so a zeroed <see cref="CharacterState"/>
     /// claims that slot 0 last hurt it, assisted in hurting it, set it on fire
     /// and is healing it. Slot 0 is the server's own reserved player and always
@@ -927,7 +927,7 @@ public sealed class PhysicsParityTests
     /// <c>Replayer</c> handled <c>PLAYER_LEAVE</c> with <c>ClearCharacter</c> —
     /// the <em>death</em> semantics — where a departure has to compact, because
     /// a roster index is positional and the server's own state updates arrive
-    /// already compacted. CLAUDE.md warns about exactly this and calls it
+    /// already compacted. CONTRIBUTING.md warns about exactly this and calls it
     /// intermittent; it is invisible until a recording contains a departure, and
     /// <c>reference-ctf_truefort-bots.trace</c> does not.
     /// <para>

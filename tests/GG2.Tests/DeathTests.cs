@@ -391,7 +391,7 @@ public sealed class DeathTests
     /// Dying clears the slot; it does not compact the roster.
     /// </summary>
     /// <remarks>
-    /// <b>The distinction CLAUDE.md warns about, from the side that is easy to
+    /// <b>The distinction CONTRIBUTING.md warns about, from the side that is easy to
     /// get wrong.</b> A death is not a departure: the player is still connected
     /// and still owns their roster index, so every slot above them has to stay
     /// where it is. Compacting here would hand each of those characters to the
@@ -423,7 +423,7 @@ public sealed class DeathTests
     /// </summary>
     /// <remarks>
     /// <c>Destroy.xml</c> arms <c>player.alarm[5]</c> — a timer on the
-    /// <em>player</em>, of which <see cref="WorldState"/> has none. docs/PLAN.md
+    /// <em>player</em>, of which <see cref="WorldState"/> has none. docs/STATUS.md
     /// phase 6. This is here so that when respawn does land, the change is
     /// visible as a test being rewritten rather than as one quietly starting to
     /// mean something else.

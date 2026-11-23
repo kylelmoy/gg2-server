@@ -16,7 +16,7 @@ public sealed partial class GameServer
     // for. ⚠️ Anything a client CAN ask for does not belong here: it goes
     // through Execute(RosterEntry, PlayerCommand), the one dispatch the socket
     // path and the bots already share, or the control port becomes a third way
-    // to do what CLAUDE.md says must have exactly one.
+    // to do what CONTRIBUTING.md says must have exactly one.
 
     /// <summary>
     /// A live character's <em>exact</em> position and health.
@@ -487,7 +487,7 @@ public sealed partial class GameServer
     /// </summary>
     /// <remarks>
     /// ⛔ <b>Goes through <c>ExecuteChangeTeam</c> — the same body the socket
-    /// switch and <see cref="Execute"/> reach.</b> CLAUDE.md's rule: a bot is an
+    /// switch and <see cref="Execute"/> reach.</b> CONTRIBUTING.md's rule: a bot is an
     /// <see cref="IInputSource"/> like a socket, and a second copy here would let
     /// a bot take a team a client could not. That matters concretely — the
     /// reference's balance guard refuses a request for the bigger team, and this

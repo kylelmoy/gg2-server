@@ -8,7 +8,7 @@ namespace GG2.Bots;
 /// it searches the keys over it instead, from where the bot stands.
 /// </summary>
 /// <remarks>
-/// <c>gg2-rl</c> <c>docs/PLAN.md</c>, "Navigation by search". From a standing
+/// From a standing
 /// start <see cref="EdgeSearch"/> finds a plan for most of the edges the
 /// follower strands on, so a stranding is mostly the follower's fault and not
 /// the edge's.

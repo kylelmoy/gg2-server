@@ -27,8 +27,7 @@ namespace Bench;
 /// <para>
 /// Between 150 and 300px it splits the ticks by whether the policy drove in the
 /// last two seconds: an upper bound on what a release band (hysteresis) could
-/// keep. Written for <c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, track B, which has
-/// the first reading.
+/// keep.
 /// </para>
 /// </remarks>
 public static class ReleaseReasons

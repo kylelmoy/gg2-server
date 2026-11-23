@@ -583,7 +583,7 @@ the connections never become the simulation's problem.
 
 **The defences are on the tick path, so the question is whether they moved
 the project's headroom number.** They did not, measured as a diff rather than
-quoted as an absolute — which is the only form CLAUDE.md accepts, and the reason
+quoted as an absolute — which is the only form CONTRIBUTING.md accepts, and the reason
 this was done against a clean `master` worktree on the same machine, back to
 back:
 
@@ -598,7 +598,7 @@ level — which is what makes "no regression" the safe reading rather than a
 hopeful one.
 
 **Neither figure is a benchmark number and neither replaces the 0.151 ms in
-`CLAUDE.md`.** `tickMs` is an exponential moving average over whatever the
+`CONTRIBUTING.md`.** `tickMs` is an exponential moving average over whatever the
 server was doing; `tools/bench/` is where a per-tick cost comes from. This is a
 *comparison* and is only good for one claim: the hardening work did not make the
 tick more expensive. It is cheap to redo — `tools/abuse/`'s control-port

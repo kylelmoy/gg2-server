@@ -4,7 +4,7 @@ using GG2.Protocol;
 namespace GG2.Tests;
 
 /// <summary>
-/// The search over the graphs <c>gg2-nav-gen</c> actually wrote.
+/// The search over the graphs the original nav generator actually wrote.
 /// </summary>
 /// <remarks>
 /// <see cref="NavSearchTests"/> asserts the search's <em>properties</em> on

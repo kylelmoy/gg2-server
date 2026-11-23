@@ -100,7 +100,7 @@ public sealed partial class GameServer
     /// nothing else, writing <c>player.team</c> and calling
     /// <c>ServerPlayerChangeteam</c> directly.
     /// <para>
-    /// ⚠️ The rule this keeps is CLAUDE.md's for bots, one layer out: an
+    /// ⚠️ The rule this keeps is CONTRIBUTING.md's for bots, one layer out: an
     /// operator or a plugin uses the <em>same</em> method a client command uses,
     /// so nothing can do something a client cannot. Reaching into
     /// <see cref="WorldState"/> from either would be the bug this shape

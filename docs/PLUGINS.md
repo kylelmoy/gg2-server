@@ -188,7 +188,7 @@ wire and may rename a player. It may not move a character, spawn a projectile or
 draw from `WorldState.Random` — that stream is observable simulation, every
 client re-derives a weapon's spread from its position, so a plugin drawing from
 it would make the game depend on what the plugins were saying. Same rule and same
-reason as the one CLAUDE.md states for bots.
+reason as the one CONTRIBUTING.md states for bots.
 
 **2. Per-player state goes in a `PluginPlayerTable<T>`.** A slot index is a
 roster index and removal **compacts**. In GML this problem does not arise —
@@ -583,7 +583,7 @@ is a plain read (`PointsOf` is `Scoring.Get`, the reference's
 `Player.stats[POINTS]`). A plugin still may not touch `WorldState`, and in
 particular may not draw from `WorldState.Random`: that stream is observable
 simulation, so a map-list shuffle taken from it would move every client's
-re-derived weapon spread. This is CLAUDE.md's rule for bots, one layer out — **a
+re-derived weapon spread. This is CONTRIBUTING.md's rule for bots, one layer out — **a
 plugin must not be able to produce a state a client could not.**
 
 **`StableIdOf` is the one that is not a convenience.** A vote holding a slot

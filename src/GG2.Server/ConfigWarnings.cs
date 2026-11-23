@@ -15,7 +15,7 @@ namespace GG2.Server;
 /// Both pass for a setting that is perfectly valid and delivered by a subsystem
 /// this server is not running — the operator sets it, the settings page shows it
 /// back, a restart applies it, and nothing happens. That is the failure
-/// <c>CLAUDE.md</c> names as the one no test can catch, in its cheapest form.
+/// <c>CONTRIBUTING.md</c> names as the one no test can catch, in its cheapest form.
 /// </para>
 /// <para>
 /// <b>One wording, three surfaces.</b> The server says these at startup, the

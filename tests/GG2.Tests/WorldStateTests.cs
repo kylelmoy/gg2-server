@@ -13,7 +13,7 @@ namespace GG2.Tests;
 /// this file is about.
 /// <para>
 /// <b>A slot index is a roster index.</b> Every field that names another player
-/// stores one, and the roster compacts on <c>PLAYER_LEAVE</c>. CLAUDE.md's
+/// stores one, and the roster compacts on <c>PLAYER_LEAVE</c>. CONTRIBUTING.md's
 /// warning — "off by one, intermittently" — is precisely the failure mode of
 /// forgetting to renumber one of them, so each is checked here.
 /// </para>
@@ -232,7 +232,7 @@ public sealed class WorldStateTests
     }
 
     /// <summary>
-    /// The intermittent off-by-one CLAUDE.md warns about, in every field that
+    /// The intermittent off-by-one CONTRIBUTING.md warns about, in every field that
     /// can carry it: a stored roster index above the departing slot moves down
     /// with the roster.
     /// </summary>

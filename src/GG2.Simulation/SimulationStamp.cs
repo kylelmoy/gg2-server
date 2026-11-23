@@ -56,11 +56,11 @@ public static class SimulationStamp
     /// </summary>
     /// <remarks>
     /// The authority was <c>GG2.Bots.ObservationWriter</c>'s field order, the
-    /// retired gg2-rl observation. Kept as a stamp input so the digest does not
+    /// retired observation. Kept as a stamp input so the digest does not
     /// move for a removal.
     /// <para>
     /// <b>Mirrored rather than referenced.</b> <c>GG2.Simulation</c> does not
-    /// and must not depend on <c>GG2.Env</c> — the simulation is the thing an
+    /// and must not depend on a training environment — the simulation is the thing an
     /// env observes, not the other way round — so the two constants are held
     /// equal by a test instead of by the compiler.
     /// </para>
@@ -112,8 +112,8 @@ public static class SimulationStamp
     /// not a regression.
     /// <para>
     /// A sealed-chamber argument does not buy an exemption from this bump: a
-    /// trainer that seeds duels from nav nodes rather than coordinates (as
-    /// <c>gg2-rl</c> does) can place a character inside a region a flood fill
+    /// trainer that seeds duels from nav nodes rather than coordinates
+    /// can place a character inside a region a flood fill
     /// from spawn points would call unreachable, because a nav graph floods the
     /// whole walkable mask rather than seeding from spawns. Unreachable by
     /// <em>walking</em> is not the same as unreachable by <em>placement</em>, so
@@ -269,7 +269,7 @@ public static class SimulationStamp
     /// to be a SOURCE scan: a <c>const</c> is inlined at compile time, so the
     /// reference is gone from the IL and no reflection or assembly-reference test
     /// can see it. If that test is deleted, this paragraph becomes an unfalsifiable
-    /// claim about the repo — which is the failure mode <c>CLAUDE.md</c> names.
+    /// claim about the repo — which is the failure mode <c>CONTRIBUTING.md</c> names.
     /// </para>
     /// </para>
     /// </remarks>
@@ -299,7 +299,7 @@ public static class SimulationStamp
     /// different investigations.
     /// <para>
     /// <b>Nothing compares it yet</b>, because no checkpoint records one. If
-    /// <c>gg2-rl</c> starts writing it into their metadata, comparing and WARNING
+    /// a trainer starts writing it into its metadata, comparing and WARNING
     /// on a mismatch is the natural next step — and a warning is the right verb
     /// here, where <see cref="Require"/>'s throw is right for the other surface.
     /// </para>

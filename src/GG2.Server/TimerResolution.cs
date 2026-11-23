@@ -27,7 +27,7 @@ namespace GG2.Server;
 /// <para>
 /// <b>This changes pacing only — never simulation.</b> A tick computes the
 /// same thing whenever it runs; <c>docs/SIMULATION.md</c>'s determinism contract
-/// is about what a tick does, not when. It is safe by CLAUDE.md's rule
+/// is about what a tick does, not when. It is safe by CONTRIBUTING.md's rule
 /// ("compatible on the wire and in observable simulation, free everywhere
 /// else") precisely because the wire content does not depend on it.
 /// </para>

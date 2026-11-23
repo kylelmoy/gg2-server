@@ -12,7 +12,7 @@ namespace GG2.Tests;
 /// <remarks>
 /// A measurement, not a gate; skipped in the suite. The oracle searches live and
 /// is far too slow to ship; it asks how much a plan cache could save on routes,
-/// entered at speed. <c>gg2-rl</c> <c>docs/PLAN.md</c>, "Navigation by search".
+/// entered at speed.
 /// </remarks>
 public sealed class OracleRouteCensus(Xunit.Abstractions.ITestOutputHelper output)
 {

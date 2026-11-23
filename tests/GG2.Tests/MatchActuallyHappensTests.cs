@@ -298,7 +298,7 @@ public sealed class MatchActuallyHappensTests
         // seed's losing team completes a capture on the point beyond the middle
         // is close-run — the attacking team stands in that zone for over a
         // thousand bot-ticks on seeds that never take it — so eight fixed seeds
-        // pinned a coin flip: they read 7 and then 5 across a change (gg2-rl N4)
+        // pinned a coin flip: they read 7 and then 5 across a change
         // that, over these thirty-two, read 29 before and 28 after. The
         // threshold is the alarm: on the code that had the bug NONE of the
         // original eight advanced.

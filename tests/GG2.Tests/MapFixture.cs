@@ -8,8 +8,7 @@ namespace GG2.Tests;
 /// built-in map contains.
 /// </summary>
 /// <remarks>
-/// Regenerate with <c>node gg2-samplers/gen-map-fixture.js</c>. That script's header
-/// explains which of the two oracles is strong and which is approximate.
+/// Recorded from the running game by a live-game sampler.
 /// </remarks>
 public sealed record MapFixture
 {
@@ -68,7 +67,7 @@ public static class MapFixtures
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "maps.json");
         if (!File.Exists(path))
-            throw new FileNotFoundException($"map fixture missing at {path}; run gg2-samplers/gen-map-fixture.js", path);
+            throw new FileNotFoundException($"map fixture missing at {path}; it is recorded from the running game", path);
 
         var document = JsonSerializer.Deserialize<Document>(File.ReadAllBytes(path))
             ?? throw new InvalidDataException($"{path} is empty");

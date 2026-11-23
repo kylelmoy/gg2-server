@@ -150,7 +150,7 @@ public sealed class ServerChatV6Tests
     // --- greeting -------------------------------------------------------------
 
     /// <summary>
-    /// gg2-client on iOS joins a server that requires <c>chat</c> and never says
+    /// A native client joins a server that requires <c>chat</c> and never says
     /// hello. A GM8 client without the plugin dies on any plugin packet, so the
     /// whole room's activity must reach the other two and not one byte of it this one.
     /// </summary>

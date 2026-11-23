@@ -6,7 +6,7 @@
 //   node tools/gen-geo-assets.js [--in <dir>] [--out <path>] [--check]
 //
 // The output is CHECKED IN. This script exists so the asset can be rebuilt and
-// diffed rather than hand-edited, the same arrangement gg2-samplers/gen-map-fixture.js
+// diffed rather than hand-edited, the same arrangement as the map fixture
 // has with tests/GG2.Tests/Fixtures/maps.json. Running it with no changes to
 // the sources must produce an empty diff.
 //

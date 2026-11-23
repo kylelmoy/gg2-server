@@ -130,8 +130,8 @@ public sealed partial class PathFollower
 
         // N12: held, as a jump is. The tracker holds the take-off column in the
         // air, so a bot that walked off at speed braked back over the edge: falls
-        // kept 0.37 of their speed and braked hard on 28% of their air ticks
-        // (gg2-rl docs/PLAN.md, N12). Now the bot keeps a key that the predictor
+        // kept 0.37 of their speed and braked hard on 28% of their air ticks.
+        // Now the bot keeps a key that the predictor
         // lands on the destination, and the tracker flies the rest of a fall only
         // once none does.
         if (HeldFalls && !state.FallTracked && Collision is { } world)
@@ -1158,8 +1158,8 @@ public sealed partial class PathFollower
     /// (<see cref="DoubleShare"/>) and when to take it
     /// (<see cref="RejumpStyle"/>), then tries ticks around that one. The fleet's
     /// people double jump on 46% of their out-of-combat jumps, over steps, gaps
-    /// and flat ground alike, mostly a little before the top of the arc
-    /// (<c>gg2-rl</c> <c>docs/PLAN.md</c>, N3). The draw hashes the bot, the edge
+    /// and flat ground alike, mostly a little before the top of the arc.
+    /// The draw hashes the bot, the edge
     /// and its launch count, so it holds through an approach and a sweep stays
     /// deterministic.
     /// </remarks>
@@ -1259,7 +1259,7 @@ public sealed partial class PathFollower
     /// <remarks>
     /// People hop on flat ground while running, 2.5 times per 1,000 running ticks
     /// out of combat, and 55% of those follow another jump's landing, after a
-    /// median of 18 ground ticks (<c>gg2-rl</c> <c>docs/PLAN.md</c>, N8). The
+    /// median of 18 ground ticks. The
     /// draws hash the bot, the tick and the route position, so a run stays
     /// deterministic.
     /// <para>
@@ -1412,7 +1412,7 @@ public sealed partial class PathFollower
     /// a tick, before its move.</b> After the run past a lip it still reads true,
     /// and a press there is a scout's mid-air jump: the predictor lands it, so N2
     /// deferred onto it, and 52% of scouts' gap second jumps came on the take-off
-    /// tick, spent before the planned one (<c>gg2-rl</c> <c>docs/PLAN.md</c>, N6).
+    /// tick, spent before the planned one.
     /// </remarks>
     private static bool GroundUnder(CollisionWorld world, in CharacterState c) =>
         !world.PlaceFree(c.Box, c.X, c.Y + 1, c.Filter);
@@ -1423,8 +1423,8 @@ public sealed partial class PathFollower
     /// </summary>
     /// <remarks>
     /// A third of people's out-of-combat step jumps start within a pixel of the
-    /// step's face and from a standstill, after a median of 9 still ticks
-    /// (<c>gg2-rl</c> <c>docs/PLAN.md</c>, N5). Drawn once per attempt at an edge
+    /// step's face and from a standstill, after a median of 9 still ticks.
+    /// Drawn once per attempt at an edge
     /// with <see cref="FaceShare"/>, and kept only if the predictor finds the
     /// face (running toward the landing stops against a wall, on the ground and
     /// in the take-off node) and a held plan that lands from standing there.

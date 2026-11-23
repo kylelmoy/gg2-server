@@ -50,7 +50,7 @@ public sealed class MedigunTests
     /// <remarks>
     /// Through <see cref="CharacterState.Fresh"/> rather than an object
     /// initialiser, because six of its fields name a roster slot and a zeroed
-    /// one silently claims slot 0 — see CLAUDE.md. The weapon is handed a live
+    /// one silently claims slot 0 — see CONTRIBUTING.md. The weapon is handed a live
     /// <c>readyToShoot</c> so a test does not have to wait out the refire timer
     /// a fresh weapon spawns with.
     /// </remarks>

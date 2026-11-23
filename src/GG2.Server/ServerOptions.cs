@@ -675,7 +675,7 @@ public sealed class ServerOptions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Phase 8's cheapest item and, per <c>docs/PLAN.md</c>, its biggest
+    /// Phase 8's cheapest item and, per <c>docs/STATUS.md</c>, its biggest
     /// iteration win: nothing about the simulation is rate-dependent, because
     /// <c>MatchSimulation.Tick</c> takes no clock and every duration in the game
     /// is counted in ticks rather than seconds. So pacing is presentation, and

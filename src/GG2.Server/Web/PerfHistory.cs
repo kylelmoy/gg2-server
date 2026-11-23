@@ -10,7 +10,7 @@ namespace GG2.Server;
 /// <remarks>
 /// <b>Every rate is per-second and already divided</b>, so the browser plots
 /// what it is given and cannot get the denominator wrong. A graph is the worst
-/// place to find a denominator that was not the one it looked like (CLAUDE.md,
+/// place to find a denominator that was not the one it looked like (CONTRIBUTING.md,
 /// "the author is the one reader guaranteed to reconstruct the mistake").
 /// </remarks>
 /// <param name="Sequence">Monotonic, so the panel can ask for "everything after".</param>

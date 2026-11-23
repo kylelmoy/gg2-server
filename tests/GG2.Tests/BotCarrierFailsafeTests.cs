@@ -24,7 +24,7 @@ namespace GG2.Tests;
 /// bot pressing "drop intel" is something a player can do, through the same
 /// command dispatch a socket reaches. A rule in <c>MatchSimulation</c> that took
 /// a briefcase off a motionless carrier would be behaviour the stock game does
-/// not have — wire-visible divergence, which CLAUDE.md's "compatible in
+/// not have — wire-visible divergence, which CONTRIBUTING.md's "compatible in
 /// observable simulation" forbids.
 /// </para>
 /// </remarks>

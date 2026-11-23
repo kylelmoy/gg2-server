@@ -20,7 +20,7 @@ namespace GG2.Tests;
 /// <para>
 /// <b>Every assertion of an ABSENCE here states its own control</b>, because an
 /// absence passes on a deleted feature. The pattern this repo arrived at after
-/// four of eight moving-platform tests turned out to be vacuous — CLAUDE.md.
+/// four of eight moving-platform tests turned out to be vacuous — CONTRIBUTING.md.
 /// </para>
 /// </remarks>
 public sealed class HybridBotSeamTests

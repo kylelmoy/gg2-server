@@ -28,7 +28,7 @@ namespace GG2.Tests;
 /// </list>
 /// <para>
 /// <b>Both of the latter two were wrong, and the suite did not move when they
-/// were fixed.</b> That is the alarm CLAUDE.md describes — a real behavioural
+/// were fixed.</b> That is the alarm CONTRIBUTING.md describes — a real behavioural
 /// change that turns nothing red says the paths are ungated. This file is that
 /// gate. It asserts at the point the distinction is <em>made</em>, because by
 /// the time a message reaches the wire the two are indistinguishable.

@@ -11,7 +11,7 @@ namespace GG2.Tests;
 /// <b>Why this exists beside <see cref="PlayerAnalyticsTests"/>.</b> Those
 /// drive <c>PlayerAnalytics</c> directly, so every one of them would still pass
 /// if <c>GameServer</c> never called it at all — the exact shape of failure
-/// CLAUDE.md names: a described capability that no test can contradict because
+/// CONTRIBUTING.md names: a described capability that no test can contradict because
 /// every test builds the thing itself. These tests connect a real client to a
 /// real server over a real socket and then ask what was counted.
 /// </para>

@@ -10,7 +10,7 @@ namespace GG2.Tests;
 /// compaction path, watched by a reader that is not the server.
 /// </summary>
 /// <remarks>
-/// <b>`CLAUDE.md`: "Roster indices are positional and shift on `PLAYER_LEAVE`
+/// <b>`CONTRIBUTING.md`: "Roster indices are positional and shift on `PLAYER_LEAVE`
 /// ... get this wrong and every message that names a player is off by one,
 /// intermittently."</b> That failure is only observable to somebody watching a
 /// slot OTHER than the one that left, which is why a single-client test can

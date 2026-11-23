@@ -22,7 +22,7 @@ public sealed class ControlPointState
 /// Everything a state update needs that is not a character.
 /// </summary>
 /// <remarks>
-/// <b>A placeholder, deliberately.</b> Phase 1 of docs/PLAN.md is a server a
+/// <b>A placeholder, deliberately.</b> Phase 1 of docs/STATUS.md is a server a
 /// client can join with no simulation behind it, so this holds the objective and
 /// HUD fields at their initial values and nothing advances them. It is a
 /// reference-shaped bag of globals, not the flat, cheaply-copyable

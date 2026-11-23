@@ -380,7 +380,7 @@ public struct TickEvents
     /// Hit points this slot dealt to <em>other</em> characters this tick.
     /// </summary>
     /// <remarks>
-    /// <b>`gg2-rl/gg2-rl/docs/ENV.md`'s first prerequisite, and the half of `docs/BOTAI.md`
+    /// <b>A training reward's first prerequisite, and the half of `docs/BOTAI.md`
     /// item 7 that was never built.</b> The rest of this struct carries kills,
     /// deaths, spawns and captures with attribution — the sparse events. A
     /// learned policy wants the <em>dense</em> signal, and item 7's design
@@ -406,7 +406,7 @@ public struct TickEvents
     /// </para>
     /// <para>
     /// <b>Sentries and generators are out.</b> Their damage does not route
-    /// through <c>DamageApi.Deal</c> at all, and `gg2-rl/gg2-rl/docs/ENV.md` puts them beyond
+    /// through <c>DamageApi.Deal</c> at all, and they are beyond
     /// v0 because a duel has no objective. Damage a sentry's turret deals to a
     /// <em>character</em> is in, because that goes through <c>Deal</c> like
     /// everything else — it is credited to the sentry's owner.

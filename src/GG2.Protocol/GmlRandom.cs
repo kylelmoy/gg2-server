@@ -27,7 +27,7 @@ namespace GG2.Protocol;
 /// <para>
 /// Measured against the running game and checked in as
 /// <c>tests/GG2.Tests/Fixtures/rng-samples.json</c>; regenerate with
-/// <c>node gg2-samplers/sample-rng.js</c>.
+/// a live-game sampler.
 /// </para>
 /// </remarks>
 public struct GmlRandom

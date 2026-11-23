@@ -222,7 +222,7 @@ public static partial class Projectiles
     /// commonest case of a screen that is older than the pellet flying into it,
     /// would leave every pellet alive and make <c>perseverant</c> meaningless.
     /// <para>
-    /// ✅ <b>MEASURED live 2026-08-27</b> (<c>gg2-samplers/probes/probe-bubble-pair.js</c>),
+    /// ✅ <b>MEASURED live 2026-08-27</b> (a live-game probe),
     /// across all four cells of the team x <c>perseverant</c> table, and this
     /// transcription was right. The decisive row is an enemy ordinary pellet,
     /// where <b>both</b> instances die — an outcome no single event can produce.

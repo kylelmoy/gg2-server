@@ -40,7 +40,7 @@ namespace GG2.Simulation;
 /// <c>gm8emulator/src/instance.rs</c> (<c>set_hspeed</c>, <c>set_direction</c>,
 /// <c>update_hvspeed</c>, <c>update_speed_direction</c>) and measured against
 /// the running game — 399 write sequences and 27 angles, regenerate with
-/// <c>node gg2-samplers/sample-motion.js</c>.
+/// a live-game sampler.
 /// </para>
 /// <para>
 /// <b>This is the one primitive in the project that is not bit-exact, and it

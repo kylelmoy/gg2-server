@@ -17,7 +17,7 @@ namespace GG2.Tests;
 /// would pass that unchanged — while measuring <b>1.06x</b> against the
 /// straight-line heuristic where the class-matched table measures <b>1.36x</b>.
 /// A set that quietly went permissive is therefore a correct, green, worthless
-/// feature, which is exactly the failure mode <c>CLAUDE.md</c> warns about, and
+/// feature, which is exactly the failure mode <c>CONTRIBUTING.md</c> warns about, and
 /// nothing else in the suite could see it.
 /// </remarks>
 public sealed class NavDistanceSetTests(ITestOutputHelper output)

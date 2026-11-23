@@ -10,8 +10,7 @@ namespace GG2.Tests;
 /// alone: the corpus swept twice, diffed edge by edge.
 /// </summary>
 /// <remarks>
-/// A measurement, not a gate; skipped in the suite. <c>gg2-rl</c>
-/// <c>docs/PLAN.md</c>, navigation, N1.
+/// A measurement, not a gate; skipped in the suite.
 /// </remarks>
 public sealed class HeldFlightCensus(Xunit.Abstractions.ITestOutputHelper output)
 {

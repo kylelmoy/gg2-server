@@ -13,8 +13,7 @@ namespace GG2.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Requested by <c>gg2-rl</c>, who are adding Medic to the trained class set
-/// with uber deliberately out of scope. <b>The two halves compose,
+/// Written for training Medic with uber deliberately out of scope. <b>The two halves compose,
 /// and that is the point rather than a coincidence:</b> the uber press requires a
 /// beam target (<c>BotClassKeys</c>' medic case wants <c>UberReady</c> AND an ally
 /// on the beam AND an enemy within <c>UberRange</c>), and a medic on the beam is
@@ -45,7 +44,7 @@ public sealed class MedicPolicyScopeTests
     /// <remarks>
     /// <b>The control is the second half.</b> Asserting only that a beaming
     /// medic is refused would pass just as well if medics were never handed over
-    /// at all — which would delete the arm <c>gg2-rl</c> is about to train.
+    /// at all — which would delete the arm being trained.
     /// </remarks>
     [Fact]
     public void ABeamingMedicIsNotHandedOverButALoneOneIs()

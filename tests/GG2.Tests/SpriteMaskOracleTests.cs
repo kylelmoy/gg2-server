@@ -9,7 +9,7 @@ namespace GG2.Tests;
 /// </summary>
 /// <remarks>
 /// <c>sprite-mask-samples.json</c> is what GM8 said, rasterised by
-/// <c>gg2-samplers/probes/probe-platform-mask.js</c> with
+/// a live-game probe with
 /// <c>collision_point(prec = 1)</c> over a sprite loaded exactly the way
 /// <c>stringToResource.gml</c> loads one. Where this port and that file disagree,
 /// <b>the file is right.</b>
@@ -27,8 +27,8 @@ namespace GG2.Tests;
 /// subimages.</item>
 /// </list>
 /// <para>
-/// <b>Regenerating this needs the running game</b> — see the probe's header
-/// and <c>docs/PARALLEL.md</c> on holding the bridge. A failure here is a real
+/// <b>Regenerating this needs the running game</b> — see
+/// <c>docs/TRAPS-LIVEGAME.md</c> on holding the bridge. A failure here is a real
 /// disagreement with GM8, not a stale fixture: check the change was one you
 /// meant before re-recording.
 /// </para>

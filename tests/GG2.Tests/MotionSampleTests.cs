@@ -32,7 +32,7 @@ namespace GG2.Tests;
 /// Every sample is a list of writes replayed in order, so a row states its own
 /// inputs and cannot be invalidated by anything the running game did between
 /// calls — docs/TRAPS-SIMULATION.md, "Every fixture row should carry its own inputs".
-/// Regenerate with <c>node gg2-samplers/sample-motion.js</c>.
+/// Regenerate with a live-game sampler.
 /// </para>
 /// </remarks>
 public sealed class MotionSampleTests

@@ -36,7 +36,7 @@ public enum HandoverRule
     /// controller always drives AIM and FIRE.
     /// </summary>
     /// <remarks>
-    /// <b><c>gg2-rl</c>'s arm A, and the argument for it is that a parameter we
+    /// <b>The argument for this arm is that a parameter we
     /// keep getting wrong is a parameter worth deleting.</b> Proximity was wrong;
     /// intent was better; intent alone was catastrophic until it was conjoined
     /// with range. A head-level split has no trigger to get wrong, and the two

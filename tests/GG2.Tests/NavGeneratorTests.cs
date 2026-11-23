@@ -12,12 +12,12 @@ namespace GG2.Tests;
 /// <remarks>
 /// ⚠️ <b>This is the whole justification for the generator being a port rather
 /// than a reimplementation, and for it having one flight model where
-/// <c>gg2-nav-gen</c> has three.</b> That project could not check a change to its
+/// the original nav generator has three.</b> That project could not check a change to its
 /// single-jump path against anything — the GML generator it was ported from had
 /// been deleted — so it duplicated the arc machinery per manoeuvre to keep
 /// unverifiable edits off the hot path of every ordinary jump. Here the 25 graphs
 /// in <c>nav/</c> are exactly that missing oracle: they were produced by
-/// <c>gg2-nav-gen</c>, they are what the bot layer's pinned end-to-end
+/// the original nav generator, they are what the bot layer's pinned end-to-end
 /// measurements were taken against, and a C# generator that reproduces them
 /// character for character is provably the same generator.
 /// <para>

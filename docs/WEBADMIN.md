@@ -373,7 +373,7 @@ reconnects itself. About forty lines against several hundred.
 `ControlCommands` holds every operator verb and every reply. `ControlPort` and
 `WebAdminServer` are transport and nothing else — the day they each grow their
 own copy of "what does `step` mean" is the day one of them can do something the
-other cannot. This is CLAUDE.md's "three places" rule one level up.
+other cannot. This is CONTRIBUTING.md's "three places" rule one level up.
 
 **A verb added to `ControlCommands` needs a row in
 `WebAdminTests.EveryControlPortVerbIsReachableFromThePanel`.** What that test

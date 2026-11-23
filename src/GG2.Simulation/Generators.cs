@@ -377,7 +377,7 @@ public static class Generators
     /// The bubble is <c>ProjectileKind.Bubble</c>, and the explosion really does
     /// pop the ones in its blast: <see cref="Explosions.PopBubblesByBox"/>,
     /// called below. What is not transcribed is the GML loop, which is
-    /// CLAUDE.md's rule rather than an omission.
+    /// CONTRIBUTING.md's rule rather than an omission.
     /// </para>
     /// </remarks>
     public static void Destroy(

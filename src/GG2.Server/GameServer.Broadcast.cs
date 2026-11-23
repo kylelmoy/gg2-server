@@ -596,7 +596,7 @@ public sealed partial class GameServer
     /// <b>No respawn is scheduled here.</b> The reference arms
     /// <c>player.alarm[5]</c> in <c>Character.events/Destroy.xml</c> and a
     /// dead player stays dead until it fires; this server has no player-side
-    /// timers yet, so a killed character simply stays absent. docs/PLAN.md
+    /// timers yet, so a killed character simply stays absent. docs/STATUS.md
     /// phase 6.
     /// </para>
     /// </remarks>
@@ -791,7 +791,7 @@ public sealed partial class GameServer
     /// standing where it belonged said it "waits on the setup timer being
     /// simulated" — which had stopped being true at some point nobody recorded:
     /// <c>WorldState.SetupTimer</c> is simulated and goes out on the wire.
-    /// CLAUDE.md's "a claim the repo makes about itself", found by reading
+    /// CONTRIBUTING.md's "a claim the repo makes about itself", found by reading
     /// rather than by any test, because no test could.
     /// </para>
     /// </remarks>

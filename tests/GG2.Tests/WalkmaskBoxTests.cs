@@ -14,7 +14,7 @@ namespace GG2.Tests;
 /// positions those traces visit agree. A box overhanging the top of the map, or
 /// one whose columns straddle a 64-cell word boundary, appears in no checked-in
 /// trace — and the word path is exactly where those two cases are handled by
-/// separate code. <b>A green fixture is not confirmation of a box</b>: CLAUDE.md
+/// separate code. <b>A green fixture is not confirmation of a box</b>: CONTRIBUTING.md
 /// says so about collision boxes and it is true here for the same reason.
 /// <para>
 /// <b>The naive loop is the oracle and it is written out here rather than

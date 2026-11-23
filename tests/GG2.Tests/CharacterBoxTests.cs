@@ -8,7 +8,7 @@ namespace GG2.Tests;
 /// <see cref="CharacterBox.For"/>, against the engine.
 /// </summary>
 /// <remarks>
-/// Measured against <c>gg2-samplers/probes/probe-character-boxes.js</c>, against all
+/// Measured against a live-game probe, against all
 /// ten classes. Every fixture that depends on this table depends on it only
 /// indirectly, so a wrong edge would show up as a mysterious trajectory
 /// divergence rather than as a wrong box.
@@ -20,7 +20,7 @@ namespace GG2.Tests;
 /// why the probe needs no character, no bot and no map.
 /// </para>
 /// <para>
-/// <c>gg2-samplers/sample-physics.js</c> derives the bounds the same way Create.xml
+/// A live-game sampler derives the bounds the same way Create.xml
 /// does. It previously overrode the engine's values with a hardcoded table of
 /// its own that had <c>top = -6</c> for the Scout and the Heavy, where the
 /// engine derives <b>-10</b> and <b>-12</b> — a divergence <c>PhysicsSampleTests</c>

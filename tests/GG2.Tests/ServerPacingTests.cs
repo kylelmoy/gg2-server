@@ -8,7 +8,7 @@ namespace GG2.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <c>docs/PLAN.md</c> calls faster-than-real-time "nearly free", and it is —
+/// <c>docs/STATUS.md</c> calls faster-than-real-time "nearly free", and it is —
 /// but only because nothing about the simulation is rate-dependent.
 /// <c>MatchSimulation.Tick</c> takes no clock and every duration in the game is
 /// counted in ticks rather than seconds, so pacing is presentation and removing

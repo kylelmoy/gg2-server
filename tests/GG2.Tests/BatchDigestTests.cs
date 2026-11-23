@@ -80,7 +80,7 @@ public sealed class BatchDigestTests
 
     /// <summary>
     /// A shorter batch is a different batch. Without this, a run that stopped
-    /// early — the thing CLAUDE.md warns about, a run that ended rather than
+    /// early — the thing CONTRIBUTING.md warns about, a run that ended rather than
     /// happened — could fold to the same number as a complete one.
     /// </summary>
     [Fact]

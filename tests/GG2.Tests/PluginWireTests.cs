@@ -294,7 +294,7 @@ public sealed class PluginWireTests
     /// id, and a client that joined without ever saying hello.
     /// </summary>
     /// <remarks>
-    /// The silent client is gg2-client's no-chat join. A GM8 client without the
+    /// The silent client is a native client's no-chat join. A GM8 client without the
     /// plugin raises a fatal error on any plugin packet, so the stream it receives
     /// must hold none of what the other two were sent.
     /// </remarks>

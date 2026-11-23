@@ -23,9 +23,6 @@ namespace GG2.Bots;
 /// guess. The callers act on a prediction only where a wrong one costs a fall
 /// back to the path follower's own machinery.
 /// </para>
-/// <para>
-/// <c>gg2-rl</c> <c>docs/PLAN.md</c>, navigation, N1.
-/// </para>
 /// </remarks>
 public static class FlightPredictor
 {

@@ -53,7 +53,7 @@ internal readonly record struct NavCharacterProfile(string Name, double RunPower
 /// change upstream of it means a different set kept, not a superset. A smaller
 /// pool cannot displace anything — it only frees slots that were being spent on
 /// arcs no bot could fly. Measured over all 24 shipped graphs when it landed in
-/// <c>gg2-nav-gen</c>: 293 jump edges removed, 174 kept in the freed slots, no
+/// the original nav generator: 293 jump edges removed, 174 kept in the freed slots, no
 /// node lost, no team lost reachability on any map, and no route to any objective
 /// longer by more than 2 cells.
 /// </para>

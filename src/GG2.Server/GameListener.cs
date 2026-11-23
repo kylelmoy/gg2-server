@@ -12,7 +12,7 @@ namespace GG2.Server;
 /// <b>Dual-stack, because an IPv4-only bind costs a client two seconds.</b> On
 /// Windows <c>localhost</c> resolves to <c>::1</c> first, and a client that
 /// tries addresses in order waits out the refused IPv6 attempt (2054 ms,
-/// measured by gg2-client against this server) before falling back to
+/// measured against this server) before falling back to
 /// <c>127.0.0.1</c>. A GM8 server does not cause that, so this server should not.
 /// </para>
 /// <para>
