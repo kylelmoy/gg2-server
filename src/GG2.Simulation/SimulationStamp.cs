@@ -180,6 +180,13 @@ public static class SimulationStamp
     /// nets every host runs have none. Both values are also left out of the class line below for
     /// that reason. The next bump for any other cause should add them to it.
     /// </para>
+    /// <para>
+    /// <b>NOT bumped, for the same reason: the sentry's cloak rules.</b>
+    /// <see cref="Sentries.TurretEndStep"/> now skips a cloaked spy and
+    /// retargets onto an enemy spy in its line of fire, as the reference does,
+    /// where it shot cloaked spies before — a damage outcome, so a bump by the
+    /// rule above, and unstamped nets are the only kind loaded.
+    /// </para>
     /// </remarks>
     public const int SimulationBehaviourVersion = 4;
 

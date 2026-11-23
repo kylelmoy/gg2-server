@@ -20,8 +20,8 @@ namespace GG2.Simulation;
 /// notice, the <c>SentryGibs</c> debris and the 50 nuts a team-mate can scrape
 /// off them, and the kill-log bookkeeping of <c>doEventDestruction.gml</c> —
 /// all presentation or scoring no client re-simulates. The spy branches of the
-/// turret's End Step (cloak exclusion, the cloaked-spy-in-the-way redirect)
-/// collapse because nothing can cloak yet; they arrive with the spy.
+/// turret's End Step — the cloak exclusion and the cloaked-spy-in-the-way
+/// redirect — are both in <see cref="TurretEndStep"/>.
 /// </para>
 /// <para>
 /// <b>All of <c>serverBuildSentry</c>'s preconditions are modelled</b>,
@@ -663,9 +663,14 @@ public static class Sentries
 
             ref readonly var character = ref state.Characters[i];
 
-            // !cloak: nothing can cloak until the spy lands. distance_to_object
-            // from the character — its facing-inflated box against the turret's
-            // reported one.
+            // !cloak: a cloaked spy never enters the queue, at any cloak alpha
+            // — `cloak` is the toggle, not the fade. The redirect below is the
+            // only way the turret shoots one.
+            if (character.Cloak)
+                continue;
+
+            // distance_to_object from the character — its facing-inflated box
+            // against the turret's reported one.
             var gap = Aabb.ForCharacter(character.Box, character.X, character.Y, character.Facing)
                 .Distance(turretReported);
 
@@ -795,8 +800,8 @@ public static class Sentries
         }
         else
         {
-            // (The cloaked-spy-in-the-way redirect goes here when the spy
-            // lands; nothing can cloak yet.)
+            nearestTarget = RedirectToSpyInTheWay(in state, in sentry, nearestTarget);
+
             var isSentry = nearestTarget >= WorldState.MaxSlots;
             var targetSlot = isSentry ? nearestTarget - WorldState.MaxSlots : nearestTarget;
             var targetX = isSentry ? state.Sentries[targetSlot].X : state.Characters[targetSlot].X;
@@ -837,6 +842,55 @@ public static class Sentries
                 sentry.RotateIndex = sentry.RotateStart;
             }
         }
+    }
+
+    /// <summary>
+    /// "set cloaked spy as target if they're in the way": every enemy spy whose
+    /// body the line from the turret to the current target crosses becomes the
+    /// target. Returns the target in the scan's encoding (a character slot, or
+    /// <see cref="WorldState.MaxSlots"/> plus a sentry slot).
+    /// </summary>
+    /// <remarks>
+    /// <c>with(Spy)</c> tests team and the line and nothing else — not cloak,
+    /// hp, the arc or the walls — so an uncloaked spy qualifies too, and a
+    /// spy that is itself the target always matches its own line. The line's
+    /// far end is <c>other.nearestTarget</c>, which the loop reassigns, so a
+    /// later spy is tested against the line to the spy already chosen; slot
+    /// order stands in for GM8 instance order here, as in the scan.
+    /// <c>collision_line</c> at <c>prec = true</c> against a character's
+    /// rectangle mask is the box walk, the same test the hitscan uses.
+    /// </remarks>
+    private static int RedirectToSpyInTheWay(
+        in WorldState state, in SentryState sentry, int nearestTarget)
+    {
+        for (var i = 0; i < WorldState.MaxSlots; i++)
+        {
+            if (!state.Alive[i])
+                continue;
+
+            ref readonly var spy = ref state.Characters[i];
+
+            if (spy.Class != PlayerClass.Spy || spy.Team == sentry.Team)
+                continue;
+
+            var isSentry = nearestTarget >= WorldState.MaxSlots;
+            var targetSlot = isSentry ? nearestTarget - WorldState.MaxSlots : nearestTarget;
+            var targetX = isSentry ? state.Sentries[targetSlot].X : state.Characters[targetSlot].X;
+            var targetY = isSentry ? state.Sentries[targetSlot].Y : state.Characters[targetSlot].Y;
+
+            if (CollisionLine.Hits(
+                    LineCollider.ForCharacter(spy.Box, spy.X, spy.Y, spy.Facing),
+                    default(CollisionLine.FilledMask),
+                    sentry.X,
+                    sentry.Y,
+                    targetX,
+                    targetY))
+            {
+                nearestTarget = i;
+            }
+        }
+
+        return nearestTarget;
     }
 
     /// <summary>The firing block of the turret's End Step.</summary>

@@ -440,6 +440,106 @@ public sealed class SentryTests
     }
 
     /// <summary>
+    /// <c>SentryTurret.events/End Step.xml</c>'s <c>!cloak</c>: a cloaked
+    /// spy never enters the target queue, however close. The control is the
+    /// same spy uncloaked, shot at once — so a failure here is the cloak test.
+    /// </summary>
+    [Fact]
+    public void TheTurretIgnoresACloakedSpy()
+    {
+        var world = World;
+
+        var state = default(WorldState);
+        PutBuiltSentry(ref state, 1, Team.Red, OpenX, FloorY);
+        Put(ref state, 2, PlayerClass.Spy, Team.Blue, OpenX + 100, OpenY);
+        state.Characters[2].Cloak = true;
+        state.Sentries[1].NoticedTarget = false;
+
+        Sentries.TurretEndStep(world, ref state, 1, ref DiscardedEvents.Events);
+        Assert.Equal(100.0, state.Characters[2].Hp);
+
+        // Nothing to shoot is idle: the next real target pays the alert pause.
+        Assert.True(state.Sentries[1].NoticedTarget);
+
+        var control = default(WorldState);
+        PutBuiltSentry(ref control, 1, Team.Red, OpenX, FloorY);
+        Put(ref control, 2, PlayerClass.Spy, Team.Blue, OpenX + 100, OpenY);
+        control.Sentries[1].NoticedTarget = false;
+
+        Sentries.TurretEndStep(world, ref control, 1, ref DiscardedEvents.Events);
+        Assert.Equal(92.0, control.Characters[2].Hp);
+    }
+
+    /// <summary>
+    /// Ignoring a cloaked spy holds over whole ticks through the real loop,
+    /// not just one direct End Step: twenty ticks beside a sentry, untouched.
+    /// </summary>
+    [Fact]
+    public void ACloakedSpyStandsBesideASentryUnharmed()
+    {
+        var world = World;
+        var state = default(WorldState);
+        var events = default(TickEvents);
+
+        PutBuiltSentry(ref state, 1, Team.Red, OpenX, FloorY);
+        Put(ref state, 2, PlayerClass.Spy, Team.Blue, OpenX + 60, OpenY);
+        state.Characters[2].Cloak = true;
+        state.Characters[2].CloakAlpha = 0;
+
+        for (var tick = 0; tick < 20; tick++)
+            Tick(world, ref state, ref events);
+
+        Assert.True(state.Characters[2].Cloak);
+        Assert.Equal(100.0, state.Characters[2].Hp);
+    }
+
+    /// <summary>
+    /// "set cloaked spy as target if they're in the way": an enemy spy whose
+    /// body the line to the chosen target crosses takes the shot instead —
+    /// cloaked or not, since <c>with(Spy)</c> tests only team and the line.
+    /// </summary>
+    [Fact]
+    public void ACloakedSpyInTheLineOfFireTakesTheShot()
+    {
+        var world = World;
+
+        var state = default(WorldState);
+        PutBuiltSentry(ref state, 1, Team.Red, OpenX, FloorY);
+        Put(ref state, 2, PlayerClass.Scout, Team.Blue, OpenX + 100, OpenY);
+        Put(ref state, 3, PlayerClass.Spy, Team.Blue, OpenX + 50, OpenY);
+        state.Characters[3].Cloak = true;
+        state.Sentries[1].NoticedTarget = false;
+
+        Sentries.TurretEndStep(world, ref state, 1, ref DiscardedEvents.Events);
+
+        Assert.Equal(100.0, state.Characters[2].Hp);
+        Assert.Equal(92.0, state.Characters[3].Hp);
+        Assert.Equal(1, state.Characters[3].LastDamageDealer);
+    }
+
+    /// <summary>
+    /// The redirect's <c>team != other.team</c>: a friendly cloaked spy on the
+    /// line is not a target, and characters do not block a turret's shot.
+    /// </summary>
+    [Fact]
+    public void AFriendlyCloakedSpyInTheLineIsShotThrough()
+    {
+        var world = World;
+
+        var state = default(WorldState);
+        PutBuiltSentry(ref state, 1, Team.Red, OpenX, FloorY);
+        Put(ref state, 2, PlayerClass.Scout, Team.Blue, OpenX + 100, OpenY);
+        Put(ref state, 3, PlayerClass.Spy, Team.Red, OpenX + 50, OpenY);
+        state.Characters[3].Cloak = true;
+        state.Sentries[1].NoticedTarget = false;
+
+        Sentries.TurretEndStep(world, ref state, 1, ref DiscardedEvents.Events);
+
+        Assert.Equal(92.0, state.Characters[2].Hp);
+        Assert.Equal(100.0, state.Characters[3].Hp);
+    }
+
+    /// <summary>
     /// A target behind the turret starts the flip: 0.3 of a frame per tick
     /// across four frames means the turn completes on the fourteenth turret
     /// step, and the held shot lands on the fifteenth.

@@ -1455,6 +1455,15 @@ and the knife that arrives late", has the full rules; these are the traps:
   click** — can only be *started* from `cloakAlpha == 1`, is refused to an intel
   carrier, and costs 25 ticks of intel grab when dropped. An `else if` freezes
   the fade while a hit has the cloak flickering.
+- **A sentry turret ignores a cloaked spy and still shoots one in its way.**
+  `SentryTurret.events/End Step.xml`: `!cloak` keeps any cloaked character out
+  of the target queue at every alpha (the toggle, not the fade), and after a
+  target is chosen `with(Spy)` retargets onto every enemy spy the line to that
+  target crosses, testing team and the line only, so uncloaked spies qualify
+  too and the line's far end follows each reassignment.
+  `Sentries.TurretEndStep` and `RedirectToSpyInTheWay`; `SentryTests`' four
+  cloak tests, the redirect one mutation-checked. Without the first branch a
+  sentry shoots a cloaked spy on sight, which players notice at once.
 - ✅ **`StabMaskS`'s box is sampled now**: `24, 13, 57, 55` about
   origin `26, 37`, so -2 back and +31 forward — exactly what the PNG said.
   `SpriteBoxSampleTests`.
