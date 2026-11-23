@@ -1496,6 +1496,74 @@ the same scenarios should pass with comparable tick counts. This is the
 regression net for the bot work that motivated the project, and porting the
 runner is worth doing early rather than reinventing it.
 
+## The variable census: reading the reference by variable, not by object
+
+The four tiers prove that what was ported behaves like the reference. None of
+them can find a branch that was never ported: a recording that never exercises
+the branch matches with or without it, and an inventory of objects, messages
+and gamemodes counts the object as done. The census closes that gap by asking,
+for every reference variable the port models, **who writes it and who reads
+it, everywhere in the reference**, and whether each site is ported.
+
+Porting goes object by object, so an object's own uses of its variables are
+covered when its events are transcribed. What porting does not cover is
+another object reaching in, and every miss the census has found was that kind
+of site:
+
+| Miss | Site | Why porting the owner did not find it |
+|---|---|---|
+| Sentry shot cloaked spies | `SentryTurret End Step:28` reads `Character.cloak` | the turret was ported before the spy, with the branch deferred "until the spy lands" |
+| Humiliation only in Arena | `WinBanner Create:11-20` writes `Player.humiliated` | the claim "Arena and nothing else" came from one writer |
+| A hit did not shorten a sandvich | `damageCharacter.gml:5-6` writes `Character.omnomnomnomindex` | each call site was read and the script it calls was not |
+| Bubbles and the knife kept `timeUnscathed` | `damageCharacter.gml:7`, called by both | the same, and a comment and a test pinned the wrong reading |
+
+**The instrument is `tools/refvars.py`.** It reads `Scripts/**/*.gml` and the
+XML-escaped event code (which grep misses), and classifies each site as a write,
+a read, or a Draw-event site:
+
+```
+python tools/refvars.py --no-draw --owner Character cloak humiliated
+python tools/refvars.py --object Character --declared --summary --owner Character
+```
+
+`--owner` drops the owning object's own events, which leaves the cross-object
+sites. Scripts are always kept, because a script is shared code that any object
+can call. The write/read split is a heuristic (GML's `=` is also its
+comparison); read the line before trusting the column.
+
+**The procedure, per variable:**
+
+1. List the cross-object sites with `--no-draw --owner <Owner>`.
+2. Drop the sites no simulation depends on: client-only objects (`PlayerControl`,
+   `Spectator`, menus, HUDs), input scripts, cosmetic reward objects, and lines
+   that only set sprites, sounds or visibility. Say why in one word when
+   recording the triage.
+3. For each remaining site, find the port's code for it. A citation of the
+   file is not enough; the line has to be carried out. A call to a script
+   counts only if every line of the script is carried out somewhere.
+4. A site with no port code is a gap: fix it with a test that fails on the old
+   behaviour, or write it into the matching `docs/TRAPS-*.md` section as
+   deliberately not ported, with the reason.
+
+**A feature that lands runs step 1 for its own variables.** That is the check a
+deferred branch needs: the turret's cloak branch waited on the spy, and the
+spy's commit is the one place that could have found it by listing the readers
+of `cloak`.
+
+**What the census does not cover.** A variable the port does not model at all
+has no port field to check and is invisible to it; the object and message
+inventories are what find those. Local variables, `with` loops over another
+object's own variables under a different name, and `variable_local_exists`
+reads are matched by name only.
+
+### Census coverage
+
+| Group | Owner | Run | Result |
+|---|---|---|---|
+| Character, small variables (40, excluding `hp`, `lastDamage*`, `aimDirection`) | `Character` | 2026-11-23, reference `ea8d6951` | three gaps, all in `damageCharacter`, fixed in `b607741`; the rest ported or client-only |
+
+A group not in this table has not been censused. Add a row when one is.
+
 ## Order of work
 
 The tiers are also the order. Tier 1 gates tier 2 — a trace replay against a
