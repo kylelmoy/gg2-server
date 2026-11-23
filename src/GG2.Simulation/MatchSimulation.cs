@@ -167,6 +167,9 @@ public static class MatchSimulation
             // the phases that own them.
             Intel.BeginStep(ref state, slot, ref events);
 
+            // Begin Step:435-442: humiliation unscopes and uncloaks.
+            CharacterPhysics.HumiliationStep(ref state, slot);
+
             // Begin Step:429-439, below the intel block and the humiliation
             // one: which capture zone the character is standing in, which its
             // control point reads in the Step stage below.

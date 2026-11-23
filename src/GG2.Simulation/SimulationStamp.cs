@@ -181,11 +181,13 @@ public static class SimulationStamp
     /// that reason. The next bump for any other cause should add them to it.
     /// </para>
     /// <para>
-    /// <b>NOT bumped, for the same reason: the sentry's cloak rules.</b>
-    /// <see cref="Sentries.TurretEndStep"/> now skips a cloaked spy and
-    /// retargets onto an enemy spy in its line of fire, as the reference does,
-    /// where it shot cloaked spies before — a damage outcome, so a bump by the
-    /// rule above, and unstamped nets are the only kind loaded.
+    /// <b>NOT bumped, for the same reason: the sentry's cloak rules and the
+    /// map-end humiliation.</b> <see cref="Sentries.TurretEndStep"/> now skips a
+    /// cloaked spy and retargets onto an enemy spy in its line of fire;
+    /// <see cref="Rounds.BeginMapChange"/> humiliates every map end's losers
+    /// and <see cref="CharacterPhysics.HumiliationStep"/> uncloaks and unscopes
+    /// them, all as the reference does. Damage and trajectory outcomes, so a
+    /// bump by the rule above, and unstamped nets are the only kind loaded.
     /// </para>
     /// </remarks>
     public const int SimulationBehaviourVersion = 4;

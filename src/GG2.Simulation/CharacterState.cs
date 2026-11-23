@@ -811,18 +811,20 @@ public struct CharacterState
 
     /// <summary>
     /// <c>player.humiliated</c>: this character is on the team that just lost an
-    /// Arena round, mirrored beside <see cref="MapChanging"/> and written by the
-    /// same line.
+    /// Arena round or a map, mirrored beside <see cref="MapChanging"/> and
+    /// written by the same line.
     /// </summary>
     /// <remarks>
-    /// Arena and nothing else. <c>doEventArenaEndRound.gml:26</c> sets it on
-    /// every player not on the winning side and the next
-    /// <c>doEventArenaRestart</c> or <c>doEventArenaWaitForPlayers</c> clears
-    /// it, so it is true only during the ten seconds the scoreboard is up.
+    /// Set on every player not on the winning side by
+    /// <c>doEventArenaEndRound.gml:26</c> and by every map end's
+    /// <c>WinBanner</c>; cleared by the next Arena restart or wait, or the next
+    /// map. So it is true only while a scoreboard is up.
     /// <para>
     /// It costs 0.2 of control (<em>instead of</em> the intel's 0.1, not as
     /// well as), suppresses the attack, the taunt, the right click, the cloak
-    /// and the sandvich, and withholds the round-end ammo refill. The state
+    /// and the sandvich, forces an uncloak (unless stabbing) and an unscope
+    /// (<see cref="CharacterPhysics.HumiliationStep"/>), and withholds the
+    /// round-end ammo refill. The state
     /// lives on <see cref="PlayerState.Humiliated"/>; this is the per-tick copy
     /// the physics reads.
     /// </para>

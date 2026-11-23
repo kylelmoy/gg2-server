@@ -499,4 +499,53 @@ public sealed class RoundTests
         Assert.Equal(1, state.Players[1].RespawnTimer);
         Assert.False(state.Alive[1]);
     }
+
+    /// <summary>
+    /// <c>WinBanner.events/Create.xml</c>, which every <c>MAP_END</c> creates on
+    /// the server and on each client: everybody not on the winning team is
+    /// humiliated for the countdown, in every gamemode — spectators included —
+    /// and the next map's <c>basicRoomSetup.gml:33</c> clears it.
+    /// </summary>
+    [Fact]
+    public void AMapEndHumiliatesEveryoneButTheWinners()
+    {
+        var state = Started();
+        PutScout(ref state, 1, Team.Red);
+        PutScout(ref state, 2, Team.Blue);
+        state.AddPlayer(3);
+        state.Players[3].Team = Team.Spectator;
+
+        Rounds.Decide(ref state, Team.Red);
+        Rounds.BeginMapChange(ref state);
+
+        Assert.False(state.Players[1].Humiliated);
+        Assert.True(state.Players[2].Humiliated);
+        Assert.True(state.Players[3].Humiliated);
+
+        Rounds.ResetForNewMap(ref state, firstArea: false);
+
+        Assert.False(state.Players[2].Humiliated);
+        Assert.False(state.Players[3].Humiliated);
+    }
+
+    /// <summary>
+    /// A stalemate's winner is <see cref="Team.Spectator"/>, so both teams are
+    /// humiliated and only the spectators are spared.
+    /// </summary>
+    [Fact]
+    public void AStalemateHumiliatesBothTeams()
+    {
+        var state = Started();
+        PutScout(ref state, 1, Team.Red);
+        PutScout(ref state, 2, Team.Blue);
+        state.AddPlayer(3);
+        state.Players[3].Team = Team.Spectator;
+
+        Rounds.Decide(ref state, Team.Spectator);
+        Rounds.BeginMapChange(ref state);
+
+        Assert.True(state.Players[1].Humiliated);
+        Assert.True(state.Players[2].Humiliated);
+        Assert.False(state.Players[3].Humiliated);
+    }
 }
