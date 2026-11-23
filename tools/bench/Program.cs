@@ -228,6 +228,12 @@ if (Environment.GetEnvironmentVariable("BENCH_DUEL") == "1")
     return;
 }
 
+if (Environment.GetEnvironmentVariable("BENCH_ROOMS") is { } roomCount)
+{
+    Bench.RoomsBench.Run(int.Parse(roomCount));
+    return;
+}
+
 if (Environment.GetEnvironmentVariable("BENCH_TICK") == "1")
 {
     Bench.TickBench.Run(maps, Environment.GetEnvironmentVariable("GG2_NAV"), Environment.GetEnvironmentVariable("BENCH_MAP") ?? "gg_debug");

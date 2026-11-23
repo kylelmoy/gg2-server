@@ -143,6 +143,12 @@ ranking underneath to show they disagree.** Ranking on `decided` sees the time-c
 layer and is blind to the draw layer — it clears a map whose two arms are 6%
 decisive and flags one that is fine.
 
+## Modes for the room host
+
+| variable | what it does |
+|---|---|
+| `BENCH_ROOMS=<n>` | **what `n` private rooms cost one room host's tick thread** (`docs/ROOMS.md`, "Measured"). A real `RoomHost`, rooms built by `RoomTemplate.Apply` as the API builds them, ticked back to back. `BENCH_ROOMS_MODE` `policy` (default; the shipped bundle under `HandoverRule=distance`) or `scripted`; `BENCH_ROOMS_BOTS`, `BENCH_ROOMS_TEAM` and `BENCH_ROOMS_MAP` are the API's choices (`normal`, `medium`, rotation); `BENCH_ROOMS_WARM` (300) and `BENCH_ROOMS_TICKS` (1800). Prints heap per room, the host tick's mean/p50/p99/max, per room and per bot, and **the share of bot-ticks a net held the wheel, which says whether a policy run measured the policy**. No clients connect, so `MinHumans` 0 fills the rooms. **`BENCH_ROOMS_ENGAGE`** is `anyone` (default, every bot fights every bot with its net: the upper bound) or `humans` (the live setting, which with nobody connected never hands a net the wheel and so measures scripted bots). **`BENCH_AFFINITY=<hex mask>` is needed on a hybrid CPU**: unpinned, a 13700K moves the mean 2x between runs as the thread lands on P or E cores; pin to a set of cores (`5555` the P-cores one thread each, `FF0000` the E-cores), not one core, or the GC shares it and p99 reads 25 ms. |
+
 ## Modes kept for reference, not current
 
 These answered one question each and are unlikely to be run again. They are here
