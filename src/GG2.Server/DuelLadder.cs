@@ -10,10 +10,10 @@ namespace GG2.Server;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Ten levels on the duel server, eight for auto difficulty.</b> The duel's
-/// are <see cref="DuelSkillOf"/>'s own table, with only level 10 a tier (5) and
-/// levels 1-2 below anything a tier plays (<see cref="BotSkill.Novice"/>), for
-/// players on cumbersome controls. For auto difficulty, <see cref="SkillOf"/>:
+/// <b>Eleven levels on the duel server (0-10), eight for auto difficulty.</b> The
+/// duel's are <see cref="DuelSkillOf"/>'s own table, with only level 10 a tier (5)
+/// and levels 0-2 below anything a tier plays (<see cref="BotSkill.Novice"/>), for
+/// players on cumbersome controls; level 0 never fires. For auto difficulty, <see cref="SkillOf"/>:
 /// tiers 1-4 sit on levels 1, 3, 5 and 7 and the levels between interpolate their
 /// skill; tier 5 is level 8.
 /// Tier 5 differs from tier 4 only in playing like a person, and
@@ -41,8 +41,11 @@ namespace GG2.Server;
 /// </remarks>
 public sealed class DuelLadder
 {
-    /// <summary>The lowest level.</summary>
+    /// <summary>The lowest level auto difficulty has.</summary>
     public const int MinLevel = 1;
+
+    /// <summary>The duel server's lowest level: Dummy, a bot that never fires (<see cref="BotSkill.NeverFires"/>).</summary>
+    public const int DuelMinLevel = 0;
 
     /// <summary>The highest level auto difficulty has: tier 5, the nets as trained.</summary>
     public const int MaxLevel = 8;
@@ -80,8 +83,18 @@ public sealed class DuelLadder
     // A null class is one rating for every class: auto difficulty's.
     private readonly Dictionary<(string Player, PlayerClass? Class), Rating> _ratings = [];
 
-    /// <summary>A ladder whose ratings run from <see cref="MinLevel"/> to <paramref name="maxLevel"/>.</summary>
-    public DuelLadder(int maxLevel = MaxLevel) => Top = maxLevel;
+    /// <summary>A ladder whose ratings run from <paramref name="minLevel"/> to <paramref name="maxLevel"/>.</summary>
+    public DuelLadder(int minLevel = MinLevel, int maxLevel = MaxLevel)
+    {
+        Bottom = minLevel;
+        Top = maxLevel;
+    }
+
+    /// <summary>A ladder for the duel server: <see cref="DuelMinLevel"/> to <see cref="DuelMaxLevel"/>.</summary>
+    public static DuelLadder ForDuel() => new(DuelMinLevel, DuelMaxLevel);
+
+    /// <summary>The lowest level this ladder's ratings reach.</summary>
+    public int Bottom { get; }
 
     /// <summary>The highest level this ladder's ratings reach.</summary>
     public int Top { get; }
@@ -89,8 +102,11 @@ public sealed class DuelLadder
     /// <summary>One human's standing with one class.</summary>
     public sealed class Rating
     {
-        /// <summary>Continuous, in levels, <see cref="MinLevel"/> to <see cref="Top"/>.</summary>
+        /// <summary>Continuous, in levels, <see cref="Bottom"/> to <see cref="Top"/>.</summary>
         public double Value { get; internal set; }
+
+        /// <summary>The lowest level this rating reaches: its ladder's <see cref="DuelLadder.Bottom"/>.</summary>
+        public int Bottom { get; internal init; } = MinLevel;
 
         /// <summary>The highest level this rating reaches: its ladder's <see cref="DuelLadder.Top"/>.</summary>
         public int Top { get; internal init; } = MaxLevel;
@@ -122,7 +138,7 @@ public sealed class DuelLadder
     {
         if (!_ratings.TryGetValue((player, playerClass), out var rating))
         {
-            rating = new Rating { Value = Math.Clamp(startLevel, MinLevel, Top), Top = Top };
+            rating = new Rating { Value = Math.Clamp(startLevel, Bottom, Top), Bottom = Bottom, Top = Top };
             _ratings[(player, playerClass)] = rating;
         }
 
@@ -179,7 +195,7 @@ public sealed class DuelLadder
         }
 
         var move = rating.Step * margin * (won ? 1 : p / (1 - p));
-        rating.Value = Math.Clamp(rating.Value + (direction * move), MinLevel, rating.Top);
+        rating.Value = Math.Clamp(rating.Value + (direction * move), rating.Bottom, rating.Top);
         rating.LastDirection = direction;
         rating.Duels++;
     }
@@ -207,7 +223,7 @@ public sealed class DuelLadder
 
     /// <summary>The level a duel rating shows as.</summary>
     public static int LevelOf(double rating) =>
-        Math.Clamp((int)Math.Floor(rating + 0.5), MinLevel, DuelMaxLevel);
+        Math.Clamp((int)Math.Floor(rating + 0.5), DuelMinLevel, DuelMaxLevel);
 
     /// <summary>The skill a rating plays at: the tiers' skills, interpolated between their levels.</summary>
     public static BotSkill SkillOf(double rating)
@@ -232,14 +248,17 @@ public sealed class DuelLadder
         return BotSkill.For(skill).Human(MaxLevel - r);
     }
 
-    /// <summary>The duel server's skill at levels 1-10 (index 0 is level 1).</summary>
-    private static ReadOnlySpan<double> DuelSkills => [0.15, 0.15, 0.15, 0.27, 0.40, 0.55, 0.70, 0.85, 0.95, 0.95];
+    /// <summary>The duel server's skill at levels 0-10 (index 0 is level 0).</summary>
+    private static ReadOnlySpan<double> DuelSkills => [0.15, 0.15, 0.15, 0.15, 0.27, 0.40, 0.55, 0.70, 0.85, 0.95, 0.95];
 
     /// <summary>How much like a person each duel level plays (<see cref="BotSkill.Human(double)"/>), 1 fully to 0 not at all.</summary>
-    private static ReadOnlySpan<double> DuelHuman => [1, 1, 1, 0.85, 0.68, 0.50, 0.33, 0.20, 0.08, 0];
+    private static ReadOnlySpan<double> DuelHuman => [1, 1, 1, 1, 0.85, 0.68, 0.50, 0.33, 0.20, 0.08, 0];
 
-    /// <summary>How far below the skill floor each duel level plays (<see cref="BotSkill.Novice"/>): only the two Novice levels.</summary>
-    private static ReadOnlySpan<double> DuelNovice => [2, 1, 0, 0, 0, 0, 0, 0, 0, 0];
+    /// <summary>
+    /// How far below the skill floor each duel level plays (<see cref="BotSkill.Novice"/>):
+    /// the Dummy level and the two Novice levels. A rating under 0.5 never fires.
+    /// </summary>
+    private static ReadOnlySpan<double> DuelNovice => [3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0];
 
     /// <summary>The skill a duel bot plays at for its human's rating.</summary>
     /// <remarks>
@@ -251,15 +270,15 @@ public sealed class DuelLadder
     /// steps in log-odds: 0.46-0.71 a level on the tuning seeds and on
     /// <c>BENCH_SEED_BASE=500000</c>, against 0.22-0.88 before.
     /// <c>docs/TRAPS-BOTS.md</c>, "The duel ladder". Those were levels 1-8 and are
-    /// 3-10 now: levels 1 and 2 are the Novice levels under them, the floor's skill
+    /// 3-10 now: level 0 (never fires) and levels 1 and 2 are under them, the floor's skill
     /// pushed further down (<see cref="BotSkill.Novice"/>). Level 10 is exactly tier
     /// 5; no level below is a tier. What would show it stale: a retrained duel net,
     /// a change to <see cref="HumanizeOptions.Tracking9"/> or to <see cref="BotSkill.For"/>.
     /// </remarks>
     public static BotSkill DuelSkillOf(double rating)
     {
-        var r = Math.Clamp(rating, MinLevel, DuelMaxLevel) - MinLevel;
-        var i = Math.Min((int)r, DuelMaxLevel - MinLevel - 1);
+        var r = Math.Clamp(rating, DuelMinLevel, DuelMaxLevel) - DuelMinLevel;
+        var i = Math.Min((int)r, DuelMaxLevel - DuelMinLevel - 1);
         var t = r - i;
 
         var skill = DuelSkills[i] + ((DuelSkills[i + 1] - DuelSkills[i]) * t);
@@ -272,22 +291,23 @@ public sealed class DuelLadder
     /// <summary>The word a duel level is shown with.</summary>
     public static string LabelOf(int level) => level switch
     {
+        <= 0 => "Dummy",
         <= 2 => "Novice",
         <= 4 => "Easy",
         <= 6 => "Normal",
         <= 8 => "Hard",
         9 => "Expert",
-        _ => "Max",
+        _ => "Haxton",
     };
 
     /// <summary>
-    /// A duel bot's name: its class, level and label, "Soldier 5 (Normal)". The
-    /// longest, "Engineer 2 (Novice)" and "Engineer 9 (Expert)", are 19 bytes of the
-    /// 20 a name may have.
+    /// A duel bot's name: its level and label, "Lv 5 (Normal)". No class: with it
+    /// "Engineer Lv 10 (Haxton)" is 23 bytes of the 20 a name may have, and the
+    /// class shows on the sprite. The longest, "Lv 10 (Haxton)", is 14.
     /// </summary>
-    public static string NameOf(PlayerClass playerClass, double rating)
+    public static string NameOf(double rating)
     {
         var level = LevelOf(rating);
-        return $"{playerClass} {level} ({LabelOf(level)})";
+        return $"Lv {level} ({LabelOf(level)})";
     }
 }

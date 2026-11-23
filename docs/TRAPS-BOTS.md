@@ -918,6 +918,13 @@ model.** Four gates, all off `BotSkill`:
     1.5 to 2 moved 0.03, level 1 at 0.233); hold-fire capped near 0.9 overshot
     the other way (level 1 at 0.101, a 1.4 step). Against level 6 the Novice
     levels read 0.08 and 0.06, saturated, so tune them against level 3.
+  - **Level 0 (`BotSkill.NeverFires`, ratings under 0.5) scores 0.006 against
+    level 3**, the rest being the opponent's self-damage and the odd tie.
+    Withholding `Attack` in the combat chain was not enough: a scripted rocket
+    jump still hit the human (`DuelLadderTests.ALevelZeroBotDealsNoDamage`), so
+    `ScriptedBot.Poll` strips `Attack` and `Special` from its whole output, and
+    the net's `BuildSentry` is a command, not a key: with only the keys gated an
+    engineer still scored 0.13 through its sentry.
   - Single-level steps carry about ±0.15 of noise in log-odds even at 1,280
     duels; read pairs of levels when tuning. **A bot against a bot**: this says
     the levels are evenly apart, not where a person settles. What would show it

@@ -679,6 +679,17 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     /// </remarks>
     public PlayerInput Poll(in WorldView world, int slot, int tick)
     {
+        var input = Think(in world, slot, tick);
+
+        // The duel ladder's level 0 never fires, from any layer: a rocket jump or a
+        // mine is as much a hit as an aimed shot. HybridBot gates the net's ticks.
+        return Skill.NeverFires
+            ? new PlayerInput(input.Keys & ~(PlayerKeys.Attack | PlayerKeys.Special), input.NetAimDirection, input.AimDistance)
+            : input;
+    }
+
+    private PlayerInput Think(in WorldView world, int slot, int tick)
+    {
         if (!world.IsAlive(slot))
         {
             // A dead bot gives up its route rather than resuming one from

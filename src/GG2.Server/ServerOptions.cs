@@ -884,15 +884,15 @@ public sealed class ServerOptions
     /// <summary>
     /// On a duel server, each human's bot plays at a level that rises when they
     /// win and falls when they lose, one per human and class, and is named for
-    /// it ("Soldier 5 (Normal)"); <c>[Bots] Difficulty</c> is not read. Off, every
+    /// it ("Lv 5 (Normal)"); <c>[Bots] Difficulty</c> is not read. Off, every
     /// duel bot plays <c>Difficulty</c>. <see cref="DuelLadder"/>,
     /// <c>docs/DUEL.md</c>, "The difficulty ladder". Read every tick.
     /// </summary>
     public bool DuelLadder { get; set; } = true;
 
     /// <summary>
-    /// The ladder level a human starts each class at, 1-10. 5 is the first
-    /// Normal level; 1-2 are Novice. Read when a rating is first made.
+    /// The ladder level a human starts each class at, 0-10. 5 is the first
+    /// Normal level; 1-2 are Novice and 0 never fires. Read when a rating is first made.
     /// </summary>
     public int DuelLadderStartLevel { get; set; } = 5;
 

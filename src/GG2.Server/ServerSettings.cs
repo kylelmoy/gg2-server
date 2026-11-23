@@ -682,7 +682,7 @@ public static class ServerSettings
         settings.Add(IntRow(
             "Bots", "DuelLadderStartLevel", nameof(ServerOptions.DuelLadderStartLevel),
             o => o.DuelLadderStartLevel,
-            (o, v) => o.DuelLadderStartLevel = Math.Clamp(v, DuelLadder.MinLevel, DuelLadder.DuelMaxLevel),
+            (o, v) => o.DuelLadderStartLevel = Math.Clamp(v, DuelLadder.DuelMinLevel, DuelLadder.DuelMaxLevel),
             "7"));
 
         settings.Add(IntRow(

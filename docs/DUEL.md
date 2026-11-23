@@ -92,16 +92,20 @@ already in flight stay in the old cell.
 
 On by default (`[Bots] DuelLadder`, `--no-duel-ladder` turns it off). Each
 human's bot plays at a rating that follows their results, kept per human and
-per class, and the bot is named for it: `Soldier 5 (Normal)`. `[Bots]
+per class, and the bot is named for it: `Lv 5 (Normal)`. The name carries no
+class, which shows on the sprite anyway: with it, `Engineer Lv 10 (Haxton)` is
+23 bytes of the 20 a name may have. `[Bots]
 Difficulty` is not read for duel bots while it is on. `DuelLadder` in
 `src/GG2.Server/` is the whole of the arithmetic; `BotPopulationService.Duel.cs`
 applies it.
 
-**Levels.** Ten, with their own table (`DuelLadder.DuelSkillOf`); only level 10
-is a server tier (5, the nets as trained). Levels 1-2 are Novice, for players on
-cumbersome controls such as a phone: every ramp in `BotSkill.For` is flat below
-skill 0.15, so they push the handicaps past that floor instead
-(`BotSkill.Novice`). Auto difficulty on team servers keeps its own eight levels.
+**Levels.** Eleven, 0-10, with their own table (`DuelLadder.DuelSkillOf`); only
+level 10 is a server tier (5, the nets as trained). Levels 0-2 are for players
+on cumbersome controls such as a phone: every ramp in `BotSkill.For` is flat
+below skill 0.15, so they push the handicaps past that floor instead
+(`BotSkill.Novice`). **Level 0 never fires** (`BotSkill.NeverFires`, any rating
+under 0.5): no `Attack` and no `Special` from either layer, and no `BuildSentry`,
+so no rocket jump, mine, airblast or sentry lands a hit either. Auto difficulty on team servers keeps its own eight levels.
 Human-like aim costs a duel several tiers where it costs a match about one, so
 on the tiers' own mapping the levels bunched far below the top. Here the human
 aim fades over levels 3-10
@@ -114,6 +118,7 @@ keeps the tiers' mapping (`DuelLadder.SkillOf`).
 
 | Level | Skill | Human | Label | Score vs level 6 | Score vs level 3 |
 |---|---|---|---|---|---|
+| 0 | 0.15, never fires | 1.00 | Dummy | | 0.006 |
 | 1 | 0.15, Novice 2: holds fire 70%, aim error to 36 degrees, 2.5 s to the first shot | 1.00 | Novice | | 0.17 |
 | 2 | 0.15, Novice 1: holds fire 50%, aim error to 18 degrees | 1.00 | Novice | | 0.34 |
 | 3 | 0.15 | 1.00 | Easy | 0.15 | 0.52 |
@@ -123,7 +128,7 @@ keeps the tiers' mapping (`DuelLadder.SkillOf`).
 | 7 | 0.70 | 0.33 | Hard | 0.65 | |
 | 8 | 0.85 | 0.20 | Hard | 0.75 | |
 | 9 | 0.95 | 0.08 | Expert | 0.83 | |
-| 10 | 0.95 | 0 | Max | 0.90 | |
+| 10 | 0.95 | 0 | Haxton | 0.90 | |
 
 The rating is continuous and the bot plays it exactly; the name shows it
 rounded. On this server the nets always drive, so a level reaches them only

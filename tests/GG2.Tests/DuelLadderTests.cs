@@ -83,8 +83,8 @@ public sealed class DuelLadderTests
         Assert.Equal(BotSkill.ForTier(5), DuelLadder.DuelSkillOf(DuelLadder.DuelMaxLevel));
         Assert.Equal(BotSkill.For(0.15).Human(true), DuelLadder.DuelSkillOf(3));
 
-        var previous = DuelLadder.DuelSkillOf(1);
-        for (var r = 1.25; r <= DuelLadder.DuelMaxLevel; r += 0.25)
+        var previous = DuelLadder.DuelSkillOf(0);
+        for (var r = 0.25; r <= DuelLadder.DuelMaxLevel; r += 0.25)
         {
             var here = DuelLadder.DuelSkillOf(r);
             var human = here.HumanAim ? here.HumanAimStrength : 0;
@@ -126,39 +126,65 @@ public sealed class DuelLadderTests
         }
 
         Assert.Equal(floor, floor.Novice(0));
-        Assert.Equal(DuelLadder.DuelSkillOf(1), DuelLadder.DuelSkillOf(-5));
+        Assert.Equal(DuelLadder.DuelSkillOf(0), DuelLadder.DuelSkillOf(-5));
     }
 
-    /// <summary>The duel server's ladder reaches level 10; auto difficulty's stops at 8.</summary>
+    /// <summary>
+    /// Every rating that shows as level 0 never fires; level 1 and above always
+    /// might, and the hold-fire climbs without a gap to certainty on the way down.
+    /// </summary>
     [Fact]
-    public void TheDuelLadderHasTenLevels()
+    public void LevelZeroNeverFires()
     {
-        var duel = new DuelLadder(DuelLadder.DuelMaxLevel).For("p", PlayerClass.Soldier, 9, 0);
+        foreach (var r in new[] { 0, 0.2, 0.49 })
+        {
+            Assert.True(DuelLadder.DuelSkillOf(r).NeverFires, $"rating {r} fires");
+            Assert.Equal(0, DuelLadder.LevelOf(r));
+        }
+
+        foreach (var r in new[] { 0.5, 1, 2, 5, 10 })
+            Assert.False(DuelLadder.DuelSkillOf(r).NeverFires, $"rating {r} never fires");
+
+        Assert.Equal(0.85, DuelLadder.DuelSkillOf(0.5).HoldFireChance, 9);
+        Assert.Equal(0.70, DuelLadder.DuelSkillOf(1).HoldFireChance, 9);
+        Assert.False(BotSkill.ForTier(1).NeverFires);
+    }
+
+    /// <summary>The duel server's ladder runs 0-10; auto difficulty's 1-8.</summary>
+    [Fact]
+    public void TheDuelLadderRunsFromZeroToTen()
+    {
+        var duel = DuelLadder.ForDuel().For("p", PlayerClass.Soldier, 9, 0);
         DuelLadder.Record(duel, won: true, winnerHealth: 1, targetWinRate: 0.6);
         DuelLadder.Record(duel, won: true, winnerHealth: 1, targetWinRate: 0.6);
         Assert.Equal(DuelLadder.DuelMaxLevel, duel.Value);
 
+        var low = DuelLadder.ForDuel().For("q", PlayerClass.Soldier, 1, 0);
+        DuelLadder.Record(low, won: false, winnerHealth: 1, targetWinRate: 0.6);
+        DuelLadder.Record(low, won: false, winnerHealth: 1, targetWinRate: 0.6);
+        Assert.Equal(DuelLadder.DuelMinLevel, low.Value);
+
         var auto = new DuelLadder().For("p", null, 10, 0);
         Assert.Equal(DuelLadder.MaxLevel, auto.Value);
+        Assert.Equal(DuelLadder.MinLevel, new DuelLadder().For("p", null, -3, 0).Value);
     }
 
     [Fact]
     public void EveryNameFitsTheWire()
     {
-        Assert.Equal("Soldier 5 (Normal)", DuelLadder.NameOf(PlayerClass.Soldier, 5));
-        Assert.Equal("Scout 1 (Novice)", DuelLadder.NameOf(PlayerClass.Scout, 1.4));
-        Assert.Equal("Scout 3 (Easy)", DuelLadder.NameOf(PlayerClass.Scout, 3));
-        Assert.Equal("Heavy 10 (Max)", DuelLadder.NameOf(PlayerClass.Heavy, 9.5));
+        Assert.Equal("Lv 5 (Normal)", DuelLadder.NameOf(5));
+        Assert.Equal("Lv 0 (Dummy)", DuelLadder.NameOf(0.4));
+        Assert.Equal("Lv 1 (Novice)", DuelLadder.NameOf(1.4));
+        Assert.Equal("Lv 3 (Easy)", DuelLadder.NameOf(3));
+        Assert.Equal("Lv 9 (Expert)", DuelLadder.NameOf(9));
+        Assert.Equal("Lv 10 (Haxton)", DuelLadder.NameOf(9.5));
 
-        foreach (var playerClass in Enum.GetValues<PlayerClass>())
+        for (var level = DuelLadder.DuelMinLevel; level <= DuelLadder.DuelMaxLevel; level++)
         {
-            for (var level = DuelLadder.MinLevel; level <= DuelLadder.DuelMaxLevel; level++)
-            {
-                var name = DuelLadder.NameOf(playerClass, level);
-                Assert.True(
-                    Encoding.UTF8.GetByteCount(name) <= GameConstants.MaxPlayerNameLength,
-                    $"{name} is longer than a name may be");
-            }
+            var name = DuelLadder.NameOf(level);
+            Assert.True(
+                Encoding.UTF8.GetByteCount(name) <= GameConstants.MaxPlayerNameLength,
+                $"{name} is longer than a name may be");
         }
     }
 
@@ -269,9 +295,12 @@ public sealed class DuelLadderTests
         Assert.Equal(3, ladder.For("p", PlayerClass.Soldier, 3, 0).Value);
     }
 
-    private static ServerHarness Duel(bool ladder = true) =>
+    private static ServerHarness Duel(bool ladder = true, int? startLevel = null) =>
         new(o =>
         {
+            if (startLevel is { } start)
+                o.DuelLadderStartLevel = start;
+
             o.Map = "duel_01";
             o.MapDirectory = Path.Combine(ReferenceTree.MapsDirectory, "duel");
             o.NavCacheDirectory = Path.Combine(ReferenceTree.RepositoryRoot, "nav", "duel");
@@ -328,7 +357,7 @@ public sealed class DuelLadderTests
         using var harness = Duel();
         JoinAndPlay(harness, PlayerClass.Soldier);
 
-        Assert.Equal("Soldier 5 (Normal)", harness.Server.NameOf(BotSlot(harness.Server)));
+        Assert.Equal("Lv 5 (Normal)", harness.Server.NameOf(BotSlot(harness.Server)));
         Assert.Equal(DuelLadder.DuelSkillOf(5), SkillOfBot(harness.Server));
     }
 
@@ -352,7 +381,7 @@ public sealed class DuelLadderTests
         var bot = BotSlot(server);
 
         server.WorldForTests.Characters[bot].Hp = 0;
-        harness.TickUntil(() => server.NameOf(bot) == "Soldier 6 (Normal)", "the bot to be renamed", maxTicks: 3);
+        harness.TickUntil(() => server.NameOf(bot) == "Lv 6 (Normal)", "the bot to be renamed", maxTicks: 3);
 
         Assert.Equal(DuelLadder.DuelSkillOf(6), SkillOfBot(server));
     }
@@ -381,10 +410,10 @@ public sealed class DuelLadderTests
             maxTicks: 3);
 
         Assert.True(server.DeathsOf(human) > 0);
-        Assert.Equal("Soldier 5 (Normal)", server.NameOf(bot));
+        Assert.Equal("Lv 5 (Normal)", server.NameOf(bot));
 
         harness.TickUntil(() => !server.IsAlive(bot), "the bot to be killed", maxTicks: BotPopulationService.KillCamTicks + 2);
-        Assert.Equal("Soldier 4 (Easy)", server.NameOf(bot));
+        Assert.Equal("Lv 4 (Easy)", server.NameOf(bot));
     }
 
     /// <summary>
@@ -400,21 +429,47 @@ public sealed class DuelLadderTests
         var bot = BotSlot(server);
 
         server.WorldForTests.Characters[bot].Hp = 0;
-        harness.TickUntil(() => server.NameOf(bot) == "Soldier 6 (Normal)", "the win", maxTicks: 3);
+        harness.TickUntil(() => server.NameOf(bot) == "Lv 6 (Normal)", "the win", maxTicks: 3);
         WaitForBoth(harness);
         WaitOutProtection(harness);
 
         client.SendChangeClass(PlayerClass.Heavy);
         harness.TickUntil(() => server.ClassOf(BotSlot(server)) == PlayerClass.Heavy, "the bot to follow", maxTicks: 200);
         WaitForBoth(harness);
-        Assert.Equal("Heavy 5 (Normal)", server.NameOf(BotSlot(server)));
+        Assert.Equal("Lv 5 (Normal)", server.NameOf(BotSlot(server)));
         Assert.Equal(DuelLadder.DuelSkillOf(5), SkillOfBot(server));
 
         WaitOutProtection(harness);
         client.SendChangeClass(PlayerClass.Soldier);
         harness.TickUntil(() => server.ClassOf(BotSlot(server)) == PlayerClass.Soldier, "the bot to follow", maxTicks: 200);
         WaitForBoth(harness);
-        Assert.Equal("Soldier 6 (Normal)", server.NameOf(BotSlot(server)));
+        Assert.Equal("Lv 6 (Normal)", server.NameOf(BotSlot(server)));
         Assert.Equal(DuelLadder.DuelSkillOf(6), SkillOfBot(server));
+    }
+
+    /// <summary>
+    /// A level-0 bot beside its human, past spawn protection, deals no damage; the
+    /// same duel at level 10 does, so the first half can fail.
+    /// </summary>
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(10, true)]
+    public void ALevelZeroBotDealsNoDamage(int level, bool hurts)
+    {
+        using var harness = Duel(startLevel: level);
+        JoinAndPlay(harness, PlayerClass.Soldier);
+        WaitOutProtection(harness);
+        var server = harness.Server;
+        var human = HumanSlot(server);
+        var full = server.WorldForTests.Characters[human].Hp;
+
+        var hurt = false;
+        for (var tick = 0; tick < 600 && !hurt; tick++)
+        {
+            harness.Tick();
+            hurt = !server.IsAlive(human) || server.WorldForTests.Characters[human].Hp < full;
+        }
+
+        Assert.Equal(hurts, hurt);
     }
 }

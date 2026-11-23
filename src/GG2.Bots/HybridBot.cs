@@ -431,7 +431,9 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
         if (scope is not null && scope.WantsZoomToggle(in world, slot, tick))
             commands.Push(PlayerCommand.ToggleZoom());
 
-        if (build is not null && build.WantsBuild(in world, slot, tick))
+        // The duel ladder's level 0 builds no sentry: a sentry's shot is the bot's hit.
+        // The question is still asked, so the controller's state does not depend on it.
+        if (build is not null && build.WantsBuild(in world, slot, tick) && !(HandicapSkill ?? _scripted.Skill).NeverFires)
             commands.Push(PlayerCommand.BuildSentry());
     }
 
@@ -752,6 +754,11 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
 
         if (reacting || _handicapHoldFire)
             keys &= ~PlayerKeys.Attack;
+
+        // The duel ladder's level 0: Special too, or an engineer's sentry and a
+        // pyro's reflected rocket would still land hits.
+        if (skill.NeverFires)
+            keys &= ~(PlayerKeys.Attack | PlayerKeys.Special);
 
         return new PlayerInput(keys, (ushort)(input.NetAimDirection + _handicapAim), input.AimDistance);
     }

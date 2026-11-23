@@ -70,6 +70,11 @@ namespace GG2.Bots;
 /// lag that reaches the wire: 1 is all of it (tiers 1-4), and the duel ladder
 /// fades it to nothing between levels 7 and 8 (<see cref="Human(double)"/>).
 /// </param>
+/// <param name="NeverFires">
+/// The duel ladder's level 0 (<see cref="Novice"/>): neither <c>Attack</c> nor
+/// <c>Special</c> ever reaches the wire on a target, so an engineer builds no
+/// sentry and a pyro reflects nothing.
+/// </param>
 public readonly record struct BotSkill(
     int AcquireTicks,
     int FireDelayTicks,
@@ -88,7 +93,8 @@ public readonly record struct BotSkill(
     bool HumanAim = false,
     int ReversalCooldownTicks = 0,
     double PolicyReflexTicks = double.NaN,
-    double HumanAimStrength = 1)
+    double HumanAimStrength = 1,
+    bool NeverFires = false)
 {
     /// <summary>
     /// How late a policy sees an enemy rocket, in ticks: <see cref="PolicyReflexTicks"/>,
@@ -237,7 +243,8 @@ public readonly record struct BotSkill(
 
     /// <summary>
     /// This skill pushed past <see cref="Lerp"/>'s floor by <paramref name="depth"/>,
-    /// 0 (unchanged) to 2: the duel ladder's Novice levels.
+    /// 0 (unchanged) to 3: the duel ladder's Novice levels at 1 and 2, its Dummy
+    /// level at 3.
     /// </summary>
     /// <remarks>
     /// <b>Why a separate knob</b>: every ramp in <see cref="For"/> is flat below
@@ -258,19 +265,29 @@ public readonly record struct BotSkill(
     /// log-odds against the ladder's 0.5-0.7 above. Bot against bot; what would show
     /// it wrong is a Novice player still losing most duels at level 1.
     /// </para>
+    /// <para>
+    /// <b>Past depth 2 the hold-fire climbs to certainty</b>, 0.85 at 2.5, and beyond
+    /// 2.5 the bot <see cref="NeverFires"/>: the duel ladder's level 0, which shows
+    /// for any rating under 0.5, does not shoot at all.
+    /// </para>
     /// </remarks>
     public BotSkill Novice(double depth)
     {
         if (depth <= 0)
             return this;
 
-        var d = Math.Min(2.0, depth);
+        var d = Math.Min(3.0, depth);
+        var dummy = d > 2.5;
+
+        // 0.025d(5 + d) up to depth 2 (+0.35), then 0.3 a depth to certainty at 3.
+        var holdFire = d <= 2 ? 0.025 * d * (5 + d) : 0.35 + (0.3 * (d - 2));
 
         return this with
         {
             FireDelayTicks = FireDelayTicks + (int)Math.Floor((15 * d) + 0.5),
             PolicyAimErrorDeg = PolicyAimErrorDeg + (6 * d * d),
-            HoldFireChance = Math.Min(0.9, HoldFireChance + (0.025 * d * (5 + d))),
+            HoldFireChance = dummy ? 1 : Math.Min(1, HoldFireChance + holdFire),
+            NeverFires = dummy,
             ReversalCooldownTicks = ReversalCooldownTicks + (int)Math.Floor((3 * d) + 0.5),
             PolicyReflexTicks = PolicyReflex + (1.5 * d),
             ReflexMissChance = Math.Min(0.9, ReflexMissChance + (0.1 * d)),
