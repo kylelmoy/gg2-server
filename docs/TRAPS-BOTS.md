@@ -2,7 +2,7 @@
 
 ## ⚠️ The bot layer is not held to the reference (2026-08-27)
 
-**The user's call, and it reverses CLAUDE.md's standing "the reference is the
+**The user's call, and it reverses CONTRIBUTING.md's standing "the reference is the
 specification" rule for `src/GG2.Bots/` only:**
 
 > "The reference bot implementation should be considered incomplete. We began
@@ -248,10 +248,10 @@ the original JavaScript scenario runner and scenarios.
 
 ⚠️ **Do not sample nav NODES as if they were places a match visits.** Nodes are
 emitted wherever the walkmask offers standable ground with clearance —
-`gg2-nav-gen` floods the whole mask, not from spawns — so a graph carries nodes
+The original nav generator floods the whole mask, not from spawns — so a graph carries nodes
 in regions no walking character can reach. Routing is immune (A* never reaches
 an island over edges); anything that draws *nodes* directly is not, which is
-how `gg2-rl`'s banded duel placement came to be able to seed episodes inside
+how a trainer's banded duel placement came to be able to seed episodes inside
 `gg_debug2`'s sealed chambers with no teleport and no intent (2026-09-01, the
 finding that made the moving-platform `SimulationStamp` bump unconditional).
 
@@ -511,7 +511,7 @@ and fly as something else.
 ### Held flight: plain jumps taken the way a person takes them (2026-10-11)
 
 **Why.** Measured against people in the fleet's traces (`tools/navscan`,
-`gg2-rl` `docs/PLAN.md`, navigation), bots braked to the arc's planned speed,
+), bots braked to the arc's planned speed,
 jumped at about half the people's speed, and changed keys every four ticks in
 the air. People run at the obstacle and hold one key.
 
@@ -654,8 +654,7 @@ off the far end, off the route (`oldfort-perch-reroutes` 1156 → 1374, with a
 blacklist). ⚠️ **An open-ended window is open-ended about where the bot
 touches down, not about where it can run to.** Requiring run-up room before
 the destination's own leaving jump fixed it and gave the gain back (13.0%),
-and raised step key changes to 0.06. Reverted. gg2-rl `docs/PLAN.md`, N9 /
-N9b.
+and raised step key changes to 0.06. Reverted.
 **N10, no standing still off the route (fixed; seen first under N9).** Standing
 off the route, the follower fires `OffRoute` every tick, and `OffRoute` calls
 `Plan`. When `Plan` returns without a route, the bot presses nothing. On
@@ -672,7 +671,7 @@ master this was 94 stalls of 2 seconds or more in 24 matches, 0.9% of bot ticks
 
 Now 0 stalls of 2 seconds or more. Sweep ticks −1.5% and blacklists −11%, but
 shipping stranded 443 → 453. Those are rocket jumps that arrived late before,
-and they came from the throttle half. gg2-rl `docs/PLAN.md`, N10 / N10b.
+and they came from the throttle half. 
 
 **N12, falls flown held.** ⚠️ **The fall steering's tracker holds the take-off
 column in the air**, so a bot that walked off a ledge at speed braked back over
@@ -1009,8 +1008,7 @@ model.** Four gates, all off `BotSkill`:
   - the fleet discriminator falls from 0.747 to 0.618 (0.852 to 0.767 at
     300px), the largest move any human-likeness change has made.
 
-  What is left is a lack of flicks and of aim reversals. `gg2-rl` `docs/PLAN.md`
-  phase 5, D3.
+  What is left is a lack of flicks and of aim reversals.
 
   **`Tracking2` replaced `Tracking` the same day (D4)**: errors past 32° are
   closed by half in 2-4 tick strokes that sometimes overshoot, and a moving
@@ -1023,7 +1021,7 @@ model.** Four gates, all off `BotSkill`:
   brain points the aim along the walk, and the filter used to let that through:
   6% of in-range ticks, 18% of the big turns. Counting a close enemy as a fight
   filters it like any other turn (`EngageWithoutTarget`). At tier 4, O2 fell
-  0.803 → 0.767 (with jump take-offs in place of key presses, `gg2-rl`'s
+  0.803 → 0.767 (with jump take-offs in place of key presses, the
   corrected instrument), and the fleet discriminator fell 0.635 → 0.607 (0.771 →
   0.652 at 300px). The ladder read −0.068 / −0.110 / −0.162 / −0.215, still even.
 
@@ -1719,7 +1717,7 @@ was provably unchanged at that moment. A stamp move caused by a *physics* change
 retires those files, and re-stamping through one leaves nothing able to detect
 it.
 
-⚠️ **`gg2-rl` needed no change** — it receives the stamp over the env handshake
+⚠️ **The trainer needed no change** — it receives the stamp over the env handshake
 (`EnvProtocol.SimulationUuid`) rather than computing it, so the trainer records
 whatever this build hands it.
 
@@ -2201,7 +2199,7 @@ survived against it**, including "sample the arc as a straight line" — the one
 the whole feature is about. Sweeping ctf_truefort for pairs where gravity alone
 decides gave five; node 27 → node 136 is the one used.
 
-⚠️ **The sweep that chose that fixture was itself wrong, for a reason CLAUDE.md
+⚠️ **The sweep that chose that fixture was itself wrong, for a reason CONTRIBUTING.md
 already records.** It solved the aim with `BotAim.NoFloor`, so the solver
 predicted a stationary target falling forever and aimed **below its feet, into
 the ground** — every arc it sampled was blocked, reading as the feature refusing
@@ -2266,7 +2264,7 @@ The reference is `botMinesArmed.gml` and `botClassKeys.gml:89-93`.
 ⚠️ **The reference's comment is only half true: a STUCK mine has no
 quarter-radius cutoff.** "Anything at 30 of box distance takes nothing" holds for
 a mine in flight but not one lying in a doorway — the guard is
-`and other.splashThreshhold`, cleared on landing (CLAUDE.md, stage 6). Measured
+`and other.splashThreshhold`, cleared on landing (CONTRIBUTING.md, stage 6). Measured
 on `ctf_truefort`, one mine against a scout, damage out of a full blast of 45:
 
 | centre gap | airborne | stuck |
@@ -2471,7 +2469,7 @@ gates and says nothing about occupancy.
 isn't free: twelve bots cost `0.154ms` a tick, 0.5% of the budget, so the
 headroom claim is untouched.** Configuration-dependent, previously unrecorded:
 the default (Debug) build reads **0.369ms, 1.1%**. `README.md`,
-`docs/ARCHITECTURE.md`, `docs/PLAN.md` and this file's header now all carry the
+`docs/ARCHITECTURE.md`, `docs/STATUS.md` and this file's header now all carry the
 figure with its build; a re-measure that omits which build ran looks like a 2x
 regression.
 
@@ -3093,7 +3091,7 @@ layer. Neither covers the routing a server actually does.
 mean, not a bug fix.** Wiring `ScenarioWorld` to the tables would move all three
 pinned numbers and every digest at once, and a pin that moves for a reason
 nobody wrote down is worse than a pin measuring the wrong arm. If it is done, it
-is a re-record with the diff stated in both directions, per `CLAUDE.md`.
+is a re-record with the diff stated in both directions, per `CONTRIBUTING.md`.
 
 ### Two ways to spend a next-hop table, and why BOTH ship
 
@@ -3358,7 +3356,7 @@ rather than a convention.
 item 3 (recording human play with the parity recorder — the only item with a
 deadline, since data not collected during the first public games does not exist
 afterwards), item 8 (the socketless match runner, which is phase 8's), item 9
-(`SIM_UUID` and refusing a mismatched policy), and item 10 (`GG2.Env`).
+(`SIM_UUID` and refusing a mismatched policy), and item 10 (the training environment).
 
 ### Phase 7 item 4u: SIM_UUID, and a surface that is chosen rather than swept
 
@@ -3537,7 +3535,7 @@ does not work.** `BotClassKeys` refuses to fire inside
 deliberately does **not** move the bot away, because *"where this bot stands is
 the objective layer's decision rather than this one's"*. So a goal of the enemy's
 own position walks a soldier to point blank and leaves it there, not firing:
-measured in `GG2.Env`'s duels as **250 decisions of walking, arrival 59px away
+measured in training duels as **250 decisions of walking, arrival 59px away
 against a band of 110, and zero shots**.
 
 The spot search fixes it and is machinery that already existed for the generator
@@ -3574,7 +3572,7 @@ bug hid:
 Deaths across those three seeds went **42 → 50** at the same time. The bots spread
 out *and* killed each other more. `MatchActuallyHappensTests` gates both halves.
 
-#### ✅ And `GG2.Env`'s duels use the same branch
+#### ✅ And training duels use the same branch
 
 A duel runs on `ScenarioWorld`, a world with no gamemode at all, so it falls to
 this branch like any TDM map. ⚠️ **`DuelEnv` had a hand-rolled `GoalLocked` chase
@@ -3617,7 +3615,7 @@ so it reports.
 
 **Pinned rather than fixed** (`MatchActuallyHappensTests`). Giving Team
 Deathmatch a goal is a bot-layer design question — hunt the nearest enemy?
-patrol? hold a chokepoint? — and `CLAUDE.md`'s rule for this layer is to improve
+patrol? hold a chokepoint? — and `CONTRIBUTING.md`'s rule for this layer is to improve
 where the fix is straightforward and write down where it is not. This is not
 straightforward: "walk at the nearest enemy" is the obvious answer and is also
 how you get eight bots in a conga line.
@@ -3631,7 +3629,7 @@ not one of them asked whether a match had anything in it.
 
 ### ⚠️ The sticky jump's envelope is 194 px, not 310 — measured before the arm was built
 
-`gg2-nav-gen` ships a sticky-jump edge fan (6,497 edges across 24 graphs,
+The original nav generator ships a sticky-jump edge fan (6,497 edges across 24 graphs,
 ~1,600 node-openings) built from a derived, not measured, constant:
 **`NAV_SJ_IMPULSE = 10`**. The rocket jump's own derived number promised 276 px
 and delivered 206 while every offline check stayed green and the follower
@@ -3673,7 +3671,7 @@ costing arcs against it: if it moves, every type-7 edge needs regenerating.
 ⚠️ **And the probe's first draft measured nothing at all**, because it placed the
 demoman at a hand-picked (500, 850) on `gg_debug` and put him inside terrain,
 where he sat at terminal velocity going nowhere. `PlaceAtSpawn` is what fixed it.
-**The same lesson as `gg2-rl/gg2-rl/docs/ENV.md`'s sampled placement, on the same day, in a
+**The same lesson as the trainer's sampled placement, on the same day, in a
 second place** — a coordinate that looks reasonable is not a coordinate that is
 free.
 
@@ -3719,14 +3717,14 @@ edge one retry before blacklisting it, which is the right policy for a transient
 `StickyModel.Reach` **delegates to `RocketModel.Reach`** rather than copying it. A
 mine jump flies under `moveStatus` 1 exactly as a rocket jump does — control
 0.65, friction 1 — and the one thing a rocket has that a mine does not
-(`NAV_RJ_SPEEDUP`) is not used by that integration. ⚠️ **`gg2-nav-gen`'s
+(`NAV_RJ_SPEEDUP`) is not used by that integration. ⚠️ **The original nav generator's
 `canFly` veto uses the same law** (`flyDistanceRocket`, moveStatus 1), so the
 generator and the follower agree about which arcs exist; that agreement is worth
 keeping deliberately rather than by coincidence.
 
 #### ⚠️ Flying real edges found a bug every synthetic test was blind to
 
-`gg2-nav-gen` built a sticky cache (`build/botnav-sticky`, 4,285 type-7 edges) and
+The original nav generator built a sticky cache (`build/botnav-sticky`, 4,285 type-7 edges) and
 48 real edges were flown across four maps. **Zero sticky jumps were taken.**
 
 **The cause: placing the mine puts the launcher on its refire cooldown.**
@@ -3764,7 +3762,7 @@ than read out of the follower.
 
 ✅ **After the fix, 4 of 4 real sticky edges on `ctf_2dfort` are flown and
 arrive** (was 1 of 4 — the one where no parallel edge existed). Reproduce with a
-demoman driven over `gg2-nav-gen`'s `build/botnav-sticky`; that cache is another
+demoman driven over the original nav generator's `build/botnav-sticky`; that cache is another
 lane's build output and is not gated here, which is why the checked-in gate is
 `PathFollowerTests.ADemomanOnAPairThatAlsoCarriesARocketJumpStillPlacesItsMine`
 — the same graph shape, synthetic, and it fails without the fix.
@@ -3829,7 +3827,7 @@ is why both are pinned.
 
 #### The number item C existed to produce
 
-**Every sticky arc `gg2-nav-gen` emits, flown**: 24 graphs, 4,132 arcs, 52.7s.
+**Every sticky arc the original nav generator emits, flown**: 24 graphs, 4,132 arcs, 52.7s.
 
 | | |
 |---|---|
@@ -3845,7 +3843,7 @@ sticky jumps taken"*. ⚠️ **It is not checked in**, because `build/botnav-sti
 is another lane's output behind a flag; the checked-in gates run the same harness
 over `nav/`, where a rocket jump and an air jump are the arcs that exist.
 
-⚠️ **Two findings in it belong to `gg2-nav-gen` rather than here.**
+⚠️ **Two findings in it belong to the original nav generator rather than here.**
 
 - **8,219 blacklist fires across 1,947 measured flights** — about 4.2 per flight,
   against **zero** over `PathFollowerFixtureTests`' 137-node walking leg and
@@ -3875,7 +3873,7 @@ cannot answer "which edge is this hop" a second way. The tie-break it implements
 #### ✅ What the flights did buy: 333 arcs that leaned on a run-up that cannot exist
 
 Independently of the open question above, the flights found a real bug in the
-generator, and the route to it is the interesting part: **`gg2-nav-gen` went
+generator, and the route to it is the interesting part: **The original nav generator went
 looking for reasons my refusals might be legitimate, and found one that applied
 to different edges.**
 
@@ -3946,7 +3944,7 @@ The complement is `BENCH_FLIGHT_ROUTES`, which flies whole routes and so exercis
 edges in the context they are actually used in.
 
 ⛔ **The two columns are not two runs of one measurement.** The exact heuristic is
-a different arm (`CLAUDE.md`, `--no-nav-distances`), and here is what that costs
+a different arm (`CONTRIBUTING.md`, `--no-nav-distances`), and here is what that costs
 in coverage: it routes around **5,741 more** single hops, and **measurable rocket
 jumps fall 5,659 → 3,537 — a 37% loss over the one edge kind whose arm nothing
 else exercises.** `shadowed` and `no route` are identical across the arms, which
@@ -4575,7 +4573,7 @@ route with no rocket jump anywhere in it and walked the long way round.
 
 ⚠️ **Nothing looked broken.** The bot arrives. It is slower and it takes a
 different route, and no gate in this repository asked whether a bot that arrived
-had used the arcs it was routed over — which is the failure mode CLAUDE.md
+had used the arcs it was routed over — which is the failure mode CONTRIBUTING.md
 describes as "a match that ends is not a match that happened", arriving in a place
 nobody had thought to look.
 
@@ -4639,7 +4637,7 @@ them and this attribution is wrong.
 #### ✅ PRICED: what it cost the bot layer, measured against a fixed checkpoint
 
 **The first bot-layer move in this project to be priced rather than assumed**,
-measured by the `gg2-rl` lane on 2026-09-06 when it re-pinned from `90cb383` to
+measured by the training project on 2026-09-06 when it re-pinned from `90cb383` to
 `c434229`. Same checkpoint files, same script, nine mirror cells against the
 scripted bot, 400 duels, four seeds:
 
@@ -4676,7 +4674,7 @@ wrong; it is recorded because it looks like a control and is a tautology.
 
 ⚠️ **This generalises past soldier.** The policy gate is scored against the
 scripted bot for every class, so ANY bot-layer move shifts the null under all
-nine — `CLAUDE.md`'s "re-score a known checkpoint when the bot layer moves" is
+nine — `CONTRIBUTING.md`'s "re-score a known checkpoint when the bot layer moves" is
 usually read as a validity check on old numbers, and it is also the only way to
 attribute new ones.
 
@@ -4792,7 +4790,7 @@ Reference damage, from `Weapons.RifleBeginStep`: unscoped
 full charge (`RifleMaxDamage`) **75**. ⚠️ **A bot that never zooms fires at 35
 for ever**, against a weapon that reaches 75, and `BotClassKeys`' sniper branch
 reads `self.Zoomed` (always false for a non-zooming bot) — so this is the
-mirror of CLAUDE.md's standing rule ("a bot must not do something a client
+mirror of CONTRIBUTING.md's standing rule ("a bot must not do something a client
 cannot") in the other direction: a client could do something a bot could not.
 
 ✅ **Closed.** `ICommandSource` already existed (phase 7, `ScriptedBot`); two
@@ -4865,7 +4863,7 @@ is exactly the part that matters.
 ⚠️ The model also says the rule is DPS-negative at *every* range past 250px,
 which cannot be the whole story — a real sniper charges for **burst to kill**, not
 for sustained DPS. Fixing this needs a decision about what the rule optimises and
-more than 24 duels on one map. CLAUDE.md: improve a bot decision where the fix is
+more than 24 duels on one map. CONTRIBUTING.md: improve a bot decision where the fix is
 straightforward and measured; **write the hard ones down**.
 
 ##### ⚠️ The sign is not stable at small samples
@@ -4907,7 +4905,7 @@ Four independent measurements now say so, and they were taken for four different
 reasons:
 
 - **One spawn point per team**, so sampled placement draws the same duel every
-  time — `gg2-rl` computed a sixteen-duel confidence interval off a sample size
+  time — the trainer computed a sixteen-duel confidence interval off a sample size
   of one.
 - **Zero opponent-model divergence in 12 of 12 scenarios**, at every separation
   tried, against both a scripted and a rollout opponent.
@@ -4958,15 +4956,14 @@ worse), observation quality (beats 1-NN), state coverage (fixing it worked and c
 is left unexplained on purpose; neither lane has a fifth candidate and neither
 invented one.**
 
-⚠️ **The 7.2 there is ONE training run a side** — see `gg2-rl/gg2-rl/docs/ENV.md`, "every win
-rate above is ONE training run a side". The conclusion it supports survives the
+⚠️ **The 7.2 there is ONE training run a side.** The conclusion it supports survives the
 noise by fifty points; the 7.2 itself lives inside it.
 
 ### ⚠️ A correction is a claim too
 
 Label-transfer from policy-visited states to their nearest control state
 retains **36%** (0.204 → 0.074): the states genuinely are meaningfully
-uncovered — the shadow slot's compounding-error rationale in `gg2-rl/gg2-rl/docs/ENV.md`
+uncovered — the shadow slot's compounding-error rationale
 stands. An earlier retraction of that claim, based on raw Euclidean distance
 over the unnormalised 209-float observation (which weights every column
 equally where a policy does not), was itself wrong. **A correction inherits the
@@ -4984,7 +4981,7 @@ Its own doc comment said that was safe: *"the search costed whichever it took, s
 the follower steers the first the index yields."*
 
 **That sentence was false, and nothing in the repo could contradict it** — the
-exact failure mode `CLAUDE.md` names. The search refuses **per edge**; the
+exact failure mode `CONTRIBUTING.md` names. The search refuses **per edge**; the
 follower resolved **per node pair**.
 
 #### The graphs really do carry parallel edges, and plenty of them
@@ -5122,7 +5119,7 @@ own hill is the nearer one, so **every bot camps the hill that scores it
 nothing** and neither team ever contests the other's. The bots play the mode
 exactly backwards.
 
-### ✅ FIXED 2026-09-01 — and `gg2-rl` supplied the distinction that made it clean
+### ✅ FIXED 2026-09-01 — and the distinction that made it clean
 
 **`BotObjective.ControlPoint` now sends a non-defending bot to the ENEMY's hill
 in this mode, and nowhere else.** After the fix: **19-20 of 20 decided at every
@@ -5156,7 +5153,7 @@ this**, because it asserted the wrong liveness. `EveryBotGoesSomewhere` checks
 that the bots MOVE — and in dkoth they moved, briskly, to their own hill. Every
 bot went somewhere and the mode could not be won.
 
-✅ **The rule, `gg2-rl`'s, in its sharpened form**: the rule is not "assert
+✅ **The rule, in its sharpened form**: the rule is not "assert
 liveness" — it is that **the signal must be one only this mode can produce.** A
 shared signal is a liveness assertion that cannot fail for the reason you care
 about. Movement is shared by every mode, so it cannot tell a working mode from
@@ -5179,7 +5176,7 @@ own options with the kill limit out of the way and has no escape clause.
 invisible because nothing asserted the mode *progressed* — `eval` reported instant
 Arena rounds as clean wins for two phases. Here two of the 22 shipped maps have
 presumably never produced a bot match that could end, and nobody noticed because
-nothing ever asked. ✅ **It was found because `gg2-rl` insisted the exit criterion
+nothing ever asked. ✅ **It was found because the trainer insisted the exit criterion
 be evaluated per map on every shipped map** rather than on the six that were
 screened.
 
@@ -5617,7 +5614,7 @@ control.
 | `ctf_truefort` 1 (control) | 322 → 590 |
 
 The statue census — 22 maps, 8 seeds, ten-minute matches, longest run inside a
-16px circle — is `.claude/notes/probes-0909/ZzStatueCensus.cs`. Across it:
+16px circle — is a one-off census (not checked in). Across it:
 
 | | Statue time | Full-match statues | Worst run > 5,000 | Longest single run |
 |---|---|---|---|---|
@@ -6136,7 +6133,7 @@ that added a gate bit to that key would cost a derive at every setup boundary.
 
 ### Measured
 
-`ZzWallCensus` (`.claude/notes/probes-0915/`, gitignored): bot-ticks spent
+`ZzWallCensus` (a one-off census (not checked in), gitignored): bot-ticks spent
 pressing a direction, on the ground, going nowhere — the player-visible symptom
 of a route through something solid. 23 maps x 2 seeds x 12 bots, 9,000 ticks,
 Release.
@@ -6261,7 +6258,7 @@ cannot.** Its two assertions are `PlaceFreeInMask` at `StandY` and at
 `StandingY` — the node is not inside terrain — and neither asks whether there is
 floor under the box. **Every one of the 3,339 nodes counted above passes it, by
 construction**: the census only counts a midpoint that is free, so it is free in
-the mask too. That is the shape CLAUDE.md warns about — a green gate that is not
+the mask too. That is the shape CONTRIBUTING.md warns about — a green gate that is not
 gating the thing it reads as gating — and the fix for the test is an assertion
 it does not currently make, not a stricter version of one it does.
 
@@ -6541,11 +6538,11 @@ and the parameters say what they were fitted from.
 
 **Why.** On the public fleet, a classifier given one second of in-range play
 tells bots from people at AUC 0.915, and both brains look alike: scripted and
-policy aim and movement give it away equally. `gg2-rl` `docs/STATUS.md`, phase 5.
+policy aim and movement give it away equally.
 
 **Measured at 115b8e0 (v2, which also held movement keys) and v3 (aim only),
 shipped two-checkpoint bundle, fleet's eight maps, `tools/botrecord` arms of
-18,000 ticks a map, 5 trace splits at 150px.** `gg2-rl` `docs/PLAN.md` phase 5
+18,000 ticks a map, 5 trace splits at 150px.** 
 has the pre-registrations and the full tables.
 
 | | without | v2 | **v3** |
@@ -6595,7 +6592,7 @@ dead zone.
 **It is not the blind test.** The aim parameters were fitted to moments of the
 distributions the classifier's turn features summarise. A bot that beats this
 instrument can still be spotted by a person. What would show it is stale: a
-re-run of `gg2-rl`'s `scripts/human_style.py --observable` against newer fleet
+re-run of the trainer's observable human-style instrument against newer fleet
 traces reading a different gap.
 
 ### Lazy aim between shots (v5): the total turn is conserved
@@ -6631,7 +6628,7 @@ smoothness for size, v5 traded turning between shots for turning on the next
 shot, and D2 traded the walk snap for stillness. Both brains track the target's
 bearing fully (about 4°/tick within 150px). People turn about 2°/tick and sit
 about 30° off. Tracking like a person means hitting less, so what is left is a
-strength trade, not a filter. `gg2-rl` `docs/PLAN.md` phase 5, D2.
+strength trade, not a filter. 
 
 **`tools/botrecord`** runs a bots-only server, unpaced, with `--record`, so a
 configuration produces traces in the fleet's format. It sets

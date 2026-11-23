@@ -12,13 +12,8 @@
 //   node tools/gen-gg-debug2.js          # writes maps/gg_debug2.png
 //
 // The output is deterministic: same script, same bytes. Never edit the PNG by
-// hand - change this script and re-run it, then regenerate the nav graph:
-//
-//   node <gg2-nav-gen>/bin/gg2navgen.js build maps/gg_debug2.png --md5 none --out nav
-//
-// (--md5 none because the server keys nav caches by map NAME, the way it does
-// for every built-in map; gg2navgen would otherwise treat a PNG given by path
-// as a custom map and suffix the file's MD5.)
+// hand - change this script and re-run it, then regenerate the nav graph with
+// `gg2-server navgen`.
 //
 // ⚠️ A stock client cannot join this map. The port always advertises an empty
 // map MD5 ("built into the client"), and gg_debug2 is not built into the
@@ -34,7 +29,7 @@
 // by the entity's `resource` property, and only the chamber raft names one —
 // see its own section below for the embed format and the discriminating
 // removeback design. All five are placed where nav cannot need them
-// (gg2-nav-gen skips the type outright, measured: the graph is byte-identical
+// (the original nav generator skips the type outright, measured: the graph is byte-identical
 // with and without them).
 //
 // The map, in one paragraph: a 240x80-cell (1440x480 world px) mirror-symmetric

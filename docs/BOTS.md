@@ -42,7 +42,7 @@ Departures taken so far, and issues deliberately not chased, are in
   no-allocation rule, the second is a kilobyte copy per bot per decision, and
   both throw away the compiler's refusal to let bot code stash it.
 
-`CLAUDE.md`, "`WorldState` — the five rules that bite before you know you are
+`CONTRIBUTING.md`, "`WorldState` — the five rules that bite before you know you are
 near them", has the state rules that apply to everyone, bot work included.
 
 ## What exists
@@ -60,7 +60,7 @@ near them", has the state rules that apply to everyone, bot work included.
 | auto difficulty: each bot plays the rating of the human it is shooting at, `[Bots] AutoDifficulty` (off) | `BotPopulationService.Auto.cs`, `OpponentSkills.cs`, `ScriptedBot.Skill` | `AutoDifficultyTests` |
 | human-like output inside a fight, `--bot-humanize` (off) | `HumanizedBot.cs` | `HumanizedBotTests` |
 | route dispersion: occupancy (on) and static lanes (measured, not adopted), `--no-bot-occupancy` | `BotLanes.cs`, `BotRoles.cs`, `ScriptedBot.cs` | `BotLanesTests`, `BotOccupancyFlagTests`, `RouteDiversityTests` |
-| the training environment seam | `gg2-rl/env/GG2.Env/`, in the `gg2-rl` repo | `EnvProtocolTests`, in `gg2-rl` |
+
 | **is the nav graph followable** — every edge of every shipped graph flown by a real bot, and whole routes sampled | `EdgeFlights.SweepAll`, `BENCH_FLIGHT` | `EdgeFlightTests` — the corpus tally pinned on **both** routing arms, plus the node census |
 | **can a body be where a node says** — 66.6% of nodes overlap the floor at `StandY`; all are free one pixel up | `EdgeFlights.StandingY` | `EdgeFlightTests.EveryShippedNodeCanHoldACharacter` |
 | the measurement instrument | `tools/bench/` | not in `GG2.sln`; build explicitly |
@@ -68,7 +68,7 @@ near them", has the state rules that apply to everyone, bot work included.
 ⚠️ **There is nothing to be "ported" against.** Stock GG2 ships no bots; this
 layer is this port's own, measured against itself.
 `BotLayerCoverageTests`, which used to assert a fork's script-name list, is
-deleted; see `CLAUDE.md`, "Except the bot layer".
+deleted; see `CONTRIBUTING.md`, "Except the bot layer".
 
 **So the only judge of a bot change is measurement.** That is what "Measuring a
 bot change" below is for.
@@ -116,8 +116,6 @@ initialisation. `HybridBot` never sets a goal kind — it gates *when* the polic
 drives rather than conditioning *what it pursues* — and that is what makes the
 untrained columns harmless. **A macro layer that conditions the policy needs a
 retrain first**, and would not look broken without one.
-
-Numbers, tables and scope: `gg2-rl/gg2-rl/docs/ENV.md`, "Phase 4 re-measured".
 
 ### There is no search controller, and no controller budget
 
@@ -249,7 +247,7 @@ where it was standing" — the question a screenshot has to answer.
 
 | Bubble | Index | When |
 |---|---|---|
-| `z1` | 20 | a policy tier took the wheel (gg2-rl or gg2-sim) |
+| `z1` | 20 | a policy tier took the wheel |
 | `z2` | 21 | the scripted layer took it back |
 
 The indices are the client's own `z` menu
@@ -355,8 +353,7 @@ times here".
   not, so a before-and-after taken on two different operating systems is two
   experiments. `docs/SIMULATION.md`, "The same build on two machines".
 
-`tools/bench/README.md` has the modes. `gg2-rl/gg2-rl/docs/ENV.md`, "Phase 4 re-measured",
-has the worked examples behind every bullet above.
+`tools/bench/README.md` has the modes.
 
 ### The three pinned end-to-end measurements
 
@@ -373,18 +370,7 @@ is checked.
 
 ---
 
-## The `gg2-rl` seam
-
-The sibling training project reads this repo's source directly for its drift
-gate. ⛔ **A pure refactor of anything it parses is a cross-repo event.** The
-full list of eight patterns across six files, and which three are fragile, is
-in `gg2-rl/gg2-rl/docs/ENV.md`, "So a pure refactor". The worst: `EnvServer.cs` reads the
-**order** of the reward block's serialisation calls, so **a formatter run over
-that method goes red with no semantic change**.
-
-⚠️ **Flagging a move is a courtesy on top of that gate, never a substitute.**
-The patterns that read `ObservationWriter.cs`, `PolicyNetwork.cs` or the
-`.npz` loader have no source here: none of those files exists.
+## The training seam
 
 `SIM_UUID` covers the constants, the action encoding, the observation layout
 and the simulation behaviour version — **not `GG2.Bots`**. So a bot change does
@@ -569,13 +555,13 @@ a controller sends destroys a sentry.
 | what a bot is allowed to SEE — the cloak, the spy | same — "the cloak is not the whole of what a bot cannot see". `BotVisibility.CanSee` is the one predicate; a candidate loop that tests `Cloak` itself has half the rule |
 | the objective layer | same, item 4g, plus "Dual King of the Hill is unwinnable by bots" |
 | the medic — who it beams, the attack/defend split | same — "The medic: who it beams, and the one role it never takes". ⛔ A full-health patient still charges the uber (2.5 during setup), so "never instead of somebody hurt" is the rule and "never" is not |
-| the env, the observation, the action space | `gg2-rl/gg2-rl/docs/ENV.md` |
+
 | anything the client can observe | `docs/SIMULATION.md` — the contract |
 | a weapon, a projectile, a gamemode | `docs/TRAPS-SIMULATION.md` — the section for it |
 | the wire | `docs/PROTOCOL.md` |
 | the structural constraints on the seam | `docs/BOTAI.md` |
 | the running GM8 game | `docs/TRAPS-LIVEGAME.md` — **before**, not after |
-| more than one session at once | `docs/PARALLEL.md` — in force |
+
 
 ⚠️ **Grep the traps files before writing.** They exist so a fact measured once
 against the running game is never measured again, and a session that does not

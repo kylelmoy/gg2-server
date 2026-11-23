@@ -3,10 +3,10 @@ using GG2.Protocol;
 
 namespace GG2.Bots;
 
-// This file lives in GG2.Bots and not in GG2.Env, and the reason is
+// This file lives in GG2.Bots and not in a training environment, and the reason is
 // docs/BOTAI.md item 4: the action space is the WIRE action, shared by every
 // bot and every policy, so it cannot belong to the project that happens to
-// serve one of them. GG2.Env references GG2.Bots and not the other way round,
+// serve one of them. An environment references GG2.Bots and not the other way round,
 // so leaving it in the env would mean a second copy, which is a second chance
 // for a policy's action space and a bot's to drift apart.
 
@@ -14,7 +14,7 @@ namespace GG2.Bots;
 /// One agent's action, as the multi-discrete heads a policy emits.
 /// </summary>
 /// <remarks>
-/// The shape is <c>gg2-rl/docs/DESIGN.md</c>'s, stamped into the action
+/// The shape is stamped into the action
 /// encoding version: horizontal ×3, jump ×2, down ×2, fire ×3, aim delta ×15.
 /// <para>
 /// <b>Indices, not flags.</b> A head is one categorical choice, so
@@ -82,7 +82,7 @@ public readonly record struct EnvAction
 /// </summary>
 /// <remarks>
 /// <b>The conversion is SERVER-SIDE, and that is a decision rather than a
-/// convenience</b> (<c>gg2-rl/docs/ENV.md</c>, scope call 2). The action encoding
+/// convenience</b>. The action encoding
 /// version rides inside <c>SIM_UUID</c>, which implies this side owns it; the
 /// turn-rate cap is an honesty property that must not be re-implementable
 /// differently per trainer; and the delta needs the current aim, which only
@@ -123,7 +123,7 @@ public sealed class ActionDecoder
     /// Degrees a policy may turn in one decision, either way.
     /// </summary>
     /// <remarks>
-    /// <b>A v0 constant, calibrated in <c>gg2-rl</c> phase 5, and changing it
+    /// <b>A v0 constant, calibrated in training, and changing it
     /// bumps the action encoding version.</b> It exists so a policy cannot snap
     /// instantly onto a target from any angle — an aimbot is not the thing being
     /// trained, and a cap the trainer could set itself would be a cap that means
@@ -171,13 +171,13 @@ public sealed class ActionDecoder
     /// <c>Character.events/Begin Step.xml</c> jumps on <c>pressedKeys</c>, and
     /// this project has already paid for that once: a driven client that held
     /// the jump bit climbed exactly one step and sat there looking wedged
-    /// (CLAUDE.md, "GG2 jumps on the PRESSED edge"). Under an action repeat of
+    /// (CONTRIBUTING.md, "GG2 jumps on the PRESSED edge"). Under an action repeat of
     /// k, emitting the bit on all k ticks would spend one jump and waste k-1
     /// ticks of the head; emitting it on the first only is what makes the head
     /// mean "jump now".
     /// <para>
     /// <b>The mask is written ABSOLUTELY, never OR-ed into a previous one.</b>
-    /// The same trap CLAUDE.md records for <c>gg2_watch</c> driving: an OR
+    /// The same trap CONTRIBUTING.md records for <c>gg2_watch</c> driving: an OR
     /// leaves an earlier direction bit set and the character walks the wrong
     /// way. Building the mask fresh from the heads every tick is why that cannot
     /// happen here.
@@ -199,8 +199,8 @@ public sealed class ActionDecoder
     /// </param>
     /// <remarks>
     /// <b>Why spread.</b> Applied at once, a decision's turn moves the aim X, 0,
-    /// 0, 0, and that rhythm is what tells a policy's aim from a person's
-    /// (<c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, C0). A policy observes only at
+    /// 0, 0, and that rhythm is what tells a policy's aim from a person's.
+    /// A policy observes only at
     /// decision boundaries, where the aim is the same either way (to rounding), so a checkpoint
     /// runs unchanged under either; what differs is the aim on the ticks between,
     /// and any shot fired on them.

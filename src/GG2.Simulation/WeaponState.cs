@@ -14,7 +14,7 @@ namespace GG2.Simulation;
 /// <see cref="WorldState"/> a flat value type, which docs/BOTAI.md item 1 says
 /// is the one thing that cannot be retrofitted.
 /// <para>
-/// <b>Counters, not alarms.</b> CLAUDE.md's rule puts alarms on the list of
+/// <b>Counters, not alarms.</b> CONTRIBUTING.md's rule puts alarms on the list of
 /// Game Maker showing through, so each of the reference's <c>alarm[n]</c> that
 /// survives is a named tick counter here. GM8 alarms count down by exactly one
 /// per frame and rest at <c>-1</c> (docs/SIMULATION.md), so

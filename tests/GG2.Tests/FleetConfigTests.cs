@@ -70,14 +70,14 @@ public sealed class FleetConfigTests : IDisposable
             FillToPlayers=11
             """);
 
-        Overlay("kyle@10.0.0.2",
+        Overlay("admin@10.0.0.2",
             """
             [Server]
             ServerName=US West
             WelcomeMessage=hello from the west
             """);
 
-        var west = Rendered("kyle@10.0.0.2");
+        var west = Rendered("admin@10.0.0.2");
 
         Assert.Equal("US West", west.ServerName);
         Assert.Equal("hello from the west", west.WelcomeMessage);
@@ -105,15 +105,15 @@ public sealed class FleetConfigTests : IDisposable
             Rotation=koth_valley,cp_dirtbowl
             """);
 
-        Overlay("barbara", "[Server]\nServerName=Barbara\n");
+        Overlay("hub", "[Server]\nServerName=Hub\n");
 
-        Assert.Equal("ctf_eiger", Rendered("barbara").Map);
+        Assert.Equal("ctf_eiger", Rendered("hub").Map);
 
         // The control arm: applying the two files one after the other really
         // does lose it, so the assertion above is testing something.
         var sequential = ServerOptions.CreateDefault();
         ServerConfigFile.Apply(sequential, FleetConfig.CommonPath(ConfigDir));
-        ServerConfigFile.Apply(sequential, FleetConfig.OverlayPath(ConfigDir, "barbara"));
+        ServerConfigFile.Apply(sequential, FleetConfig.OverlayPath(ConfigDir, "hub"));
         Assert.Equal(string.Empty, sequential.Map);
     }
 
@@ -210,9 +210,9 @@ public sealed class FleetConfigTests : IDisposable
     [Fact]
     public void TheHostsFileIsReadTheWayDeployShReadsIt()
     {
-        File.WriteAllText(HostsFile, "# header\nbarbara   # a box\n\n  kyle@1.2.3.4\t# tab\n# kyle@gone\n");
+        File.WriteAllText(HostsFile, "# header\nhub   # a box\n\n  admin@1.2.3.4\t# tab\n# admin@gone\n");
 
-        Assert.Equal(["barbara", "kyle@1.2.3.4"], FleetConfig.ReadHosts(HostsFile));
+        Assert.Equal(["hub", "admin@1.2.3.4"], FleetConfig.ReadHosts(HostsFile));
     }
 
     /// <summary>
@@ -229,7 +229,7 @@ public sealed class FleetConfigTests : IDisposable
         const string CharacterClass = "[^A-Za-z0-9._@-]";
 
         var rule = new Regex(CharacterClass);
-        string[] destinations = ["barbara", "admin@203.0.113.7", "host:2222", "[::1]", "a b", "Ω"];
+        string[] destinations = ["hub", "admin@203.0.113.7", "host:2222", "[::1]", "a b", "Ω"];
 
         foreach (var destination in destinations)
             Assert.Equal(rule.Replace(destination, "_") + ".ini", FleetConfig.OverlayFileName(destination));

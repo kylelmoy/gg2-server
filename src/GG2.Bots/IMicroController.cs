@@ -19,14 +19,14 @@ namespace GG2.Bots;
 /// of a decision, so the held ticks are a <em>different decode of the same
 /// action</em> rather than a repeat of one <c>PlayerInput</c>. A gate that counted
 /// ticks itself would either starve a controller of its held ticks or
-/// re-implement the pressed-edge logic a second time — CLAUDE.md's "GG2 jumps on
+/// re-implement the pressed-edge logic a second time — CONTRIBUTING.md's "GG2 jumps on
 /// the PRESSED edge" scar. So the gate asks
 /// <see cref="AtDecisionBoundary"/> and never counts.
 /// </para>
 /// <para>
 /// <b>An implementation must not draw from <c>WorldState.Random</c></b> — the
 /// match's stream is observable simulation, and a bot drawing from it makes the
-/// stream's position depend on how many bots were thinking. CLAUDE.md's first bot
+/// stream's position depend on how many bots were thinking. CONTRIBUTING.md's first bot
 /// rule, and it applies here exactly as it does to <c>ScriptedBot</c>.
 /// </para>
 /// <para>

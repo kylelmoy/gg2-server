@@ -12,7 +12,7 @@ dotnet run --project src/GG2.Host -- --map ctf_truefort   # a server, which buil
 
 ## Why it exists here
 
-Nav graphs for the shipped maps are also produced by `gg2-nav-gen`, a standalone
+Nav graphs for the shipped maps are also produced by the original nav generator, a standalone
 Node tool that reads a Game Maker checkout for `Constants.xml` and the sprite
 sizes, and originally by GML running inside the game itself
 (`Source/gg2/Scripts/BotNav/*.gml`). Neither can run inside this repository, so
@@ -31,12 +31,12 @@ input `CustomMapInit.gml` reads), so it was never data that had to be missing.
 **This is a port, and it has an oracle.** `NavGeneratorTests.RebuildsEveryShippedGraphExactly`
 rebuilds all 25 checked-in graphs from the map PNGs and compares them
 **character for character** against `nav/`. Those files were produced by
-`gg2-nav-gen`; they are what the bot layer's pinned end-to-end measurements were
+The original nav generator; they are what the bot layer's pinned end-to-end measurements were
 taken against. A generator that reproduces them exactly is provably the same
 generator.
 
 **That test is load-bearing for a design decision, not just for correctness.**
-`gg2-nav-gen` keeps three copies of the arc machinery, one per manoeuvre, because
+The original nav generator keeps three copies of the arc machinery, one per manoeuvre, because
 it has no oracle of its own to check a change to its single-jump path against
 (the GML generator it was ported from no longer exists), so it keeps
 unverifiable edits off the hot path of every ordinary jump. Here there is one
@@ -248,13 +248,13 @@ Measured 2026-09-03, two custom CTF maps (`ctf_atalia`, `ctf_doublecross`),
 
 **Look at the "unfinished" column.** With no graph every match is a 0-0 draw at
 the time limit — a **finished** match, so any "N completed" criterion is satisfied
-by a map on which nothing happened. That is CLAUDE.md's "a match that ends is not
+by a map on which nothing happened. That is CONTRIBUTING.md's "a match that ends is not
 a match that happened", and it is why the nav column exists at all.
 
 ## Staying in step
 
 - **The constants are `NavConstants` and `BotConstants`**, transcribed from
-  `Constants.xml` and pinned by `ConstantsTests`. `gg2-nav-gen` reads the XML at
+  `Constants.xml` and pinned by `ConstantsTests`. The original nav generator reads the XML at
   run time; this cannot, because it ships without a checkout — the test is what
   replaces that.
 - **Three of them are `BOT_*` rather than `NAV_*`**: `BOT_RUNUP_CELLS`,
@@ -275,7 +275,7 @@ a match that happened", and it is why the nav column exists at all.
   same call a file off disk gets. So an on-the-fly graph and a generated file
   are the same graph by construction rather than by two code paths agreeing.
 
-## What is still in `gg2-nav-gen`
+## What is still in the original nav generator
 
 The Node generator still exists as its own repository and still works. What is
 there and not here:
@@ -292,7 +292,7 @@ there and not here:
 
 ## One thing that was measured on the way in
 
-**`gg2-nav-gen` derives a collider's bounding box from the raw entity
+**The original nav generator derives a collider's bounding box from the raw entity
 coordinates; GM8 rounds an instance's position first**, and so does this port's
 own `SolidRect.FromEntity`. The two differ by up to a pixel on a *fractional*
 scale — a 60x6 bar at yscale 0.3 ends at 607.8, not 608 — which can put a wall in

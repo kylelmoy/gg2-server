@@ -1456,7 +1456,7 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     /// <c>PLAYER_DROP_INTEL</c>, through the same command dispatch a socket
     /// reaches. A rule in <c>MatchSimulation</c> that took a briefcase off a
     /// motionless carrier would be behaviour the reference does not have, which
-    /// is a wire-visible divergence from the stock game: CLAUDE.md's line is
+    /// is a wire-visible divergence from the stock game: CONTRIBUTING.md's line is
     /// compatible in observable simulation, free everywhere else, and this is
     /// squarely on the observable side.
     /// </para>

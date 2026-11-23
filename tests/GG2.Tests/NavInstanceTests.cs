@@ -14,7 +14,7 @@ namespace GG2.Tests;
 /// ⚠️ <b><c>GG2.Nav</c> restates four sprite sizes that <c>ColliderSprites</c>
 /// already carries</b>, because a generator has no business referencing the
 /// simulation — so there are two copies of a number that decides where every wall
-/// and every gate is in a graph. <c>gg2-nav-gen</c> did not have this problem: it
+/// and every gate is in a graph. The original nav generator did not have this problem: it
 /// read the sizes out of the checkout's own PNG headers at run time, and asserted
 /// the origin and mask shape while it was there. This port ships without a
 /// checkout and cannot, so this test is what replaces that check — one arm against
@@ -125,7 +125,7 @@ public sealed partial class NavInstanceTests
     /// ⚠️ <b>The origin and the mask shape are half of this, not decoration.</b> A
     /// sprite that grew a nonzero origin would shift every stamp by the origin, and
     /// one that stopped being a full-image RECTANGLE would make the box a lie about
-    /// the mask — and both would leave a size check green. <c>gg2-nav-gen</c>
+    /// the mask — and both would leave a size check green. The original nav generator
     /// asserted them on every run for that reason; this is the once-per-suite
     /// version.
     /// </remarks>

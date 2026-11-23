@@ -1,7 +1,7 @@
 # Nav graphs are gzipped ds_grid_write blobs. Even uncompressed they are a
 # single multi-megabyte line of hex, so there has never been anything here for
 # git to diff or three-way merge — a conflict in one is not resolvable by hand
-# and must not look as though it is. gg2-nav-gen regenerates them wholesale;
+# and must not look as though it is. `gg2-server navgen` regenerates them wholesale;
 # that is the merge strategy. See NavCache and docs/DEPLOY.md.
 nav/*.txt      binary
 nav/*.txt.gz   binary

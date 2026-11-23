@@ -10,7 +10,7 @@ part a session needs *in front of it* while it edits the code, and the pointer
 to the section of `SIMULATION.md` that settled it. Where the two disagree, read
 the reference and fix both.
 
-⚠️ **Nothing here may be re-derived.** `CLAUDE.md`'s rule stands: a fact marked
+⚠️ **Nothing here may be re-derived.** `CONTRIBUTING.md`'s rule stands: a fact marked
 settled was measured against the running game, and re-measuring it is how a
 session spends a day arriving where it started.
 
@@ -34,7 +34,7 @@ session spends a day arriving where it started.
 - `GG2.Simulation.CharacterPhysics` — phase 4. The character update reproduces
   the running engine **bit for bit** across 64 trajectories on two maps
   (`tests/GG2.Tests/Fixtures/physics-samples.json`, regenerate with
-  `node gg2-samplers/sample-physics.js`), and replays the checked-in 898-tick bot trace
+  a live-game sampler), and replays the checked-in 898-tick bot trace
   closed-loop with **zero** error on both axes, hp included. No nudges, no
   tolerances.
 - ⚠️ **`Projectiles.Move` runs before the characters move, and `Projectiles.Collide`
@@ -81,19 +81,19 @@ Do not re-derive any of them.
 
 - **GM8's RNG is Delphi's** — `seed' = seed*0x08088405 + 1 mod 2^32`, then
   `random(x) = x*seed'/2^32`. `GG2.Protocol.GmlRandom`, regenerate the fixture
-  with `node gg2-samplers/sample-rng.js`. It is **contract, not incidental**: a weapon
+  with a live-game sampler. It is **contract, not incidental**: a weapon
   puts the *seed* on the wire and every client re-derives the shot spread itself,
   so `docs/SIMULATION.md`'s "server-side RNG is free" does not cover weapon fire.
   `Minigun` and `Blade` are exempt — they `randomize()` and send no seed.
 - **`distance_to_object` and `place_meeting`** — `GG2.Simulation.Aabb`,
-  regenerate with `node gg2-samplers/sample-primitives.js`. Both exact over 722 samples.
+  regenerate with a live-game sampler. Both exact over 722 samples.
   ⚠️ `distance_to_object` uses the **facing-inflated** bounding box and
   `place_meeting` does not, so **splash damage depends on which way the victim is
   facing**. And do not reach for `double.Hypot`; it rescales and loses the last
   bit.
 - **`collision_line` clips, rounds, then walks pixels** —
   `GG2.Simulation.CollisionLine`, regenerate with
-  `node gg2-samplers/sample-collision-line.js`. Exact over 9,014 segments.
+  a live-game sampler. Exact over 9,014 segments.
   ⚠️ **It is not a segment-versus-rectangle intersection.** GM8 clips the segment
   to the instance's horizontal span, rounds the clipped endpoints half to even,
   and steps whole pixels along the longer axis — so a line can register against a
@@ -124,7 +124,7 @@ Do not re-derive any of them.
 
 ### The four motion variables, measured — and the one place exactness ends
 
-`GG2.Simulation.Motion`, regenerate with `node gg2-samplers/sample-motion.js`. **All
+`GG2.Simulation.Motion`, regenerate with a live-game sampler. **All
 four of `hspeed`, `vspeed`, `direction` and `speed` are stored**, and writing any
 one rewrites the others. A character never writes `direction`, which is why
 phase 4 got away with two fields; a projectile writes it three times before it
@@ -157,9 +157,9 @@ GML's own 1e-13 comparison fuzz, and twelve orders below the wire's fifth of a
 pixel. `MotionSampleTests` asserts a bound for the trig and stays exact for the
 snap. Do not re-derive it and do not try to beat it.
 
-✅ **The mantissa encoder is one file now: `gg2-samplers/exact-double.js`.** There
+✅ **The mantissa encoder is one file now: a live-game sampler.** There
 were four copies of it and **three of them were wrong**, so the duplication is
-gone and `node gg2-samplers/exact-double.js` self-tests it without a game. All four
+gone and a live-game sampler self-tests it without a game. All four
 samplers use it. Three bugs, each of which silently loses the last bit or the
 whole value:
 
@@ -204,7 +204,7 @@ a slow loop: it never ends, and no amount of waiting changes that.
 ⚠️ **The map is not a coincidence and the class probably is.** The window is
 `(1e-13, ULP(position)/2]`, so it is **empty below about 1024** and widens as the
 coordinate grows: `cp_dirtbowl` is three rounds stacked vertically and is the
-tall map, which is where a `y` in the thousands comes from. Both of `gg2-rl`'s
+tall map, which is where a `y` in the thousands comes from. Both of the trainer's
 occurrences also had a soldier on the other side, and this repo has **not**
 established that a rocket is needed — what the arithmetic needs is a large
 coordinate and a residual that lands in the window.
@@ -569,7 +569,7 @@ which is the only way to see bytes that were never written.
 `docs/SIMULATION.md`, "Settled: afterburn", has the full rules.
 
 - ⚠️ **A fired alarm rests at 0 for the rest of its own frame, and the port is
-  wrong about it.** Measured (`gg2-samplers/probes/probe-alarm-image.js`): the counter
+  wrong about it.** Measured (a live-game probe): the counter
   reads `…2, 1, 0, -1` on successive frames and the event runs on the frame it
   reads **0**. `Timers.Advance` writes `Inactive` at the moment of firing, one
   tick early. Invisible everywhere except `Character.events/Begin Step.xml:67`,
@@ -674,8 +674,7 @@ sentry", has the full rules; these are the traps:
 
 ### The sentry's box, the turret's box, and collision_circle — all measured
 
-Measured 2026-08-26 against the running game; `gg2-samplers/probes/` has the scripts and
-`docs/SIMULATION.md` has the tables. These unblocked the sentry and the airblast.
+Measured 2026-08-26 against the running game; `docs/SIMULATION.md` has the tables. These unblocked the sentry and the airblast.
 
 - ⚠️ **A sentry's hitbox does NOT animate, though its sprite does.**
   `SentryRed` has twelve frames whose extent swings from `-8,-1,7,12` to
@@ -1397,7 +1396,7 @@ Blade", has the full rules; these are the traps:
 - ✅ **A collision between two projectiles runs two events, and the port applies
   both from whichever side it reaches the pair first.** Otherwise the outcome
   depends on creation order and `perseverant` becomes meaningless. **Measured
-  2026-08-27** (`gg2-samplers/probes/probe-bubble-pair.js`) across all four cells of
+  2026-08-27** (a live-game probe) across all four cells of
   the team × `perseverant` table, and the port was right. The decisive row is an
   enemy ordinary pellet, where **both** instances die — which no single event
   can do. ⚠️ So **a projectile that destroys itself in its own collision event
@@ -2336,7 +2335,7 @@ That is the whole reason no fixture can see this.
 
 #### ⬅️ The next step is one command, and it is decisive
 
-`gg2-samplers/probes/probe-wall-stop.js` drives that scenario in the engine and prints
+A live-game probe drives that scenario in the engine and prints
 the engine's resting x beside the port's. It needs a dedicated server on
 `gg_debug` with the bridge and one Character to borrow, and it answers the item
 either way:
@@ -2396,7 +2395,7 @@ slot 2's bounding box*.
 the PRECISE MASK for a rotated projectile, where this port uses the bounding
 box.** Measured with `collision_point(..., precise)` — nine sprites by eighteen
 angles, `tests/GG2.Tests/Fixtures/rotated-mask-samples.json`, regenerate with
-`node gg2-samplers/sample-rotated-mask.js`.
+A live-game sampler.
 
 ⚠️ **The split runs through the middle of one GML line, and it is sharper than
 the facing asymmetry already recorded on `Aabb.ForCharacter`:**
@@ -2541,7 +2540,7 @@ and 140 − 55 = the 85 the recording holds. Fixing it took the window from 135 
 
 `CharacterState.CreationOrder` is a `uint` on the character rather than a
 parallel `SlotBuffer`, **on purpose**: it then moves with the character through
-`RemoveSlot`'s compaction and cannot be forgotten there — which CLAUDE.md warns
+`RemoveSlot`'s compaction and cannot be forgotten there — which CONTRIBUTING.md warns
 is exactly how a per-slot field goes wrong. `WorldState.NextCharacterOrder`
 issues it, and lives in the state for the reason the RNG does: a forked rollout
 has to fork it.
@@ -2798,7 +2797,7 @@ misalignment does to it anyway, and the assertion is that
 
 ### Phase 2's scripted fixtures, and what they turned out to gate
 
-✅ **Recorded**, the deliverable `docs/PLAN.md` has listed as open since
+✅ **Recorded**, the deliverable `docs/STATUS.md` has listed as open since
 phase 2: recordings of a **scripted** character rather than a bot's own
 judgement. `reference-gg_debug-scriptedwalk.trace` and
 `reference-gg_debug-scriptedjumps.trace`, one scout driven from the agent bridge
@@ -2868,7 +2867,7 @@ being wedged.
 running when its second press failed, so the `gg2_watch`-writes-`heldMask`
 explanation is ruled out by that alone.
 
-**The workaround, and it is what CLAUDE.md already recommends for frame
+**The workaround, and it is what CONTRIBUTING.md already recommends for frame
 accuracy:** drive everything from **one** `gg2_watch` expression that computes
 the mask, and change the expression when the phase changes, rather than
 alternating `gg2_input` calls. A watch expression is evaluated every frame and
@@ -2911,7 +2910,7 @@ changes direction mid-stride, and taps a key for five ticks and lets go.
 
 ### ⚠️ OPEN: the port puts a player back on a platform they dropped through
 
-**Found by that human take**, and it is the fourth manoeuvre `docs/PLAN.md`
+**Found by that human take**, and it is the fourth manoeuvre `docs/STATUS.md`
 asked for. At t1621–1625 the player holds `KEY_DOWN` on the dropdown platform at
 `2622,1014` and releases it. The reference drops them through and they keep
 falling — y 990.4 → 1001.2 → 1041.2 → 1086.4. **The port falls with them and
@@ -2970,7 +2969,7 @@ ceiling on recovery, not a bug.
 #### The three things the players reported
 
 ⬅️ **1. Rubberbanding / hitching. ✅ One measured cause found and fixed.**
-⚠️ It is the failure mode CLAUDE.md says has no test: "the client re-simulates
+⚠️ It is the failure mode CONTRIBUTING.md says has no test: "the client re-simulates
 the physics itself between position updates … there is no test that fails when
 trajectories drift — the client just snaps."
 
@@ -3011,7 +3010,7 @@ Confirmed in the source, which says so in four places: `PlayerCommand.cs`
 `CharacterPhysics.cs`, `SpawnRooms.cs` (twice) and `Weapons.cs`.
 
 ⚠️ **This contradicts two claims in this repo** and both were wrong before the
-playtest: CLAUDE.md's "✅ Every class is implemented", and the handoff's
+playtest: the project guide's "✅ Every class is implemented", and the handoff's
 "nothing else in the port is known-missing". A class being playable is not a
 class being complete. **A gap noted only in a code comment is a gap nobody is
 tracking.**
@@ -3093,7 +3092,7 @@ input identical by construction, seven ticks of divergence can only be physics.
 The constant-mask leg rules it out a second way: a held key is the same value
 every frame, so no arrival offset can survive to explain 0.1737 px.
 
-⚠️ **This is the failure mode CLAUDE.md says has no test, and it had none.** The
+⚠️ **This is the failure mode CONTRIBUTING.md says has no test, and it had none.** The
 parity harness proves the port matches the reference *server* on recorded traces;
 it says nothing about the *client's* prediction, and the client is what a player
 watches. The harness and this measurement are not redundant — a fixture's exact
@@ -3110,7 +3109,7 @@ server.
 
 ### The client-prediction gate, and what pinning it turned up
 
-Built for the failure mode CLAUDE.md calls invisible — "there is
+Built for the failure mode CONTRIBUTING.md calls invisible — "there is
 no test that fails when trajectories drift; the client just snaps".
 
 ⚠️ **`ReplayMode.OpenLoop` has existed since phase 2, and
@@ -3216,7 +3215,7 @@ From a player's report in the first two-human game — "heavy sandwich doesn't
 work" — not from any test.
 
 ⚠️ **It had been absent for the whole port and was recorded only in four code
-comments.** CLAUDE.md said "✅ Every class is implemented" and the handoff said
+comments.** The project guide said "✅ Every class is implemented" and the handoff said
 "nothing else in the port is known-missing", and both were wrong.
 **A gap noted only in a code comment is a gap nobody is tracking.**
 
@@ -3375,7 +3374,7 @@ remember the wire's ×5. That is 22 px, not 110. **Divide before disbelieving.**
 
 ### ✅ The damage accumulators, and why the parameters are required
 
-`gg2-rl/gg2-rl/docs/ENV.md`'s first prerequisite — the half of
+A training reward's first prerequisite — the half of
 `docs/BOTAI.md` item 7 that was never built. `TickEvents` carried kills, deaths,
 spawns and captures with attribution and **no per-tick damage amounts**.
 
@@ -3534,7 +3533,7 @@ Falsified; do not retry it.
 
 ### ✅ Every character box measured — and the physics oracle was measuring the wrong one
 
-`gg2-samplers/probes/probe-character-boxes.js`. Chasing the `gg_debug`
+A live-game probe. Chasing the `gg_debug`
 t523 residue into the physics oracle turned up something bigger than the residue.
 
 ✅ **`CharacterBox.For` is exactly right for all ten classes, on both teams.**
@@ -3558,7 +3557,7 @@ decides from its own clock, so a client whose date disagrees with the server's
 disagrees about Quote's head in the reference too. That is why this was cheap once anybody thought to ask, and why
 nothing had forced it.
 
-⚠️ **`gg2-samplers/sample-physics.js` overrode the engine with a table of its own, and
+⚠️ **A live-game sampler overrode the engine with a table of its own, and
 two of its numbers were wrong.** It set `top_bound_offset = -6` for the Scout
 and the Heavy where the engine derives **-10** and **-12**. So
 `physics-samples.json` is a recording of a character the port does not simulate,
@@ -3626,7 +3625,7 @@ compared run to run.
 
 The first sampler run timed out with "the game did not reply within 10000ms".
 The cause was not the game: **an earlier backgrounded run of the same sampler
-was still alive and holding the bridge.** CLAUDE.md records the MCP-server form
+was still alive and holding the bridge.** docs/TRAPS-LIVEGAME.md records the MCP-server form
 of this; the other form is **two CLI tools at once**, and it looks exactly like
 a hung game. `Get-CimInstance Win32_Process` filtered on the command line is
 what identified it in seconds — `Get-Process` alone shows only `node.exe` and
@@ -3795,7 +3794,7 @@ moving platforms**, five of them, and even 40 bot matches there are byte-identic
 either side of the carry, because no bot ever stood on one.
 
 ✅ **So the carry cannot fire on any map the server rotates through**, which is
-what made the stamp bypass (since removed with the gg2-rl nets) honest for a
+what made the stamp bypass (since removed with the nets it served) honest for a
 shipped map rather than merely convenient. ⚠️ **Re-check this before repeating it**: it is a fact about the map
 set, and a new map with a `moving_platform` entity falsifies it silently.
 
@@ -3870,7 +3869,7 @@ definitions.Length)`, both come from the map's entities, and **all 22 shipped ma
 place none** — so the loop body cannot execute and the tick is bit-identical.
 **`MovingPlatformTests.NoShippedMapPlacesAMovingPlatform` is the gate: if it goes
 red, bump `SimulationBehaviourVersion` and do not reason about it.** The
-alternative was invalidating `gg2-rl`'s trained checkpoint, which the server
+alternative was invalidating the then-shipped trained checkpoint, which the server
 refused on a stamp mismatch while it still loaded those. Note the exemption is about
 what a *checkpoint* was trained against; a match on a custom map is outside the
 stamp's claim either way.
@@ -3942,7 +3941,7 @@ that it should not be assumed benign.
 `png_get_text`, which returns `tEXt`, `zTXt` and `iTXt` alike
 (`Extensions/GG2DLL/GG2DLL/GG2DLL.cpp:357-368`). GG2 *writes* `zTXt` (:288), so
 every map saved by the game itself worked and every map from another editor did
-not. Fixed. ⚠️ **`gg2-nav-gen` had the identical bug in its own
+not. Fixed. ⚠️ **The original nav generator had the identical bug in its own
 reader and found 438 affected maps; this port recovered 438 too** — two
 independent readers, same count, which is what makes it a diagnosis rather than a
 coincidence.
@@ -3982,9 +3981,8 @@ platforms are irregular, not an estimate.
 agrees with itself; it cannot prove GM8 agrees. This is the plan that would
 settle it, written while the decisions were fresh.
 
-⚠️ **The live game is exclusive** (`docs/PARALLEL.md`): one session holds the
-bridge, and while it does, no other lane calls a `gg2_*` tool or runs a sampler.
-Take it before starting, and say so in the handoff.
+⚠️ **The live game is exclusive**: one session holds the bridge, and while it
+does, nothing else calls a `gg2_*` tool or runs a sampler.
 
 **What is actually uncertain**, worst first — this is the list a probe has to
 retire, not a general "check it works":
@@ -4222,5 +4220,5 @@ simulates every shot itself from `WEAPON_FIRE` and destroys it at the wall the
 same way. A server that registered the hit anyway would deal damage no client
 predicted, with nothing on the wire saying where it came from — a hit that
 happens on the server and nowhere else. It is also a change to hit registration
-rather than to a bug's consequences, which is the distinction `CLAUDE.md`'s rule
+rather than to a bug's consequences, which is the distinction `CONTRIBUTING.md`'s rule
 turns on.

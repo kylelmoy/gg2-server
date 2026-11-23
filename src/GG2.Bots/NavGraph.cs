@@ -76,7 +76,7 @@ public sealed class NavGraph
 
     // navEdgeIndex.gml: for each node, where its outgoing edges start and how
     // many there are. The cache guarantees the edge list is already sorted by
-    // from-node — gg2-nav-gen counting-sorts it as its last step — so a node's
+    // from-node — the original nav generator counting-sorts it as its last step — so a node's
     // neighbours are one contiguous range. Without it every expansion is a scan
     // of the whole edge list: on cp_dirtbowl, 1,298 reads per expansion against
     // about two.
@@ -261,7 +261,7 @@ public sealed class NavGraph
     /// <para>
     /// the JavaScript nav-graph decoder floors instead of rounding here — it
     /// documents the format but is wrong about this line. The reference is the
-    /// specification (CLAUDE.md, "the reference is the specification, not this
+    /// specification (CONTRIBUTING.md, "the reference is the specification, not this
     /// repo"), so this rounds, and <c>NavGraphTests</c> gates the difference.
     /// </para>
     /// <para>

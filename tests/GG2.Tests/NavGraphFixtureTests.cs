@@ -5,7 +5,7 @@ using GG2.Protocol;
 namespace GG2.Tests;
 
 /// <summary>
-/// The reader against every nav cache <c>gg2-nav-gen</c> has actually written.
+/// The reader against every nav cache the original nav generator has actually written.
 /// </summary>
 /// <remarks>
 /// <see cref="NavCacheTests"/> pins the format by writing bytes and reading them
@@ -93,7 +93,7 @@ public sealed class NavGraphFixtureTests
     /// <b>Both indices are correctness bets on the generator's output, not on
     /// this reader's code.</b> <c>navEdgeIndex.gml</c> takes it on trust that
     /// "edges must already be sorted by <c>NAV_EDGE_FROM</c>, which the cache
-    /// file guarantees: gg2-nav-gen counting-sorts the edge list by from-node as
+    /// file guarantees: the original nav generator counting-sorts the edge list by from-node as
     /// its last step", and <c>navNodeFromWorld.gml</c> the same for "nodes are
     /// emitted sorted by y then x, so the nodes of one row are contiguous".
     /// <para>
@@ -377,7 +377,7 @@ public sealed class NavGraphFixtureTests
     /// <para>
     /// <b>A generator that stopped emitting parallel edges would make every one
     /// of those tests pass while testing nothing</b>, and nothing else here would
-    /// notice — the caches are built out of band by gg2-nav-gen. So the counts
+    /// notice — the caches are built out of band by the original nav generator. So the counts
     /// are exact, and a move is the re-record: check the generator changed the way
     /// you meant, update the numbers, and say so in the commit.
     /// </para>

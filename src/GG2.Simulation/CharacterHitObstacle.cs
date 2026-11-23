@@ -12,7 +12,7 @@ namespace GG2.Simulation;
 /// 30 Hz the <c>* global.delta_factor</c> / <c>/ global.delta_factor</c> pair
 /// that brackets it is the identity and is gone.
 /// <para>
-/// This is the piece docs/PLAN.md calls the heart of phase 4, and the one whose
+/// This is the piece docs/STATUS.md calls the heart of phase 4, and the one whose
 /// step-up and corner cases decide whether a wall-run feels right. It is
 /// deliberately a close transcription: the order of the three checks, and the
 /// fact that the horizontal one runs <em>after</em> the vertical one has

@@ -227,7 +227,7 @@ public sealed class ScenarioWorld : DrivenWorld
     /// difference here is the two lines that do not run.
     /// <para>
     /// It exists because a caller that has no business knowing a map's geometry
-    /// should not have to invent coordinates. <c>gg2-rl/docs/ENV.md</c> promised
+    /// should not have to invent coordinates. The scenario API promised
     /// "explicit positions <b>or sampled</b>" from the first draft and only the
     /// first half was built, so a duel on any map meant the trainer holding a
     /// coordinate table — a second source of truth about the maps, which is what
@@ -263,7 +263,7 @@ public sealed class ScenarioWorld : DrivenWorld
     /// <remarks>
     /// <b>This is what makes a batch of N worlds N SAMPLES.</b> Placing at
     /// fixed coordinates gives two deterministic bots the identical duel in every
-    /// world — <c>gg2-rl</c> measured 8 worlds returning 74 decisions and 165
+    /// world — 8 worlds measured returning 74 decisions and 165
     /// damage eight times over, seed-invariant, and a sixteen-duel win rate
     /// computed off a sample size of one. Banded, the same matchup returns 15
     /// distinct episode lengths out of 16.
@@ -292,7 +292,7 @@ public sealed class ScenarioWorld : DrivenWorld
     /// <para>
     /// <b>Gate-filtered per team.</b> A node whose gate that team cannot pass
     /// is a node that team cannot legitimately stand on, and placing there is
-    /// what produced <c>gg2-rl</c>'s four maps at 0 of 8 engagements: the pair
+    /// what produced four maps at 0 of 8 engagements: the pair
     /// started behind their own team gates and could not route to one another.
     /// <c>hasIntel</c> is false because a duel has no briefcase and
     /// <c>setupGatesClosed</c> is false because this world zeroes the setup timer.

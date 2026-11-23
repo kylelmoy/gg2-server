@@ -10,13 +10,13 @@ namespace GG2.Host;
 /// </summary>
 /// <remarks>
 /// The generator used to live in the game, on a server tick, and then in
-/// <c>gg2-nav-gen</c>, a Node program beside a Game Maker checkout. It is here now
+/// the original nav generator, a Node program beside a Game Maker checkout. It is here now
 /// because <see cref="NavGenerator"/> is: everything a graph needs is in the map's
 /// own PNG, so the same binary that serves a round can build the graphs it serves
 /// it with, and a clone of this repository needs nothing else.
 /// <para>
 /// ⚠️ <b>This does the WHOLE cycle, which the previous workflow did not.</b>
-/// <c>gg2-nav-gen</c> wrote <c>&lt;key&gt;.txt</c> into the directory this
+/// The original nav generator wrote <c>&lt;key&gt;.txt</c> into the directory this
 /// repository ships <c>.txt.gz</c> in, and two further steps —
 /// <c>tools/compress-nav.sh</c> and a manifest re-record — were needed before the
 /// tree was consistent again. Skipping the second left the old pairing recorded

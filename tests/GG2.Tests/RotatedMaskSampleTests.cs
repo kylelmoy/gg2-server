@@ -13,7 +13,7 @@ namespace GG2.Tests;
 /// <remarks>
 /// <b>Measured 2026-08-27</b> with <c>collision_point(..., precise)</c> over a
 /// grid, nine sprites by eighteen angles; regenerate with
-/// <c>node gg2-samplers/sample-rotated-mask.js</c>. It needs a running game but no bot,
+/// a live-game sampler. It needs a running game but no bot,
 /// because every probe is a projectile it creates itself.
 /// <para>
 /// <b>The split, and it runs straight through the middle of one GML line.</b>
@@ -586,7 +586,7 @@ public sealed class RotatedMaskSampleTests
     /// projectile is essentially never at an integer position: a rocket's x
     /// moves by <c>hspeed</c> every tick.
     /// <para>
-    /// <c>gg2-samplers/probes/probe-fractional-mask.js</c>, rotated Rocket at 30°,
+    /// Measured live, rotated Rocket at 30°,
     /// rasterised at x + 0, +0.25, +0.5, +0.75:
     /// <b>+0.25 is pixel-identical to +0, and +0.75 is +0 shifted exactly one
     /// pixel right.</b> That is rounding, and it rules out the mask following

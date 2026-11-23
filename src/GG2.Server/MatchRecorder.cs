@@ -195,7 +195,7 @@ public sealed class MatchRecorder : IDisposable
     /// population manager added, the server's own reserved slot 0) and leaves
     /// from more, and <c>WorldState.RemoveSlot</c> renumbers everyone above a
     /// departure. Hooking each site is the "add it in three places" rule
-    /// <c>CLAUDE.md</c> records for client commands, and the failure mode here
+    /// <c>CONTRIBUTING.md</c> records for client commands, and the failure mode here
     /// is worse than a missing feature: an unhooked site produces a recording
     /// whose labels are silently attached to the wrong slots.
     /// <para>

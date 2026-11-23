@@ -9,7 +9,7 @@ namespace GG2.Tests;
 /// <see cref="PreciseCollision"/> against the engine, with a REAL character box.
 /// </summary>
 /// <remarks>
-/// Recorded via <c>gg2-samplers/probes/probe-platform-carry.js</c>. Everything verified
+/// Recorded via a live-game probe. Everything verified
 /// before it used a 1x1 probe point, so the character side of the query — the
 /// inclusive bounds, the rounding, and whether GM8 even treats a character as a
 /// rectangle — was still only self-consistent.

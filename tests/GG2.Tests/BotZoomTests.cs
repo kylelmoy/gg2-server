@@ -265,7 +265,7 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
     /// zeroing the charge, shots not taken while waiting — is not in the model at
     /// all. Fixing it needs a decision about what the rule optimises (burst to
     /// kill, not sustained DPS) and more than 24 duels on one map.
-    /// CLAUDE.md: improve a bot decision where the fix is straightforward and
+    /// CONTRIBUTING.md: improve a bot decision where the fix is straightforward and
     /// measured, and <b>write the hard ones down</b>.
     /// </para>
     /// <para>

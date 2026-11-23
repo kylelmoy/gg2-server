@@ -264,7 +264,7 @@ public sealed class ControlPortTests : IDisposable
     /// </summary>
     /// <remarks>
     /// <c>command</c> submits a <see cref="GG2.Simulation.PlayerCommand"/> to
-    /// the same <c>Execute</c> the socket switch and the bots reach — CLAUDE.md's
+    /// the same <c>Execute</c> the socket switch and the bots reach — CONTRIBUTING.md's
     /// "three places" rule, honoured by not adding a fourth. A control port that
     /// reimplemented team changes would drift from the socket path, and the
     /// divergence would only show up as a client and an operator getting

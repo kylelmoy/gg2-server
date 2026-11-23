@@ -230,7 +230,7 @@ late-tick line whose `work` figure rises with the number of engaged bots is what
 would show it matters there.
 
 `--speed` and `--control-port` must stay **off** on anything a client
-connects to. CLAUDE.md, "Phase 8's four switches", says why: an unpaced server
+connects to. CONTRIBUTING.md, "Runtime switches", says why: an unpaced server
 desynchronises every connected client at once, and the control port executes
 commands against a live game.
 
@@ -628,8 +628,8 @@ not needed under systemd.
 ### A second instance on the same host
 
 A second server from the same release is a sibling unit, `<service>-<name>`,
-with its own config file in `shared/` and its own ports. barbara runs one:
-`gg2-duel.service`, the duel server (`docs/DUEL.md`), "V's | 1v1 Bot".
+with its own config file in `shared/` and its own ports. For example
+`gg2-duel.service`, a duel server (`docs/DUEL.md`).
 
 | | `gg2` | `gg2-duel` |
 |---|---|---|
@@ -701,14 +701,14 @@ It writes the shipped `.txt.gz`, deletes a stale `.txt` beside it, and rewrites
 `git status` afterwards names the graphs a change actually moved.
 
 **A plain `.txt` still WINS over a shipped `.txt.gz`.** An outside generator
-(`gg2-nav-gen`) writes `<map>_a<area>.txt` into the same `nav/` directory that
+(the original nav generator) writes `<map>_a<area>.txt` into the same `nav/` directory that
 holds the checked-in `.txt.gz`, so the only way a plain file appears beside a
 compressed one is that somebody just ran one — and the rule is **what somebody
 just wrote beats what shipped**. `NavCache.FindFile` implements it; the server
 logs when it finds both, naming the one it used, because which one is in effect
 is otherwise invisible.
 
-`tools/compress-nav.sh` is now only for `gg2-nav-gen`'s output; `navgen` writes
+`tools/compress-nav.sh` is now only for the original nav generator's output; `navgen` writes
 the shipped container itself. Both are deterministic — the same graph gives the
 same bytes, so a regeneration that changed nothing produces no git diff. The two
 do not produce the *same* bytes as each other (zlib and .NET pack the same input
@@ -980,7 +980,7 @@ deployed server has no dependency on a Gang Garrison 2 checkout of any kind.
 |---|---|
 | running it where anybody can reach it | `docs/HARDENING.md` |
 | running the attacks at it yourself | `tools/abuse/README.md` |
-| what the switches do and why two are dangerous | `CLAUDE.md`, "Phase 8's four switches" |
+| what the switches do and why two are dangerous | `CONTRIBUTING.md`, "Runtime switches" |
 | bot cost | `docs/BOTS.md` |
 | why a late tick is usually not the server | `docs/BOTS.md`, "late ticks are a pacing measurement" |
 | the runtime settings and what the TFM bump proved | `docs/ARCHITECTURE.md`, "Runtime settings" |

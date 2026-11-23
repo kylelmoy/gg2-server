@@ -55,7 +55,7 @@ public static class SystemInfo
 
     /// <remarks>
     /// <b>This is how <c>GG2.Server</c> was compiled, which is the one that
-    /// matters</b>: the simulation and the bot layer live here. CLAUDE.md's
+    /// matters</b>: the simulation and the bot layer live here. CONTRIBUTING.md's
     /// standing rule is that a tick figure without its build is meaningless —
     /// the same twelve-bot tick is 0.151ms in Release and 0.307ms in Debug — so
     /// the panel that shows tick graphs says which build produced them.

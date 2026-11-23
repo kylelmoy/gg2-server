@@ -130,7 +130,7 @@ A silent black screen means a *short* message, not an unrecognised one.
 
 A wedge also looks identical to a client that has disconnected itself and had
 its modal force-closed — a spectator does this at exactly five minutes
-(`docs/PLAN.md`, phase 1). Check the launcher log for a dismissed dialog before
+(`docs/STATUS.md`, phase 1). Check the launcher log for a dismissed dialog before
 concluding the stream is at fault.
 
 ### Building a trace
@@ -342,7 +342,7 @@ All fixtures live in `tests/GG2.Tests/Fixtures/`. This table is the current
 inventory — map, roster, what each is for, and its measured closed-loop
 exact-window length where one applies. Regenerate the row after changing
 anything in `src/GG2.Simulation` or the harness; a window that does not move
-when it should have is itself a finding (CLAUDE.md, "the other direction").
+when it should have is itself a finding (CONTRIBUTING.md, "the other direction").
 
 | fixture | map / mode | roster | closed-loop? | what it gates |
 |---|---|---|---|---|
@@ -387,7 +387,7 @@ handle snapshot; all were unchanged except the heavy (270→396 with the seam).*
 Re-measure the whole table after any change to spawn timing, collision
 ordering, or projectile lifetime — an unmoved window is the expected result
 for everything else, and a window that *should* have moved and did not is the
-alarm (CLAUDE.md, "the other direction").
+alarm (CONTRIBUTING.md, "the other direction").
 
 ### Fixture recipes worth knowing before recording a new one
 

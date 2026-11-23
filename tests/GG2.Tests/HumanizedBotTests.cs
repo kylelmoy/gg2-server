@@ -153,7 +153,7 @@ public sealed class HumanizedBotTests
     /// <remarks>
     /// v4 generalised the aim into strokes and smoothed corrections, and v3 is
     /// the special case with one-tick strokes and no smoothing. Every number
-    /// measured for v3 (<c>gg2-rl</c> <c>docs/PLAN.md</c>, phase 5) is about the
+    /// measured for v3 is about the
     /// default only while this holds. <see cref="V3"/> is v3's aim, copied from
     /// the commit that was measured (8593cab) and kept here as the reference.
     /// </remarks>
@@ -263,7 +263,6 @@ public sealed class HumanizedBotTests
     /// <remarks>
     /// A 30° error is inside the idle dead zone (45°), so with the attack key up
     /// the aim stays where it was; held down, it is v3's correction and arrives.
-    /// <c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, v5.
     /// </remarks>
     [Theory]
     [InlineData(false)]

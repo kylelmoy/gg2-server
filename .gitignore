@@ -17,53 +17,22 @@ traces/
 !tests/GG2.Tests/Fixtures/*.trace
 !tests/GG2.Tests/Fixtures/duel/*.trace
 
-# Claude Code session automation: the hooks, settings.json and commands that
-# carry a handoff from one session to the next.
-#
-# ⚠️ The negation is load-bearing. ~/.gitignore_global excludes .claude/
-# wholesale, and git will not descend into an excluded DIRECTORY to find a
-# negated file inside it - so the directory has to be re-included first or
-# .claude/hooks/ is silently untracked and a fresh clone gets none of it.
-!.claude/
+# Agent workflow (CLAUDE.md, .claude/) is local to each checkout and kept in a
+# separate private repository.
+CLAUDE.md
+CLAUDE.local.md
+.claude/
 
-# ...but handoffs stay out. They are disposable messages to the next session,
-# not documentation. See CLAUDE.md, "Where documentation goes".
-.claude/notes/
-
-# Machine-specific overrides, never team config.
-.claude/settings.local.json
-
-# The bot nav graphs at nav/ are CHECKED IN as of 2026-09-01, deliberately.
-#
-# They are gg2-nav-gen's output rather than this repo's source, which is the
-# usual argument for ignoring them -- and it loses to the fact that without them
-# a clone cannot run a bot, and regenerating them needs a Game Maker 8 build of
-# a fork that most people cloning this will never have. A generated artefact
-# whose generator is not reproducible from this repository is, in practice, a
-# source file.
-#
-# 34 MB on disk and ~1.2 MB packed: hex text compresses about 28:1, so the
-# objection that they would bloat the repository was measured and is wrong.
-#
-# They used to be read out of the reference tree's GM8 build directory, which
-# coupled the test suite to one particular checkout of a fork.
-# ReferenceTree.NavCacheDirectory looks at nav/, or at GG2_NAVCACHE.
+# The bot nav graphs at nav/ are checked in deliberately: without them a clone
+# cannot run a bot. Hex text compresses about 28:1, so they cost ~1.2 MB packed.
 TestResults/
 
 # Fleet analytics collected by scripts/fleet-analytics.sh. Player names; never commit.
 deploy/analytics/
 
-# scripts/ is the OPERATOR's tooling, not the project's: the fleet deploy, the
-# Linux/Windows build wrappers, the fleet-state and analytics readers, and the
-# one-line admin-panel tunnels. It is specific to the three hosts this
-# repository's author personally runs, so it was untracked on 2026-09-15 and
-# left on disk. Nothing secret was in it -- every password is read from the
-# host's own gg2.ini and masked before it reaches a terminal -- so the history
-# was deliberately NOT rewritten; the files are simply no longer carried.
-#
-# docs/DEPLOY.md, CONFIG.md, WEBADMIN.md and ANALYTICS.md still describe these
-# scripts. That is on purpose: they document how the fleet is actually run, and
-# the layout they describe is reproducible without them.
+# scripts/ is the operator's own fleet tooling (deploy, build wrappers, tunnels),
+# specific to the hosts the author runs. docs/DEPLOY.md, CONFIG.md, WEBADMIN.md
+# and ANALYTICS.md describe the layout it implements.
 #
 # Anchored with a leading slash: a bare `scripts/` matches a directory of that
 # name at ANY depth, so a future src/Something/scripts/ would be ignored

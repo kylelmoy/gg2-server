@@ -1103,7 +1103,7 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         //
         // MatchSimulation.Tick applies the SAME inputs again below, and that is
         // deliberate rather than tolerated. The simulation must stay a pure
-        // function of (state, inputs) — CLAUDE.md's first non-negotiable — so it
+        // function of (state, inputs) — CONTRIBUTING.md's first non-negotiable — so it
         // cannot depend on the server having pre-applied anything. The second
         // apply contributes nothing: ApplyInput ORs the edge into PressedKeys and
         // then sets LastKeyState = KeyState, so the second call ORs zero, and

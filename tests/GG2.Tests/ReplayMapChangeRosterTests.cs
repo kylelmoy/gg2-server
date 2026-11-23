@@ -14,7 +14,7 @@ namespace GG2.Tests;
 /// rebuilt the world wholesale on that message spawned everyone who did not
 /// re-pick as a scout: measured on the fleet's recordings, 71 of 149 traces
 /// showed a -20/-60/-100 hp mismatch against the wire
-/// (a 120, 160 or 200 hp class spawned at 100), and <c>gg2-env dataset</c>
+/// (a 120, 160 or 200 hp class spawned at 100), and a dataset exporter
 /// wrote those scouts into its observation rows. Nothing was red, because no
 /// checked-in fixture crosses a map change after naming a class.
 /// </remarks>

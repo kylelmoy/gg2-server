@@ -25,7 +25,7 @@
 // And on stderr, for rates: out-of-combat ground ticks running faster than 2
 // px/tick, per participant kind and class ("running,<who>,<class>,<ticks>").
 //
-// Output: CSV on stdout. gg2-rl docs/PLAN.md, the navigation study, reads it.
+// Output: CSV on stdout.
 
 using System.Collections.Concurrent;
 using System.Globalization;

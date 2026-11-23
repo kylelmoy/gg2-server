@@ -87,7 +87,7 @@ public static class NavConstants
     /// </summary>
     /// <remarks>
     /// <b>A deliberate quality-for-speed trade with no reference behind it</b> —
-    /// <c>navFindPath.gml</c> searches at 1.0 and re-opens closed nodes. CLAUDE.md
+    /// <c>navFindPath.gml</c> searches at 1.0 and re-opens closed nodes. CONTRIBUTING.md
     /// puts the bot layer outside the "the reference is the specification" rule.
     /// <para>
     /// Against 1.0 with re-opening, twelve bots on <c>ctf_truefort</c>: the bots'

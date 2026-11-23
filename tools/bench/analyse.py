@@ -2,7 +2,7 @@
 
 Three questions, none of which a column of percentages answers:
 
-  1. IS THE FILTER EQUAL BETWEEN ARMS?  gg2-rl's sharpening, and the one that
+  1. IS THE FILTER EQUAL BETWEEN ARMS?  The one that
      outranks the others: what invalidates a win-share comparison is not that
      censoring is HIGH, it is that it DIFFERS between the arms.  3% vs 3% is
      comparable; 3% vs 15% is not, and both look fine beside 50%.  So the first
@@ -89,7 +89,7 @@ for r in rows:
     print(f"{r['map']:<18} {r['pdec']:>6}/{r['cdec']:<6} {fmt(dz)}   "
           f"{pd:>8.1%}/{cd:<8.1%} {fmt(hz)}   {pw:>7.1%}/{cw:<7.1%} {fmt(wz)}{flag}")
 
-# ⛔ gg2-rl's sharpening, as a ranked list: the quantity that invalidates a
+# ⛔ As a ranked list: the quantity that invalidates a
 # win-share comparison is the DIFFERENCE in censoring between the arms, not the
 # level.  A map at 3%/3% is fine and a map at 30%/30% is fine; a map at 3%/15%
 # is the broken one and it looks better than the second.  Ranking by the

@@ -378,7 +378,7 @@ public sealed class MovementTests
 
     /// <summary>
     /// The crawl terminates when what is left to travel is too small for the
-    /// position to represent — the hang <c>gg2-rl</c> reported from training.
+    /// position to represent — a hang first seen in training.
     /// </summary>
     /// <remarks>
     /// <b>These numbers are a recording, not a construction.</b> They are the

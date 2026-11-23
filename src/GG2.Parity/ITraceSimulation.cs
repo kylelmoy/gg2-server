@@ -227,7 +227,7 @@ public interface ITraceSimulation
     /// </summary>
     /// <remarks>
     /// <b>Not <see cref="ClearCharacter"/>.</b> A roster index is positional,
-    /// so a departure <em>renumbers</em> everybody above it — CLAUDE.md, "Roster
+    /// so a departure <em>renumbers</em> everybody above it — CONTRIBUTING.md, "Roster
     /// indices are positional and shift on PLAYER_LEAVE". The server's own
     /// state updates are already compacted by the time they reach a recording,
     /// so a replay that merely cleared the slot would compare its slot 3 with
@@ -520,7 +520,7 @@ public interface ITraceSimulation
 /// A simulation with nothing in it.
 /// </summary>
 /// <remarks>
-/// Phase 2's exit criterion in docs/PLAN.md is that "the replayer runs a trace
+/// Phase 2's exit criterion in docs/STATUS.md is that "the replayer runs a trace
 /// against an empty simulation and reports a mismatch on tick 1 with a legible
 /// diff". This is that empty simulation, and it exists so the harness can be
 /// finished — and shown to fail correctly — before there is any physics to

@@ -391,7 +391,7 @@ public sealed class MovingPlatformTests
     /// is why this gate licenses only "a shaped platform may exist while
     /// platforms can touch nothing", and why porting the carry (or the
     /// standing box) bumps unconditionally — <see cref="SimulationStamp"/>
-    /// carries the whole argument, owed to <c>gg2-rl</c>.
+    /// carries the whole argument.
     /// </para>
     /// </remarks>
     [Fact]

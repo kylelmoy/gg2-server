@@ -95,7 +95,7 @@ public class PortabilityTests
     /// P/Invoke that exists.
     /// </summary>
     /// <remarks>
-    /// CLAUDE.md: <b>ask what would go red if the claim were false.</b> A gate
+    /// CONTRIBUTING.md: <b>ask what would go red if the claim were false.</b> A gate
     /// over an empty set is satisfied by deleting the thing it guards, which is
     /// exactly how it would stop protecting anything without failing. If this
     /// row moves, the change is real and the row is the re-record — say so in the
@@ -188,7 +188,7 @@ public class PortabilityTests
     /// </summary>
     /// <remarks>
     /// A path detector that silently matched nothing would leave the test green
-    /// for ever — the "unsatisfiable-by-the-right-evidence" gate CLAUDE.md warns
+    /// for ever — the "unsatisfiable-by-the-right-evidence" gate CONTRIBUTING.md warns
     /// about. This pins it in both directions and costs nothing.
     /// </remarks>
     [Fact]

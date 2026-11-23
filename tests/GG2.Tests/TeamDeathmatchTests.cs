@@ -355,7 +355,7 @@ public sealed class TeamDeathmatchTests
 
         Assert.Equal(hp, victim.Hp);
 
-        // Blocked damage accumulates NOTHING on either side — `gg2-rl/gg2-rl/docs/ENV.md`'s
+        // Blocked damage accumulates NOTHING on either side — the reward's
         // rule, and deliberately not the same rule as the line below it. The
         // reference resets `timeUnscathed` on a hit that did nothing; a reward
         // signal must not count an amount that never landed.

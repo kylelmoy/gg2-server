@@ -18,7 +18,7 @@ namespace GG2.Tests;
 /// <para>
 /// The fixture is measured on the running game — the seed chain, exact
 /// <c>random(x)</c> bits through the mantissa encoder, and the integer draws.
-/// Regenerate with <c>node gg2-samplers/sample-rng.js</c>.
+/// Regenerate with a live-game sampler.
 /// </para>
 /// </remarks>
 public sealed class RngSampleTests

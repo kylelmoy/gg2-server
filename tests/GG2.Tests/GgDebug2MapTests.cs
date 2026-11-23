@@ -313,9 +313,7 @@ public sealed class GgDebug2MapTests
     /// which is half of what the map is for.
     /// </summary>
     /// <remarks>
-    /// Regenerate with
-    /// <c>node &lt;gg2-nav-gen&gt;/bin/gg2navgen.js build maps/gg_debug2.png --md5 none --out nav</c>
-    /// after any generator change — the graph is derived from the map bytes and
+    /// Regenerate with <c>gg2-server navgen</c> after any generator change — the graph is derived from the map bytes and
     /// goes stale with them.
     /// </remarks>
     [Fact]

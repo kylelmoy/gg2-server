@@ -2,8 +2,8 @@
 // configuration produces traces in exactly the format the public fleet's do.
 //
 // Why a server and not HeadlessMatch: the recorder sits on GameServer and its
-// traces carry the roster labels (human/bot, controller) that gg2-rl's
-// `gg2-env dataset` and human-likeness instruments read. A headless match has no
+// traces carry the roster labels (human/bot, controller) that dataset and
+// human-likeness tooling reads. A headless match has no
 // wire and nothing to record. Same reason the bots engage each other here
 // (BotEngagesBotsToo): with no humans present a live server's default keeps the
 // controller off, and the recording would be of the scripted layer whatever

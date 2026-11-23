@@ -15,7 +15,7 @@ namespace GG2.Server;
 /// line of JSON over loopback TCP and <see cref="WebAdminServer"/> speaks HTTP
 /// to a browser somewhere else, and the day they each grow their own copy of
 /// "what does <c>step</c> mean" is the day one of them starts doing something
-/// the other cannot. This is CLAUDE.md's "three places" rule applied one level
+/// the other cannot. This is CONTRIBUTING.md's "three places" rule applied one level
 /// up: the transports are transport, and everything an operator can ask for
 /// lives here.
 /// </para>

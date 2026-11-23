@@ -15,7 +15,7 @@ namespace GG2.Tests;
 /// that is a <c>GG2.Parity.Replayer</c> option for interpreting traces recorded
 /// from the real game, and it constrains nothing about what this server emits.
 /// The claim named a real thing that was not the thing claimed, which is the
-/// exact failure shape <c>CLAUDE.md</c> keeps recording.
+/// exact failure shape <c>CONTRIBUTING.md</c> keeps recording.
 /// <para>
 /// <b>Why a one-tick slip here is invisible and expensive.</b> Every client
 /// dead-reckons each character from the last keys it heard until the next

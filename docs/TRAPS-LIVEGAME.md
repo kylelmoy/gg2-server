@@ -17,9 +17,8 @@ probe that measures the engine rather than measuring itself.
 Most of these look identical to a broken bridge from the outside — the
 failure mode is never an error message, it is a character that does not move.
 
-**Read `docs/PARALLEL.md` first if more than one session is running.** The
-bridge serves ONE TCP client and exactly one lane may hold it, and restoring
-`gg2.ini` empties another lane's roster mid-measurement.
+**The bridge serves ONE TCP client** and exactly one session may hold it, and
+restoring `gg2.ini` empties another session's roster mid-measurement.
 
 ### Recording a trace with something in it
 
@@ -339,8 +338,8 @@ and reading the result back.
   and ratios and let the game divide.
 - **`string_format(v, 1, 17)` is only good to ~16 significant digits** and the
   last one is noise. For ULP work pull the mantissa out in chunks, each under
-  2^19, because GM8's `floor()` wraps at 32 bits. Use `gg2-samplers/exact-double.js` —
-  do not write another one. `node gg2-samplers/exact-double.js` self-tests it.
+  2^19, because GM8's `floor()` wraps at 32 bits. Use a live-game sampler —
+  do not write another one. A live-game sampler self-tests it.
 - **A probe character inherits its bot's `player.team`,** and `charSetSolids`
   makes the *other* team's gates solid — set `team` explicitly or the
   character walks into a wall the recording walked through.
@@ -354,33 +353,26 @@ and reading the result back.
 
 ## The samplers, the probes, and handing over the socket
 
-The samplers and probes live in the separate `gg2-samplers` repo, a sibling
-checkout of this one. Each writes its fixture into this repo's
-`tests/GG2.Tests/Fixtures/`; `GG2_SERVER` says where this repo is when it is not
-`../gg2-server`.
-
-`gg2-samplers/sample-collision.js`, `gg2-samplers/sample-physics.js`, `gg2-samplers/sample-rng.js`,
-`gg2-samplers/sample-primitives.js`, `gg2-samplers/sample-collision-line.js`,
-`gg2-samplers/sample-motion.js` and `gg2-samplers/sample-rotated-box.js` regenerate the
-engine oracles. All seven need a **running game with the agent bridge**; the
+The engine oracles in `tests/GG2.Tests/Fixtures/` are written by seven
+live-game samplers (physics, primitives, RNG, collision, collision-line,
+motion, rotated-box), each a small Node script that drives the running game.
+All seven need a **running game with the agent bridge**; the
 physics and primitives ones also need at least one bot character, and the RNG,
 collision-line, motion and rotated-box ones are happy with any running
 instance — the last two create and scale their own probe rather than
 borrowing a bot's character, so a dedicated server with an empty match is
 enough.
 
-`gg2-samplers/probes/` holds the one-off probes that settled a single question rather
-than generating a fixture — the sprite boxes, the bubble pair, the sentry
-mask, the airblast, the turret. Read the header of one before writing another:
-each records what it cost to get right.
+One-off probes settled single questions rather than generating a fixture —
+the sprite boxes, the bubble pair, the sentry mask, the airblast, the turret.
 
 `collision-samples.json` covers every `BulletWall`, including the ones on
 `gg_debug` as well as `arena_lumberyard` and `koth_harvest`; `CollisionSampleTests`
 compares every rectangle the port builds against it.
 
 **The bridge serves one TCP client at a time and the MCP server process holds
-it.** Once a session has called any `gg2_*` tool, a `node gg2-samplers/sample-*.js`
-run times out on its first call — even `gg2_ping` — even though the game is
+it.** Once a session has called any `gg2_*` tool, a sampler run from the CLI
+times out on its first call — even `gg2_ping` — even though the game is
 fine. Hand the socket over deliberately: stop the game, restart it with
 `node <bridge>/run-agent.js --port 17777 --name server --role server -- -dedicated -map ctf_truefort`,
 and do not touch `gg2_*` until the tool has finished. The other direction is
@@ -491,7 +483,7 @@ and leave on a seeded schedule, 70% by `PLAYER_LEAVE` and FIN and 30% by RST. It
 README carries the server flags it needs — two per-address limits refuse a fleet
 from `127.0.0.1` by default, and the refusal reads as the tool not working.
 
-What it is for is the off-by-one in CLAUDE.md: a departure from a low slot
+What it is for is the off-by-one in CONTRIBUTING.md: a departure from a low slot
 renumbers every slot above it, and a watching client tracks that with one line
 (`ClientBeginStep.gml:218`). Nothing inside this repo can check that line is
 still right. The invariant a watching client should hold is
@@ -580,7 +572,7 @@ frames.
 
 ### Corrections in a soldier duel: the client's clock and rockets, not the physics
 
-Measured 2026-11-18 because a stock client on barbara's duel server showed
+Measured 2026-11-18 because a stock client on a duel server showed
 noticeable snaps against soldier bots even on the LAN. A GM8 client's
 prediction, logged at each `QUICK_UPDATE` just before the authoritative values
 overwrite it, was paired with the C# replica's prediction for the same update

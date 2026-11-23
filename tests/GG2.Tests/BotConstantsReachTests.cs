@@ -22,7 +22,7 @@ namespace GG2.Tests;
 /// </para>
 /// <para>
 /// <b>Deleting this test does not fail anything; it converts a checked claim
-/// into an unfalsifiable one</b> — <c>CLAUDE.md</c>'s "a claim the repo makes
+/// into an unfalsifiable one</b> — <c>CONTRIBUTING.md</c>'s "a claim the repo makes
 /// about itself". If the reach genuinely has to widen, move <c>BotConstants</c>
 /// back to the gating surface in the same change and bump the stamp.
 /// </para>
@@ -153,7 +153,7 @@ public sealed class BotConstantsReachTests(ITestOutputHelper output)
     /// </summary>
     /// <remarks>
     /// The catch-all, so a reader appearing in <c>GG2.Server</c>, <c>GG2.Host</c>
-    /// or <c>GG2.Env</c> is a decision rather than a drift. None of those would
+    /// or a training environment is a decision rather than a drift. None of those would
     /// be <em>wrong</em> on its own — but each is a place where the "which states,
     /// not what an action does" argument has to be made again, and this is where
     /// somebody is asked to make it.

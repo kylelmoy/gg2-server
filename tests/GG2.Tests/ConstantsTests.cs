@@ -12,7 +12,7 @@ namespace GG2.Tests;
 /// The table was generated from that file rather than typed, but a generator
 /// run once is not a guarantee that the file still says the same thing. This is
 /// the test that notices when the reference fork moves — which
-/// <c>CLAUDE.md</c> warns is when the protocol docs need re-checking.
+/// <c>CONTRIBUTING.md</c> warns is when the protocol docs need re-checking.
 /// <para>
 /// The name mappings below are written out rather than derived, because the
 /// reference's naming is not mechanical: <c>PLAYER_CHANGENAME</c>,
@@ -314,7 +314,7 @@ public sealed class ConstantsTests
 
         Assert.True(File.Exists(path), $"the reference tree has no PlayerControl Begin Step at {path}");
 
-        // Object event code is XML-escaped inside the .xml (CLAUDE.md, "Reading
+        // Object event code is XML-escaped inside the .xml (CONTRIBUTING.md, "Reading
         // the reference"), so `||` survives but `&&` and comparisons do not.
         var source = File.ReadAllText(path)
             .Replace("&lt;", "<", StringComparison.Ordinal)

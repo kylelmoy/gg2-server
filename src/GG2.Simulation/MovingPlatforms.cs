@@ -447,7 +447,7 @@ public static class MovingPlatforms
     /// rather than 0, and <c>x_</c> drifts by that much every tick. Normalising
     /// <c>(left, -top)</c> directly would be arithmetically nicer and would put
     /// this port's <c>x_</c> a few ULPs from the client's, which the wire's
-    /// <c>x_*5</c> would eventually disagree about. CLAUDE.md: transcribe GML
+    /// <c>x_*5</c> would eventually disagree about. CONTRIBUTING.md: transcribe GML
     /// arithmetic, not GML structure.
     /// <para>
     /// <b>No motion snap.</b> <c>Gml.SnapToNearInteger</c> applies to

@@ -19,7 +19,6 @@ key, speed reversals, mean speed); the height gained; and for a jump within 60
 ticks of the last landing, the ticks on the ground between them. The header of
 `Program.cs` has the definitions. Not in `GG2.sln`, like `tools/aimscan`.
 
-`gg2-rl` `docs/PLAN.md`, "Navigation: how bots get over obstacles", has the
-first reading: bots take off at about half the people's speed after braking,
+The first reading: bots take off at about half the people's speed after braking,
 change keys about ten times as often in the air, and pause about twice as long
 between chained jumps.

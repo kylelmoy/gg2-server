@@ -5,7 +5,7 @@
 WHY THIS EXISTS
 ---------------
 The pooled death-share test compared ~34,000 deaths an arm and reported z = -4.26.
-`gg2-rl` pointed out that **deaths cluster by match**: ~40 arrive together, from
+But **deaths cluster by match**: ~40 arrive together, from
 ~840 matches an arm, so a test over pooled deaths treats clustered data as
 independent and overstates its own evidence.  A plausible intra-match correlation
 moves it a long way:
@@ -25,7 +25,7 @@ rather than adjusting for it.
     comes back near -2   ->  the pooled headline was overstated, and we would
                              rather know than have it found later
 
-⛔ AND THIS TEST IS BIASED TOO, IN THE OPPOSITE DIRECTION. `gg2-rl`, before the
+⛔ AND THIS TEST IS BIASED TOO, IN THE OPPOSITE DIRECTION, as noted before the
 first result existed:
 
     pooled z over DEATHS       OVERSTATES  -- clustered deaths as independent

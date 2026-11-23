@@ -237,7 +237,7 @@ public sealed partial class PathFollower
     /// default; needs <see cref="Collision"/>, and does nothing without it.
     /// </summary>
     /// <remarks>
-    /// <c>gg2-rl</c> <c>docs/PLAN.md</c>, navigation: bots used to brake to the
+    /// Bots used to brake to the
     /// arc's planned speed, jump at about half the people's speed and chatter the
     /// keys in the air. People run at the obstacle and hold the key.
     /// </remarks>
@@ -384,8 +384,8 @@ public sealed partial class PathFollower
         //
         // N13, off: held for the ground, in the air the position resolves to
         // whatever surface the arc is passing, so a timer re-plan over a narrow
-        // ledge installs a route of that one node and the bot falls past it
-        // (gg2-rl docs/PLAN.md, NS3b). Holding it fixed as many sweep flights
+        // ledge installs a route of that one node and the bot falls past it.
+        // Holding it fixed as many sweep flights
         // as it broke.
         if (tick >= state.ReplanAt && (onGround || !GroundedReplans) && !(GoalAirHolds && !onGround && OverGoal(state, x, y)))
             Plan(state, x, y, tick, query, occupancy);
@@ -513,7 +513,7 @@ public sealed partial class PathFollower
     /// grabs → 118; 6v2 5.8 → 6.0; 6v4 3.4 → 3.6.
     /// </para>
     /// <para>
-    /// <b>The bot layer is not held to the reference — see CLAUDE.md.</b> The
+    /// <b>The bot layer is not held to the reference — see CONTRIBUTING.md.</b> The
     /// wire and observable simulation are; a bot's decisions are this project's
     /// own, the reference's bot layer is treated as incomplete, and much of it is
     /// expected to be replaced by a learned policy later.

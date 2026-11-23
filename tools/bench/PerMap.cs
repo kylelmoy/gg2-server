@@ -9,8 +9,7 @@ namespace Bench;
 /// Phase 4's exit criterion, per map, on every shipped map.
 /// </summary>
 /// <remarks>
-/// <b>Three things this reports that an aggregate cannot.</b> `gg2-rl` named
-/// all three: the criterion says MATCH WIN RATE and the earlier runs quoted
+/// <b>Three things this reports that an aggregate cannot.</b> The criterion says MATCH WIN RATE and the earlier runs quoted
 /// capture share; "no map produces a stuck bot" is a per-map claim that an
 /// aggregate ratio hides one bad map inside; and "every shipped map" is 22, not
 /// the six that were screened.
@@ -41,8 +40,7 @@ public static class PerMapEval
         // win share was computed over the surviving subset. A win share over a
         // filtered subset is exactly the statistic censoring distorts, and if
         // the policy's matches run longer its subset is more selected than the
-        // control's. `gg2-rl` raised it; their own Scoreboard already carries
-        // draw and dead shares beside every win rate for the same reason.
+        // control's.
         var cap = int.Parse(Environment.GetEnvironmentVariable("BENCH_CAP") ?? "5");
         var focus = Environment.GetEnvironmentVariable("BENCH_FOCUS");
         var list = focus is { Length: > 0 } ? focus.Split(',') : Maps;

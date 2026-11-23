@@ -18,7 +18,7 @@ namespace GG2.Tests;
 /// (docs/TRAPS-BOTS.md, "the arm was never asked").
 /// <para>
 /// <b>These pin counts against the nav caches in <c>nav/</c>, which are
-/// <c>gg2-nav-gen</c>'s output and not checked in.</b> Same exposure as
+/// the original nav generator's output and not checked in.</b> Same exposure as
 /// <see cref="PathFollowerFixtureTests"/>'s 137-node route, and the same
 /// discipline: a failure here is the <b>re-record</b> — check the change is one
 /// you meant, check it went the way you meant, update the row, say so in the
@@ -242,8 +242,8 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// </para>
     /// </remarks>
     /// <para>
-    /// ✅ <b>Re-recorded 2026-10-11 for held flight</b> (<see cref="PathFollower.HeldFlight"/>,
-    /// <c>gg2-rl</c> <c>docs/PLAN.md</c>, navigation, N1): arrived 31,520 → 31,561,
+    /// ✅ <b>Re-recorded 2026-10-11 for held flight</b> (<see cref="PathFollower.HeldFlight"/>):
+    /// arrived 31,520 → 31,561,
     /// stranded 535 → 494, ticks 1,474,882 → 1,411,258, blacklists 7,963 → 7,569,
     /// flown 3,626 → 3,644; the premises did not move. Per edge, 107 flights that
     /// stranded now arrive and 66 that arrived now strand (<c>HeldFlightCensus</c>).
@@ -310,7 +310,7 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// as tiers 1-4 fly out of combat.
     /// </summary>
     /// <remarks>
-    /// <c>gg2-rl</c> <c>docs/PLAN.md</c>, N5: a drawn share of step attempts run
+    /// A drawn share of step attempts run
     /// into the step's face, stand, and hop from standing. Recorded 2026-10-13
     /// against the shipping arm's 445 stranded and 1,367,620 ticks: per edge 713
     /// flights changed, 22 that stranded now arrive and 10 that arrived now
@@ -362,7 +362,7 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// <remarks>
     /// The shipping arm flies plain jumps as a soldier, so a scout's own plans
     /// over them — a second jump drawn on a plain jump, a rescue in the air
-    /// (<c>gg2-rl</c> <c>docs/PLAN.md</c>, N3) — are measured here and nowhere
+    /// — are measured here and nowhere
     /// else. Recorded 2026-10-11 at N3 (164 stranded, 491,677 ticks); with the
     /// second-jump plans off (<see cref="PathFollower.HeldDoubles"/>) that sweep
     /// stranded 216 and took 509,023 ticks, and per edge 63 flights were won and
@@ -412,7 +412,7 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// </summary>
     /// <remarks>
     /// <b>The exact heuristic is not a faster search, it is a different one</b>
-    /// (<c>CLAUDE.md</c>, <c>--no-nav-distances</c>: "a different arm, not a
+    /// (<c>CONTRIBUTING.md</c>, <c>--no-nav-distances</c>: "a different arm, not a
     /// slower one"), and this is that stated in edges. With the tables A* goes
     /// round <b>5,741 more</b> single hops, so the corpus a per-edge sweep can even
     /// pose shrinks from 37,789 to 32,048 — and measurable rocket jumps fall from
@@ -643,7 +643,7 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
         // PathFollowerFixtureTests pins zero over a 137-node leg, which is the
         // other end of the same question.
         //
-        // ✅ Re-recorded 2026-10-15 (gg2-rl N14): the sweep starts a body at rest,
+        // ✅ Re-recorded 2026-10-15: the sweep starts a body at rest,
         // so 26 of these arcs, whose from-node does not hold a resting body, are
         // StartUnsupported. Measured 21 → 11, all 11 flown, blacklists 15 → 6.
         Assert.Equal(6, blacklists);
@@ -671,10 +671,10 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
 
         // SIX, from ten: a held flight takes the second jump only where its plan
         // needs or draws one, and the other five of these arcs land on one held
-        // jump. Every one still arrives. Five from 2026-10-11 (gg2-rl N3, N4),
-        // six from 2026-10-13 (N7), when a drawn second jump began to be tried
+        // jump. Every one still arrives. Five from 2026-10-11,
+        // six from 2026-10-13, when a drawn second jump began to be tried
         // in every plan shape before a single jump.
-        // Five from 2026-10-15 (gg2-rl N14), with one arc's start unsupported.
+        // Five from 2026-10-15, with one arc's start unsupported.
         Assert.Equal(5, flown);
 
         // ONE, re-recorded 2026-09-05 from zero when the start moved a pixel out

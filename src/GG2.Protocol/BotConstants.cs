@@ -6,7 +6,7 @@ namespace GG2.Protocol;
 /// </summary>
 /// <remarks>
 /// Carried over verbatim so the port has a known-good baseline to measure
-/// against, per docs/PLAN.md phase 7 — the point is to beat these, not to keep
+/// against, per docs/STATUS.md phase 7 — the point is to beat these, not to keep
 /// them.
 /// </remarks>
 public static class BotConstants

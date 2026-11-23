@@ -21,7 +21,7 @@ namespace GG2.Server.Plugins;
 /// re-derives a weapon's spread from its position, so a plugin drawing from it
 /// would make the game depend on what the plugins were saying. Use
 /// <see cref="Random"/> here instead. Same rule, and the same reason, as the one
-/// CLAUDE.md states for bots — a plugin must not be able to produce a state a
+/// CONTRIBUTING.md states for bots — a plugin must not be able to produce a state a
 /// client could not.
 /// </para>
 /// <para>

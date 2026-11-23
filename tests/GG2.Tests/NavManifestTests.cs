@@ -17,7 +17,7 @@ namespace GG2.Tests;
 /// <para>
 /// <b>This is a two-sided check and both sides matter.</b> A map edited
 /// without regenerating nav fails here; so does a nav graph regenerated against
-/// something other than the maps in this repository. CLAUDE.md's rule about
+/// something other than the maps in this repository. CONTRIBUTING.md's rule about
 /// pinned numbers applies — a red here is "re-record and say so in the commit"
 /// when you meant to change the geometry, and an alarm when you did not.
 /// </para>
@@ -113,7 +113,7 @@ public sealed class NavManifestTests
 
              Either a map changed and its graph was not regenerated (bots will path against
              geometry that is not there), or the graphs were regenerated against different
-             maps. Regenerate with gg2-nav-gen, then:
+             maps. Regenerate with `gg2-server navgen`, then:
                  {UpdateVariable}=1 dotnet test GG2.sln --filter NavManifestTests
              """);
     }
@@ -123,7 +123,7 @@ public sealed class NavManifestTests
     /// </summary>
     /// <remarks>
     /// <b>Without this the test above is satisfiable by a manifest that
-    /// matches everything.</b> That is CLAUDE.md's recurring shape — the code
+    /// matches everything.</b> That is CONTRIBUTING.md's recurring shape — the code
     /// self-consistent, the claim about coverage false — and here it would be
     /// invisible, because the only observable difference is whether a stale
     /// graph gets refused months from now. So: mutate one cell of a real

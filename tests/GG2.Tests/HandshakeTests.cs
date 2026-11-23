@@ -4,7 +4,7 @@ using GG2.Server;
 namespace GG2.Tests;
 
 /// <summary>
-/// Phase 1 of docs/PLAN.md: a stock client gets through the handshake, joins,
+/// Phase 1 of docs/STATUS.md: a stock client gets through the handshake, joins,
 /// and is not disconnected.
 /// </summary>
 /// <remarks>

@@ -11,8 +11,7 @@ namespace GG2.Tests;
 /// A character is put on a spread of nav nodes on three maps, runs for a few
 /// ticks, then jumps and holds a key, and the predictor's landing taken just
 /// before the jump is compared with where the world puts it. The path follower
-/// launches on these predictions (<c>gg2-rl</c> <c>docs/PLAN.md</c>, navigation,
-/// N1), so a disagreement here is a bot jumping at something it cannot reach.
+/// launches on these predictions, so a disagreement here is a bot jumping at something it cannot reach.
 /// </remarks>
 public sealed class FlightPredictorTests(Xunit.Abstractions.ITestOutputHelper output)
 {

@@ -1359,15 +1359,13 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         // objective tick that sees the flag moved reissues, and each reissue
         // re-arms the follower's deadline on that tick: the plan is attempted at
         // once. ⚠️ Attempted, not counted: a reissue that lands while the bot is
-        // in the air searches from no node and fails before Replans counts it
-        // (gg2-rl docs/PLAN.md, N12, where one of the two reissues did).
+        // in the air searches from no node and fails before Replans counts it.
         //
         // ⚠️ Counted per reissue, not as "more re-plans than the still window".
         // That comparison passed for years on churn: the flag walks off its
         // platform after two reissues and the goal stops following it, so the
         // moving window's surplus was off-route re-plans, not the objective. A
-        // follower change that landed the bot more cleanly (gg2-rl docs/PLAN.md,
-        // N9b) took the count from 5 to 2 against the still window's 3, with the
+        // follower change that landed the bot more cleanly took the count from 5 to 2 against the still window's 3, with the
         // objective doing exactly what it did before.
         replansBefore = bot.Path.Replans;
         var reissues = 0;

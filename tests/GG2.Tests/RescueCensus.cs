@@ -8,8 +8,7 @@ namespace GG2.Tests;
 /// plan, arrive, and why the rest give up.
 /// </summary>
 /// <remarks>
-/// A measurement, not a gate; skipped in the suite. <c>gg2-rl</c>
-/// <c>docs/PLAN.md</c>, NS3.
+/// A measurement, not a gate; skipped in the suite.
 /// </remarks>
 public sealed class RescueCensus(Xunit.Abstractions.ITestOutputHelper output)
 {

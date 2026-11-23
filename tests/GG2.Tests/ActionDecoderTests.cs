@@ -7,7 +7,7 @@ namespace GG2.Tests;
 /// <see cref="ActionDecoder"/> — heads to <see cref="PlayerInput"/>.
 /// </summary>
 /// <remarks>
-/// <c>gg2-rl/docs/ENV.md</c>'s gate list names three properties for this type, and all
+/// Three properties are gated for this type, and all
 /// three are here because each one is a bug this project has already paid for
 /// somewhere else.
 /// </remarks>
@@ -23,7 +23,7 @@ public sealed class ActionDecoderTests
     /// </summary>
     /// <remarks>
     /// GG2 jumps on the PRESSED edge, so a held bit fires once and then does
-    /// nothing. CLAUDE.md records the cost of learning that the hard way: a
+    /// nothing. CONTRIBUTING.md records the cost of learning that the hard way: a
     /// driven client with the jump bit held "climbed exactly one step and then
     /// sat there looking wedged", and several minutes went into suspecting the
     /// bridge. Under an action repeat of k, emitting the bit on all k ticks
@@ -48,7 +48,7 @@ public sealed class ActionDecoderTests
     /// of direction.</b>
     /// </summary>
     /// <remarks>
-    /// The same trap CLAUDE.md records for driving a client through
+    /// The same trap CONTRIBUTING.md records for driving a client through
     /// <c>gg2_watch</c>: <c>heldMask = heldMask | 32</c> leaves an earlier
     /// <c>left</c> bit set and the character walks the wrong way — measured, and
     /// it looked like the physics being wrong. A decoder that accumulated would
@@ -161,7 +161,7 @@ public sealed class ActionDecoderTests
 
     /// <summary>
     /// <b>A spread turn arrives at the same place in equal steps</b>, under the
-    /// same cap: gg2-rl phase 5, C0.
+    /// same cap.
     /// </summary>
     [Fact]
     public void ASpreadTurnArrivesInEqualStepsAtTheSameTotal()

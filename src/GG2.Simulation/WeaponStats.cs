@@ -38,7 +38,7 @@ public enum WeaponKind : byte
 /// <b>Only the numbers that reach the wire or the simulation are here.</b> Every
 /// weapon's Create event also sets sprite ids, animation lengths and image
 /// speeds; those are the client drawing itself and are outside the contract —
-/// CLAUDE.md, "Compatible on the wire and in observable simulation. Free
+/// CONTRIBUTING.md, "Compatible on the wire and in observable simulation. Free
 /// everywhere else."
 /// </para>
 /// </remarks>

@@ -8,7 +8,7 @@ namespace GG2.Simulation;
 /// </summary>
 /// <remarks>
 /// Game Maker runs alarms in their own event stage between Begin Step and Step,
-/// so this sits between them in <see cref="MatchSimulation.Tick"/>. CLAUDE.md
+/// so this sits between them in <see cref="MatchSimulation.Tick"/>. CONTRIBUTING.md
 /// puts alarms on the list of Game Maker showing through, so the reference's
 /// <c>alarm[n]</c> are named counters here — but the <em>phase</em> is
 /// observable and stays.

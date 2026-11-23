@@ -606,7 +606,7 @@ public sealed class SupportClassFixtureTests
     /// </summary>
     /// <remarks>
     /// A decorator over the real replay loop, like <see cref="ChargeWatcher"/>
-    /// and for the same CLAUDE.md reason. It needs the concrete
+    /// and for the same CONTRIBUTING.md reason. It needs the concrete
     /// <see cref="PortedSimulation"/> for the landing flag and the sentry's
     /// unquantised position.
     /// </remarks>
@@ -678,7 +678,7 @@ public sealed class SupportClassFixtureTests
     /// Records the tick of every <c>UBER_CHARGED</c> the simulation produced.
     /// </summary>
     /// <remarks>
-    /// A decorator, because CLAUDE.md's rule is that the replay loop is never
+    /// A decorator, because CONTRIBUTING.md's rule is that the replay loop is never
     /// reimplemented — the fire seeds and the slot reconciliation are both easy
     /// to get subtly wrong, and two earlier investigations did.
     /// </remarks>

@@ -18,7 +18,7 @@ namespace GG2.Server.Plugins;
 /// disconnect nobody connected it to.
 /// <para>
 /// It is the same trap <c>WorldState.RemoveSlot</c> is written up for in
-/// CLAUDE.md, one layer out.
+/// CONTRIBUTING.md, one layer out.
 /// </para>
 /// </remarks>
 public sealed class PluginPlayerTable<T>(Func<T> factory)

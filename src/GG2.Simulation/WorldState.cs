@@ -377,7 +377,7 @@ public struct WorldState
     /// <para>
     /// <b>It costs a bigger <see cref="WorldState"/>, and the state is copied
     /// per rollout candidate.</b> 176 extra slots is on the order of 4 KB against
-    /// a ~145 KB state — a few percent on the fork copy <c>gg2-rl/docs/ENV.md</c> prices
+    /// a ~145 KB state — a few percent on a fork copy measured
     /// at 10-12 µs, paid on every map including the 22 that place none. If that
     /// ever matters, the answer is to stop carrying platforms in-line, not to
     /// shrink the ceiling back below a real map.
@@ -912,7 +912,7 @@ public struct WorldState
     /// and renumber everything above it (<c>ClientBeginStep.gml:212-221</c>). A
     /// character left in place while the roster shifted underneath it would
     /// belong to whoever moved into that index: the wrong player, only after
-    /// somebody leaves, which is exactly the intermittent off-by-one CLAUDE.md
+    /// somebody leaves, which is exactly the intermittent off-by-one CONTRIBUTING.md
     /// warns about.
     /// <para>
     /// <b>Everything else that names a slot renumbers with it.</b> A projectile's

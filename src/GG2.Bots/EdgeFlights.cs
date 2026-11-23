@@ -70,8 +70,8 @@ public enum EdgeFlightOutcome
     /// misses: placed there, it falls a cell or more and lands somewhere else.
     /// About a third of shipped nodes are like this. A flight from one starts
     /// mid-air and credits an edge whose start no body stands still on, and a
-    /// follower change to when it plans in the air moved the whole reading
-    /// (<c>gg2-rl</c> <c>docs/PLAN.md</c>, N13 and N14). So the flight starts
+    /// follower change to when it plans in the air moved the whole reading.
+    /// So the flight starts
     /// at rest, and a start that cannot rest on its node is skipped.
     /// </remarks>
     StartUnsupported,
@@ -325,7 +325,7 @@ public readonly record struct EdgeFlightTally(
 /// <b>Why this is a class and not a test.</b> A cache full of a new edge kind is
 /// only worth what a bot can actually do with it, and the question "how many of
 /// these 4,132 arcs does the follower fly" is asked by whoever generated them —
-/// <c>gg2-nav-gen</c> is a separate lane whose output is not checked in here.
+/// the original nav generator was a separate project whose output is not checked in here.
 /// So the apparatus lives in the library beside <see cref="ScenarioWorld"/>, the
 /// gates in the test project point it at the shipped caches, and a sweep of
 /// somebody else's cache is one call rather than a rewrite.
@@ -370,7 +370,7 @@ public static class EdgeFlights
     /// Ticks a single hop is given before it counts as stranded.
     /// </summary>
     /// <remarks>
-    /// Generous on purpose: the longest arc <c>gg2-nav-gen</c> emits is capped at
+    /// Generous on purpose: the longest arc the original nav generator emits is capped at
     /// <c>NAV_SJ_MAX_TICKS</c> (100) and a mine jump adds
     /// <see cref="NavConstants.SjSetupTicks"/> before it, but the bot also has to
     /// walk from the node's midpoint to the takeoff column, and

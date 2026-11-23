@@ -2,18 +2,18 @@
 
 **Implemented as specified here** (`GameServer.Prediction.cs`,
 `NetworkInputSource`'s queued mode, `PredictionTests`). Verified live against
-gg2-client (its `docs/DECISIONS.md` D21, pin `7475a32`), measured as the
+the native client (its `docs/DECISIONS.md` D21, pin `7475a32`), measured as the
 distance between successive predictions for the same input number:
 
 | Run | Result |
 |---|---|
 | Lock-step test, 4 bots | p50 0.11 px; p99 1.8-11 px across runs, attributed to combat knockback |
 | Burst of 5 inputs | folds once (an 11 px correction), drains to 2 ahead or fewer |
-| barbara:8190 over the LAN, 60 s, scout, NetProbe | steady at 2 inputs ahead; rewind corrections n=1628, p50 0, p95 0.22 px, p99 0.36 px, 9 over 5 px. Replica drift unchanged (p50 0.13 px) |
+| a home server over the LAN, 60 s, scout, NetProbe | steady at 2 inputs ahead; rewind corrections n=1628, p50 0, p95 0.22 px, p99 0.36 px, 9 over 5 px. Replica drift unchanged (p50 0.13 px) |
 
 The over-5-px corrections are not yet split into queue folds and knockback;
 if folds dominate, `PredictionMaxQueuedInputs` is the knob. "What would show
-this has gone stale" says what would show the design wrong. Asked for by gg2-client (its
+this has gone stale" says what would show the design wrong. Asked for by the native client (its
 `docs/DECISIONS.md`, D12 item 2): predict the local character only, rewind to the replica's state on each
 server tick, and replay the inputs the server has not applied yet. Remote
 players stay as they are. This document is the server half: what the wire
@@ -107,7 +107,7 @@ chat hello uses), the server is GM8 or an older gg2-server, and the client
 runs as it does today. Whether to fall back to RTT estimation there is the
 client's call. Nothing here depends on it.
 
-**gg2-client must recognise `0xC0` and `0xC1` before it sends the hello.** D12
+**the native client must recognise `0xC0` and `0xC1` before it sends the hello.** D12
 item 7 fails the session on an unknown leading byte, so an old client must
 never send the hello. The server sends neither message unasked, so an old
 client never receives one.
@@ -116,7 +116,7 @@ client never receives one.
 
 - **(a) Inside the `chat` packet id.** It works only where chat is advertised.
   `[Chat] Enabled=0` exists and turns that off. It costs PLUGIN_PACKET framing
-  (4 bytes) on every ack. It also overloads gg2-chat2026's `0x80` envelope,
+  (4 bytes) on every ack. It also overloads the native chat protocol's `0x80` envelope,
   whose contract is "exactly one native chat message". Prediction metadata does
   not belong to a chat protocol, and a client that skipped the plugin download
   could not opt in.
@@ -134,7 +134,7 @@ queue below, which applies to a welcomed client only and is argued there. A
 stock client receives a byte-identical
 stream, because the new messages go only to a connection that sent the hello.
 A stock client never sends the hello. A stock server ignores the hello. That
-is the "cannot see the difference at all" arm of `CLAUDE.md`'s test for a new
+is the "cannot see the difference at all" arm of `CONTRIBUTING.md`'s test for a new
 feature.
 
 ### Where it lives
@@ -200,7 +200,7 @@ So a welcomed client's inputs go through a small queue on its connection:
 - **What it costs.** A burst waits up to a tick or two instead of landing at
   once. That is latency only for the opted-in player, and prediction hides it
   from them. The two knobs are a jitter buffer's knobs. The defaults are
-  starting points, to be tuned against gg2-client's measured correction, not
+  starting points, to be tuned against the native client's measured correction, not
   settled numbers.
 
 **Why this is allowed under the rule.** The queue changes which tick an
@@ -216,7 +216,7 @@ carry.
   queue, so they see the same stream as today.
 - `ClientCommands.PerTickLimit` still bounds how many commands are read in a
   tick. The queue bound is separate and smaller.
-- A dead player's inputs are consumed or held as today. gg2-client sends
+- A dead player's inputs are consumed or held as today. the native client sends
   INPUTSTATE only while alive, so its queue empties on death.
 - The merge is what makes a misbehaving client harmless. A client sending
   faster than 30 Hz is merged down to one tick per tick. It cannot buy extra
@@ -304,7 +304,7 @@ compound past a few ticks. The replica's own drift is the existing D12 figure.
   (`docs/BOTS.md`). The simulation alone is less. Ten replays come to at most
   about 1 ms on a desktop.
 - **Unmeasured: either number on a phone.** That measurement decides whether
-  the fallback below is needed. Measure it in gg2-client as
+  the fallback below is needed. Measure it in the native client as
   (copy + N x Tick) at N = 10 on the slowest target device, with a full
   twelve-player server's state.
 
@@ -329,8 +329,7 @@ phases (`ApplyInput`, the mirrored flags, `BeginStepInput`, `CloakStep`,
 `BeginStepAccelerate`, `BeginStepUberEffects`, `Step`, `HeavyStep`, `EndStep`)
 against an otherwise frozen world. It costs a refactor of `MatchSimulation.Tick`
 so the full tick and the one-slot step share the per-slot code. Without that
-sharing they drift apart silently. `MatchSimulation.cs` is serialised across
-lanes (`docs/PARALLEL.md`). It also loses the three advantages above. The
+sharing they drift apart silently. It also loses the three advantages above. The
 character physics itself would allow it: `CharacterPhysics`'s phases take only the
 `CollisionWorld` and the character (and its weapon at `EndStep`), so a
 character's movement reads no other character and no sentry.
@@ -421,7 +420,7 @@ an `INPUTSTATE`, so a 24-player server sends each client about
 `24 x 9 x 30 x (1/3 - 1/7)` = 1.2 KB/s more. A duel's two players, about
 0.1 KB/s.
 
-What would change the recommendation: a predicting client (gg2-client) whose
+What would change the recommendation: a predicting client (the native client) whose
 own character's correction rises above the quantisation floor at interval 3,
 or a re-run over a real network where interval 3 does not beat stock.
 
@@ -479,5 +478,5 @@ said it.
 
 ## Decisions
 
-Kyle's, 2026-11-18: the wire as specified, `ClientPrediction` on by default,
+The maintainer's, 2026-11-18: the wire as specified, `ClientPrediction` on by default,
 and no lag compensation.

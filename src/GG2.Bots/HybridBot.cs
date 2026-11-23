@@ -28,7 +28,7 @@ namespace GG2.Bots;
 /// <para>
 /// <b>This does NOT reach the wire or observable simulation.</b> A bot may press
 /// "drop intel"; <c>MatchSimulation</c> may not decide to drop one. The simulation
-/// never special-cases a bot — CLAUDE.md.
+/// never special-cases a bot — CONTRIBUTING.md.
 /// </para>
 /// </remarks>
 public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
@@ -45,7 +45,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// saturates there: goal distance clamps at <c>min(d / 400, 1)</c>, the
     /// geometry rays reach 320px and the walkmask patch covers 128px. Beyond that
     /// the policy is handed the wheel at a range its own input cannot describe.
-    /// Those figures are the retired gg2-rl observation's; a gg2-sim net's
+    /// Those figures are a retired observation's; a <c>.gg2p</c> net's
     /// observation (<c>SimPolicyObservation</c>) sets its own ceiling, and a range
     /// past it is the same problem.
     /// </para>
@@ -63,7 +63,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     public const double EngagementRange = 150.0;
 
     /// <summary>
-    /// The 300px `gg2-rl` measured in DUELS, kept for reference and no longer the
+    /// The 300px measured in DUELS, kept for reference and no longer the
     /// default.
     /// </summary>
     /// <remarks>
@@ -248,8 +248,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// widening when it takes the wheel, which is what Q22 measured to cost the
     /// objective. It is still read only at a decision boundary, so there is no
     /// flapping to damp. The rest of the gate (the engage hold under
-    /// <c>MacroTask</c>) applies unchanged. <c>gg2-rl</c> <c>docs/PLAN.md</c>
-    /// phase 5, B2, has the measurement.
+    /// <c>MacroTask</c>) applies unchanged.
     /// </remarks>
     public double ReleaseRange { get; init; } = double.NaN;
 
@@ -358,7 +357,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// </summary>
     /// <remarks>
     /// <b>A combat controller has no command head and must never acquire
-    /// one.</b> <c>gg2-rl</c>'s reward is damage dealt minus taken with no
+    /// one.</b> The policy's reward is damage dealt minus taken with no
     /// objective term, by its user's decision — a bot that runs past you to tap the
     /// intel is optimal and unpleasant. The macro layer owns objectives entirely.
     /// <para>
@@ -484,7 +483,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
         // all: no re-target, no re-path, no spot ban, and its path state goes
         // stale the moment control comes back. A bot that meets enemies often
         // then stops pursuing the objective even between fights. Captures fell
-        // 20 to 7 over a hundred matches; gg2-rl/docs/ENV.md has the arms.
+        // 20 to 7 over a hundred matches.
         //
         // Counted beside the poll it counts, in one place, so no mutation can
         // leave a counter reporting work that never happened — a counter separable

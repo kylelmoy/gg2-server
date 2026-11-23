@@ -37,7 +37,7 @@ public sealed class NavContainerTests : IDisposable
         }
     }
 
-    /// <summary>A plain <c>.txt</c> still loads — <c>gg2-nav-gen</c> writes those.</summary>
+    /// <summary>A plain <c>.txt</c> still loads — the original nav generator writes those.</summary>
     [Fact]
     public void APlainFileLoads()
     {
@@ -66,7 +66,7 @@ public sealed class NavContainerTests : IDisposable
     /// effect.
     /// </summary>
     /// <remarks>
-    /// "Compressed wins, because it is what shipped" is wrong: <c>gg2-nav-gen</c>
+    /// "Compressed wins, because it is what shipped" is wrong: the original nav generator
     /// writes <c>&lt;key&gt;.txt</c> into <c>../gg2-server/nav</c> by default, which
     /// is the directory holding the shipped <c>.txt.gz</c>. So preferring the
     /// compressed file would mean a regeneration is silently ignored — and nothing
@@ -111,7 +111,7 @@ public sealed class NavContainerTests : IDisposable
     /// </summary>
     /// <remarks>
     /// <b>This is the workflow, and every step of it is a place to lose
-    /// data.</b> <c>gg2-nav-gen</c> writes <c>.txt</c>;
+    /// data.</b> The original nav generator writes <c>.txt</c>;
     /// <c>tools/compress-nav.sh</c> gzips and deletes the original; the loader
     /// has to read the result as the same graph. Asserting the round trip here
     /// means the script's contract is pinned by something other than the
@@ -273,7 +273,7 @@ public sealed class NavContainerTests : IDisposable
             $"""
              Uncompressed nav graphs in {directory}: {string.Join(", ", plain.Select(Path.GetFileName))}
 
-             This is what a gg2-nav-gen run leaves behind — it writes .txt into this
+             This is what an original nav generator run leaves behind — it writes .txt into this
              directory by default. The graphs are live (a .txt beats a .txt.gz), so the
              server is using them; they are just 32x larger than the shipped form. Finish
              the cycle:

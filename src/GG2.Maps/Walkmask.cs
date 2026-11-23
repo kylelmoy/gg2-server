@@ -562,7 +562,7 @@ public sealed class Walkmask
     /// </summary>
     /// <remarks>
     /// Exists so the parity fixture can compare this decoder against that one
-    /// cell-for-cell (docs/PLAN.md, phase 0 exit criterion). Not a hot path.
+    /// cell-for-cell (docs/STATUS.md, phase 0 exit criterion). Not a hot path.
     /// </remarks>
     public byte[] ToCellBytes()
     {

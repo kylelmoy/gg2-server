@@ -31,8 +31,7 @@ namespace Bench;
 /// </para>
 /// <para>
 /// <b>Death share and win share are co-primaries and neither is read alone</b>:
-/// Q14 and Q22 found death-share optima that lose the game. <c>gg2-rl</c>
-/// <c>docs/PLAN.md</c> phase 5, B2, has the pre-registration.
+/// Q14 and Q22 found death-share optima that lose the game.
 /// </para>
 /// </remarks>
 public static class HandoverArms

@@ -15,7 +15,7 @@ using GG2.Protocol;
 // the wire. These are real TCP clients speaking the real handshake, so a join and
 // a departure cost what a player's costs.
 //
-// What it is for is CLAUDE.md's "roster indices are positional and shift on
+// What it is for is CONTRIBUTING.md's "roster indices are positional and shift on
 // PLAYER_LEAVE ... off by one, intermittently". A departure from a LOW slot
 // renumbers every slot above it, including a watching client's own, and the
 // stock client tracks that with one line

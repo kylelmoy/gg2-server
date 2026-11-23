@@ -13,7 +13,7 @@ namespace GG2.Simulation;
 /// small measured table rather than being read back out of the reference tree.
 /// <para>
 /// Every number below was read out of the running game by
-/// <c>gg2-samplers/sample-rotated-box.js</c> and is checked against that fixture by
+/// a live-game sampler and is checked against that fixture by
 /// <c>ProjectileSpriteTests</c>, so the table cannot drift away from the
 /// oracle it was taken from.
 /// </para>
@@ -57,10 +57,10 @@ public static class ProjectileSprites
     /// rather than the alpha's extent, and the image is 12x12.
     /// <para>
     /// <b>A <c>Bubble</c> cannot be sampled the way the rest of this table
-    /// was.</b> <c>gg2-samplers/sample-rotated-box.js</c> works by creating the
+    /// was.</b> A live-game sampler works by creating the
     /// projectile and reading its instance <c>bbox_*</c>, and a bubble is not
     /// something <c>createShot</c> can be handed. It is measured instead by
-    /// <c>gg2-samplers/probes/probe-sprite-boxes.js</c>, which asks
+    /// a live-game probe, which asks
     /// <c>sprite_get_bbox_*</c> — no instance needed — and by
     /// <c>SpriteBoxSampleTests</c>, which also records that <c>Bubble</c>
     /// declares no <c>&lt;mask&gt;</c> of its own, so this really is the box
@@ -80,7 +80,7 @@ public static class ProjectileSprites
     /// (<c>StabMask.events/Step.xml</c>), so a left-facing stab mirrors all of
     /// it — which is also what decides whether a hit is a backstab.
     /// <para>
-    /// <b>Measured</b> by <c>gg2-samplers/probes/probe-sprite-boxes.js</c> and gated by
+    /// <b>Measured</b> by a live-game probe and gated by
     /// <c>SpriteBoxSampleTests</c>, which also records that <c>StabMask</c>
     /// declares no <c>&lt;mask&gt;</c> of its own. The AUTO bound read off the
     /// PNG was right. <b>This is one of the boxes where the sprite and the

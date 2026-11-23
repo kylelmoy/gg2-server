@@ -1006,7 +1006,7 @@ public sealed class PlayerAnalytics : IDisposable
     /// </summary>
     /// <remarks>
     /// ⚠️ <b>A player name is twenty arbitrary bytes including a tab and a
-    /// newline</b> — CLAUDE.md's third headline — so a name written raw here
+    /// newline</b> — CONTRIBUTING.md's third headline — so a name written raw here
     /// would add columns, or whole records, to the next read.
     /// <see cref="LogText.Safe"/> escapes both, and escapes rather than strips
     /// so two names that differ only invisibly do not merge.

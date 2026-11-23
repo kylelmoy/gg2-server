@@ -272,7 +272,7 @@ public static class BotPopulation
     /// A class for a new bot, restricted to <paramref name="allowed"/>.
     /// </summary>
     /// <remarks>
-    /// <b>Phase 4 needs this and nothing else provided it.</b> `gg2-rl`'s
+    /// <b>Phase 4 needs this and nothing else provided it.</b> The first
     /// policy was trained on four of the nine classes, and the other five are
     /// untrained input rather than a class it plays badly — so the honest first
     /// full-match experiment restricts both teams to the trained four.

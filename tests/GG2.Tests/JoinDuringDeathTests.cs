@@ -119,7 +119,7 @@ public sealed class JoinDuringDeathTests
         // ⚠️ A FIXED point on ctf_truefort, where the two piles have a line of
         // fire. It used to be wherever the first bot stood at tick 300, which made
         // this test a measurement of bot navigation: a path-follower change
-        // (gg2-rl docs/PLAN.md, N6) moved that bot to (3187, 684.5) and the piles
+        // moved that bot to (3187, 684.5) and the piles
         // there killed nobody on a join tick in 400 attempts. This is where it
         // stood before, a standing y taken from the simulation.
         const double px = 3140, py = 627.4998919123824;

@@ -25,7 +25,7 @@ namespace GG2.Server;
 /// <b><c>GG2.Parity</c> has a parallel copy of this probe order</b> and does
 /// not reference <c>GG2.Server</c>. Change one, change the other. It is not
 /// shared through <c>GG2.Maps</c> on purpose: <c>GG2.Simulation</c> references
-/// that assembly, and CLAUDE.md's no-I/O rule is enforced by keeping file access
+/// that assembly, and CONTRIBUTING.md's no-I/O rule is enforced by keeping file access
 /// out of everything the simulation can reach.
 /// </para>
 /// </remarks>

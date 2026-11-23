@@ -11,8 +11,8 @@ namespace GG2.Bots;
 /// <remarks>
 /// <para>
 /// <b>Why it exists.</b> A classifier given one second of in-range play tells the
-/// fleet's bots from its people at AUC 0.915 (<c>gg2-rl</c> <c>docs/STATUS.md</c>,
-/// phase 5, 2026-10-09; a human-vs-human control reads 0.514). Its three biggest
+/// fleet's bots from its people at AUC 0.915 (measured 2026-10-09; a
+/// human-vs-human control reads 0.514). Its three biggest
 /// signals are below, and all of them are the same for the scripted and policy
 /// brains. This targets the two an observer can see, the aim; the first is a key
 /// state (see the movement paragraph):
@@ -31,7 +31,7 @@ namespace GG2.Bots;
 /// key held past where the brain let go overshoots and comes back: 0.54 a second.
 /// The hold bought no strength either. Most of the key churn is the path
 /// follower's arc tracker trimming on and off in the air, which is what makes its
-/// jumps land (<c>gg2-rl</c> <c>docs/PLAN.md</c>, phase 5, "the churn is in a key").
+/// jumps land.
 /// </para>
 /// <para>
 /// <b>Aim: a flick and corrections, not a constant slew.</b> A person moves
@@ -40,7 +40,7 @@ namespace GG2.Bots;
 /// much of the time. Both are <em>smooth</em>: a person's turn on one tick predicts
 /// the next (lag-1 autocorrelation 0.43 within 300px, the bots' 0.27) and one
 /// movement lasts about 3.5 ticks. That smoothness is what a classifier reads
-/// best (<c>gg2-rl</c> <c>docs/PLAN.md</c>, phase 5, A2). With
+/// best. With
 /// <see cref="HumanizeOptions.Strokes"/> a flick is a minimum-jerk stroke over several
 /// ticks and a correction low-passes the turn rate; the defaults are v3, one-tick
 /// flicks and unsmoothed corrections (see <see cref="HumanizeOptions.Default"/>).
@@ -513,8 +513,7 @@ public sealed class HumanizedBot : IInputSource, ICommandSource, IWrapsScriptedB
 /// bot a person still spots. <see cref="Default"/> was fitted by replaying a copy
 /// of this filter, open loop, over a recorded bots-only server's brain output and
 /// matching the people's in-range turn quantiles (p75-p99), still-mouse share,
-/// reversal rate, lag-1 autocorrelation and movement length (<c>gg2-rl</c>
-/// <c>docs/PLAN.md</c>, phase 5, v4).
+/// reversal rate, lag-1 autocorrelation and movement length.
 /// Open loop means the brain did not see the filtered output, which it does live.
 /// </remarks>
 /// <param name="Range">Pixels within which a visible target makes it a fight. The classifier's wider band.</param>
@@ -626,7 +625,7 @@ public sealed record HumanizeOptions(
     /// smoothness tell (an independent learned discriminator ranks it most human,
     /// 0.816 against v3's 0.868 at 300px), but the pre-registered instrument moves
     /// by only 0.006 and it costs more strength (−0.042 death share against v3's
-    /// −0.025). <c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, v4.
+    /// −0.025).
     /// </summary>
     public static HumanizeOptions Strokes { get; } = new(
         SaccadeDegrees: 12,
@@ -644,7 +643,7 @@ public sealed record HumanizeOptions(
     /// drifts until the error passes 45°, then corrects at a fifth of it or flicks
     /// past 50°. Fitted open loop to the people's turn and aim error within 150px,
     /// split by fire: between shots people turn about 2°/tick and sit 35° off,
-    /// where v3 turns about 4°/tick. <c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, v5.
+    /// where v3 turns about 4°/tick.
     /// <b>Measured and not the default</b>: live, the drift is paid back by a flick
     /// when the brain fires again, so overall turning does not move. O2 reads 0.879
     /// against v3's 0.866, at −0.036 death share against v3's −0.024.
@@ -656,8 +655,7 @@ public sealed record HumanizeOptions(
 
     /// <summary>
     /// D2: v3, holding the aim while the scripted layer has no target and an enemy
-    /// is close, instead of pointing it along the walk. <c>gg2-rl</c>
-    /// <c>docs/PLAN.md</c> phase 5, D2. <b>Measured and not the default</b>: free in
+    /// is close, instead of pointing it along the walk. <b>Measured and not the default</b>: free in
     /// strength, but O2 reads 0.890 against v3's 0.864, because a held aim is dead
     /// still and then snaps when a target is acquired.
     /// </summary>
@@ -667,8 +665,7 @@ public sealed record HumanizeOptions(
     /// D3, tiers 1-4's aim: it lags the target the way people do. Corrections move
     /// at 8% of the error a tick and stop inside 16°, and only an error past 120°
     /// is flicked. Fitted open loop to the people's in-range turn size, p90, still
-    /// share, aim error and smoothness (<c>gg2-rl</c> <c>scripts/fit_humanize_tracking.py</c>,
-    /// <c>docs/PLAN.md</c> phase 5, D3). Tiers 1-4 used it until <see cref="Tracking2"/>
+    /// share, aim error and smoothness. Tiers 1-4 used it until <see cref="Tracking2"/>
     /// replaced it the same day. Measured at tier 4: O2 0.901 to 0.870, and the fleet discriminator 0.747 to
     /// 0.618 within 150px.
     /// </summary>
@@ -683,8 +680,7 @@ public sealed record HumanizeOptions(
     /// they sometimes overshoot; corrections inside that start at 8° and tremble
     /// by 0.75° a tick. Fitted open loop to the people's in-range turn size, still
     /// share, aim error, smoothness, reversals, flicks over 30° and movement
-    /// length (<c>gg2-rl</c> <c>scripts/fit_humanize_tracking.py --d4</c>,
-    /// <c>docs/PLAN.md</c> phase 5, D4). <b>What tiers 1-4 used until D9</b>, through
+    /// length. <b>What tiers 1-4 used until D9</b>, through
     /// <see cref="HumanizedBot.ByTier"/>: at tier 4 against <see cref="Tracking"/>, O2
     /// 0.883 to 0.809 with the ladder unchanged; the fleet discriminator read 0.617
     /// to 0.629, inside its noise, and the user adopted it on 2026-10-10.
@@ -712,8 +708,7 @@ public sealed record HumanizeOptions(
     /// its left/right is averaged at 0.9 a tick; the legs start at 0.75 and stop
     /// when the average crosses zero, and one jump press in ten passes, at most one
     /// every 90 ticks. Fitted with <c>BENCH_TURNS</c> at tier 4 to the people's
-    /// still share, \|Δhspeed\|, reversals and take-offs within 150px
-    /// (<c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, D6).
+    /// still share, \|Δhspeed\|, reversals and take-offs within 150px.
     /// </summary>
     public static HumanizeOptions Tracking3 { get; } = Tracking2 with
     {
@@ -730,7 +725,7 @@ public sealed record HumanizeOptions(
     /// reversal needs the average at 0.75 against the heading, and the legs stop
     /// once the brain's activity falls below 0.3. Fitted with <c>BENCH_TURNS</c> at
     /// tier 4 to the people's reversals, \|Δhspeed\| and take-offs and a speed
-    /// target (<c>gg2-rl</c> <c>docs/PLAN.md</c> phase 5, D7).
+    /// target.
     /// </summary>
     public static HumanizeOptions Tracking4 { get; } = Tracking3 with
     {
@@ -745,8 +740,7 @@ public sealed record HumanizeOptions(
     /// past 48° are stroked, the pursuit closes 12% a tick and trembles by 1°, so
     /// more of the closing is persistent motion rather than short bursts. Fitted open
     /// loop with the people's window p90, lag-3 autocorrelation and jerk added to D4's
-    /// targets (<c>gg2-rl</c> <c>scripts/fit_humanize_tracking.py --d8 --d8b</c>,
-    /// <c>docs/PLAN.md</c> phase 5, D8).
+    /// targets.
     /// </summary>
     public static HumanizeOptions Tracking5 { get; } = Tracking2 with
     {
@@ -757,8 +751,7 @@ public sealed record HumanizeOptions(
 
     /// <summary>
     /// D9: <see cref="Tracking5"/> with pursuit gain 0.10, between D4's and D8's,
-    /// to give back the aim error the fleet discriminator read in D8 (<c>gg2-rl</c>
-    /// <c>docs/PLAN.md</c> phase 5, D9). <b>What tiers 1-4 used until D10</b>, through
+    /// to give back the aim error the fleet discriminator read in D8. <b>What tiers 1-4 used until D10</b>, through
     /// <see cref="HumanizedBot.ByTier"/>, adopted by the user on 2026-10-11 over the
     /// registered bars: at tier 4 O2 fell 0.761 to 0.734 (bar 0.03) with the ladder
     /// even, and the fleet discriminator read 0.580 to 0.596 at 150px and 0.648 to
@@ -770,8 +763,7 @@ public sealed record HumanizeOptions(
     /// D10: <see cref="Tracking6"/>'s aim with <see cref="Tracking4"/>'s
     /// legs, and the policy's jumps thinned to the people's grounded share rather
     /// than their take-off count: half the presses pass, with no refractory window.
-    /// Fitted with <c>BENCH_TURNS</c>'s grounded share at tier 4 (<c>gg2-rl</c>
-    /// <c>docs/PLAN.md</c> phase 5, D10). <b>What tiers 1-4 used until D12</b>, through
+    /// Fitted with <c>BENCH_TURNS</c>'s grounded share at tier 4. <b>What tiers 1-4 used until D12</b>, through
     /// <see cref="HumanizedBot.ByTier"/>, adopted by the user on 2026-10-11 over its
     /// bars, with the tier skills respread: at tier 4 against D9, O2
     /// 0.753 to 0.712 and the fleet discriminator better at 150px (−0.020, −0.011 on
@@ -789,8 +781,7 @@ public sealed record HumanizeOptions(
 
     /// <summary>
     /// D11's candidate: <see cref="Tracking7"/> with D8's pursuit gain 0.12, so the
-    /// aim keeps up with legs that keep running (<c>gg2-rl</c> <c>docs/PLAN.md</c>
-    /// phase 5, D11).
+    /// aim keeps up with legs that keep running.
     /// </summary>
     public static HumanizeOptions Tracking8 { get; } = Tracking7 with { PursuitGain = 0.12 };
 

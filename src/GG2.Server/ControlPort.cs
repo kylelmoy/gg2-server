@@ -38,7 +38,7 @@ namespace GG2.Server;
 /// Freezing, stepping, teleporting and changing the map are operator actions no
 /// client can ask for. Anything a client <em>can</em> ask for goes through
 /// <c>command</c>, which submits a <see cref="PlayerCommand"/> to the same
-/// <c>Execute</c> the socket switch and the bots reach — CLAUDE.md's "three
+/// <c>Execute</c> the socket switch and the bots reach — CONTRIBUTING.md's "three
 /// places" rule, honoured by not adding a fourth.
 /// </para>
 /// <para>

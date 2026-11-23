@@ -15,7 +15,7 @@ namespace GG2.Server;
 /// ⛔ <b>ONE PLACE BUILDS THE BRAIN, at the end, from inputs collected first.</b>
 /// Collecting first and building once keeps the flags order-independent, and it
 /// is what lets a config file and the command line reach the same reconcile instead
-/// of growing two copies of it — CLAUDE.md's "three places" rule one level up,
+/// of growing two copies of it — CONTRIBUTING.md's "three places" rule one level up,
 /// the same argument <see cref="ControlCommands"/> makes for the operator verbs.
 /// </para>
 /// <para>

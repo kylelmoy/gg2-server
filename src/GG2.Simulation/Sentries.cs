@@ -105,7 +105,7 @@ public static class Sentries
     /// inflation applied <em>before</em> the rotation.
     /// </summary>
     /// <remarks>
-    /// Measured (<c>gg2-samplers/probes/probe-airblast.js</c>): three flipped
+    /// Measured (a live-game probe): three flipped
     /// rotations of <c>SentryTurretS</c> all match the pre-rotation model.
     /// See <see cref="Aabb.ForRotatedSpriteReported"/>.
     /// </remarks>
@@ -376,7 +376,7 @@ public static class Sentries
         // x += hspeed; y += vspeed; x -= hspeed; y -= vspeed — the reference's
         // delta-factor dance. Adding and subtracting the same double is not a
         // no-op in the last bit, and the automatic movement pass carries on
-        // from the result, so it is transcribed (CLAUDE.md, "the x -= hspeed
+        // from the result, so it is transcribed (CONTRIBUTING.md, "the x -= hspeed
         // cancellation does not belong on the incidental list").
         sentry.X = sentry.X + sentry.Motion.HSpeed - sentry.Motion.HSpeed;
         sentry.Y = sentry.Y + sentry.Motion.VSpeed - sentry.Motion.VSpeed;

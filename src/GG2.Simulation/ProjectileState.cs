@@ -30,7 +30,7 @@ public enum ProjectileKind : byte
 /// <b>Index plus generation, because an index alone is a use-after-free
 /// waiting to happen.</b> Pool slots are reused, so a raw index that outlives
 /// the projectile it named silently starts naming a different one — the same
-/// class of bug as CLAUDE.md's roster-index warning, and just as intermittent.
+/// class of bug as CONTRIBUTING.md's roster-index warning, and just as intermittent.
 /// Every read goes through <see cref="WorldState.TryGetProjectile"/>, which
 /// compares the generation and refuses a stale handle.
 /// <para>
@@ -305,7 +305,7 @@ public struct ProjectileState
     // No originx/originy, and that is a deliberate omission rather than an
     // oversight. Shot.events/Create.xml sets both and nothing in the entire
     // reference ever reads them — checked across Objects/ and Scripts/ — so
-    // they are not observable, and CLAUDE.md's rule ("compatible in observable
+    // they are not observable, and CONTRIBUTING.md's rule ("compatible in observable
     // simulation, free everywhere else") says not to carry them. The cost of
     // carrying them would not be nominal: two doubles times a 512-slot pool is
     // eight kilobytes on every clone of the world, and docs/BOTAI.md item 1
@@ -368,7 +368,7 @@ public struct ProjectileState
     /// exactly a <c>ulong</c>.
     /// <para>
     /// It names roster slots, so <see cref="WorldState.RemoveSlot"/> has to
-    /// renumber it like every other stored index — CLAUDE.md's rule. A stale bit
+    /// renumber it like every other stored index — CONTRIBUTING.md's rule. A stale bit
     /// would let a rocket fly through a stranger for free some seconds after an
     /// unrelated disconnect.
     /// </para>

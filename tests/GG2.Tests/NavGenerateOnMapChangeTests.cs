@@ -12,7 +12,7 @@ namespace GG2.Tests;
 /// ⚠️ <b>This is the claim somebody else builds against, so it is the one that
 /// has to be checked rather than reasoned about.</b> The 25 graphs in
 /// <c>nav/</c> cover the shipped maps; before this the answer for anything else
-/// was bots that fight whatever reaches them and walk nowhere — and CLAUDE.md's
+/// was bots that fight whatever reaches them and walk nowhere — and CONTRIBUTING.md's
 /// own record of this project is that a degradation nothing goes red for is a
 /// degradation nobody notices. Everything a graph needs is in the map's own PNG,
 /// so it was never missing data that had to be missing.

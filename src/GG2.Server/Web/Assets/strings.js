@@ -731,7 +731,7 @@ const STRINGS = {
       "AutoBalance": "Move a player when one team leads by two.",
       "AimCheck": "Aim input no mouse could produce: off, log it, or kick after 30.",
       "AimAnalysis": "Log players whose aim statistics no recorded human matches.",
-      "ClientPrediction": "Give clients that ask for it (gg2-client) input acks for client-side prediction. A stock client never asks and is unaffected.",
+      "ClientPrediction": "Give clients that ask for it input acks for client-side prediction. A stock client never asks and is unaffected.",
       "PredictionMaxQueuedInputs": "Inputs a predicting client may have waiting before the oldest merge into one tick.",
       "PredictionQueueDrainTicks": "Ticks a predicting client's input queue may stand before two inputs merge.",
       "QuickUpdateInterval": "Ticks between position updates, 1..7. 7 is stock; lower corrects clients sooner for more bandwidth.",

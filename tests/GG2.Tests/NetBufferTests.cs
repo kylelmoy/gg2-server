@@ -44,13 +44,13 @@ public sealed class NetBufferTests
     public void StringsAreLengthPrefixedNotNulTerminated()
     {
         var writer = new NetWriter();
-        writer.WriteString1("Kyle");
+        writer.WriteString1("anna");
         writer.WriteString2("a longer one");
 
         Assert.Equal(4, writer.WrittenSpan[0]);
 
         var reader = new NetReader(writer.WrittenSpan);
-        Assert.Equal("Kyle", reader.ReadString1());
+        Assert.Equal("anna", reader.ReadString1());
         Assert.Equal("a longer one", reader.ReadString2());
         Assert.True(reader.IsEmpty);
     }

@@ -15,7 +15,7 @@ namespace GG2.Tests;
 /// test that asks clones <see cref="Upstream"/> at <see cref="PinnedCommit"/>
 /// into a per-user cache (<see cref="CacheRoot"/>) and every later run reuses
 /// it, so a fresh clone of this repo needs git and a network connection once
-/// and nothing on disk. The tree is <b>read-only</b> from this repo (CLAUDE.md).
+/// and nothing on disk. The tree is <b>read-only</b> from this repo (CONTRIBUTING.md).
 /// </para>
 /// <para>
 /// <b>The reference is stock upstream GG2</b>, pinned to the commit the suite
@@ -178,7 +178,7 @@ public static class ReferenceTree
     /// <remarks>
     /// <b>Deliberately NOT under <see cref="Root"/>.</b> A nav graph is
     /// <em>this project's</em> artefact and the reference knows nothing about
-    /// it, so it does not belong in a tree CLAUDE.md calls read-only.
+    /// it, so it does not belong in a tree CONTRIBUTING.md calls read-only.
     /// <para>
     /// <b>Checked in</b>, so a fresh clone has them and can run a bot.
     /// <see cref="RequireNavCache"/> still guards, because a clone can still

@@ -61,7 +61,7 @@ public readonly record struct Aabb(int Left, int Top, int Right, int Bottom)
     /// <para>
     /// The rule, measured over 1,008 boxes across all seven projectile sprites
     /// (<c>tests/GG2.Tests/Fixtures/rotated-box-samples.json</c>, regenerate with
-    /// <c>node gg2-samplers/sample-rotated-box.js</c>): take the sprite's own bbox
+    /// a live-game sampler): take the sprite's own bbox
     /// corners relative to the origin, scale them, rotate each about the origin,
     /// take the extremes, and round each half to <b>even</b> — the same rounding
     /// as <see cref="SolidRect.FromEntity"/>, and the fourth row of docs/TRAPS-SIMULATION.md's
@@ -145,7 +145,7 @@ public readonly record struct Aabb(int Left, int Top, int Right, int Bottom)
     /// the flipped-sprite inflation included.
     /// </summary>
     /// <remarks>
-    /// Measured (<c>gg2-samplers/probes/probe-airblast.js</c>, 19 boxes on
+    /// Measured (a live-game probe, 19 boxes on
     /// <c>AirBlastMaskS</c> plus three flipped angles on <c>SentryTurretS</c>):
     /// at <c>image_xscale = -1</c> GM8's box is the mirrored sprite box with the
     /// mirrored-left edge extended by <b>two sprite pixels before the

@@ -282,7 +282,7 @@ public sealed class TraceTests
     }
 
     /// <summary>
-    /// Phase 2's exit criterion in docs/PLAN.md: the replayer runs a trace
+    /// Phase 2's exit criterion in docs/STATUS.md: the replayer runs a trace
     /// against an empty simulation and reports a mismatch with a legible diff.
     /// </summary>
     [Fact]

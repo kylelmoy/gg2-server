@@ -79,7 +79,7 @@ public struct PlayerState
     /// <remarks>
     /// <b>NOTHING IN <c>MatchSimulation</c> MAY READ THIS, ever.</b> "The
     /// simulation never special-cases a bot" is one of the three rules that
-    /// outrank everything in the bot layer (<c>CLAUDE.md</c>): a bot is an
+    /// outrank everything in the bot layer (<c>CONTRIBUTING.md</c>): a bot is an
     /// <c>IInputSource</c> like a socket, and a simulation that branched on this
     /// would let a bot do something a client cannot.
     /// <c>BotIsNotVisibleToTheSimulationTests</c> is the gate — it runs the same

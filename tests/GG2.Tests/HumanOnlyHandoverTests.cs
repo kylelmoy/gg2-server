@@ -192,7 +192,7 @@ public sealed class HumanOnlyHandoverTests
     /// A departure renumbers the flag with everything else that names a player.
     /// </summary>
     /// <remarks>
-    /// <c>RemoveSlot</c> compacts the roster, and <c>CLAUDE.md</c> is explicit
+    /// <c>RemoveSlot</c> compacts the roster, and <c>CONTRIBUTING.md</c> is explicit
     /// that anything naming a player has to be renumbered there too. This one is
     /// carried by the wholesale <c>Players[i] = Players[i + 1]</c> shift rather
     /// than by a line of its own — which is why it is worth a test: the next

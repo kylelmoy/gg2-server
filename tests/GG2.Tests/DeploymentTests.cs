@@ -103,7 +103,7 @@ public class DeploymentTests
     /// thing it warned about really stopped.</b> Asserting only that the message
     /// is absent would pass against a change that deleted the warning and left
     /// the bots standing still, which is the same failure with the alarm turned
-    /// off — the shape CLAUDE.md keeps finding.
+    /// off — the shape CONTRIBUTING.md keeps finding.
     /// </remarks>
     [Fact]
     public void BotsWithNoNavDirectoryNavigateAnywayAndSayNothing()
@@ -126,7 +126,7 @@ public class DeploymentTests
     /// </summary>
     /// <remarks>
     /// Without this the warning could be unconditional and the test above would
-    /// still be green — the shape CLAUDE.md keeps finding, where the code is
+    /// still be green — the shape CONTRIBUTING.md keeps finding, where the code is
     /// self-consistent and only a reader who acts on it finds out. Here that
     /// reader is an operator who wired <c>--botnav</c> correctly and was told
     /// every startup that they had not.

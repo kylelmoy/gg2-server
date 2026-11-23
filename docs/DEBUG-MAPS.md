@@ -29,7 +29,7 @@ it ships with the game and is covered by the ordinary map gates.)
   voiding it** — see `SimulationStamp` and `MovingPlatformTests`: the
   exemption's premise is "no platform with a shape is reachable in play",
   which the raft satisfies because it lives in the sealed chamber. All five
-  are nav-invisible — `gg2-nav-gen` skips the type outright, and the nav graph
+  are nav-invisible — the original nav generator skips the type outright, and the nav graph
   is byte-identical with and without them (measured).
 - **A stock client can join it.** `gg_debug2` is not one of
   `GG2.Maps.InternalMaps`' 22 names, so the server advertises **its MD5**
@@ -55,12 +55,9 @@ it ships with the game and is covered by the ordinary map gates.)
 
 ```powershell
 node tools/gen-gg-debug2.js
-node <gg2-nav-gen>/bin/gg2navgen.js build maps/gg_debug2.png --md5 none --out nav
+dotnet run --project src/GG2.Host -- navgen
 ```
 
-`--md5 none` because the server keys nav caches by map *name* (the built-in
-rule); without it gg2navgen treats a by-path map as a custom map and suffixes
-the file's MD5, and `NavCache.TryLoad` never finds it.
 
 **A generator change moves pinned numbers, deliberately.** `GgDebug2MapTests`
 pins the map's census and nav properties, and the whole-cache pins in

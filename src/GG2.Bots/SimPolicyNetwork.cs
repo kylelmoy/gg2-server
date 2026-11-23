@@ -10,7 +10,7 @@ namespace GG2.Bots;
 /// <remarks>
 /// <b>Not a <see cref="PolicyNetwork"/>, and not convertible into one.</b> The
 /// observation (<see cref="SimPolicyObservation"/>) and the action space
-/// (<see cref="SimPolicyController"/>) are gg2-sim's own, not gg2-rl's
+/// (<see cref="SimPolicyController"/>) are gg2-sim's own, not the retired
 /// <c>ObservationWriter</c>/<c>ActionDecoder</c> layout.
 /// <para>
 /// ⛔ <b>The forward pass is gg2-sim's <c>ref/PolicyDriver.cs</c> <c>Decide</c>

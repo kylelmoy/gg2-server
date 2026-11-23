@@ -34,7 +34,7 @@ namespace GG2.Bots;
 /// once.
 /// </para>
 /// <para>
-/// <b><c>gg2-nav-gen</c>'s <c>follow.js</c> runs the same law on the generator
+/// <b>The original nav generator's <c>follow.js</c> runs the same law on the generator
 /// side</b> and vetoes an arc before the edge is ever emitted. This is the
 /// follower's own copy, asked at the takeoff gate. If one moves, move both, or
 /// the gate answers a question about a flight the generator never proved.

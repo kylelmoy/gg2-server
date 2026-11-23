@@ -8,7 +8,7 @@ namespace GG2.Bots;
 /// </summary>
 /// <remarks>
 /// <b>Extracted from <c>PolicyBot</c> so a second micro-controller could use
-/// it, and extracted rather than copied on purpose.</b> CLAUDE.md's rule for the
+/// it, and extracted rather than copied on purpose.</b> CONTRIBUTING.md's rule for the
 /// command path is the same rule here: a second copy lets one bot engage where
 /// the other would not, and the difference between two arms then includes the
 /// gate as well as the controller — which is the one thing an experiment

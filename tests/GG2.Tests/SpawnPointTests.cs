@@ -10,7 +10,7 @@ namespace GG2.Tests;
 /// <remarks>
 /// This exists to make the parity harness's anchor exact. A trace anchored on a
 /// broadcast position starts inside a quantisation bin — a fifth of a pixel of
-/// position, <c>1/8.5</c> px/tick of velocity — and docs/PLAN.md's phase-4
+/// position, <c>1/8.5</c> px/tick of velocity — and docs/STATUS.md's phase-4
 /// history is the story of a one-wire-unit residual that turned out to be
 /// exactly that. Resolving the spawn point instead gives a position that passed
 /// through no wire at all, which is what makes a closed-loop gate of zero

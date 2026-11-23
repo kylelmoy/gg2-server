@@ -11,7 +11,7 @@ travels on.
 | implementation | `ServerChat.cs`, `ServerChat.Commands.cs`, `ServerChat.Votes.cs` |
 | configuration | `[Chat]` in `--config` (`docs/CONFIG.md`), `ServerOptions.Chat` |
 | a stock GM8 client speaks | Lorgan3's chat v6, from the `chat` plugin it downloads |
-| a native client (gg2-client) speaks | the native format, behind a `0x80` byte on the same packet id |
+| a native client (the native client) speaks | the native format, behind a `0x80` byte on the same packet id |
 | tests | `ServerChatTests` (native behaviour), `ServerChatV6Tests` (every v6 translation and the mixed room), `PluginWireTests` (over a socket) |
 
 ## Why it rides the `chat` plugin
@@ -43,8 +43,8 @@ packet id with `ServerChat`.
 | `0x80` (`ServerChat.Envelope`) | the rest is exactly one native message, in either direction |
 | anything else | Lorgan3's v6 (`docs/PLUGINS.md`, "`chat` on the wire") |
 
-**The native format is `PROTOCOL.md` version 1 in gg2-chat2026**, the spec both
-ends cite. Its host logic (`src/host/`, `src/commands/`, `src/votes/` there) is
+**The native format is version 1 of the native chat protocol**, the spec both
+ends cite. The chat plugin's GML host logic (`src/host/`, `src/commands/`, `src/votes/`) is
 what `ServerChat` transcribes; a method citing `host/*.gml` names the file it
 stands for.
 
@@ -57,7 +57,7 @@ only ever sent to a player who greeted with one.**
 
 **Nothing is sent to a player who has not greeted**, in either format. A GM8
 client without the plugin raises a fatal error on a plugin packet it has no queue
-for, and gg2-client on iOS joins without ever saying hello.
+for, and the native client on iOS joins without ever saying hello.
 `ServerChatV6Tests.APlayerWhoNeverGreetsIsSentNothingWhateverHappens` and
 `PluginWireTests.AV6AndANativeClientShareOneRoomAndASilentClientHearsNothing` are
 the gates.
@@ -65,7 +65,7 @@ the gates.
 **The most recent hello sets the format.** A repeat hello in the same format is
 ignored. A hello in the other format switches the player: an enveloped HELLO is
 answered with WELCOME, a v6 hello with the MOTD, and either re-offers a running
-vote without clearing an answer already given. gg2-client sends an enveloped
+vote without clearing an answer already given. the native client sends an enveloped
 HELLO, waits two seconds for WELCOME and then falls back to v6, so a WELCOME that
 is merely late still leaves both ends on v6.
 
@@ -173,15 +173,15 @@ from the decoded frames the socket client received:
 | a vote called from a native client | the v6 dialog opened from a 204 with the question, both options and the clock, and counted the caller's Yes from a 203 |
 | a v6 answer | the native client got `VOTE_TALLY 2 2,0` then `VOTE_END 2 winner=1 Teams scrambled (2 yes, 0 no).`; the v6 dialog showed `win` 1 with `total` 2, and `chatLog` ended with the result as a 255 |
 
-gg2-client then confirmed two of its desktop clients settling on the native format
+the native client then confirmed two of its desktop clients settling on the native format
 against this server and chatting both ways, and its no-hello client staying
 connected on a server that requires `chat`.
 
 **Three real clients in one room, 2026-11-18**, on `6e4f7b2` with chat on by
-default and no `ServerPluginList` at all (barbara, a scratch process on :8290):
-a stock GM8 client with `chat` v6 (`stockv6`, Nahida, driven through the bridge),
-gg2-client's desktop build on Windows (`win26`, Nahida) and on macOS (`mac26`),
-both run with gg2-client's `--chat-script` / `--chat-log` (`8e07d5e`). Read back
+default and no `ServerPluginList` at all (a scratch process on :8290):
+a stock GM8 client with `chat` v6 (`stockv6`, driven through the bridge),
+the native client's desktop build on Windows (`win26`) and on macOS (`mac26`),
+both run with the native client's `--chat-script` / `--chat-log` (`8e07d5e`). Read back
 from the GM8 client's `chatLog` and `global.voter`, both desktop logs, and the
 server log, which agreed line for line:
 

@@ -211,7 +211,7 @@ public sealed class TeamDeathmatchFixtureTests
     /// platform — <c>sample-collision.js</c> enumerates what
     /// <c>charSetSolids</c> names, and a platform is never solid — so confirming
     /// it against the running game is owed to the next live session. This
-    /// window replaying exactly is strong evidence and not proof: CLAUDE.md's
+    /// window replaying exactly is strong evidence and not proof: CONTRIBUTING.md's
     /// "a green fixture is not confirmation of a box".
     /// </para>
     /// </remarks>
