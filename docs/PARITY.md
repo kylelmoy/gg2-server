@@ -1565,7 +1565,7 @@ reads are matched by name only.
 | Weapon state read or written from outside `Objects/Weapons` (19) | `Objects/Weapons` | 2026-11-23 | clean |
 | Sentry and SentryTurret, plus every caller of `damageSentry` | `Sentry`, `SentryTurret` | 2026-11-23 | `WinBanner`'s Begin Step disarming losing sentries, fixed in `4c26333` |
 | Damage scripts: `damageCharacter`, `damageSentry`, `damageGenerator`, `dealFlicker` | (callee check) | 2026-11-23 | the `damageCharacter` gaps above; the other three clean |
-| `DropdownPlatform` parent, through `MovingPlatform` | (comment sweep) | 2026-11-23 | **open**: nobody can stand on a masked moving platform; `docs/TRAPS-SIMULATION.md` |
+| `DropdownPlatform` parent, through `MovingPlatform` | (comment sweep) | 2026-11-23 | nobody could stand on a masked moving platform; the three character scans now visit them, fixed. `docs/TRAPS-SIMULATION.md`, "Standing on a moving platform that has a shape" |
 | Generator: its Create variables, and every site naming the object | `Generator` | 2026-11-23 | clean; all eleven damage sites go through `damageGenerator` |
 | ControlPoint: its User Event 0 variables, `cappingPoint`, `capStrength`, `cpUnlock`, `baseCapTime`, and the four gamemode HUDs that read them | `ControlPoint` | 2026-11-23 | `areSetupGatesClosed`'s `with(FauxCPHUD)` override, fixed (setup gates on Arena, KotH and DKotH follow `cpUnlock`); the rest ported |
 

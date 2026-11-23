@@ -149,7 +149,7 @@ public static class MatchSimulation
             Afterburn.BeginStep(ref state, slot, ref events);
 
             Weapons.FireStep(world, ref state, slot, ref events);
-            CharacterPhysics.BeginStepInput(world, ref state.Characters[slot]);
+            CharacterPhysics.BeginStepInput(world, ref state.Characters[slot], state.MovingPlatformSpan);
             Weapons.SpecialStep(world, ref state, slot, ref events);
 
             // Begin Step:129-142, between the right-click block above and the
@@ -275,7 +275,7 @@ public static class MatchSimulation
             if (!state.Alive[slot])
                 continue;
 
-            CharacterPhysics.Step(world, ref state.Characters[slot]);
+            CharacterPhysics.Step(world, ref state.Characters[slot], state.MovingPlatformSpan);
 
             // Objects/Characters/Heavy.events/Step.xml, after the inherited
             // Step it wraps — the only class-specific Step event in the game.
@@ -390,7 +390,8 @@ public static class MatchSimulation
                 continue;
 
             // A client's replica never decides a death: WorldState.ClientReplica.
-            if (!CharacterPhysics.EndStep(world, ref state.Characters[slot], ref state.Weapons[slot], host: !state.ClientReplica))
+            if (!CharacterPhysics.EndStep(
+                    world, ref state.Characters[slot], ref state.Weapons[slot], host: !state.ClientReplica, state.MovingPlatformSpan))
                 continue;
 
             Deaths.Kill(ref state, slot, ref events, world);

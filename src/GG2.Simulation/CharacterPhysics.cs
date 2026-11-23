@@ -72,7 +72,14 @@ public static class CharacterPhysics
     /// running the detonation after the whole of Begin Step would give it last
     /// tick's friction.
     /// </remarks>
-    public static void BeginStepInput(CollisionWorld world, ref CharacterState character)
+    /// <param name="platforms">
+    /// The world's moving platforms, index for index with
+    /// <see cref="CollisionWorld.MovingPlatforms"/>. Empty for callers with no
+    /// <see cref="WorldState"/> (the bots' flight predictors), which then see
+    /// only the static platforms.
+    /// </param>
+    public static void BeginStepInput(
+        CollisionWorld world, ref CharacterState character, ReadOnlySpan<MovingPlatformState> platforms = default)
     {
         var stats = character.Stats;
         var box = character.Box;
@@ -106,12 +113,10 @@ public static class CharacterPhysics
         // character" is the same question as "the character moved down one meets
         // the platform", which is what is asked here.
         //
-        // A MovingPlatform belongs in this scan too — its parent object IS
-        // DropdownPlatform, so `place_meeting(…, DropdownPlatform)` matches one
-        // — and it is MISSING: a platform's shape is a mask in
-        // CollisionWorld.MovingPlatforms, never a SolidRect, so nobody can
-        // stand on one. Open gap, custom maps only: docs/TRAPS-SIMULATION.md,
-        // "nobody can stand on a moving platform that has a shape".
+        // A MovingPlatform is in this scan too: its parent object IS
+        // DropdownPlatform, so `with(DropdownPlatform)` visits it. Its shape is
+        // a mask, not a SolidRect, so it is asked separately below; it inherits
+        // `resetMoveStatus = 1` through its Create's call to the parent event.
         else if ((character.KeyState & PlayerKeys.Down) == 0)
         {
             foreach (ref readonly var rect in world.RectSpan)
@@ -136,6 +141,12 @@ public static class CharacterPhysics
                 // a surfing platform, which is not modelled.
                 onNonSurfingGround = true;
                 break;
+            }
+
+            if (!character.OnGround && OnMovingPlatform(world, platforms, box, character.X, character.Y))
+            {
+                character.OnGround = true;
+                onNonSurfingGround = true;
             }
         }
 
@@ -337,7 +348,9 @@ public static class CharacterPhysics
     /// <summary>
     /// The speed clamp, the split gravity, and the move itself.
     /// </summary>
-    public static void Step(CollisionWorld world, ref CharacterState character)
+    /// <param name="platforms">As for <see cref="BeginStepInput"/>.</param>
+    public static void Step(
+        CollisionWorld world, ref CharacterState character, ReadOnlySpan<MovingPlatformState> platforms = default)
     {
         var box = character.Box;
         var filter = character.Filter;
@@ -470,6 +483,8 @@ public static class CharacterPhysics
 
                 character.VSpeed = 0;
             }
+
+            CatchOnMovingPlatforms(world, ref character, box, filter, platforms);
         }
 
         // The GM8 automatic-movement round trip, and it is NOT decoration.
@@ -594,7 +609,13 @@ public static class CharacterPhysics
     /// character at hp 0 or below carries on through the rest of End Step and
     /// this never returns true.
     /// </param>
-    public static bool EndStep(CollisionWorld world, ref CharacterState character, ref WeaponState weapon, bool host)
+    /// <param name="platforms">As for <see cref="BeginStepInput"/>.</param>
+    public static bool EndStep(
+        CollisionWorld world,
+        ref CharacterState character,
+        ref WeaponState weapon,
+        bool host,
+        ReadOnlySpan<MovingPlatformState> platforms = default)
     {
         var box = character.Box;
         var filter = character.Filter;
@@ -606,7 +627,7 @@ public static class CharacterPhysics
         // or the snap would drop a character straight through the thing holding
         // it up. Holding KEY_DOWN re-enables it, which is how you step down off
         // one deliberately.
-        if (Gml.Equal(character.VSpeed, 0) && !StandingOnDropdown(world, in character, box))
+        if (Gml.Equal(character.VSpeed, 0) && !StandingOnDropdown(world, in character, box, platforms))
         {
             if (world.PlaceFree(box, character.X, character.Y + 6, filter))
             {
@@ -996,7 +1017,8 @@ public static class CharacterPhysics
     /// negation, and the third clause matters: a character whose box already
     /// overlaps a platform is not standing <em>on</em> it and may step down.
     /// </remarks>
-    private static bool StandingOnDropdown(CollisionWorld world, in CharacterState character, in CharacterBox box)
+    private static bool StandingOnDropdown(
+        CollisionWorld world, in CharacterState character, in CharacterBox box, ReadOnlySpan<MovingPlatformState> platforms)
     {
         if ((character.KeyState & PlayerKeys.Down) != 0)
             return false;
@@ -1013,6 +1035,79 @@ public static class CharacterPhysics
             }
         }
 
+        return OnMovingPlatform(world, platforms, box, character.X, character.Y);
+    }
+
+    /// <summary>
+    /// The ground test against the moving platforms: one immediately below,
+    /// and not one already overlapped.
+    /// </summary>
+    /// <remarks>
+    /// Each platform is tested where GM8 holds it, at its rounded position. A
+    /// platform with no mask has <c>sprite_index = -1</c> and meets nothing.
+    /// </remarks>
+    private static bool OnMovingPlatform(
+        CollisionWorld world, ReadOnlySpan<MovingPlatformState> platforms, in CharacterBox box, double x, double y)
+    {
+        var definitions = world.MovingPlatforms;
+        var count = Math.Min(definitions.Length, platforms.Length);
+
+        for (var i = 0; i < count; i++)
+        {
+            var collider = MovingPlatforms.ColliderAt(definitions[i], platforms[i], 0);
+
+            if (collider.Meets(box, x, y + 1) && !collider.Meets(box, x, y))
+                return true;
+        }
+
         return false;
+    }
+
+    /// <summary>
+    /// <c>Step.xml:90-107</c> against the moving platforms: the same catch as
+    /// the static platforms', with the platform's mask in place of a rect.
+    /// </summary>
+    /// <remarks>
+    /// The static platforms are caught first and the moving ones after. GM8
+    /// visits all of them in instance order, so a character inside a static
+    /// and a moving platform at once may be lifted in a different order than
+    /// the reference's; no map has the two overlapping.
+    /// </remarks>
+    private static void CatchOnMovingPlatforms(
+        CollisionWorld world,
+        ref CharacterState character,
+        in CharacterBox box,
+        in CollisionFilter filter,
+        ReadOnlySpan<MovingPlatformState> platforms)
+    {
+        var definitions = world.MovingPlatforms;
+        var count = Math.Min(definitions.Length, platforms.Length);
+
+        for (var i = 0; i < count; i++)
+        {
+            if (Gml.Less(character.Y, character.YPrevious))
+                return;
+
+            var collider = MovingPlatforms.ColliderAt(definitions[i], platforms[i], 0);
+
+            if (!collider.Meets(box, character.X, character.Y))
+                continue;
+
+            // The platform moved down by the character's dy: inside it before
+            // this tick's move, so leave it alone. See the static catch.
+            var shifted = MovingPlatforms.ColliderAt(
+                definitions[i], platforms[i], CollisionWorld.RoundPosition(character.Y - character.YPrevious));
+
+            if (shifted.Meets(box, character.X, character.Y))
+                continue;
+
+            while (collider.Meets(box, character.X, character.Y)
+                   && world.PlaceFree(box, character.X, character.Y - 0.1, filter))
+            {
+                character.Y -= 0.1;
+            }
+
+            character.VSpeed = 0;
+        }
     }
 }

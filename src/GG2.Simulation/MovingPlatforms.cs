@@ -27,11 +27,13 @@ namespace GG2.Simulation;
 /// <c>gg_debug2</c>'s original platforms are like that; its raft is not.
 /// </para>
 /// <para>
-/// <b>The parent still matters, and it is why STANDING needed no new rule.</b>
-/// Because <c>MovingPlatform</c>'s parent IS <c>DropdownPlatform</c>, every
-/// <c>with(DropdownPlatform)</c> in the character physics already means "or a
-/// moving platform". What is here is only the part that has no equivalent: moving
-/// a character <em>with</em> the platform.
+/// <b>The parent still matters.</b> Because <c>MovingPlatform</c>'s parent IS
+/// <c>DropdownPlatform</c>, every <c>with(DropdownPlatform)</c> in the character
+/// physics also visits a moving platform: the ground test, the catch and the
+/// stair guard. <see cref="CharacterPhysics"/> asks those against
+/// <see cref="ColliderAt"/>, because a platform's shape is a mask and never a
+/// <see cref="SolidRect"/>. What is here is the part that has no equivalent:
+/// moving a character <em>with</em> the platform.
 /// </para>
 /// </remarks>
 public static class MovingPlatforms
@@ -259,6 +261,24 @@ public static class MovingPlatforms
             }
         }
     }
+
+    /// <summary>
+    /// The platform's mask where GM8 holds it — its rounded position — shifted
+    /// down by <paramref name="shiftY"/>. Default (meets nothing) for a
+    /// platform with no mask.
+    /// </summary>
+    public static PreciseCollision.PlatformCollider ColliderAt(
+        in MovingPlatformDefinition definition, in MovingPlatformState platform, int shiftY) =>
+        definition.Mask is { } mask
+            ? new PreciseCollision.PlatformCollider
+            {
+                Mask = mask,
+                X = platform.RoundedX,
+                Y = platform.RoundedY + shiftY,
+                XScale = definition.Scale,
+                YScale = definition.Scale,
+            }
+            : default;
 
     /// <summary>
     /// <c>with(Character)</c>: pick up the riders, and shove whoever the platform

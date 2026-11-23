@@ -198,7 +198,8 @@ public static class SimulationStamp
     /// <see cref="WorldState.SetupGatesClosed"/>, which shuts a setup gate on an
     /// Arena, KotH or DKotH map for the pregame lock. And
     /// <see cref="WorldState.ChristmasSprites"/>, which is false everywhere a
-    /// net is trained.
+    /// net is trained, and standing on a masked moving platform, which no
+    /// shipped map has.
     /// </para>
     /// </remarks>
     public const int SimulationBehaviourVersion = 4;

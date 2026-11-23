@@ -365,6 +365,11 @@ public struct WorldState
     /// <summary>How many of <see cref="MovingPlatforms"/> the map placed.</summary>
     public int MovingPlatformCount;
 
+    /// <summary>The placed platforms, for the character physics' dropdown scans.</summary>
+    [System.Diagnostics.CodeAnalysis.UnscopedRef]
+    public ReadOnlySpan<MovingPlatformState> MovingPlatformSpan =>
+        ((ReadOnlySpan<MovingPlatformState>)MovingPlatforms)[..MovingPlatformCount];
+
     /// <summary>
     /// Moving platforms this state has room for.
     /// </summary>
