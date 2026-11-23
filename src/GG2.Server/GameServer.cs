@@ -394,6 +394,13 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     private LobbyAnnouncer? _lobby;
 
     /// <summary>
+    /// The gg2-lobby announcer, or null when <c>LobbyUrl</c> is empty. Beside
+    /// <see cref="_lobby"/>, not instead of it, and null-conditional at every
+    /// call site for the same reason.
+    /// </summary>
+    private HttpLobbyAnnouncer? _httpLobby;
+
+    /// <summary>
     /// The reward auth relay, or null when <c>--rewards</c> was not passed.
     /// </summary>
     /// <remarks>
@@ -949,8 +956,22 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         {
             _lobby = new LobbyAnnouncer(_log);
             _log.Info($"announcing to lobby {GameConstants.LobbyServerHost}:{GameConstants.LobbyServerPort}");
-            AnnounceToLobby();
         }
+
+        if (_options.LobbyUrl.Length > 0)
+        {
+            if (Uri.TryCreate(_options.LobbyUrl, UriKind.Absolute, out var lobbyUri) && lobbyUri.Scheme is "http" or "https")
+            {
+                _httpLobby = new HttpLobbyAnnouncer(lobbyUri, _log);
+                _log.Info($"announcing to gg2-lobby {lobbyUri.GetLeftPart(UriPartial.Authority)}");
+            }
+            else
+            {
+                _log.Warn($"LobbyUrl '{_options.LobbyUrl}' is not an http(s) URL; not announcing there");
+            }
+        }
+
+        AnnounceToLobby();
 
         // Off unless asked for, and for a sharper reason than the lobby's: this
         // makes the server relay its players' user ids to a third party.
@@ -1028,7 +1049,7 @@ public sealed partial class GameServer : IDisposable, IPluginHost
 
             // Cheap to leave unguarded because _lobby is null unless --lobby
             // was passed, and the modulo runs either way.
-            if (_lobby is not null)
+            if (_lobby is not null || _httpLobby is not null)
                 AnnounceToLobby();
 
             _aprilFools = ChatBubbles.IsAprilFools(LocalClock());
@@ -1297,6 +1318,10 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         _lobby?.Unregister();
         _lobby?.Dispose();
         _lobby = null;
+
+        // Withdraws, and waits a bounded moment for the DELETE to go out.
+        _httpLobby?.Dispose();
+        _httpLobby = null;
 
         // Any auth check still in flight is abandoned. Nothing is lost that
         // matters: the result would have been a hat on a player who is about to

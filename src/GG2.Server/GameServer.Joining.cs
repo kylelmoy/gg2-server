@@ -389,12 +389,14 @@ public sealed partial class GameServer
     /// </remarks>
     private void AnnounceToLobby()
     {
-        if (_lobby is null || _offline)
+        if ((_lobby is null && _httpLobby is null) || _offline)
             return;
 
-        _lobby.Register(new LobbyServerInfo
+        var info = new LobbyServerInfo
         {
-            ServerId = _lobby.ServerId,
+            // The UDP lobby's id. The HTTP announcer keeps its own and ignores
+            // this one; see HttpLobbyAnnouncer's remarks.
+            ServerId = _lobby?.ServerId ?? ReadOnlyMemory<byte>.Empty,
             ServerName = _options.ServerName,
             Map = _match.Map.Name,
             Port = checked((ushort)BoundPort),
@@ -402,7 +404,10 @@ public sealed partial class GameServer
             OccupiedSlots = checked((ushort)OccupiedSlots()),
             Bots = checked((ushort)AnnouncedBotCount),
             Passworded = _options.Password.Length > 0,
-        });
+        };
+
+        _lobby?.Register(info);
+        _httpLobby?.Register(info);
     }
 
     /// <summary>

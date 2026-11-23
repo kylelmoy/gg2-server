@@ -89,9 +89,11 @@ free the simulation: a stock client on the same server still has to simulate
 what the server does, so a change to observable simulation answers to "The
 rule" in `CONTRIBUTING.md` whichever protocol carries its news.
 
-**Not protocol-aware yet:** the lobby registration advertises the legacy UUID
-alone, so a server browser cannot tell a native-capable server from a stock
-one before connecting; and the match recorder keeps only the legacy stream.
+**Not protocol-aware yet:** the ganggarrison.com lobby registration advertises
+the legacy UUID alone, so a browser reading that list cannot tell a
+native-capable server from a stock one before connecting; and the match
+recorder keeps only the legacy stream. The gg2-lobby announce (`--lobby-url`,
+`docs/LOBBY.md`) does carry both UUIDs, in its `protocols` array.
 
 ## Transport
 

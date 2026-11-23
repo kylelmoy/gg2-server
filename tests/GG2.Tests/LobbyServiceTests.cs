@@ -1,18 +1,23 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using GG2.Lobby;
+using GG2.Protocol;
+using GG2.Server;
 
 namespace GG2.Tests;
 
 /// <summary>
-/// The gg2-lobby service (<c>src/GG2.Lobby</c>), on loopback.
+/// The gg2-lobby service (<c>src/GG2.Lobby</c>) and the server's
+/// <see cref="HttpLobbyAnnouncer"/>, against each other on loopback.
 /// </summary>
 /// <remarks>
-/// Unlike <see cref="LobbyOptInTests"/>, these are allowed a real socket: the
-/// lobby is this repo's own code on 127.0.0.1, so nothing leaves the machine.
+/// Unlike <see cref="LobbyOptInTests"/>, these are allowed a real socket: both
+/// ends are this repo's own code on 127.0.0.1, so nothing leaves the machine.
 /// </remarks>
 public sealed class LobbyServiceTests
 {
@@ -169,6 +174,122 @@ public sealed class LobbyServiceTests
         var plain = registry.GetSnapshot(0).Plain;
         var body = Encoding.UTF8.GetString(plain)[(Encoding.UTF8.GetString(plain).IndexOf("\r\n\r\n", StringComparison.Ordinal) + 4)..];
         Assert.Equal("""{"servers":[]}""", body);
+    }
+
+    // --- End to end ---------------------------------------------------------
+
+    private sealed class ConcurrentLog : IServerLog
+    {
+        public ConcurrentQueue<string> Lines { get; } = new();
+
+        public void Info(string message) => Lines.Enqueue(message);
+
+        public void Warn(string message) => Lines.Enqueue("[warn] " + message);
+
+        public bool Has(string fragment) => Lines.Any(l => l.Contains(fragment, StringComparison.Ordinal));
+    }
+
+    private static LobbyServerInfo Info(int port, ushort players = 3) => new()
+    {
+        ServerId = ReadOnlyMemory<byte>.Empty,
+        ServerName = "Loopback Fort",
+        Map = "ctf_truefort",
+        Port = checked((ushort)port),
+        PlayerLimit = 16,
+        OccupiedSlots = players,
+        Bots = 7,
+        Passworded = false,
+    };
+
+    private static async Task<JsonElement[]> ListAsync(HttpClient http, int lobbyPort)
+    {
+        var json = await http.GetStringAsync($"http://127.0.0.1:{lobbyPort}/servers");
+        using var doc = JsonDocument.Parse(json);
+        return [.. doc.RootElement.GetProperty("servers").EnumerateArray().Select(e => e.Clone())];
+    }
+
+    private static async Task<JsonElement[]> WaitForAsync(HttpClient http, int lobbyPort, Func<JsonElement[], bool> done)
+    {
+        var clock = Stopwatch.StartNew();
+        while (true)
+        {
+            var servers = await ListAsync(http, lobbyPort);
+            if (done(servers) || clock.Elapsed > TimeSpan.FromSeconds(10))
+                return servers;
+            await Task.Delay(25);
+        }
+    }
+
+    [Fact]
+    public async Task AServerIsListedProbedUpdatedAndWithdrawn()
+    {
+        using var game = new TcpListener(IPAddress.Loopback, 0);
+        game.Start();
+        var gamePort = ((IPEndPoint)game.LocalEndpoint).Port;
+
+        using var lobby = new LobbyServer(new LobbyOptions { Bind = IPAddress.Loopback, Port = 0 }, Quiet);
+        using var http = new HttpClient();
+        var log = new ConcurrentLog();
+
+        var announcer = new HttpLobbyAnnouncer(new Uri($"http://127.0.0.1:{lobby.Port}"), log, TimeSpan.FromMilliseconds(20));
+        try
+        {
+            announcer.Register(Info(gamePort));
+            var servers = await WaitForAsync(http, lobby.Port, s => s.Length == 1);
+
+            var entry = Assert.Single(servers);
+            Assert.Equal("127.0.0.1", entry.GetProperty("ip").GetString());
+            Assert.Equal(gamePort, entry.GetProperty("port").GetInt32());
+            Assert.Equal("Loopback Fort", entry.GetProperty("name").GetString());
+            Assert.Equal(3, entry.GetProperty("players").GetInt32());
+            Assert.Equal(7, entry.GetProperty("bots").GetInt32());
+            Assert.Equal(LobbyRegistration.GameNameString, entry.GetProperty("game").GetString());
+            Assert.Contains(NativeProtocol.Uuid, entry.GetProperty("protocols").EnumerateArray().Select(p => p.GetString()));
+            Assert.Contains(GameConstants.ProtocolUuid, entry.GetProperty("protocols").EnumerateArray().Select(p => p.GetString()));
+
+            // The id is the server's secret and is never listed.
+            Assert.DoesNotContain(announcer.Id, entry.GetRawText(), StringComparison.Ordinal);
+
+            // The lobby connected to the game port before listing it. Nothing
+            // accepts here, so the probe is still sitting in the backlog.
+            Assert.True(game.Pending());
+
+            announcer.Register(Info(gamePort, players: 9));
+            servers = await WaitForAsync(http, lobby.Port, s => s.Length == 1 && s[0].GetProperty("players").GetInt32() == 9);
+            Assert.Equal(9, Assert.Single(servers).GetProperty("players").GetInt32());
+        }
+        finally
+        {
+            announcer.Dispose();
+        }
+
+        Assert.Empty(await ListAsync(http, lobby.Port));
+        Assert.True(log.Has("withdrawn"), string.Join("\n", log.Lines));
+    }
+
+    [Fact]
+    public async Task AnUnreachablePortIsNotListedAndTheServerIsTold()
+    {
+        var closed = new TcpListener(IPAddress.Loopback, 0);
+        closed.Start();
+        var deadPort = ((IPEndPoint)closed.LocalEndpoint).Port;
+        closed.Stop();
+
+        using var lobby = new LobbyServer(new LobbyOptions { Bind = IPAddress.Loopback, Port = 0 }, Quiet);
+        using var http = new HttpClient();
+        var log = new ConcurrentLog();
+
+        using (var announcer = new HttpLobbyAnnouncer(new Uri($"http://127.0.0.1:{lobby.Port}"), log, TimeSpan.FromMilliseconds(20)))
+        {
+            announcer.Register(Info(deadPort));
+
+            var clock = Stopwatch.StartNew();
+            while (!log.Has("cannot connect") && clock.Elapsed < TimeSpan.FromSeconds(10))
+                await Task.Delay(25);
+        }
+
+        Assert.True(log.Has("cannot connect"), string.Join("\n", log.Lines));
+        Assert.Empty(await ListAsync(http, lobby.Port));
     }
 
     [Fact]

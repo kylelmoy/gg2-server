@@ -824,12 +824,23 @@ internal static class CommandLine
                     options.TickStats = true;
                     break;
 
-                // ⚠️ The only switch that reaches outside this machine. Opt-in,
+                // ⚠️ Reaches outside this machine. Opt-in,
                 // never a default: it publishes this server's address, name,
                 // map and player count to ganggarrison.com every 30 seconds.
                 case "--lobby":
                     options.AnnounceToLobby = true;
                     break;
+
+                // ⚠️ Reaches outside this machine too, to the gg2-lobby named.
+                // Independent of --lobby; pass both to be listed in both.
+                case "--lobby-url":
+                {
+                    var url = cursor.Take();
+                    if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
+                        throw new FormatException($"{name} wants an http(s) URL, not '{url}'");
+                    options.LobbyUrl = url;
+                    break;
+                }
 
                 // ⚠️ The other switch that reaches outside this machine, and the
                 // one that sends something ABOUT A PLAYER rather than about the
@@ -1377,6 +1388,8 @@ internal static class CommandLine
                             appears in the client's server browser (default: off).
                             Sends this server's address, name, map and player
                             count there every 30 seconds until it shuts down.
+          --lobby-url <url> also list this server at the gg2-lobby at <url>
+                            (docs/LOBBY.md), over HTTP; independent of --lobby
           --rewards         let players authenticate their Haxxy badges, hats and
                             capes so everyone sees them (default: off). Relays
                             each player's reward id to the auth server, which is
