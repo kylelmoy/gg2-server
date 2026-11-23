@@ -3714,6 +3714,29 @@ gate geometry straight off the map and needs no simulation),
 `SentryKillFixtureTests` and two unit tests in `SentryTests`. All four go red
 when `Sentries.GateCollisionStep` is removed — measured, not assumed.
 
+### Open: nobody can stand on a moving platform that has a shape
+
+**A character falls straight through a masked moving platform**, stopped or
+moving. `MovingPlatform`'s parent is `DropdownPlatform`, so both of the
+character's own `with(DropdownPlatform)` blocks include it: the ground test at
+`Character.events/Begin Step.xml:32-49` and the catch-and-lift at
+`Step.xml:90-107`. The port's two scans in `CharacterPhysics` walk only the
+static `SolidKind.DropdownPlatform` rects, and a moving platform is never one.
+`MovingPlatforms.Carry` only handles somebody already exactly on top or driven
+into, so it never gets the chance.
+
+Found by the variable census (`docs/PARITY.md`) and confirmed with full
+`MatchSimulation.Tick`s on `gg_debug2`'s raft: a scout placed exactly on top
+at (286, 126.3) is at y 162 eleven ticks later, through a raft at y 150.
+
+The fix threads the platforms' colliders (positions are in `WorldState`, masks
+in `CollisionWorld.MovingPlatforms`) into both scans, and ports the catch's
+`y - yprevious` shift and tenth-pixel lift against the mask. Neither
+`CharacterPhysics` entry point receives `WorldState` today. **Reach: custom
+maps only.** No shipped map has a `moving_platform`, and `gg_debug2`'s raft is
+in a sealed chamber. Nothing about it has been measured against the running
+game.
+
 ### ⛔ The carry LANDED, and NOTHING IN THE SUITE COVERS IT
 
 `MovingPlatforms.Carry` — 362 lines, and the reason `SIM_UUID` moved from

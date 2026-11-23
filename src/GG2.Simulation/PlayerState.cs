@@ -11,8 +11,10 @@ namespace GG2.Simulation;
 /// only three things on it feed the simulation: <c>team</c>, <c>class</c> and
 /// <c>alarm[5]</c>, the respawn timer. <c>object</c> (the character, or -1) is
 /// <see cref="WorldState.Alive"/>; <c>sentry</c> is
-/// <see cref="WorldState.HasSentry"/>; the stats arrive with the features that
-/// read them.
+/// <see cref="WorldState.HasSentry"/>. The scoreboard stats are here too
+/// (<see cref="Stats"/>, <see cref="RoundStats"/>) because they are on the wire,
+/// and <see cref="Humiliated"/> and <see cref="QueueJump"/> because the
+/// character physics reads them.
 /// <para>
 /// <b>Make a player with <see cref="Fresh"/>, never <c>default</c>.</b>
 /// <c>Team.Red</c> is 0, so a zeroed player is a red scout ready to respawn —

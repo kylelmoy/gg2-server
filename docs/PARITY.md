@@ -1560,7 +1560,14 @@ reads are matched by name only.
 
 | Group | Owner | Run | Result |
 |---|---|---|---|
-| Character, small variables (40, excluding `hp`, `lastDamage*`, `aimDirection`) | `Character` | 2026-11-23, reference `ea8d6951` | three gaps, all in `damageCharacter`, fixed in `b607741`; the rest ported or client-only |
+| Character, all modelled variables (55) | `Character` | 2026-11-23, reference `ea8d6951` | three gaps in `damageCharacter`, fixed in `b607741`; the rest ported or client-only |
+| Player: `team`, `class`, `humiliated`, `queueJump`, `sentry` | `Player` | 2026-11-23 | clean |
+| Weapon state read or written from outside `Objects/Weapons` (19) | `Objects/Weapons` | 2026-11-23 | clean |
+| Sentry and SentryTurret, plus every caller of `damageSentry` | `Sentry`, `SentryTurret` | 2026-11-23 | `WinBanner`'s Begin Step disarming losing sentries, fixed in `4c26333` |
+| Damage scripts: `damageCharacter`, `damageSentry`, `damageGenerator`, `dealFlicker` | (callee check) | 2026-11-23 | the `damageCharacter` gaps above; the other three clean |
+| `DropdownPlatform` parent, through `MovingPlatform` | (comment sweep) | 2026-11-23 | **open**: nobody can stand on a masked moving platform; `docs/TRAPS-SIMULATION.md` |
+
+Not yet censused: `Generator`, `ControlPoint`, the intel objects, `MovingPlatform`'s own variables, and every `global.*` the simulation reads.
 
 A group not in this table has not been censused. Add a row when one is.
 

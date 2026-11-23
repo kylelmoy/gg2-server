@@ -162,7 +162,7 @@ public struct TickEvents
     /// Indexed by slot for the same reason <see cref="Fired"/> is, and with a
     /// stronger guarantee: a character that dies is destroyed, so it cannot die
     /// twice in a tick and nothing can respawn into the slot before the next one
-    /// (respawn runs off the player's own alarm, which is a later phase).
+    /// (respawn runs off the player's own alarm, in the next tick's alarm stage).
     /// Walking slots in ascending order therefore reproduces the order the
     /// reference's End Steps wrote the messages in.
     /// </remarks>

@@ -106,12 +106,12 @@ public static class CharacterPhysics
         // character" is the same question as "the character moved down one meets
         // the platform", which is what is asked here.
         //
-        // A MovingPlatform would land in this scan too — its parent object IS
-        // DropdownPlatform, so `place_meeting(…, DropdownPlatform)` matches one —
-        // but it never has a SolidRect to be found by. It has no sprite of its
-        // own, so its collision box comes from an embedded resource in a custom
-        // map, and that pipeline is not ported. MovingPlatforms carries the
-        // detail; its motion IS simulated, only its box and its carry are not.
+        // A MovingPlatform belongs in this scan too — its parent object IS
+        // DropdownPlatform, so `place_meeting(…, DropdownPlatform)` matches one
+        // — and it is MISSING: a platform's shape is a mask in
+        // CollisionWorld.MovingPlatforms, never a SolidRect, so nobody can
+        // stand on one. Open gap, custom maps only: docs/TRAPS-SIMULATION.md,
+        // "nobody can stand on a moving platform that has a shape".
         else if ((character.KeyState & PlayerKeys.Down) == 0)
         {
             foreach (ref readonly var rect in world.RectSpan)
@@ -494,10 +494,10 @@ public static class CharacterPhysics
     /// to you besides making you invulnerable (<c>:389-394</c>).
     /// </summary>
     /// <remarks>
-    /// <b>Still not the whole tail.</b> The animation counter beside these
-    /// belongs to a phase that has not landed. The intel drop moved out to
-    /// <see cref="Intel.BeginStep"/> with the objective, and the arena arm of
-    /// the ammo refill waits on <c>ArenaHUD</c>.
+    /// <b>Not the whole tail.</b> The animation counter beside these is read
+    /// only by Draw events. The intel drop is <see cref="Intel.BeginStep"/>,
+    /// and the round-end ammo refill (map end or Arena round end) is the end
+    /// of this method.
     /// <para>
     /// The regeneration is unconditional and classless:
     /// <c>nutsNBolts = min(nutsNBolts + 0.1, maxNutsNBolts)</c> runs for a

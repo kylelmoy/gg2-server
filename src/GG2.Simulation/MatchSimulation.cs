@@ -163,8 +163,8 @@ public static class MatchSimulation
             // Begin Step:303-337 charges a carrier's return timer and :366
             // makes an ubered carrier drop the flag, both between the gravity
             // above and the `if ubered` block below. The nuts-and-bolts
-            // regeneration and the animation counter beside them arrive with
-            // the phases that own them.
+            // regeneration is in BeginStepUberEffects below; the animation
+            // counter beside it is read only by Draw events.
             Intel.BeginStep(ref state, slot, ref events);
 
             // Begin Step:435-442: humiliation unscopes and uncloaks.
@@ -201,9 +201,11 @@ public static class MatchSimulation
         // Every sentry's Begin Step: build progress, the turret's birth, and
         // the fall. After the whole character loop because a sentry is created
         // later than every character alive when it was placed, so its Begin
-        // Step runs after theirs. (A character spawning *after* the sentry
-        // would run after it in the reference; the port has no respawn yet, so
-        // the case cannot arise inside a tick.)
+        // Step runs after theirs. A character that respawned after the sentry
+        // was built is younger and runs after it in the reference; that order
+        // is not reproduced, and is unobservable only while neither Begin Step
+        // reads what the other writes (a sentry's reads its owner's Player,
+        // other sentries and the map; a character's reads no sentry).
         for (var slot = 0; slot < WorldState.MaxSlots; slot++)
         {
             if (state.HasSentry[slot])
@@ -370,10 +372,9 @@ public static class MatchSimulation
         // Generators.BeginStep above the character loop at the top of this tick.
         //
         // In the reference this event ALSO carries its riders, inside a
-        // `with(Character)` that runs before those characters' own End Steps.
-        // That half is not ported and cannot be until a platform has a collision
-        // box; MovingPlatforms' remarks say why, and the position of this call is
-        // what the carry will need when it lands.
+        // `with(Character)` that runs before those characters' own End Steps,
+        // which is why it sits here: MovingPlatforms.Carry. Only a platform with
+        // a mask carries anybody, and no shipped map has one.
         MovingPlatforms.EndStep(world, ref state);
 
         // End Step, which is also where anything that ran out of hp dies. GM8's

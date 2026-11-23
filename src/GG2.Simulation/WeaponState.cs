@@ -24,9 +24,9 @@ namespace GG2.Simulation;
 /// <b>Only what is observable.</b> <c>justShot</c>, <c>alarm[6]</c> and the
 /// sprite fields drive the recoil and reload <em>animations</em>, which the
 /// client runs for itself off nothing the server sends; they are not here.
-/// Weapon-specific state that no wire field and no other character can see —
+/// Weapon-specific state that no wire field shows but the simulation reads —
 /// the blade's bubble count, the flamethrower's blast and flare timers, the
-/// revolver's stab cooldown — arrives with the weapon that needs it in stage 3.
+/// revolver's stab cooldown — is here beside the shared fields.
 /// </para>
 /// </remarks>
 public struct WeaponState

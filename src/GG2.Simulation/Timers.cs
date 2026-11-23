@@ -391,8 +391,9 @@ public static class Timers
         // Rocketlauncher and Minegun each put a single round back and re-arm the
         // alarm if the magazine is still short. The Revolver refills the whole
         // magazine at once. Minigun and Flamethrower have no reload cycle at all
-        // (reloadTime 0); Rifle, Medigun and Blade have their own bodies and
-        // arrive with their weapons.
+        // (reloadTime 0). Medigun and Blade have their own one-line bodies,
+        // below. The Rifle has no Alarm 5 at all (maxAmmo 0; its Alarm 7 only
+        // ejects a cosmetic shell).
         //
         // Nothing sets ReloadTimer for a weapon not listed below, so the switch
         // cannot silently drop one: an unimplemented weapon's counter is never

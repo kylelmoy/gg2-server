@@ -12,10 +12,9 @@ namespace GG2.Simulation;
 /// <c>CTFHUD</c> is what decides the match, and a dedicated server creates one
 /// too. What lives here is the part that decides; the drawing does not exist.
 /// <para>
-/// Each gamemode has its own HUD and its own end condition. Only
-/// <see cref="GameMode.CaptureTheFlag"/> and <see cref="GameMode.Invasion"/>
-/// are transcribed, because those are the modes the port simulates an objective
-/// for; the rest arrive with theirs.
+/// Each gamemode has its own HUD and its own end condition, and
+/// <see cref="Step"/> dispatches to all seven here. Arena's is
+/// <see cref="Arena.Step"/>, because it also restarts rounds inside a map.
 /// </para>
 /// </remarks>
 public static class Rounds

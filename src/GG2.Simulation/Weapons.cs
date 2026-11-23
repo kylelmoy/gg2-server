@@ -624,8 +624,9 @@ public static partial class Weapons
         if (kind != WeaponKind.Rifle && !Gml.Greater(weapon.AmmoCount, 0))
             return;
 
-        // Every unimplemented weapon's User Event 3 arrives with that weapon.
-        // Bailing *before* the seed is drawn rather than after is deliberate: a
+        // Every other weapon returned above through its own fire path, so this
+        // is a guard for a weapon added later, not a gap. Bailing *before* the
+        // seed is drawn rather than after is deliberate: a
         // shot that is announced and not simulated is worse than one that never
         // happens, because the client would draw projectiles the server has no
         // record of and then snap them away.
@@ -736,11 +737,10 @@ public static partial class Weapons
     /// <see cref="CharacterPhysics.BeginStepAccelerate"/> exist to leave room for
     /// it.
     /// <para>
-    /// The Minegun detonates and the Medigun shoots needles or pops its uber.
-    /// The Flamethrower's airblast, the Revolver's stab and Quote's bubbles hang
-    /// off the same key and arrive with their weapons; every other weapon's User
-    /// Event 2 is empty, so the key does nothing at all for six of the ten
-    /// classes.
+    /// The Minegun detonates, the Medigun shoots needles or pops its uber, the
+    /// Flamethrower airblasts and the Blade blows bubbles. The Revolver's stab is
+    /// on the primary key (User Event 1), and every other weapon's User Event 2
+    /// is empty.
     /// </para>
     /// </remarks>
     public static void SpecialStep(CollisionWorld world, ref WorldState state, int slot, ref TickEvents events)
