@@ -196,8 +196,8 @@ public sealed class PolicyTierWiringTests
 
         var summary = Assert.Single(lines, line => line.StartsWith("bot policy: ", StringComparison.Ordinal));
 
-        Assert.StartsWith("bot policy: 2 gg2-sim net(s)", summary);
-        Assert.Contains("driving Scout,Soldier ", summary);
+        Assert.StartsWith("bot policy: 2 net(s)", summary);
+        Assert.EndsWith("driving Scout,Soldier", summary);
         Assert.DoesNotContain(lines, line => line.StartsWith("policy ", StringComparison.Ordinal));
         Assert.DoesNotContain(lines, line => line.StartsWith("WARNING:", StringComparison.Ordinal));
     }
