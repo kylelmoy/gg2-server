@@ -78,7 +78,7 @@ public static class RoomCodes
 }
 
 /// <summary>One room inside a <see cref="RoomHost"/>.</summary>
-public sealed class HostedRoom(string code, GameServer server, DateTime createdUtc)
+public sealed class HostedRoom(string code, GameServer server, DateTime createdUtc, string? creator = null)
 {
     /// <summary>The whole code a player shares: the host prefix and the secret.</summary>
     public string Code { get; } = code;
@@ -89,6 +89,12 @@ public sealed class HostedRoom(string code, GameServer server, DateTime createdU
     public GameServer Server { get; } = server;
 
     public DateTime CreatedUtc { get; } = createdUtc;
+
+    /// <summary>
+    /// Who asked for the room: the <see cref="RoomCreateLimits.Key"/> of the
+    /// address that created it over the API, or null for one made in-process.
+    /// </summary>
+    public string? Creator { get; } = creator;
 
     internal TickFaultBudget Faults { get; } = new();
 }
@@ -167,7 +173,8 @@ public sealed class RoomHost : IDisposable
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentException">A brain that will not build.</exception>
-    public HostedRoom? CreateRoom(ServerOptions options)
+    /// <param name="creator">What <see cref="HostedRoom.Creator"/> records.</param>
+    public HostedRoom? CreateRoom(ServerOptions options, string? creator = null)
     {
         if (_rooms.Count >= _options.MaxRooms)
             return null;
@@ -194,7 +201,7 @@ public sealed class RoomHost : IDisposable
 
         server.StartHosted();
 
-        var room = new HostedRoom(code, server, DateTime.UtcNow);
+        var room = new HostedRoom(code, server, DateTime.UtcNow, creator);
         _rooms.Add(room);
         _bySecret.Add(secret, room);
 

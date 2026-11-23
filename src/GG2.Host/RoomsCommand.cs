@@ -33,6 +33,10 @@ internal static class RoomsCommand
               --api-port <n>        the HTTP API's port (default 8301)
               --api-bind <address>  the API's bind address (default 127.0.0.1)
               --min-free-mb <n>     refuse a room under this much MemAvailable (default 256, 0 = off)
+              --live-per-address <n>  live rooms one address may hold (default 2, 0 = off)
+              --creates-per-hour <n>  rooms one address may create an hour (default 6, 0 = off)
+              --api-trust-proxy     read the client address from X-Forwarded-For on a
+                                    loopback request (only behind a proxy that appends it)
             """);
     }
 
@@ -79,6 +83,15 @@ internal static class RoomsCommand
                 case "--min-free-mb":
                     api = api with { MinFreeMemoryMb = Int() };
                     break;
+                case "--live-per-address":
+                    api = api with { MaxLiveRoomsPerAddress = Int() };
+                    break;
+                case "--creates-per-hour":
+                    api = api with { MaxCreatesPerAddressPerHour = Int() };
+                    break;
+                case "--api-trust-proxy":
+                    api = api with { TrustForwardedFor = true };
+                    break;
                 default:
                     throw new ArgumentException($"unknown option {args[i]}");
             }
@@ -118,8 +131,8 @@ internal static class RoomsCommand
         using var server = new RoomApi(rooms, Template, api, log);
         server.Start();
 
-        if (!IPAddress.IsLoopback(api.Bind))
-            log.Warn("room API bound beyond loopback with no device check: anybody who can reach it can fill this host");
+        if (!IPAddress.IsLoopback(api.Bind) && (api.MaxLiveRoomsPerAddress <= 0 || api.MaxCreatesPerAddressPerHour <= 0))
+            log.Warn("room API bound beyond loopback with a per-address limit off: one address can fill this host");
 
         using var stopping = new CancellationTokenSource();
         Console.CancelKeyPress += (_, e) =>

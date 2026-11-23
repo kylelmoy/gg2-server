@@ -28,7 +28,7 @@ public sealed class RoomApiTests : IDisposable
         _host = new RoomHost(new RoomHostOptions { Port = 0, Prefix = 'V', MaxRooms = 2 }, _log);
         _host.Start();
 
-        _api = new RoomApi(_host, Template, new RoomApiOptions { Port = 0, MinFreeMemoryMb = 100 }, _log)
+        _api = new RoomApi(_host, Template, new RoomApiOptions { Port = 0, MinFreeMemoryMb = 100, MaxLiveRoomsPerAddress = 1, TrustForwardedFor = true }, _log)
         {
             FreeMemoryMb = () => _freeMb,
         };
@@ -56,8 +56,16 @@ public sealed class RoomApiTests : IDisposable
         return options;
     }
 
-    private Task<HttpResponseMessage> Create(string json, string contentType = "application/json") =>
-        _http.PostAsync("/rooms", new StringContent(json, Encoding.UTF8, contentType));
+    /// <summary>A create from <paramref name="from"/>, as the proxy in front would say it.</summary>
+    private Task<HttpResponseMessage> Create(string json, string contentType = "application/json", string from = "203.0.113.1")
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/rooms")
+        {
+            Content = new StringContent(json, Encoding.UTF8, contentType),
+        };
+        request.Headers.Add("X-Forwarded-For", $"198.51.100.9, {from}");
+        return _http.SendAsync(request);
+    }
 
     private static async Task<JsonElement> Json(HttpResponseMessage response) =>
         (await response.Content.ReadFromJsonAsync<JsonElement>())!;
@@ -167,10 +175,10 @@ public sealed class RoomApiTests : IDisposable
     [Fact]
     public async Task AFullHostSaysSo()
     {
-        Assert.Equal(HttpStatusCode.Created, (await Create("{}")).StatusCode);
-        Assert.Equal(HttpStatusCode.Created, (await Create("{}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await Create("{}", from: "203.0.113.1")).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await Create("{}", from: "203.0.113.2")).StatusCode);
 
-        var third = await Create("{}");
+        var third = await Create("{}", from: "203.0.113.3");
         Assert.Equal(HttpStatusCode.ServiceUnavailable, third.StatusCode);
         Assert.Contains("full", (await Json(third)).GetProperty("error").GetString());
     }
@@ -185,6 +193,25 @@ public sealed class RoomApiTests : IDisposable
 
         _freeMb = 500;
         Assert.Equal(HttpStatusCode.Created, (await Create("{}")).StatusCode);
+    }
+
+    /// <summary>
+    /// One address, one live room here; another address is unaffected. The
+    /// address is the proxy's last <c>X-Forwarded-For</c> entry, not the first,
+    /// which a client could have written.
+    /// </summary>
+    [Fact]
+    public async Task AnAddressHoldsOnlyItsLiveRoomAllowance()
+    {
+        Assert.Equal(HttpStatusCode.Created, (await Create("{}", from: "203.0.113.7")).StatusCode);
+
+        var second = await Create("{}", from: "203.0.113.7");
+        Assert.Equal((HttpStatusCode)429, second.StatusCode);
+        Assert.Contains("already have 1 room", (await Json(second)).GetProperty("error").GetString());
+        Assert.True(second.Headers.RetryAfter?.Delta > TimeSpan.Zero);
+
+        Assert.Equal(HttpStatusCode.Created, (await Create("{}", from: "203.0.113.8")).StatusCode);
+        Assert.Equal(["203.0.113.7", "203.0.113.8"], _host.Rooms.Select(r => r.Creator));
     }
 
     private static async Task Until(Func<bool> condition, LoopbackClient client)
@@ -296,5 +323,95 @@ public sealed class RoomTemplateTests
 
         foreach (var map in RoomTemplate.Maps)
             Assert.True(GG2.Maps.InternalMaps.IsInternal(map), map);
+    }
+}
+
+/// <summary>The per-address create limits alone (<c>docs/ROOMS.md</c>, "Create limits").</summary>
+public sealed class RoomCreateLimitTests
+{
+    private DateTime _now = new(2026, 11, 22, 12, 0, 0, DateTimeKind.Utc);
+
+    [Fact]
+    public void TheHourlyAllowanceRefillsAnHourAfterEachCreate()
+    {
+        var limits = new RoomCreateLimits(0, 3, () => _now);
+
+        for (var i = 0; i < 3; i++)
+        {
+            Assert.Null(limits.Refusal("a", live: 0));
+            limits.Created("a");
+            _now = _now.AddMinutes(10);
+        }
+
+        var refused = limits.Refusal("a", live: 0);
+        Assert.NotNull(refused);
+        Assert.Equal(30 * 60, refused.Value.RetryAfterSeconds);
+        Assert.Null(limits.Refusal("b", live: 0));
+
+        _now = _now.AddMinutes(30);
+        Assert.Null(limits.Refusal("a", live: 0));
+    }
+
+    [Fact]
+    public void TheLiveCountIsTheCallersAndZeroTurnsALimitOff()
+    {
+        var limits = new RoomCreateLimits(2, 0, () => _now);
+
+        Assert.Null(limits.Refusal("a", live: 1));
+        Assert.NotNull(limits.Refusal("a", live: 2));
+
+        for (var i = 0; i < 100; i++)
+            limits.Created("a");
+
+        Assert.Null(limits.Refusal("a", live: 0));
+        Assert.Equal(0, limits.TrackedAddresses);
+    }
+
+    [Fact]
+    public void ExpiredAddressesAreSweptOnceThereAreMany()
+    {
+        var limits = new RoomCreateLimits(0, 1, () => _now);
+
+        for (var i = 0; i < 5000; i++)
+            limits.Created($"10.0.{i / 256}.{i % 256}");
+
+        _now = _now.AddHours(1);
+        limits.Created("new");
+
+        Assert.Equal(1, limits.TrackedAddresses);
+    }
+
+    [Theory]
+    [InlineData("203.0.113.5", "203.0.113.5")]
+    [InlineData("::ffff:203.0.113.5", "203.0.113.5")]
+    [InlineData("2001:db8:1:2:aaaa:bbbb:cccc:dddd", "2001:db8:1:2::/64")]
+    [InlineData("2001:db8:1:2::1", "2001:db8:1:2::/64")]
+    public void AnIpv6AddressCountsAsItsSlash64(string address, string key) =>
+        Assert.Equal(key, RoomCreateLimits.Key(IPAddress.Parse(address)));
+
+    [Theory]
+    [InlineData(true, "127.0.0.1", "198.51.100.9, 203.0.113.5", "203.0.113.5")]
+    [InlineData(true, "::1", "203.0.113.5", "203.0.113.5")]
+    [InlineData(true, "127.0.0.1", "not an address", "127.0.0.1")]
+    [InlineData(true, "127.0.0.1", null, "127.0.0.1")]
+    [InlineData(true, "192.0.2.4", "203.0.113.5", "192.0.2.4")]
+    [InlineData(false, "127.0.0.1", "203.0.113.5", "127.0.0.1")]
+    public void TheForwardedAddressIsReadOnlyFromATrustedLoopbackPeer(bool trust, string peer, string? header, string expected)
+    {
+        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        if (header is not null)
+            headers["X-Forwarded-For"] = header;
+
+        var request = new HttpRequest
+        {
+            Method = "POST",
+            Path = "/rooms",
+            Query = [],
+            Headers = headers,
+            Body = "{}",
+        };
+
+        Assert.Equal(IPAddress.Parse(expected), RoomApi.ClientAddress(request, IPAddress.Parse(peer), trust));
     }
 }

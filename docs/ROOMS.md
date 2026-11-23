@@ -6,15 +6,15 @@ Nobody hosts from a phone. This is the industry's session-based dedicated
 server pattern (Agones allocation, GameLift game sessions, PlayFab
 multiplayer servers), built so that one process holds many rooms.
 
-**Status: steps 1 to 3 built; no device check, so the API is loopback only.** The table says which parts exist and what proves
+**Status: steps 1 to 3 built; creates are limited per address, and there is no device check.** The table says which parts exist and what proves
 each. Nothing else in this file exists until its row says so.
 
 | Step | Part | State |
 |---|---|---|
 | 1 | A server stops itself: empty timeout and hard lifetime | **Built.** `EmptyServerExitTests`; the real host exits 0 three seconds after an empty start |
 | 2 | The room host: one process, one port, many rooms | **Built** as a library (`RoomHost`, `RoomFrontDoor`, `SharedNav`, `SharedPolicies`). `RoomHostTests` drive real sockets through the one port. **Live, 2026-11-22**: a stock GM8 client joined a room created over the API (`gg2-server rooms` with the fleet's `common.ini`, Windows, loopback) with the code as its password, in lower case with spaces; got the room's map, its policy bots filled to six, chat, a character on blue; a code naming no room showed the stock "Incorrect Password."; the emptied room ended 120 s after the client left and its code went 404. Not yet run on a VPS or from another machine |
-| 3 | The dispatcher API, inside the room host | **Built**: `gg2-server rooms`. `RoomApiTests` create over real HTTP and join with the returned code over the game port. No authentication yet, so loopback only |
-| 4 | Device check and the ban list | not started |
+| 3 | The dispatcher API, inside the room host | **Built**: `gg2-server rooms`. `RoomApiTests` create over real HTTP and join with the returned code over the game port. No authentication; a create is limited per address (`RoomCreateLimitTests`) |
+| 4 | Device check and the ban list | **deferred** (no Apple developer key yet); the per-address create limits stand in |
 | 5 | gg2-client: create, join by code | not started |
 | 6 | Fleet rollout: one unit and one port per VPS | not started |
 
@@ -180,13 +180,15 @@ are not physics on the wire.
 (`src/GG2.Host/RoomsCommand.cs`, `src/GG2.Server/Rooms/RoomApi.cs`):
 
 ```
-gg2-server rooms --config rooms.ini --port 8300 --prefix W --max-rooms 8                  --api-port 8301 [--api-bind 127.0.0.1] [--min-free-mb 256]
+gg2-server rooms --config rooms.ini --port 8300 --prefix W --max-rooms 8 \
+                 --api-port 8301 [--api-bind 127.0.0.1] [--min-free-mb 256] \
+                 [--live-per-address 2] [--creates-per-hour 6] [--api-trust-proxy]
 ```
 
 | Endpoint | Does |
 |---|---|
 | `GET /status` | `prefix`, `gamePort`, `rooms`, `maxRooms`, `free`. What the client's region picker reads |
-| `POST /rooms` | body `{"map", "bots", "teamSize"}`, each optional (room settings below). `201` with the room; `400` for a choice off the list or an unknown field; `415` unless `Content-Type: application/json`; `503` when the host is full or `MemAvailable` is under `--min-free-mb` |
+| `POST /rooms` | body `{"map", "bots", "teamSize"}`, each optional (room settings below). `201` with the room; `400` for a choice off the list or an unknown field; `415` unless `Content-Type: application/json`; `429` with `Retry-After` past a create limit; `503` when the host is full or `MemAvailable` is under `--min-free-mb` |
 | `GET /rooms/{code}` | `code`, `gamePort`, `map`, `players`, `playerLimit`, `createdUtc`, `endsUtc`; `404` for a code naming no live room |
 
 **A room is the base config plus the choices.** `--config` is an ordinary
@@ -202,9 +204,32 @@ parse and reply; every answer is computed on the tick thread
 
 | Missing | Where it lands |
 |---|---|
-| Any authentication, per-device and per-address create limits, one live room per device | step 4. Until then `--api-bind` stays loopback; the host warns when it is not |
+| Any authentication, per-device create limits, one live room per device | step 4, deferred. The per-address limits below stand in; the host warns when bound beyond loopback with either one off |
+| A cap on concurrent API connections | not planned; the proxy in front is where it belongs |
 | TLS | a reverse proxy in front of the API port, step 6 |
 | Draining for a deploy | step 6 |
+
+**Create limits** (`RoomCreateLimits`), checked on the tick thread after the
+host-full check and before the room is built:
+
+| Limit | Default | Flag | Refusal |
+|---|---|---|---|
+| Live rooms one address holds | 2 | `--live-per-address` | `429`, `Retry-After: 60` |
+| Rooms one address creates in a sliding hour | 6 | `--creates-per-hour` | `429`, `Retry-After` until the oldest create leaves the hour |
+
+- **The key is the address, or an IPv6 address's /64**; an IPv4 address
+  mapped into IPv6 is the IPv4 address. `HostedRoom.Creator` records it.
+- **Only a room that was made counts**; a refused or malformed create does not.
+- **Behind the step 6 proxy, pass `--api-trust-proxy`**: on a loopback peer the
+  address is then the LAST `X-Forwarded-For` entry, the one the proxy appended,
+  so a client's own header cannot choose it. Without it every create shares the
+  proxy's allowance. The proxy must append the header, not pass a client's
+  through.
+- **An address is weaker than a device**: a phone carrier's NAT puts many
+  players behind one, so a busy carrier address can hit the live limit with
+  two unrelated players; and somebody with many addresses gets many
+  allowances. `MaxRooms` and the memory floor still bound the host as a whole.
+- State is in memory and starts fresh at a restart.
 
 **A room on a map the host has not loaded yet costs about 190 ms on the tick
 thread**, stalling every live room for about six ticks; a room on a map

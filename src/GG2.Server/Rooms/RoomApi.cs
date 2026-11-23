@@ -13,9 +13,9 @@ public sealed record RoomApiOptions
     public int Port { get; init; } = 8301;
 
     /// <summary>
-    /// The address to bind. <b>Loopback by default, and it stays loopback until
-    /// the device check exists</b> (<c>docs/ROOMS.md</c> step 4): without it,
-    /// anybody who can reach the port can fill the host.
+    /// The address to bind. <b>Loopback by default</b>: the public surface is the
+    /// reverse proxy in front of it (<c>docs/ROOMS.md</c> step 6). With no device
+    /// check (step 4), the per-address limits below are all that bound a create.
     /// </summary>
     public IPAddress Bind { get; init; } = IPAddress.Loopback;
 
@@ -25,6 +25,22 @@ public sealed record RoomApiOptions
     /// it is not checked where <c>/proc/meminfo</c> does not exist.
     /// </summary>
     public int MinFreeMemoryMb { get; init; } = 256;
+
+    /// <summary>Live rooms one address may hold at once. 0 turns it off.</summary>
+    public int MaxLiveRoomsPerAddress { get; init; } = 2;
+
+    /// <summary>Rooms one address may create in an hour. 0 turns it off.</summary>
+    public int MaxCreatesPerAddressPerHour { get; init; } = 6;
+
+    /// <summary>
+    /// Take the client's address from the last <c>X-Forwarded-For</c> entry,
+    /// for a request whose peer is loopback: what the reverse proxy in front of
+    /// this port (step 6) appends. Off, the header is ignored, and behind a
+    /// proxy every create would share the proxy's one allowance. <b>Only for a
+    /// proxy that appends the header</b>; one that passes a client's own value
+    /// through would let a client name any address.
+    /// </summary>
+    public bool TrustForwardedFor { get; init; }
 }
 
 /// <summary>
@@ -54,6 +70,7 @@ public sealed class RoomApi : IDisposable
     private readonly IServerLog _log;
     private readonly TcpListener _listener;
     private readonly CancellationTokenSource _stopping = new();
+    private RoomCreateLimits? _limits;
 
     /// <param name="template">
     /// Builds a room's options from a player's choices: a fresh copy of the base
@@ -76,11 +93,19 @@ public sealed class RoomApi : IDisposable
     /// </summary>
     public Func<long?> FreeMemoryMb { get; init; } = ReadMemAvailableMb;
 
+    /// <summary>The clock the create limits read, for a test.</summary>
+    public Func<DateTime> UtcNow { get; init; } = () => DateTime.UtcNow;
+
+    /// <summary>Built on first use, so it reads the <see cref="UtcNow"/> an initializer set.</summary>
+    private RoomCreateLimits Limits =>
+        _limits ??= new RoomCreateLimits(_options.MaxLiveRoomsPerAddress, _options.MaxCreatesPerAddressPerHour, UtcNow);
+
     public void Start()
     {
         _listener.Start();
         BoundPort = ((IPEndPoint)_listener.LocalEndpoint).Port;
-        _log.Info($"room API listening on {_options.Bind}:{BoundPort}");
+        _log.Info($"room API listening on {_options.Bind}:{BoundPort}; per address: {_options.MaxLiveRoomsPerAddress} live, {_options.MaxCreatesPerAddressPerHour} an hour"
+            + (_options.TrustForwardedFor ? "; X-Forwarded-For trusted from loopback" : string.Empty));
     }
 
     /// <summary>Serves until <paramref name="token"/> is cancelled or this is disposed.</summary>
@@ -125,6 +150,7 @@ public sealed class RoomApi : IDisposable
     private async Task ServeAsync(TcpClient client, CancellationToken token)
     {
         await using var stream = client.GetStream();
+        var peer = ((IPEndPoint)client.Client.RemoteEndPoint!).Address;
 
         for (var served = 0; served < 20; served++)
         {
@@ -145,8 +171,8 @@ public sealed class RoomApi : IDisposable
             if (request is null)
                 return;
 
-            var (status, body) = await HandleAsync(request, token);
-            await JsonAsync(stream, status, body, token);
+            var (status, body, extra) = await HandleAsync(request, peer, token);
+            await JsonAsync(stream, status, body, token, extra);
 
             if (!request.KeepAlive)
                 return;
@@ -154,34 +180,51 @@ public sealed class RoomApi : IDisposable
     }
 
     /// <summary>One request's status and JSON body.</summary>
-    internal async Task<(int Status, string Body)> HandleAsync(HttpRequest request, CancellationToken token)
+    internal async Task<(int Status, string Body, string Headers)> HandleAsync(HttpRequest request, IPAddress peer, CancellationToken token)
     {
         const string roomsPrefix = "/rooms/";
 
         switch (request.Method, request.Path)
         {
             case ("GET", "/status"):
-                return (200, await _host.Invoke(Status).WaitAsync(token));
+                return (200, await _host.Invoke(Status).WaitAsync(token), string.Empty);
 
             case ("POST", "/rooms"):
-                return await CreateAsync(request, token);
+                return await CreateAsync(request, ClientAddress(request, peer, _options.TrustForwardedFor), token);
 
             case ("GET", var path) when path.StartsWith(roomsPrefix, StringComparison.Ordinal):
                 var code = path[roomsPrefix.Length..];
                 var found = await _host.Invoke(() => _host.Find(code) is { } room ? Describe(room) : null).WaitAsync(token);
-                return found is null ? (404, Error("no such room")) : (200, found);
+                return found is null ? (404, Error("no such room"), string.Empty) : (200, found, string.Empty);
 
             default:
-                return (404, Error($"no {request.Method} {request.Path}"));
+                return (404, Error($"no {request.Method} {request.Path}"), string.Empty);
         }
     }
 
-    private async Task<(int, string)> CreateAsync(HttpRequest request, CancellationToken token)
+    /// <summary>
+    /// The address a request is from: the peer, or with
+    /// <paramref name="trustForwardedFor"/> and a loopback peer, the last
+    /// <c>X-Forwarded-For</c> entry. A header that does not parse is ignored.
+    /// </summary>
+    internal static IPAddress ClientAddress(HttpRequest request, IPAddress peer, bool trustForwardedFor)
+    {
+        if (peer.IsIPv4MappedToIPv6)
+            peer = peer.MapToIPv4();
+
+        if (!trustForwardedFor || !IPAddress.IsLoopback(peer) || request.Header("X-Forwarded-For") is not { } forwarded)
+            return peer;
+
+        var last = forwarded[(forwarded.LastIndexOf(',') + 1)..].Trim();
+        return IPAddress.TryParse(last, out var address) ? address : peer;
+    }
+
+    private async Task<(int, string, string)> CreateAsync(HttpRequest request, IPAddress address, CancellationToken token)
     {
         var contentType = request.Header("Content-Type") ?? string.Empty;
 
         if (!contentType.StartsWith("application/json", StringComparison.OrdinalIgnoreCase))
-            return (415, Error("Content-Type must be application/json"));
+            return (415, Error("Content-Type must be application/json"), string.Empty);
 
         RoomChoices choices;
 
@@ -191,17 +234,36 @@ public sealed class RoomApi : IDisposable
         }
         catch (ArgumentException e)
         {
-            return (400, Error(e.Message));
+            return (400, Error(e.Message), string.Empty);
         }
 
         if (_options.MinFreeMemoryMb > 0 && FreeMemoryMb() is { } free && free < _options.MinFreeMemoryMb)
         {
             _log.Warn($"room refused: {free} MB available, under the {_options.MinFreeMemoryMb} MB floor");
-            return (503, Error("this server is busy; try another region"));
+            return (503, Error("this server is busy; try another region"), string.Empty);
         }
 
-        return await _host.Invoke<(int, string)>(() =>
+        var key = RoomCreateLimits.Key(address);
+
+        return await _host.Invoke<(int, string, string)>(() =>
         {
+            if (_host.Rooms.Count >= _host.Options.MaxRooms)
+                return (503, Error("this server is full; try another region"), string.Empty);
+
+            var live = 0;
+
+            foreach (var open in _host.Rooms)
+            {
+                if (open.Creator == key)
+                    live++;
+            }
+
+            if (Limits.Refusal(key, live) is { } refusal)
+            {
+                _log.Info($"room refused for {key}: {refusal.Reason}");
+                return (429, Error(refusal.Reason), $"Retry-After: {refusal.RetryAfterSeconds}\r\n");
+            }
+
             ServerOptions options;
 
             try
@@ -210,14 +272,16 @@ public sealed class RoomApi : IDisposable
             }
             catch (ArgumentException e)
             {
-                return (400, Error(e.Message));
+                return (400, Error(e.Message), string.Empty);
             }
 
-            var room = _host.CreateRoom(options);
+            var room = _host.CreateRoom(options, key);
 
-            return room is null
-                ? (503, Error("this server is full; try another region"))
-                : (201, Describe(room));
+            if (room is null)
+                return (503, Error("this server is full; try another region"), string.Empty);
+
+            Limits.Created(key);
+            return (201, Describe(room), string.Empty);
         }).WaitAsync(token);
     }
 
@@ -259,8 +323,8 @@ public sealed class RoomApi : IDisposable
 
     private static string Error(string message) => ControlCommands.Error(message);
 
-    private static Task JsonAsync(Stream stream, int status, string body, CancellationToken token) =>
-        HttpResponse.TextAsync(stream, status, "application/json", body, token, "Cache-Control: no-store\r\n");
+    private static Task JsonAsync(Stream stream, int status, string body, CancellationToken token, string extra = "") =>
+        HttpResponse.TextAsync(stream, status, "application/json", body, token, "Cache-Control: no-store\r\n" + extra);
 
     /// <summary><c>MemAvailable</c> from <c>/proc/meminfo</c>, in MB, or null off Linux.</summary>
     private static long? ReadMemAvailableMb()
