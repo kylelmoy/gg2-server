@@ -104,7 +104,7 @@ public static class FleetConfig
     /// </summary>
     /// <remarks>
     /// ⚠️ <b>Duplicated in <c>scripts/deploy.sh</c></b> as a <c>sed</c>
-    /// expression. <c>kyle@203.0.113.7</c> passes through unchanged; a
+    /// expression. <c>admin@203.0.113.7</c> passes through unchanged; a
     /// <c>host:2222</c> or an IPv6 literal does not, and the two sides must agree
     /// on what it becomes.
     /// </remarks>
