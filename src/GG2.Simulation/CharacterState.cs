@@ -775,7 +775,13 @@ public struct CharacterState
 
     public readonly ClassStats Stats => ClassStats.For(Class);
 
-    public readonly CharacterBox Box => CharacterBox.For(Class);
+    public readonly CharacterBox Box => CharacterBox.For(Class, ChristmasSprites);
+
+    /// <summary>
+    /// <see cref="WorldState.ChristmasSprites"/>, copied on at spawn because
+    /// <see cref="Box"/> reads it.
+    /// </summary>
+    public bool ChristmasSprites;
 
     /// <summary>
     /// GM8's <c>speed</c>. Equal to <c>sqrt(hspeed^2 + vspeed^2)</c> for as long

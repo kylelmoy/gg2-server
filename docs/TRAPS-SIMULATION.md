@@ -3544,7 +3544,18 @@ wrong box. `CharacterBoxTests` holds it now.
 
 **A character's box is a pure property of its class sprite** — four subtractions
 in `Character.events/Create.xml:12-15` — so the probe needs no character, no bot
-and no map. That is why this was cheap once anybody thought to ask, and why
+and no map.
+
+**Except between 24 December and 2 January, when Quote is one pixel taller.**
+`game_init` calls `calculateMonthAndDay`, which reads the local date once and in
+that window runs `xmasTime.gml`; its `sprite_assign`s carry the Christmas
+sprites' origin and bbox. Measured live after calling `xmasTime()`:
+`QuerlyRedS` and `QuerlyBlueS` read -7, 7, **-13**, 11, and `ScoutRedS` is
+unchanged. No other class's box changes (the taunt sprites' origins move, but no
+character's `sprite_index` is ever a taunt sprite). The server sets
+`WorldState.ChristmasSprites` from its local clock at `Start`; each client
+decides from its own clock, so a client whose date disagrees with the server's
+disagrees about Quote's head in the reference too. That is why this was cheap once anybody thought to ask, and why
 nothing had forced it.
 
 ⚠️ **`gg2-samplers/sample-physics.js` overrode the engine with a table of its own, and

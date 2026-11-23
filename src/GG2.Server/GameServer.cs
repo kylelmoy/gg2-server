@@ -789,10 +789,18 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     /// </summary>
     public int? LocalSeed { get; set; }
 
+    /// <summary>
+    /// <c>calculateMonthAndDay.gml</c>'s window: 24 December to 2 January,
+    /// both inclusive (<c>day &gt; 23</c> in December, <c>day &lt; 3</c> in January).
+    /// </summary>
+    public static bool IsChristmas(DateTime date) =>
+        (date.Month == 12 && date.Day > 23) || (date.Month == 1 && date.Day < 3);
+
     public void Start()
     {
         _roster = new Roster(_options.ServerPlayerName);
         _world = default;
+        _world.ChristmasSprites = IsChristmas(LocalClock());
 
         // GameServerCreate.gml:92-108, before the first serverGotoMap: the
         // rotation is ordered once and then walked in that order for ever.

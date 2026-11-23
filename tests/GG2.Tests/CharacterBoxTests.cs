@@ -1,3 +1,4 @@
+using GG2.Maps;
 using GG2.Protocol;
 using GG2.Simulation;
 
@@ -90,4 +91,61 @@ public sealed class CharacterBoxTests
             Assert.Equal(-box.Left, box.Right);
         }
     }
+
+    /// <summary>
+    /// In the Christmas window Quote is one pixel taller, and nobody else changes.
+    /// </summary>
+    /// <remarks>
+    /// <c>xmasTime.gml</c> <c>sprite_assign</c>s the Christmas sprites, bbox and
+    /// origin included. Measured live: after <c>xmasTime()</c>,
+    /// <c>QuerlyRedS</c> and <c>QuerlyBlueS</c> read -7, 7, -13, 11 and
+    /// <c>ScoutRedS</c> is unchanged.
+    /// </remarks>
+    [Fact]
+    public void ChristmasMakesQuoteOnePixelTaller()
+    {
+        Assert.Equal(new CharacterBox(-7, 7, -13, 11), CharacterBox.For(PlayerClass.Quote, christmasSprites: true));
+        Assert.Equal(new CharacterBox(-7, 7, -12, 11), CharacterBox.For(PlayerClass.Quote, christmasSprites: false));
+
+        foreach (var playerClass in Enum.GetValues<PlayerClass>())
+        {
+            if (playerClass == PlayerClass.Quote || !Enum.IsDefined(playerClass))
+                continue;
+
+            CharacterBox normal;
+            try { normal = CharacterBox.For(playerClass); }
+            catch (ArgumentOutOfRangeException) { continue; }
+
+            Assert.Equal(normal, CharacterBox.For(playerClass, christmasSprites: true));
+        }
+    }
+
+    /// <summary>A spawned character takes the world's Christmas flag.</summary>
+    [Fact]
+    public void ASpawnedQuoteTakesTheWorldsChristmasBox()
+    {
+        var level = LevelMap.FromPng("ctf_truefort", ReferenceTree.ReadMap("ctf_truefort"));
+        var spawns = new SpawnPoints(level);
+        var state = default(WorldState);
+        state.ChristmasSprites = true;
+
+        Assert.True(state.Spawn(spawns, 1, PlayerClass.Quote, Team.Red, spawnpointId: 0, group: 0));
+        Assert.Equal(-13, state.Characters[1].Box.Top);
+
+        state.ChristmasSprites = false;
+        Assert.True(state.Spawn(spawns, 2, PlayerClass.Quote, Team.Blue, spawnpointId: 0, group: 0));
+        Assert.Equal(-12, state.Characters[2].Box.Top);
+    }
+
+    /// <summary><c>calculateMonthAndDay.gml</c>'s window, both ends.</summary>
+    [Theory]
+    [InlineData(12, 23, false)]
+    [InlineData(12, 24, true)]
+    [InlineData(12, 31, true)]
+    [InlineData(1, 1, true)]
+    [InlineData(1, 2, true)]
+    [InlineData(1, 3, false)]
+    [InlineData(7, 1, false)]
+    public void TheChristmasWindowIsTheReferences(int month, int day, bool christmas) =>
+        Assert.Equal(christmas, GG2.Server.GameServer.IsChristmas(new DateTime(2026, month, day)));
 }

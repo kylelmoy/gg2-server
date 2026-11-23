@@ -196,7 +196,9 @@ public static class SimulationStamp
     /// reference does. Likewise <see cref="Rounds.WinBannerBeginStep"/>, which
     /// disarms the losing team's sentries for a map end's countdown, and
     /// <see cref="WorldState.SetupGatesClosed"/>, which shuts a setup gate on an
-    /// Arena, KotH or DKotH map for the pregame lock.
+    /// Arena, KotH or DKotH map for the pregame lock. And
+    /// <see cref="WorldState.ChristmasSprites"/>, which is false everywhere a
+    /// net is trained.
     /// </para>
     /// </remarks>
     public const int SimulationBehaviourVersion = 4;

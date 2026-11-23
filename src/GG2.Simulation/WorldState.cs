@@ -616,6 +616,20 @@ public struct WorldState
     public int SetupTimer;
 
     /// <summary>
+    /// <c>global.xmas</c>: whether the process started between 24 December and
+    /// 2 January, which swaps in the Christmas character sprites.
+    /// </summary>
+    /// <remarks>
+    /// <c>calculateMonthAndDay.gml</c> reads the local date once, from
+    /// <c>game_init</c>, on the server and on every client independently. It
+    /// changes Quote's collision box (<see cref="CharacterBox.For(PlayerClass, bool)"/>),
+    /// so a client re-simulating a Quote in that window uses the taller box.
+    /// The server sets this at startup from its local clock; the simulation
+    /// has no clock of its own, and headless matches leave it false.
+    /// </remarks>
+    public bool ChristmasSprites;
+
+    /// <summary>
     /// <c>Scripts/Physics/areSetupGatesClosed.gml</c>: whether every
     /// <c>ControlPointSetupGate</c> on the map is solid this tick.
     /// </summary>
@@ -1218,6 +1232,7 @@ public struct WorldState
         var character = CharacterState.Fresh(playerClass, team);
         character.X = x;
         character.Y = y;
+        character.ChristmasSprites = ChristmasSprites;
 
         // GM8 issues an instance id here, and the order it induces is
         // observable — see CharacterState.CreationOrder. Pre-incremented so no

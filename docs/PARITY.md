@@ -1572,7 +1572,9 @@ reads are matched by name only.
 | Intel objects, by every site naming `Intelligence*`, and the four `doEvent*Intel` scripts line by line | `Objects/Map elements/Gamemode-specific/CTF` | 2026-11-23 | clean; `doEventReturnIntel`'s forced drop is dead in the reference (no Character has a User Event 5) |
 | `MovingPlatform`'s own variables, and its End Step's writes into Character | `MovingPlatform` | 2026-11-23 | the port's push-from-below branch also pulled the trigger, which the reference does only for a rider; removed. No reachable state was found to exercise it, so no test |
 
-Not yet censused: every `global.*` the simulation reads.
+| Every `global.*` the reference reads (some 230 names), triaged by name and then by site for the ones a simulation could depend on | (all) | 2026-11-23 | `global.xmas`: Quote's box is one pixel taller from 24 December to 2 January, fixed. The rest are client, UI, network, cosmetic, or already modelled (`delta_factor` is 1 at 30 Hz, and `skip_delta_factor` with it) |
+
+Every group the census set out to cover is in this table. A new reference variable the port starts to model needs its own row.
 
 `--declared` reads Create only. An object that declares its variables in a user event (ControlPoint's `User Event 0`) has to be listed by hand.
 

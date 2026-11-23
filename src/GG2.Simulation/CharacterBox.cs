@@ -61,6 +61,21 @@ public readonly record struct CharacterBox
     /// <c>&lt;Class&gt;&lt;Team&gt;S</c> search.
     /// </para>
     /// </remarks>
+    public static CharacterBox For(PlayerClass playerClass, bool christmasSprites) =>
+        christmasSprites && playerClass == PlayerClass.Quote
+            ? new CharacterBox(-7, 7, -13, 11)
+            : For(playerClass);
+
+    /// <summary>The per-class boxes outside the Christmas window.</summary>
+    /// <remarks>
+    /// <b>Quote's box depends on the date.</b> <c>Scripts/Holidays/xmasTime.gml</c>
+    /// runs from <c>game_init</c> between 24 December and 2 January and
+    /// <c>sprite_assign</c>s every character sprite to its Christmas variant,
+    /// origin and bbox included. Every class keeps its box except Quote, whose
+    /// <c>QuerlyRedSX</c>/<c>QuerlyBlueSX</c> top is -13 instead of -12 —
+    /// measured live after calling <c>xmasTime()</c>. See
+    /// <see cref="WorldState.ChristmasSprites"/>.
+    /// </remarks>
     public static CharacterBox For(PlayerClass playerClass) => playerClass switch
     {
         PlayerClass.Scout => new CharacterBox(-6, 6, -10, 23),
