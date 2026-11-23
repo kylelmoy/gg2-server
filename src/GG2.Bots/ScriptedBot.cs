@@ -767,7 +767,7 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         //
         //   - SetupGatesClosed. `SolidKind.SetupGate => filter.SetupGatesClosed`,
         //     and the character's own flag is written every tick from
-        //     `state.SetupTimer > 0`. Left at its default the bot believes the
+        //     `state.SetupGatesClosed`. Left at its default the bot believes the
         //     gates are open for the whole setup phase — 1,800 ticks on Invasion,
         //     900 on attack/defend.
         //   - HasIntel. `SolidKind.TeamGate` is solid to a character of its OWN

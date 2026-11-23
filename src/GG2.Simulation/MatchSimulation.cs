@@ -115,7 +115,7 @@ public static class MatchSimulation
             // The tick's one writer of the two mirrored globals — see
             // CharacterState.MapChanging. Before any physics reads a filter.
             state.Characters[slot].MapChanging = state.MapChanging;
-            state.Characters[slot].SetupGatesClosed = state.SetupTimer > 0;
+            state.Characters[slot].SetupGatesClosed = state.SetupGatesClosed;
             state.Characters[slot].ArenaRoundEnded = Arena.RoundEnded(state);
 
             // The third and fourth mirrored flags, and the only ones that come

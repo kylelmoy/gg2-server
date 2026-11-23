@@ -1566,8 +1566,12 @@ reads are matched by name only.
 | Sentry and SentryTurret, plus every caller of `damageSentry` | `Sentry`, `SentryTurret` | 2026-11-23 | `WinBanner`'s Begin Step disarming losing sentries, fixed in `4c26333` |
 | Damage scripts: `damageCharacter`, `damageSentry`, `damageGenerator`, `dealFlicker` | (callee check) | 2026-11-23 | the `damageCharacter` gaps above; the other three clean |
 | `DropdownPlatform` parent, through `MovingPlatform` | (comment sweep) | 2026-11-23 | **open**: nobody can stand on a masked moving platform; `docs/TRAPS-SIMULATION.md` |
+| Generator: its Create variables, and every site naming the object | `Generator` | 2026-11-23 | clean; all eleven damage sites go through `damageGenerator` |
+| ControlPoint: its User Event 0 variables, `cappingPoint`, `capStrength`, `cpUnlock`, `baseCapTime`, and the four gamemode HUDs that read them | `ControlPoint` | 2026-11-23 | `areSetupGatesClosed`'s `with(FauxCPHUD)` override, fixed (setup gates on Arena, KotH and DKotH follow `cpUnlock`); the rest ported |
 
-Not yet censused: `Generator`, `ControlPoint`, the intel objects, `MovingPlatform`'s own variables, and every `global.*` the simulation reads.
+Not yet censused: the intel objects, `MovingPlatform`'s own variables, and every `global.*` the simulation reads.
+
+`--declared` reads Create only. An object that declares its variables in a user event (ControlPoint's `User Event 0`) has to be listed by hand.
 
 A group not in this table has not been censused. Add a row when one is.
 

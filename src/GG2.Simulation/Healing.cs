@@ -319,8 +319,8 @@ public static class Healing
             //     is named `SetupGate` and builder_init.gml:301 builds a
             //     ControlPointSetupGate from it — so "the map placed one" and
             //     "this map has a setup gate" are the same predicate;
-            //   - the second is `areSetupGatesClosed.gml`, which is nothing but
-            //     `global.setupTimer > 0`.
+            //   - the second is `areSetupGatesClosed.gml`, which is
+            //     WorldState.SetupGatesClosed.
             //
             // Read LIVE here rather than through CharacterState.SetupGatesClosed,
             // which mirrors the same value. The two agree at this point in the
@@ -345,7 +345,7 @@ public static class Healing
             // this branch is unreachable there, and the gg2-rl nets trained no
             // Medic. Those nets are retired; a gg2-sim net carries no stamp, so
             // the question no longer has a checkpoint to protect.
-            var setup = state.AttackDefend && state.SetupTimer > 0;
+            var setup = state.AttackDefend && state.SetupGatesClosed;
 
             weapon.UberCharge += Gml.Less(patient.Hp, maxHp) || setup
                 ? UberChargeHurt

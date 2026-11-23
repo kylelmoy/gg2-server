@@ -194,7 +194,9 @@ public static class SimulationStamp
     /// <see cref="DamageApi.DamageCharacter"/> now shortens a sandvich on every
     /// hit, and bubbles and the knife now reset <c>timeUnscathed</c>, as the
     /// reference does. Likewise <see cref="Rounds.WinBannerBeginStep"/>, which
-    /// disarms the losing team's sentries for a map end's countdown.
+    /// disarms the losing team's sentries for a map end's countdown, and
+    /// <see cref="WorldState.SetupGatesClosed"/>, which shuts a setup gate on an
+    /// Arena, KotH or DKotH map for the pregame lock.
     /// </para>
     /// </remarks>
     public const int SimulationBehaviourVersion = 4;

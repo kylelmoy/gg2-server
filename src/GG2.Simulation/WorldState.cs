@@ -615,6 +615,25 @@ public struct WorldState
     /// </remarks>
     public int SetupTimer;
 
+    /// <summary>
+    /// <c>Scripts/Physics/areSetupGatesClosed.gml</c>: whether every
+    /// <c>ControlPointSetupGate</c> on the map is solid this tick.
+    /// </summary>
+    /// <remarks>
+    /// <b>Not just <see cref="SetupTimer"/>.</b> The script starts from
+    /// <c>global.setupTimer &gt; 0</c> and then overrides it inside
+    /// <c>with(FauxCPHUD)</c>, the parent of <c>ArenaHUD</c>, <c>KothHUD</c> and
+    /// <c>DKothHUD</c>, with <c>cpUnlock &gt; 0</c>. So on those three modes a
+    /// setup gate is shut for the pregame and open once the point unlocks. No
+    /// shipped map puts a setup gate on one of them; a custom map can.
+    /// Every reader of the script goes through here: the character mirror,
+    /// <see cref="BulletFilter"/>, and the Medigun's <c>setup</c> term.
+    /// </remarks>
+    public readonly bool SetupGatesClosed =>
+        GameMode is GameMode.Arena or GameMode.KingOfTheHill or GameMode.DualKingOfTheHill
+            ? ControlPointUnlock > 0
+            : SetupTimer > 0;
+
     // --- arena ---------------------------------------------------------------
 
     /// <summary>Which phase of an Arena map the match is in.</summary>
@@ -667,7 +686,7 @@ public struct WorldState
     /// closed setup gate, or stop at a team gate the victory screen has opened.
     /// </remarks>
     public readonly CollisionFilter BulletFilter =>
-        CollisionFilter.ForBullet(SetupTimer > 0, MapChanging);
+        CollisionFilter.ForBullet(SetupGatesClosed, MapChanging);
 
     /// <summary>
     /// <c>KothHUD.cpUnlock</c>: ticks of pregame before the point can be taken.

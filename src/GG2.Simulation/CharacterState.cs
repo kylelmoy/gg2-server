@@ -850,7 +850,7 @@ public struct CharacterState
     /// and written by the same line.
     /// </summary>
     /// <remarks>
-    /// <c>global.setupTimer &gt; 0</c>. No fixture exercises an Invasion or
+    /// <see cref="WorldState.SetupGatesClosed"/>. No fixture exercises an Invasion or
     /// attack/defend map, so the <c>ControlPointSetupGate</c> path here is
     /// unverified against either.
     /// </remarks>

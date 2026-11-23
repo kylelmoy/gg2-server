@@ -1076,8 +1076,13 @@ attack/defend, and Invasion", have the full rules; these are the traps:
   switches off the moment a capture meter empties.
 - ⚠️ **`CollisionFilter.SetupGatesClosed` had been permanently false since phase
   3.** Nothing set it, so every setup gate was open from the first tick. It is
-  fed from `WorldState.SetupTimer` now, mirrored onto the character beside
+  fed from `WorldState.SetupGatesClosed` now, mirrored onto the character beside
   `MapChanging` — and ⚠️ **the round clock restarts at setupTimer 30, not 0**.
+- **On Arena, KotH and DKotH a setup gate follows `cpUnlock`, not
+  `setupTimer`.** `areSetupGatesClosed.gml` overrides its result inside
+  `with(FauxCPHUD)`, and FauxCPHUD is the parent of all three of those HUDs, so
+  a gate there is shut for the pregame lock. No shipped map has one; a custom
+  map can. `ControlPointModeTests.APregameLockClosesTheSetupGates`.
 - ⚠️ **Invasion is not CTF with gates**, and the port was running it through
   CTF's round rules. Red wins on the cap limit; **blue wins by surviving the
   clock**, with a let-off only when red is one capture from winning; and its

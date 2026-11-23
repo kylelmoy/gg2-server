@@ -464,6 +464,61 @@ public sealed class ControlPointModeTests
     }
 
     /// <summary>
+    /// On Arena, KotH and DKotH a setup gate follows the pregame lock, not the
+    /// setup timer.
+    /// </summary>
+    /// <remarks>
+    /// <c>areSetupGatesClosed.gml</c> ends <c>with(FauxCPHUD) isSetup =
+    /// (cpUnlock &gt; 0)</c>, and those three HUDs are FauxCPHUD's children.
+    /// No shipped map has a setup gate on one, so the test grafts attack/defend's
+    /// gate onto each. Read from <c>setupTimer</c> alone, which is zero on these
+    /// modes, the gate would be open from the first tick.
+    /// </remarks>
+    [Theory]
+    [InlineData("koth_harvest", GameMode.KingOfTheHill)]
+    [InlineData("dkoth_atalia", GameMode.DualKingOfTheHill)]
+    [InlineData("arena_montane", GameMode.Arena)]
+    public void APregameLockClosesTheSetupGates(string map, GameMode mode)
+    {
+        var gateEntity = Level(AttackDefendMap).Entities.First(e => e.Type == EntityTypes.SetupGate);
+        var level = Level(map);
+        level = level.WithEntities([.. level.Entities, gateEntity]);
+
+        var world = new CollisionWorld(level);
+        var state = default(WorldState);
+        state.GameMode = GameModes.Of(level);
+        state.AttackDefend = GameModes.HasSetupGate(level);
+        state.TimeLimitMinutes = 15;
+        state.CapLimit = 5;
+        ControlPoints.Place(ref state, level, out var zones);
+        world.SetCaptureZones(zones);
+        Rounds.Start(ref state);
+
+        Assert.Equal(mode, state.GameMode);
+        Assert.Equal(0, state.SetupTimer);
+        Assert.True(state.ControlPointUnlock > 0);
+
+        var gate = world.Rects.First(r => r.Kind == SolidKind.SetupGate);
+        var character = CharacterState.Fresh(PlayerClass.Soldier, Team.Red);
+        character.X = (gate.Left + gate.Right) / 2.0;
+        character.Y = (gate.Top + gate.Bottom) / 2.0;
+        state.Characters[1] = character;
+        state.Weapons[1] = WeaponState.Spawn(PlayerClass.Soldier, character.X, character.Y);
+        state.Alive[1] = true;
+        state.Players[1] = new PlayerState { Team = Team.Red, Class = PlayerClass.Soldier, RespawnTimer = Timers.Inactive };
+        state.HasPlayer[1] = true;
+
+        Tick(world, ref state);
+        Assert.True(gate.IsSolidTo(state.Characters[1].Filter));
+        Assert.True(gate.IsSolidTo(state.BulletFilter));
+
+        state.ControlPointUnlock = 0;
+        Tick(world, ref state);
+        Assert.False(gate.IsSolidTo(state.Characters[1].Filter));
+        Assert.False(gate.IsSolidTo(state.BulletFilter));
+    }
+
+    /// <summary>
     /// The round clock is restarted one second before the gates open, not when
     /// they do.
     /// </summary>
