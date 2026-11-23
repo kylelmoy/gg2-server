@@ -210,6 +210,10 @@ public static class MatchSimulation
                 Sentries.BeginStep(world, ref state, slot, ref events);
         }
 
+        // The map-end WinBanner's Begin Step, after every sentry's because the
+        // banner is younger than all of them: it scraps the losers' turrets.
+        Rounds.WinBannerBeginStep(ref state);
+
         // Game Maker's alarm stage sits between Begin Step and Step. Note the
         // consequence for a weapon: Begin Step ran *first*, so the shot above
         // was tested against the refire counter last tick left behind, and the

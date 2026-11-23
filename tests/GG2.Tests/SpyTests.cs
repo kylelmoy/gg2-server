@@ -721,7 +721,7 @@ public sealed class SpyTests
 
     /// <summary>
     /// <b>A stab resets <c>timeUnscathed</c></b>: the knife's damage line is
-    /// <c>damageCharacter</c> (<c>StabMask.events/Collision with Character.xml:13</c>),
+    /// <c>damageCharacter</c> (<c>StabMask.events/Collision with Character.xml:14</c>),
     /// and <c>damageCharacter.gml:7</c> is the reset. Visible on a victim the
     /// knife does not kill, which Team Deathmatch spawn protection guarantees.
     /// </summary>

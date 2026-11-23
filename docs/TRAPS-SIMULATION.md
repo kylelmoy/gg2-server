@@ -2178,6 +2178,15 @@ It costs **0.2 of control**, suppresses the attack, the taunt, the right click,
 the cloak and the sandvich, and withholds the round-end ammo refill everybody
 else gets.
 
+**The losers' sentries are disarmed too, by a second banner event.**
+`WinBanner.events/Begin Step.xml` runs `with Sentry if team != global.winners
+event_user(1)` every tick of the countdown, and `Sentry.events/User Event 1.xml`
+scraps the turret and sets the sentry's own `humiliated`, after which its Begin
+Step scraps every turret it re-creates. Arena does the same once, at
+`doEventArenaEndRound.gml:27`. `Rounds.WinBannerBeginStep`;
+`SentryTests.AMapEndDisarmsTheLosersSentriesAndNotTheWinners`. Not measured:
+whether GM8 runs the banner's Begin Step on the tick it is created.
+
 **It also forces an uncloak and an unscope, every tick.** `Begin Step.xml:435-442`:
 a scoped sniper goes through `toggleZoom` (run power and jump back to
 unscoped), and `cloak` drops unless the spy is `stabbing`; `cloakAlpha` climbs

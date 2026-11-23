@@ -346,6 +346,53 @@ public sealed class SentryTests
     }
 
     /// <summary>
+    /// <b>A map end scraps the losing team's turrets</b> for the whole
+    /// countdown: <c>WinBanner.events/Begin Step.xml</c> runs
+    /// <c>Sentry.events/User Event 1.xml</c> on every sentry not on the winning
+    /// team, every tick. The winners' sentries keep shooting.
+    /// </summary>
+    [Fact]
+    public void AMapEndDisarmsTheLosersSentriesAndNotTheWinners()
+    {
+        int Hits(Team winner, out SentryState sentry)
+        {
+            var world = World;
+            var state = default(WorldState);
+            var events = default(TickEvents);
+
+            PutBuiltSentry(ref state, 1, Team.Red, OpenX, FloorY);
+            Put(ref state, 2, PlayerClass.Heavy, Team.Blue, OpenX + 100, OpenY);
+
+            Rounds.Decide(ref state, winner);
+            Rounds.BeginMapChange(ref state);
+
+            var hits = 0;
+            var hp = state.Characters[2].Hp;
+
+            for (var tick = 1; tick <= 26; tick++)
+            {
+                Tick(world, ref state, ref events);
+
+                if (Gml.Less(state.Characters[2].Hp, hp))
+                {
+                    hits++;
+                    hp = state.Characters[2].Hp;
+                }
+            }
+
+            sentry = state.Sentries[1];
+            return hits;
+        }
+
+        Assert.Equal(0, Hits(Team.Blue, out var lost));
+        Assert.True(lost.Humiliated);
+        Assert.False(lost.HasTurret);
+
+        Assert.Equal(4, Hits(Team.Red, out var won));
+        Assert.False(won.Humiliated);
+    }
+
+    /// <summary>
     /// The angle restriction: a target more than 45 degrees above the
     /// horizontal is invisible unless it stands on the gun.
     /// </summary>

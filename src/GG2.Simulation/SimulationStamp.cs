@@ -193,7 +193,8 @@ public static class SimulationStamp
     /// <b>NOT bumped, for the same reason: <c>damageCharacter</c>'s tail.</b>
     /// <see cref="DamageApi.DamageCharacter"/> now shortens a sandvich on every
     /// hit, and bubbles and the knife now reset <c>timeUnscathed</c>, as the
-    /// reference does.
+    /// reference does. Likewise <see cref="Rounds.WinBannerBeginStep"/>, which
+    /// disarms the losing team's sentries for a map end's countdown.
     /// </para>
     /// </remarks>
     public const int SimulationBehaviourVersion = 4;

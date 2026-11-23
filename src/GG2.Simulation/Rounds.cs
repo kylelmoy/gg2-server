@@ -902,6 +902,46 @@ public static class Rounds
     }
 
     /// <summary>
+    /// <c>WinBanner.events/Begin Step.xml</c>: <c>with Sentry if team !=
+    /// global.winners event_user(1)</c>, every tick the banner exists.
+    /// </summary>
+    /// <remarks>
+    /// The banner is created with the map end and goes with the room, so it
+    /// lives exactly as long as <see cref="WorldState.MapChanging"/>. It is
+    /// the youngest instance there is, so its Begin Step runs after every
+    /// sentry's, and the server sets <c>MapChanging</c> before the tick, so
+    /// the first run is the map-end tick itself. ⚠️ Whether GM8 runs a Begin
+    /// Step for an instance created earlier in the same Begin Step stage is
+    /// not measured; if it does not, the reference's first scrap is one tick
+    /// later than this.
+    /// <para>
+    /// <c>Sentry.events/User Event 1.xml</c> scraps a built sentry's turret and
+    /// sets the sentry's own <c>humiliated</c>, which makes its Begin Step
+    /// scrap every turret it re-creates after this (<see cref="Sentries.BeginStep"/>).
+    /// A stalemate's winner is <see cref="Team.Spectator"/>, so every sentry
+    /// goes. The sprite and idle-animation lines are drawing.
+    /// </para>
+    /// </remarks>
+    public static void WinBannerBeginStep(ref WorldState state)
+    {
+        if (!state.MapChanging)
+            return;
+
+        for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+        {
+            if (!state.HasSentry[slot] || state.Sentries[slot].Team == state.Winner)
+                continue;
+
+            ref var sentry = ref state.Sentries[slot];
+
+            if (sentry.Built)
+                sentry.HasTurret = false;
+
+            sentry.Humiliated = true;
+        }
+    }
+
+    /// <summary>
     /// Clears the round and puts the world back to a fresh map's state, keeping
     /// the players.
     /// </summary>
