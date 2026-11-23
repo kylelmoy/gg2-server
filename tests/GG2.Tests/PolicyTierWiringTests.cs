@@ -170,14 +170,17 @@ public sealed class PolicyTierWiringTests
     }
 
     /// <summary>
-    /// Each checkpoint gets its own line, naming the classes it will drive.
+    /// The nets get one line between them, naming how many loaded and every class
+    /// they will drive.
     /// </summary>
     /// <remarks>
-    /// One line per tier, so a typo in <c>ClassPolicy</c> that silences one tier
-    /// shows as that tier driving nothing.
+    /// One line for the set rather than one per net, so the startup log stays
+    /// readable with ten loaded; a typo in <c>ClassPolicy</c> that silences a net
+    /// still shows, as a class missing from the line and as the warning
+    /// <see cref="ANetThatDrivesNothingIsWarnedAbout"/> pins.
     /// </remarks>
     [Fact]
-    public void EveryCheckpointReportsTheClassesItDrives()
+    public void TheNetsReportTheClassesTheyDriveOnOneLine()
     {
         var lines = new List<string>();
 
@@ -191,13 +194,11 @@ public sealed class PolicyTierWiringTests
 
         BotBrain.Build(options, lines.Add);
 
-        var stamps = lines.Where(line => line.StartsWith("policy ", StringComparison.Ordinal)).ToArray();
+        var summary = Assert.Single(lines, line => line.StartsWith("bot policy: ", StringComparison.Ordinal));
 
-        Assert.Equal(2, stamps.Length);
-        Assert.Contains(Path.GetFileName(PolicyFixture.Checkpoint), stamps[0]);
-        Assert.EndsWith("drives Soldier", stamps[0]);
-        Assert.Contains(Path.GetFileName(PolicyFixture.Second), stamps[1]);
-        Assert.EndsWith("drives Scout", stamps[1]);
+        Assert.StartsWith("bot policy: 2 gg2-sim net(s)", summary);
+        Assert.Contains("driving Scout,Soldier ", summary);
+        Assert.DoesNotContain(lines, line => line.StartsWith("policy ", StringComparison.Ordinal));
         Assert.DoesNotContain(lines, line => line.StartsWith("WARNING:", StringComparison.Ordinal));
     }
 

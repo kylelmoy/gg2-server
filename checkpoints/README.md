@@ -7,8 +7,9 @@ Nine gg2-sim policies, one per class: the set gg2-sim's
 summary", 2026-11-11), copied from `gg2-sim/build/` at gg2-sim `9142f46`. Every
 one is base layout v2 (`docs/BOTS.md`, "gg2-sim policies"). **A `.gg2p` names
 no class of its own**: loaded by `[Bots] Policy` alone each one drives nothing
-(the startup log says so), so `[Bots] ClassPolicy` has to assign all nine, one
-`Class=file-name` each. Best is
+(the startup log warns), so `[Bots] ClassPolicy` has to assign them, one
+`Class=file-name` each. A server given no `--policy` loads these nine with that
+assignment already made. Best is
 judged against the other classes' policies in gg2-sim's own scoring, not
 against the scripted bots, and is gg2-sim's claim: nothing here measures it.
 

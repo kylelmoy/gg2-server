@@ -121,6 +121,20 @@ public static class BotBrain
                     with { Sampled = DuelDefaults.Sampled(options) });
             }
 
+            // ONE line for the whole set, not one per net: the stamp caveat is the
+            // same for every .gg2p, and ten copies of it buried the startup log.
+            if (tiers.Count > 0)
+            {
+                var driven = tiers.Cast<SimPolicyMicroSpec>().SelectMany(tier => tier.Drives).Order().ToArray();
+                var folders = policyPaths.Select(Path.GetDirectoryName).Distinct().ToArray();
+
+                report?.Invoke(
+                    $"bot policy: {tiers.Count} gg2-sim net(s)"
+                    + (folders.Length == 1 ? $" from {folders[0]}" : "")
+                    + $", driving {Classes(driven)} (a .gg2p carries no simulation stamp; this build is "
+                    + $"{SimulationStamp.Uuid})");
+            }
+
             // ⛔ AFTER the loop, so the message can name the labels that DO exist.
             // A typo here is the failure mode this whole setting invites: it looks
             // like a working server whose bots are quietly all scripted.
@@ -191,12 +205,6 @@ public static class BotBrain
             .Select(entry => entry.Key)
             .Order()
             .ToArray();
-
-        report?.Invoke(
-            $"policy {Path.GetFileName(policyPath)}: a gg2-sim {(network.IsTeam ? network.IsV2 ? "team (layout v2)" : "team" : "duel")}"
-            + $"{(network.IsTerrain ? " terrain" : "")} net "
-            + $"({network.InputSize} inputs) with no simulation stamp - gg2-sim records the commit it "
-            + $"trained against - this build is {SimulationStamp.Uuid}, drives {Classes(drives)}");
 
         if (drives.Length == 0)
         {
