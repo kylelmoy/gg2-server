@@ -31,14 +31,16 @@ public struct PlayerState
 
     /// <summary>
     /// <c>player.humiliated</c>: this player was on the losing side of the
-    /// Arena round now on the scoreboard.
+    /// round now on the scoreboard — an Arena round, or any gamemode's map end.
     /// </summary>
     /// <remarks>
-    /// <b>Arena and nothing else, and it is a <em>player</em> flag rather
-    /// than a character one</b> — it survives the death it is usually earned by.
-    /// <c>doEventArenaEndRound.gml:26</c> is <c>with Player if team != win
-    /// humiliated = 1</c>, which takes spectators with it because their team is
-    /// not the winner either; <c>doEventArenaRestart.gml:11</c> and
+    /// <b>It is a <em>player</em> flag rather than a character one</b> — it
+    /// survives the death it is usually earned by. Two writers:
+    /// <c>doEventArenaEndRound.gml:26</c> (<c>with Player if team != win
+    /// humiliated = 1</c>) and the <c>WinBanner</c> every <c>MAP_END</c>
+    /// creates (<see cref="Rounds.BeginMapChange"/>). Both take spectators
+    /// with them, because their team is not the winner either, unless a
+    /// stalemate makes the spectators the winners; <c>doEventArenaRestart.gml:11</c> and
     /// <c>doEventArenaWaitForPlayers.gml:12</c> clear it on everybody, as does
     /// <c>basicRoomSetup.gml:33</c> on a map load.
     /// <para>

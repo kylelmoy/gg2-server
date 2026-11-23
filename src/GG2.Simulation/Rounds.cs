@@ -876,13 +876,30 @@ public static class Rounds
     /// </item>
     /// </list>
     /// <para>
-    /// <b><c>player.humiliated</c> IS modelled</b> —
-    /// <see cref="PlayerState.Humiliated"/>, set by <see cref="Arena"/> and read
-    /// by <see cref="CharacterPhysics"/> for the control penalty, the suppressed
-    /// attack, taunt, cloak and sandvich, and the withheld ammo refill.
+    /// <b>The losers are humiliated, in every gamemode.</b> The server's
+    /// <c>GameServerBeginStep.gml:96</c> and the client's <c>MAP_END</c>
+    /// handler (<c>ClientBeginStep.gml:468</c>) both create a <c>WinBanner</c>,
+    /// whose Create sets <c>humiliated</c> on every player whose team is not
+    /// <c>global.winners</c> and clears it on the rest. So a stalemate
+    /// (<see cref="Team.Spectator"/>) humiliates everybody on red and blue, and
+    /// the set matches what each client derives from the <c>MAP_END</c> winner
+    /// byte. <see cref="PlayerState.Humiliated"/> is read by
+    /// <see cref="CharacterPhysics"/> for the control penalty, the suppressed
+    /// attack, taunt, cloak and sandvich, the withheld ammo refill, and the
+    /// forced uncloak and unscope; <see cref="ResetForNewMap"/> clears it
+    /// (<c>basicRoomSetup.gml:33</c>).
     /// </para>
     /// </remarks>
-    public static void BeginMapChange(ref WorldState state) => state.MapChanging = true;
+    public static void BeginMapChange(ref WorldState state)
+    {
+        state.MapChanging = true;
+
+        for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+        {
+            if (state.HasPlayer[slot])
+                state.Players[slot].Humiliated = state.Players[slot].Team != state.Winner;
+        }
+    }
 
     /// <summary>
     /// Clears the round and puts the world back to a fresh map's state, keeping
@@ -918,6 +935,10 @@ public static class Rounds
 
             if (!state.HasPlayer[slot])
                 continue;
+
+            // basicRoomSetup.gml:33, `with(Player) humiliated = 0` — the map
+            // end's WinBanner humiliated the losers for the countdown.
+            state.Players[slot].Humiliated = false;
 
             if (firstArea)
                 state.Players[slot].Team = Team.Spectator;

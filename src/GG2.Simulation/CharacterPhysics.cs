@@ -827,6 +827,34 @@ public static class CharacterPhysics
     }
 
     /// <summary>
+    /// <c>Character.events/Begin Step.xml:435-442</c>, "drop cloak and unscope
+    /// if on losing team or stalemate": every tick a character is humiliated,
+    /// a scoped sniper is unscoped through <c>toggleZoom</c> and a cloak is
+    /// dropped unless the spy is mid-stab.
+    /// </summary>
+    /// <remarks>
+    /// Observable simulation: the stock client runs the same block on its own
+    /// copy, so a server without it keeps a losing spy's cloak bit set on the
+    /// wire and a losing sniper at the scoped run power the client no longer
+    /// has. Only <c>cloak</c> is cleared; <c>cloakAlpha</c> climbs back
+    /// through the End Step fade as after any uncloak. Below the intel block
+    /// and above the capture-zone test, which reads <c>cloak</c>.
+    /// </remarks>
+    public static void HumiliationStep(ref WorldState state, int slot)
+    {
+        ref var character = ref state.Characters[slot];
+
+        if (!character.Humiliated)
+            return;
+
+        if (character.Zoomed)
+            PlayerCommands.ToggleZoom(ref state, slot);
+
+        if (!character.Stabbing)
+            character.Cloak = false;
+    }
+
+    /// <summary>
     /// <c>Objects/Characters/Heavy.events/Step.xml</c>: a heavy holding the
     /// trigger walks at 0.3 instead of 0.8.
     /// </summary>

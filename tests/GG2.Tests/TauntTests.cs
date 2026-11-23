@@ -246,4 +246,77 @@ public sealed class TauntTests
         state.Players[slot].Humiliated = false;
         Assert.True(PlayerCommands.EatSandvich(ref state, slot));
     }
+
+    /// <summary>
+    /// <c>Character.events/Begin Step.xml:436-442</c>: humiliation drops a
+    /// cloak on its first tick, with no key pressed, and the fade then climbs
+    /// back as for any uncloak. The control is the same spy not humiliated.
+    /// </summary>
+    [Fact]
+    public void HumiliationDropsTheCloak()
+    {
+        var state = default(WorldState);
+        var events = default(TickEvents);
+        var slot = Put(ref state, PlayerClass.Spy, Team.Red);
+        state.Characters[slot].Cloak = true;
+        state.Characters[slot].CloakAlpha = 0;
+        state.Players[slot].Humiliated = true;
+
+        Tick(ref state, ref events, PlayerKeys.None, slot);
+
+        Assert.False(state.Characters[slot].Cloak);
+        Assert.Equal(0.05, state.Characters[slot].CloakAlpha);
+
+        var control = default(WorldState);
+        Put(ref control, PlayerClass.Spy, Team.Red);
+        control.Characters[slot].Cloak = true;
+        control.Characters[slot].CloakAlpha = 0;
+
+        Tick(ref control, ref events, PlayerKeys.None, slot);
+
+        Assert.True(control.Characters[slot].Cloak);
+    }
+
+    /// <summary>
+    /// The drop's one exception, <c>if (!stabbing)</c>: a spy frozen in a stab
+    /// keeps the cloak until the stab ends.
+    /// </summary>
+    [Fact]
+    public void AStabbingSpyKeepsTheCloakThroughHumiliation()
+    {
+        var state = default(WorldState);
+        var events = default(TickEvents);
+        var slot = Put(ref state, PlayerClass.Spy, Team.Red);
+        state.Characters[slot].Cloak = true;
+        state.Characters[slot].CloakAlpha = 0;
+        state.Characters[slot].Stabbing = true;
+        state.Characters[slot].StabFreezeTimer = 40;
+        state.Players[slot].Humiliated = true;
+
+        Tick(ref state, ref events, PlayerKeys.None, slot);
+
+        Assert.True(state.Characters[slot].Stabbing);
+        Assert.True(state.Characters[slot].Cloak);
+    }
+
+    /// <summary>
+    /// The same block's <c>toggleZoom</c>: a scoped sniper is unscoped by
+    /// humiliation, and gets the class's run power back with it.
+    /// </summary>
+    [Fact]
+    public void HumiliationUnscopesASniper()
+    {
+        var state = default(WorldState);
+        var events = default(TickEvents);
+        var slot = Put(ref state, PlayerClass.Sniper, Team.Red);
+        Assert.True(PlayerCommands.ToggleZoom(ref state, slot));
+        Assert.Equal(Gml.PointSix, state.Characters[slot].RunPower);
+
+        state.Players[slot].Humiliated = true;
+        Tick(ref state, ref events, PlayerKeys.None, slot);
+
+        Assert.False(state.Characters[slot].Zoomed);
+        Assert.Equal(ClassStats.For(PlayerClass.Sniper).RunPower, state.Characters[slot].RunPower);
+        Assert.Equal(ClassStats.BaseJumpStrength, state.Characters[slot].JumpStrength);
+    }
 }

@@ -1455,6 +1455,15 @@ and the knife that arrives late", has the full rules; these are the traps:
   click** — can only be *started* from `cloakAlpha == 1`, is refused to an intel
   carrier, and costs 25 ticks of intel grab when dropped. An `else if` freezes
   the fade while a hit has the cloak flickering.
+- **A sentry turret ignores a cloaked spy and still shoots one in its way.**
+  `SentryTurret.events/End Step.xml`: `!cloak` keeps any cloaked character out
+  of the target queue at every alpha (the toggle, not the fade), and after a
+  target is chosen `with(Spy)` retargets onto every enemy spy the line to that
+  target crosses, testing team and the line only, so uncloaked spies qualify
+  too and the line's far end follows each reassignment.
+  `Sentries.TurretEndStep` and `RedirectToSpyInTheWay`; `SentryTests`' four
+  cloak tests, the redirect one mutation-checked. Without the first branch a
+  sentry shoots a cloaked spy on sight, which players notice at once.
 - ✅ **`StabMaskS`'s box is sampled now**: `24, 13, 57, 55` about
   origin `26, 37`, so -2 back and +31 forward — exactly what the PNG said.
   `SpriteBoxSampleTests`.
@@ -2156,12 +2165,25 @@ doubles and this is a repeated addition compared against a small integer, so
 which tick the taunt ends on can differ. Same class of trap as the physics
 constants.
 
-**What humiliation does.** `doEventArenaEndRound.gml:26` is `with Player if team
-!= win humiliated = 1`, cleared by `doEventArenaRestart.gml:11` and
-`doEventArenaWaitForPlayers.gml:12`. It is **Arena and nothing else**, and true
-only for the ten seconds the scoreboard is up. It costs **0.2 of control**,
-suppresses the attack, the taunt, the right click, the cloak and the sandvich,
-and withholds the round-end ammo refill everybody else gets.
+**What humiliation does.** Two writers set it on every player whose team is
+not the winner's: `doEventArenaEndRound.gml:26` (`with Player if team != win
+humiliated = 1`), and **every gamemode's map end**, because the `WinBanner`
+that `GameServerBeginStep.gml:96` (server) and the `MAP_END` handler at
+`ClientBeginStep.gml:468` (client) both create does the same in its Create. A
+stalemate's winner is the spectator team, so both teams are humiliated. Cleared
+by `doEventArenaRestart.gml:11`, `doEventArenaWaitForPlayers.gml:12` and the
+next map's `basicRoomSetup.gml:33`; true only while a scoreboard is up.
+`Rounds.BeginMapChange` and `ResetForNewMap`; `RoundTests`' two map-end tests.
+It costs **0.2 of control**, suppresses the attack, the taunt, the right click,
+the cloak and the sandvich, and withholds the round-end ammo refill everybody
+else gets.
+
+**It also forces an uncloak and an unscope, every tick.** `Begin Step.xml:435-442`:
+a scoped sniper goes through `toggleZoom` (run power and jump back to
+unscoped), and `cloak` drops unless the spy is `stabbing`; `cloakAlpha` climbs
+back through the ordinary fade. The client runs the same block on its own copy,
+so without it the server keeps a losing spy's cloak bit set on the wire.
+`CharacterPhysics.HumiliationStep`; `TauntTests`' three humiliation tests.
 
 ⚠️ **The control penalties do not stack.** `Begin Step.xml:176-181` is an
 if/else-if chain, so a humiliated flag carrier is `baseControl - 0.2` and not
