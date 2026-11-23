@@ -311,7 +311,8 @@ and it is described above.
 | `PlayerLimit` | integer | `10` | Seats for network clients, 1..48. Slot 0 and bots do not count against it. |
 | `MultiClientLimit` | integer | `3` | Connections allowed from one address. Loopback is exempt. |
 | `PlayerName` | text | `Server` | The name of reserved roster slot 0, a permanent spectator. |
-| `UseLobby` | boolean | `0` | Announce this server to ganggarrison.com so it appears in the client's server list. The only outbound connection this project makes. |
+| `UseLobby` | boolean | `0` | Announce this server to ganggarrison.com so it appears in the client's server list. |
+| `LobbyUrl` | text | empty | Also announce to the gg2-lobby at this URL over HTTP ([LOBBY.md](LOBBY.md)). Empty is off; independent of `UseLobby`. |
 | `Rewards` | boolean | `0` | Answer `REWARD_REQUEST`, relaying each player's reward id to the auth server. |
 
 ### `[Server]`

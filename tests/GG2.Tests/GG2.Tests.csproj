@@ -47,6 +47,9 @@
     <ProjectReference Include="..\..\src\GG2.Bots\GG2.Bots.csproj" />
     <ProjectReference Include="..\..\src\GG2.Nav\GG2.Nav.csproj" />
 
+    <!-- The HTTP lobby, standalone. LobbyServiceTests. -->
+    <ProjectReference Include="..\..\src\GG2.Lobby\GG2.Lobby.csproj" />
+
     <!-- The command line itself. See CliCoverageTests. -->
     <ProjectReference Include="..\..\src\GG2.Host\GG2.Host.csproj" />
   </ItemGroup>

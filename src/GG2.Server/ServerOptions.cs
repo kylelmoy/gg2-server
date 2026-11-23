@@ -451,13 +451,25 @@ public sealed class ServerOptions
     /// <c>docs/PROTOCOL.md</c> asks for a flag that defaults off: running
     /// <c>gg2-server</c> must not publish an address to a third party.
     /// <para>
-    /// It is the only outbound connection this project makes. Turning it on
-    /// sends a UDP datagram every 30 seconds, plus one on each map change, each
+    /// Turning it on sends a UDP datagram every 30 seconds, plus one on each map change, each
     /// join, and each leave that un-fills a full server, plus an unregister at
     /// shutdown.
     /// </para>
     /// </remarks>
     public bool AnnounceToLobby { get; set; }
+
+    /// <summary>
+    /// The root of a gg2-lobby to announce to as well, e.g.
+    /// <c>https://lobby.example</c>; empty is off.
+    /// </summary>
+    /// <remarks>
+    /// <b>Independent of <see cref="AnnounceToLobby"/>, and off by default for
+    /// the same reason.</b> Either, both or neither may be set: with both, the
+    /// server is listed at ganggarrison.com over UDP and at this URL over
+    /// HTTP, under different ids. <c>HttpLobbyAnnouncer</c> is the client;
+    /// <c>docs/LOBBY.md</c> is the service and its routes.
+    /// </remarks>
+    public string LobbyUrl { get; set; } = string.Empty;
 
     /// <summary>
     /// Whether to answer <c>REWARD_REQUEST</c> and relay reward auth.

@@ -224,6 +224,7 @@ public sealed class RoomHost : IDisposable
         options.Password = secret;
         options.Port = BoundPort;
         options.AnnounceToLobby = false;
+        options.LobbyUrl = string.Empty;
         options.ControlPortEnabled = false;
         options.Web = WebAdminOptions.Disabled;
         options.RecordingDirectory = string.Empty;

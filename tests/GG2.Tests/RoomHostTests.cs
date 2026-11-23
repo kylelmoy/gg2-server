@@ -188,11 +188,13 @@ public sealed class RoomHostTests : IDisposable
     {
         var options = Room("quiet");
         options.AnnounceToLobby = true;
+        options.LobbyUrl = "https://lobby.example";
         options.Password = "chosen by the caller";
 
         var room = _host.CreateRoom(options)!;
 
         Assert.False(options.AnnounceToLobby);
+        Assert.Empty(options.LobbyUrl);
         Assert.Equal(room.Secret, options.Password);
         Assert.True(room.Server.IsHosted);
     }

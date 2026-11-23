@@ -694,7 +694,8 @@ const STRINGS = {
       "PlayerLimit": "Network client seats, 1..48. Slot 0 and bots excluded.",
       "MultiClientLimit": "Max connections per address. Loopback exempt.",
       "PlayerName": "Name of reserved roster slot 0 (permanent spectator).",
-      "UseLobby": "Announce to the ganggarrison.com lobby (the client's server list). The only outbound connection this server makes.",
+      "UseLobby": "Announce to the ganggarrison.com lobby (the client's server list).",
+      "LobbyUrl": "Also announce to the gg2-lobby at this URL over HTTP. Empty: off.",
       "Rewards": "Answer REWARD_REQUEST by relaying each player's reward id to the auth server."
     },
     "Chat": {

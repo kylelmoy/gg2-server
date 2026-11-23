@@ -42,6 +42,33 @@ public sealed class LoopbackClient : IDisposable
         Send(writer.WrittenSpan);
     }
 
+    /// <summary>
+    /// The native HELLO: HELLO, the native UUID, and a <c>ushort</c> version —
+    /// 19 bytes, written from docs/PROTOCOL.md rather than from
+    /// <c>NativeProtocol.WriteHello</c>, for the reason this class gives.
+    /// </summary>
+    /// <param name="split">Send the 17 and the 2 in separate writes.</param>
+    public void SendNativeHello(ushort version = NativeProtocol.Version, bool split = false)
+    {
+        var bytes = NativeHelloBytes(version);
+
+        if (!split)
+        {
+            Send(bytes);
+            return;
+        }
+
+        Send(bytes.AsSpan(0, 17));
+        Send(bytes.AsSpan(17));
+    }
+
+    /// <summary>The native HELLO's bytes, from the UUID's text form.</summary>
+    public static byte[] NativeHelloBytes(ushort version = NativeProtocol.Version)
+    {
+        var uuid = Convert.FromHexString(NativeProtocol.Uuid.Replace("-", string.Empty, StringComparison.Ordinal));
+        return [(byte)MessageType.Hello, .. uuid, (byte)version, (byte)(version >> 8)];
+    }
+
     /// <summary>HELLO with a deliberately wrong UUID.</summary>
     public void SendHelloWithWrongUuid()
     {

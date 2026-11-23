@@ -236,6 +236,12 @@ public static class ServerSettings
             "Settings", "UseLobby", nameof(ServerOptions.AnnounceToLobby),
             o => o.AnnounceToLobby, (o, v) => o.AnnounceToLobby = v));
 
+        // This port's own key: the gg2-lobby to announce to as well. Empty is
+        // off, for the reason UseLobby defaults off.
+        settings.Add(TextRow(
+            "Settings", "LobbyUrl", nameof(ServerOptions.LobbyUrl),
+            o => o.LobbyUrl, (o, v) => o.LobbyUrl = v, "https://lobby.example"));
+
         // No reference key to read: GG2 has no server-side rewards switch, because
         // its server answers every request. It is this port's own, for the same
         // reason UseLobby's default is not the reference's — relaying player

@@ -86,8 +86,17 @@ public struct InvalidRunSample
 /// <see cref="ReceiveBuffer"/>. Pure — it never touches a socket.
 /// </para>
 /// </remarks>
-public sealed class CommandStream
+public sealed class CommandStream(ClientCommandTable table)
 {
+    /// <summary>A framer for the legacy wire.</summary>
+    public CommandStream()
+        : this(ClientCommandTable.Legacy)
+    {
+    }
+
+    /// <summary>The table this stream frames against, which is the protocol it reads.</summary>
+    public ClientCommandTable Table { get; } = table;
+
     private enum State
     {
         /// <summary>Waiting for a command byte.</summary>
@@ -197,7 +206,7 @@ public sealed class CommandStream
                 case State.Command:
                     _command = bytes[0];
 
-                    switch (ClientCommands.KindOf(_command))
+                    switch (Table.KindOf(_command))
                     {
                         case CommandLength.Invalid:
                             // Ignore it and wait for another command byte.
@@ -217,7 +226,7 @@ public sealed class CommandStream
                         default:
                             _openRun = -1;
                             _state = State.Payload;
-                            _expected = ClientCommands.FixedLengthOf(_command);
+                            _expected = Table.FixedLengthOf(_command);
                             continue;
                     }
 

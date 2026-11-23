@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    gg2-lobby: the HTTP/JSON server list. docs/LOBBY.md.
+
+    Standalone on purpose - no ProjectReference. The lobby knows nothing about
+    the game beyond the JSON it is handed, which is what lets it publish as a
+    small native-AOT binary with no simulation, maps or bots linked in.
+
+    ⚠️ PublishAot is set ONLY while publishing. Unconditionally, it makes every
+    restore of the solution - every test run, every CI build - download the
+    Microsoft.DotNet.ILCompiler package, and NuGet's audit of that package is a
+    warning, which this repo treats as an error. The release workflow and the
+    Dockerfile publish GG2.Host alone, so neither is affected either way.
+    IsAotCompatible needs no package: it turns the trim/AOT analyzers on for
+    ordinary builds, so code that would not survive AOT fails the normal build
+    rather than the publish.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>GG2.Lobby</RootNamespace>
+    <AssemblyName>gg2-lobby</AssemblyName>
+    <PublishAot Condition="'$(_IsPublishing)' == 'true'">true</PublishAot>
+    <IsAotCompatible>true</IsAotCompatible>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <EventSourceSupport>false</EventSourceSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="GG2.Tests" />
+  </ItemGroup>
+
+</Project>

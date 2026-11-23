@@ -73,6 +73,7 @@ public sealed partial class GameServer
 
             _listener?.Stop();
             _lobby?.Unregister();
+            _httpLobby?.Unregister();
 
             _log.Info("control: server offline; players disconnected, connections refused");
             return;

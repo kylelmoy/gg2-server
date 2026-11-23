@@ -27,6 +27,9 @@ public sealed class LobbyOptInTests
     [Fact]
     public void TheOptionDefaultsToOff() => Assert.False(new ServerOptions().AnnounceToLobby);
 
+    [Fact]
+    public void TheHttpLobbyDefaultsToOff() => Assert.Empty(new ServerOptions().LobbyUrl);
+
     /// <summary>
     /// A server started with default options builds no announcer at all.
     /// </summary>
@@ -42,6 +45,7 @@ public sealed class LobbyOptInTests
         using var harness = new ServerHarness();
 
         Assert.Null(Announcer(harness.Server));
+        Assert.Null(Announcer(harness.Server, "_httpLobby"));
     }
 
     /// <summary>
@@ -66,10 +70,11 @@ public sealed class LobbyOptInTests
 
         Assert.False(harness.Options.AnnounceToLobby);
         Assert.Null(Announcer(harness.Server));
+        Assert.Null(Announcer(harness.Server, "_httpLobby"));
     }
 
-    private static object? Announcer(GameServer server) =>
+    private static object? Announcer(GameServer server, string field = "_lobby") =>
         typeof(GameServer)
-            .GetField("_lobby", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetField(field, BindingFlags.NonPublic | BindingFlags.Instance)!
             .GetValue(server);
 }

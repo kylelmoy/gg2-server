@@ -118,6 +118,7 @@ public sealed class CliCoverageTests
         ("ExitWhenEmptySeconds", ["--exit-when-empty", "120"], o => o.ExitWhenEmptySeconds),
         ("MaxLifetimeMinutes", ["--max-lifetime", "360"], o => o.MaxLifetimeMinutes),
         ("AnnounceToLobby", ["--lobby"], o => o.AnnounceToLobby),
+        ("LobbyUrl", ["--lobby-url", "https://lobby.example"], o => o.LobbyUrl),
         ("Rewards", ["--rewards"], o => o.Rewards),
         ("AuthServerHost", ["--auth-server", "auth.example:45022"], o => o.AuthServerHost),
         ("AuthServerPort", ["--auth-server", "auth.example:45099"], o => o.AuthServerPort),
