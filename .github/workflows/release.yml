@@ -40,12 +40,21 @@ jobs:
           GG2_REFERENCE: ${{ github.workspace }}/reference
         run: dotnet test GG2.sln -c Release
 
+  # The macOS builds run on a macOS runner because only there does the SDK
+  # sign the executable. Apple Silicon kills an unsigned binary on launch, and
+  # a cross-publish from Linux produces exactly that. The ad-hoc signature is
+  # enough for a download that never carries the quarantine flag, which is
+  # what install.sh's curl or wget gives. A browser download does carry it.
   build:
     needs: test
     strategy:
       matrix:
-        rid: [linux-x64, win-x64]
-    runs-on: ubuntu-latest
+        include:
+          - { rid: linux-x64, os: ubuntu-latest }
+          - { rid: win-x64, os: ubuntu-latest }
+          - { rid: osx-arm64, os: macos-latest }
+          - { rid: osx-x64, os: macos-latest }
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
 
@@ -61,7 +70,8 @@ jobs:
             echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           else
             echo "version=0.0.0-dev" >> "$GITHUB_OUTPUT"
-            echo "name=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+            # ${GITHUB_SHA::7} is a syntax error in macOS's bash 3.2.
+            echo "name=dev-${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
           fi
 
       # Self-contained, so a host needs no .NET runtime installed. The output
@@ -73,16 +83,26 @@ jobs:
           -p:Version=${{ steps.version.outputs.version }}
           -o out/gg2-server
 
-      # tar keeps the executable bit a Linux host needs; Windows gets a zip.
+      # Starts the binary where the runner can run it natively, so a build that
+      # macOS refuses to launch (an unsigned arm64 apphost) fails here rather
+      # than on a player's machine.
+      - name: Launch check
+        if: matrix.rid == 'linux-x64' || matrix.rid == 'osx-arm64'
+        run: out/gg2-server/gg2-server --version
+
+      # tar keeps the executable bit Linux and macOS need; Windows gets a zip.
+      # install.sh and install.ps1 build these names from the tag and the RID,
+      # so renaming them breaks the quick start for every later release.
+      # COPYFILE_DISABLE keeps macOS's tar from adding ._ metadata files.
       - name: Archive
         run: |
           base="gg2-server-${{ steps.version.outputs.name }}-${{ matrix.rid }}"
           cd out
-          if [[ "${{ matrix.rid }}" == linux-* ]]; then
-            chmod +x gg2-server/gg2-server
-            tar -czf "../$base.tar.gz" gg2-server
-          else
+          if [[ "${{ matrix.rid }}" == win-* ]]; then
             zip -qr "../$base.zip" gg2-server
+          else
+            chmod +x gg2-server/gg2-server
+            COPYFILE_DISABLE=1 tar -czf "../$base.tar.gz" gg2-server
           fi
 
       - uses: actions/upload-artifact@v7

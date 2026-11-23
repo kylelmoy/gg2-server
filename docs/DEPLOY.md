@@ -267,6 +267,36 @@ ssh server chmod +x /opt/gg2-server/gg2-server
 **The executable bit does not survive `scp` from Windows**, which is what the
 second line is for.
 
+### Release archives and macOS
+
+`release.yml` publishes self-contained archives for `linux-x64`, `win-x64`,
+`osx-arm64` and `osx-x64`, named `gg2-server-<tag>-<rid>.tar.gz` (`.zip` for
+Windows). `install.sh` and `install.ps1` at the root construct those names from
+the tag and the RID, so renaming an archive breaks the quick start for every
+release after it. Both scripts were run against real archives served from a
+local HTTP server: `install.sh` under dash with curl and with wget (Linux x64)
+and under macOS's `sh` (arm64), and `install.ps1` under Windows PowerShell 5.1
+through `iex`. Each was run for a fresh install, a reinstall that kept a
+`gg2.ini`, and a missing version.
+
+The macOS archives are built on a macOS runner, because the SDK signs the
+apphost (ad hoc) only there; an unsigned arm64 binary is killed at launch.
+On an M3 MacBook Air (macOS 26.5), both RIDs were published there and
+run, `osx-x64` under Rosetta. Each served `koth_valley` with six bots while six
+`tools/soak` players churned for 30 s (10 joins, 0 dropped, 0 handshake
+failures), the panel answered, and SIGTERM exited 0.
+
+**The suite does not pass on macOS, and CI does not run it there.** On the
+same machine, 3704 tests passed, including every physics parity fixture, and 42 failed: 41
+socket-level tests (`JoinAndBroadcastTests`, `InputReachesTheWireTests`,
+`DuelServerTests`, `FullUpdateLayoutTests` and others built on
+`ServerHarness`), plus `BuildInfoTests` because the run used a `git archive`
+with no commit. `ServerHarness` polls the loopback client straight after each
+tick and assumes the bytes have arrived, which holds on Linux and Windows and
+evidently not on macOS. That reading is unconfirmed. What would show it is
+wrong: a harness that waits for the bytes still failing there, or a stock
+client on a macOS host rubberbanding.
+
 ## Running in Docker
 
 Every tagged release also pushes an image to GHCR,
