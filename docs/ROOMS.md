@@ -6,7 +6,7 @@ Nobody hosts from a phone. This is the industry's session-based dedicated
 server pattern (Agones allocation, GameLift game sessions, PlayFab
 multiplayer servers), built so that one process holds many rooms.
 
-**Status: steps 1 to 3 built; creates are limited per address, and there is no device check.** The table says which parts exist and what proves
+**Status: steps 1 to 3 built, and step 6's drain; creates are limited per address, and there is no device check.** The table says which parts exist and what proves
 each. Nothing else in this file exists until its row says so.
 
 | Step | Part | State |
@@ -16,7 +16,7 @@ each. Nothing else in this file exists until its row says so.
 | 3 | The dispatcher API, inside the room host | **Built**: `gg2-server rooms`. `RoomApiTests` create over real HTTP and join with the returned code over the game port. No authentication; a create is limited per address (`RoomCreateLimitTests`) |
 | 4 | Device check and the ban list | **deferred** (no Apple developer key yet); the per-address create limits stand in |
 | 5 | gg2-client: create, join by code | not started |
-| 6 | Fleet rollout: one unit and one port per VPS | not started |
+| 6 | Fleet rollout: one unit and one port per VPS | **Drain built**: `--drain-file`, exit 4, `deploy.sh` drains a `<service>-rooms` sibling instead of restarting it, `deploy.sh --print-rooms-unit` (`RoomHostTests`' drain tests, `RoomApiTests.ADrainingHostRefusesCreates`; live on Windows loopback: an old marker ignored at startup, a fresh one refused creates and the host exited 4 when its room ended). Not installed on any VPS; no TLS proxy |
 
 ## Where rooms run
 
@@ -126,7 +126,7 @@ systemd unit. It holds:
   port, recording, analytics) is off for a room.
 - **The loop**: ticks every room at 30 Hz on one thread to begin with.
   Each room has its own fault budget, so a room whose ticks keep failing is
-  ended alone instead of taking the host down. A room that stops itself is
+  ended alone instead of taking the host down (`RoomHostTests.ARoomWhoseTicksKeepFailingEndsAlone`, through an injected throw). A room that stops itself is
   disposed and its code freed.
 
 **Shared data**: `SharedNav` loads each map's nav graph and next-hop tables
@@ -203,13 +203,13 @@ are not physics on the wire.
 ```
 gg2-server rooms --config rooms.ini --port 8300 --prefix W --max-rooms 8 \
                  --api-port 8301 [--api-bind 127.0.0.1] [--min-free-mb 256] \
-                 [--live-per-address 2] [--creates-per-hour 6] [--api-trust-proxy]
+                 [--live-per-address 2] [--creates-per-hour 6] [--api-trust-proxy]                  [--drain-file <path>]
 ```
 
 | Endpoint | Does |
 |---|---|
-| `GET /status` | `prefix`, `gamePort`, `rooms`, `maxRooms`, `free`. What the client's region picker reads |
-| `POST /rooms` | body `{"map", "bots", "teamSize"}`, each optional (room settings below). `201` with the room; `400` for a choice off the list or an unknown field; `415` unless `Content-Type: application/json`; `429` with `Retry-After` past a create limit; `503` when the host is full or `MemAvailable` is under `--min-free-mb` |
+| `GET /status` | `prefix`, `gamePort`, `rooms`, `maxRooms`, `free`, `draining`. What the client's region picker reads; a draining host reports `free: 0` |
+| `POST /rooms` | body `{"map", "bots", "teamSize"}`, each optional (room settings below). `201` with the room; `400` for a choice off the list or an unknown field; `415` unless `Content-Type: application/json`; `429` with `Retry-After` past a create limit; `503` when the host is full or draining, or `MemAvailable` is under `--min-free-mb` |
 | `GET /rooms/{code}` | `code`, `gamePort`, `map`, `players`, `playerLimit`, `createdUtc`, `endsUtc`; `404` for a code naming no live room |
 
 **A room is the base config plus the choices.** `--config` is an ordinary
@@ -228,7 +228,6 @@ parse and reply; every answer is computed on the tick thread
 | Any authentication, per-device create limits, one live room per device | step 4, deferred. The per-address limits below stand in; the host warns when bound beyond loopback with either one off |
 | A cap on concurrent API connections | not planned; the proxy in front is where it belongs |
 | TLS | a reverse proxy in front of the API port, step 6 |
-| Draining for a deploy | step 6 |
 
 **Create limits** (`RoomCreateLimits`), checked on the tick thread after the
 host-full check and before the room is built:
@@ -264,9 +263,8 @@ thread would remove it.
 without look-alikes (no `0/O`, `1/I/L`): 31^5, about 2.9 x 10^7 per host. The
 five characters are the room's password.
 
-**A restart ends every room on the host**, so a deploy waits for the host to
-empty, the same way a config push already waits for a fleet server to
-(`docs/CONFIG.md`). A host that is draining refuses new rooms.
+**A restart ends every room on the host**, so a deploy drains it instead
+(below, "Draining for a deploy").
 
 ### 4. Device check and bans
 
@@ -340,6 +338,30 @@ mid-match.
 
 One `gg2-rooms.service` per VPS, from the same release as the fleet server,
 and one more TCP port open in `ufw` (planned: 8300) plus the HTTPS port.
+`scripts/deploy.sh --print-rooms-unit` prints the unit: `Nice=10` below the
+fleet server, the fleet's `shared/gg2.ini` as the base config,
+`--api-trust-proxy`, and the drain file. Its `--prefix` and `--max-rooms` are
+per host and edited before installing (suggested values under "Measured").
+
+#### Draining for a deploy (built)
+
+`--drain-file <path>` names a marker. **Written after the host started**, it
+drains the host: `/status` says `draining: true` and `free: 0`, a create gets
+`503`, live rooms run on to their own end (empty for 120 s, or their 6-hour
+lifetime), and once the last has ended the process **exits 4**. The unit's
+`Restart=on-failure` then starts it on whatever release is current. An
+operator's stop still exits 0 and stays stopped.
+
+- **A marker older than the host's start is ignored**, so the host a drain
+  restarts onto does not drain again and nothing has to delete the marker.
+- **`deploy.sh` touches `shared/<unit>.drain` for any enabled
+  `<service>-rooms*` sibling** instead of restarting it, after the flip. A
+  rooms host that is not running is left alone.
+- **The marker is polled once a second** on the tick thread.
+- **A draining host with no rooms exits at once.**
+- Known gap: **a draining host keeps reading maps and nav from its own release
+  directory**, and `deploy.sh --keep` prunes old releases. Five more deploys inside
+  one room lifetime (the default keeps five) would delete it from under a live room's next map change.
 
 ## A changing set of hosts
 
@@ -460,8 +482,6 @@ hitting is unlikely even before the rate limit.
 
 - **A live policy room's tick cost with people in it is unmeasured**; the
   policy rows above are the all-fighting upper bound.
-- **No test makes a room's tick throw**, so the per-room fault budget has never
-  run.
 - **No pre-lifetime warning** reaches the players before `--max-lifetime`
   drops them.
 

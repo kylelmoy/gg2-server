@@ -247,6 +247,9 @@ public sealed class RoomApi : IDisposable
 
         return await _host.Invoke<(int, string, string)>(() =>
         {
+            if (_host.Draining)
+                return (503, Error("this server is restarting; try another region"), string.Empty);
+
             if (_host.Rooms.Count >= _host.Options.MaxRooms)
                 return (503, Error("this server is full; try another region"), string.Empty);
 
@@ -292,7 +295,8 @@ public sealed class RoomApi : IDisposable
         json.Append(",\"gamePort\":").Append(_host.BoundPort);
         json.Append(",\"rooms\":").Append(_host.Rooms.Count);
         json.Append(",\"maxRooms\":").Append(_host.Options.MaxRooms);
-        json.Append(",\"free\":").Append(_host.Options.MaxRooms - _host.Rooms.Count);
+        json.Append(",\"free\":").Append(_host.Draining ? 0 : _host.Options.MaxRooms - _host.Rooms.Count);
+        json.Append(",\"draining\":").Append(_host.Draining ? "true" : "false");
         json.Append('}');
         return json.ToString();
     }

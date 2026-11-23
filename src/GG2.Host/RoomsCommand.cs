@@ -18,6 +18,9 @@ namespace GG2.Host;
 /// </remarks>
 internal static class RoomsCommand
 {
+    /// <summary>The exit code of a host that drained (<c>docs/ROOMS.md</c>, "Draining for a deploy").</summary>
+    public const int DrainedExitCode = 4;
+
     public static void PrintUsage()
     {
         Console.WriteLine("""
@@ -37,6 +40,9 @@ internal static class RoomsCommand
               --creates-per-hour <n>  rooms one address may create an hour (default 6, 0 = off)
               --api-trust-proxy     read the client address from X-Forwarded-For on a
                                     loopback request (only behind a proxy that appends it)
+              --drain-file <path>   written after startup, this file drains the host: no
+                                    new rooms, and exit 4 once the last one ends, so a
+                                    Restart=on-failure unit comes back on the new release
             """);
     }
 
@@ -88,6 +94,9 @@ internal static class RoomsCommand
                     break;
                 case "--creates-per-hour":
                     api = api with { MaxCreatesPerAddressPerHour = Int() };
+                    break;
+                case "--drain-file":
+                    host = host with { DrainFile = Value() };
                     break;
                 case "--api-trust-proxy":
                     api = api with { TrustForwardedFor = true };
@@ -148,6 +157,10 @@ internal static class RoomsCommand
 
         server.Dispose();
         serving.Wait(TimeSpan.FromSeconds(2));
-        return 0;
+
+        // NON-ZERO on purpose: a drain is a deploy asking for a fresh process on
+        // the new release, and Restart=on-failure only restarts a failure. An
+        // operator's stop (SIGTERM, Ctrl+C) still exits 0 and stays stopped.
+        return rooms.Drained ? DrainedExitCode : 0;
     }
 }

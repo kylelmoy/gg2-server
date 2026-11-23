@@ -218,6 +218,128 @@ public sealed class RoomHostTests : IDisposable
     }
 
     /// <summary>
+    /// A room whose ticks keep throwing ends alone, past its own budget, and the
+    /// room beside it carries on (<c>docs/ROOMS.md</c>, "The loop").
+    /// </summary>
+    [Fact]
+    public void ARoomWhoseTicksKeepFailingEndsAlone()
+    {
+        var broken = _host.CreateRoom(Room("broken"))!;
+        var healthy = _host.CreateRoom(Room("healthy"))!;
+        var thrown = 0;
+        var healthyTicks = 0;
+
+        _host.BeforeRoomTick = room =>
+        {
+            if (room == healthy)
+                healthyTicks++;
+
+            if (room == broken)
+            {
+                thrown++;
+                throw new InvalidOperationException("injected");
+            }
+        };
+
+        Tick(TickFaultBudget.Allowance);
+        Assert.Contains(broken, _host.Rooms);
+
+        Tick();
+
+        Assert.Equal(TickFaultBudget.Allowance + 1, thrown);
+        Assert.Equal([healthy], _host.Rooms);
+        Assert.Null(_host.Find(broken.Code));
+        Assert.Same(healthy, _host.Find(healthy.Code));
+        Assert.Contains(_log.Lines, line => line.Contains($"room {broken.Code} ended: its ticks kept failing"));
+
+        Assert.Equal(TickFaultBudget.Allowance + 1, healthyTicks);
+        Assert.Equal(0, healthy.Server.TickFaults);
+        Tick(3);
+        Assert.Equal(TickFaultBudget.Allowance + 4, healthyTicks);
+        Assert.Equal(TickFaultBudget.Allowance + 1, thrown);
+    }
+
+    /// <summary>
+    /// A draining host makes no new room, lets a live one run to its own end,
+    /// and is drained once that one has gone.
+    /// </summary>
+    [Fact]
+    public void ADrainingHostWaitsForItsLiveRooms()
+    {
+        var options = Room("last");
+        options.ExitWhenEmptySeconds = 1;
+        var room = _host.CreateRoom(options)!;
+
+        _host.Drain("a test");
+
+        Assert.True(_host.Draining);
+        Assert.False(_host.Drained);
+        Assert.Null(_host.CreateRoom(Room("refused")));
+        Assert.Same(room, _host.Find(room.Code));
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (!_host.Drained && clock.Elapsed < TimeSpan.FromSeconds(10))
+        {
+            Tick();
+            Thread.Sleep(20);
+        }
+
+        Assert.True(_host.Drained);
+        Assert.Contains(_log.Lines, line => line.Contains($"room {room.Code} ended: nobody was on it"));
+    }
+
+    /// <summary>
+    /// The drain file drains a host it was written after, and not the host a
+    /// deploy restarts onto, which starts after the marker.
+    /// </summary>
+    [Fact]
+    public void TheDrainFileDrainsOnlyAHostItPostdates()
+    {
+        var directory = Directory.CreateTempSubdirectory("gg2-drain-");
+
+        try
+        {
+            var marker = Path.Combine(directory.FullName, "rooms.drain");
+            File.WriteAllText(marker, string.Empty);
+            File.SetLastWriteTimeUtc(marker, DateTime.UtcNow.AddMinutes(-1));
+
+            using var host = new RoomHost(new RoomHostOptions { Port = 0, DrainFile = marker }, _log);
+            host.Start();
+
+            host.Tick();
+            Assert.False(host.Draining);
+
+            File.SetLastWriteTimeUtc(marker, DateTime.UtcNow);
+
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (!host.Draining && clock.Elapsed < TimeSpan.FromSeconds(5))
+            {
+                host.Tick();
+                Thread.Sleep(20);
+            }
+
+            Assert.True(host.Draining);
+            Assert.True(host.Drained);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// <see cref="RoomHost.Run"/> returns on its own once drained, which is what
+    /// lets <c>gg2-server rooms</c> exit for its unit to restart it.
+    /// </summary>
+    [Fact]
+    public async Task RunReturnsOnceDrained()
+    {
+        _host.Drain("a test");
+
+        await Task.Run(() => _host.Run(CancellationToken.None)).WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    /// <summary>
     /// Rooms on one map share one graph and one set of next-hop tables, which is
     /// most of what a room would otherwise cost (<c>SharedNav</c>).
     /// </summary>

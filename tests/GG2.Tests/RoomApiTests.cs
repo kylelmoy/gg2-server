@@ -86,6 +86,30 @@ public sealed class RoomApiTests : IDisposable
         Assert.Equal(1, after.GetProperty("free").GetInt32());
     }
 
+    /// <summary>
+    /// A draining host says so, offers no room, and refuses a create. It holds a
+    /// live room first: a host with none would be drained at once and stop ticking.
+    /// </summary>
+    [Fact]
+    public async Task ADrainingHostRefusesCreates()
+    {
+        Assert.Equal(HttpStatusCode.Created, (await Create("{}")).StatusCode);
+
+        await _host.Invoke(() =>
+        {
+            _host.Drain("a test");
+            return true;
+        });
+
+        var status = await Json(await _http.GetAsync("/status"));
+        Assert.True(status.GetProperty("draining").GetBoolean());
+        Assert.Equal(0, status.GetProperty("free").GetInt32());
+
+        var response = await Create("{}");
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Contains("restarting", (await Json(response)).GetProperty("error").GetString());
+    }
+
     /// <summary>The whole path: create over HTTP, then join with the code it gave.</summary>
     [Fact]
     public async Task TheCodeACreateReturnsJoinsThatRoom()

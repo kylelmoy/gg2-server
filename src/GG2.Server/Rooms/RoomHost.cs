@@ -23,6 +23,13 @@ public sealed record RoomHostOptions
     /// <summary>The front door's connection limits.</summary>
     public ConnectionLimits Limits { get; init; } = ConnectionLimits.Default;
 
+    /// <summary>
+    /// A file whose appearance drains the host (<c>docs/ROOMS.md</c>,
+    /// "Draining for a deploy"): written after the host started, it stops new
+    /// rooms, and the host ends once its last room has. Null or empty: none.
+    /// </summary>
+    public string? DrainFile { get; init; }
+
     public void Validate()
     {
         if (Port is < 0 or > 65535)
@@ -127,7 +134,9 @@ public sealed class RoomHost : IDisposable
     private readonly SharedNav _sharedNav = new();
     private readonly SharedPolicies _sharedPolicies = new();
     private readonly ConcurrentQueue<Action> _work = new();
+    private readonly DateTime _startedUtc = DateTime.UtcNow;
     private RoomFrontDoor? _frontDoor;
+    private long _nextDrainCheckMs;
 
     public RoomHost(RoomHostOptions options, IServerLog log)
     {
@@ -148,6 +157,34 @@ public sealed class RoomHost : IDisposable
 
     /// <summary>The policy nets every room shares.</summary>
     public SharedPolicies SharedPolicies => _sharedPolicies;
+
+    /// <summary>
+    /// True once the host has been told to drain: it creates no more rooms, and
+    /// <see cref="Run"/> returns once the last live one has ended.
+    /// </summary>
+    public bool Draining { get; private set; }
+
+    /// <summary>Draining, and nothing left to wait for.</summary>
+    public bool Drained => Draining && _rooms.Count == 0;
+
+    /// <summary>
+    /// Stops new rooms. Live rooms run on to their own end (empty for 120 s, or
+    /// their lifetime). Tick thread only, like everything else here.
+    /// </summary>
+    public void Drain(string why)
+    {
+        if (Draining)
+            return;
+
+        Draining = true;
+        _log.Info($"draining: {why}; no new rooms, {_rooms.Count} live room(s) run to their end");
+    }
+
+    /// <summary>
+    /// Runs inside each room's fault guard before its tick, for a test to make a
+    /// room's tick throw. Null in every real host.
+    /// </summary>
+    internal Action<HostedRoom>? BeforeRoomTick { get; set; }
 
     /// <summary>Connections at the front door that have not named a room yet.</summary>
     public int PendingConnections => _frontDoor?.PendingCount ?? 0;
@@ -176,7 +213,7 @@ public sealed class RoomHost : IDisposable
     /// <param name="creator">What <see cref="HostedRoom.Creator"/> records.</param>
     public HostedRoom? CreateRoom(ServerOptions options, string? creator = null)
     {
-        if (_rooms.Count >= _options.MaxRooms)
+        if (Draining || _rooms.Count >= _options.MaxRooms)
             return null;
 
         BuildBrain(options);
@@ -290,6 +327,7 @@ public sealed class RoomHost : IDisposable
 
             try
             {
+                BeforeRoomTick?.Invoke(room);
                 room.Server.Tick();
             }
             catch (Exception e)
@@ -310,6 +348,36 @@ public sealed class RoomHost : IDisposable
         }
 
         _frontDoor?.Service(DateTime.UtcNow, nowMs);
+
+        if (nowMs >= _nextDrainCheckMs)
+        {
+            _nextDrainCheckMs = nowMs + 1000;
+            CheckDrainFile();
+        }
+    }
+
+    /// <summary>
+    /// Drains when <see cref="RoomHostOptions.DrainFile"/> was written after this
+    /// host started. A marker older than the start is the one that drained the
+    /// process before this, so the host a deploy restarts onto ignores it and
+    /// nothing has to delete it.
+    /// </summary>
+    private void CheckDrainFile()
+    {
+        if (Draining || string.IsNullOrEmpty(_options.DrainFile))
+            return;
+
+        try
+        {
+            var info = new FileInfo(_options.DrainFile);
+
+            if (info.Exists && info.LastWriteTimeUtc >= _startedUtc)
+                Drain($"{_options.DrainFile} was written");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Unreadable is the same as absent; the next check tries again.
+        }
     }
 
     private void Remove(int index, string why)
@@ -330,7 +398,7 @@ public sealed class RoomHost : IDisposable
         _log.Info($"room {room.Code} ended: {why} ({_rooms.Count}/{_options.MaxRooms})");
     }
 
-    /// <summary>Ticks at 30 Hz until cancelled.</summary>
+    /// <summary>Ticks at 30 Hz until cancelled, or until the host has <see cref="Drained"/>.</summary>
     public void Run(CancellationToken cancellation)
     {
         using var resolution = TimerResolution.Raise();
@@ -342,6 +410,12 @@ public sealed class RoomHost : IDisposable
         while (!cancellation.IsCancellationRequested)
         {
             Tick();
+
+            if (Drained)
+            {
+                _log.Info("drained: the last room has ended");
+                return;
+            }
 
             next += interval;
             var wait = next - clock.Elapsed;

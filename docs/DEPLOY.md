@@ -641,7 +641,10 @@ with its own config file in `shared/` and its own ports. barbara runs one:
 The unit is `gg2.service` with its description and `--config` changed. A build
 deploy restarts every enabled sibling unit after the main one, so both run the
 same release; a sibling that will not restart is reported and does not fail the
-deploy. Installing a unit and its sudoers line (`systemctl
+deploy. **A room host (`<service>-rooms*`) is the exception**: a restart would end
+every private room on it, so the deploy touches its drain marker instead and it
+restarts itself once its rooms have ended (`docs/ROOMS.md`, "Draining for a
+deploy"; `deploy.sh --print-rooms-unit` prints its unit). Installing a unit and its sudoers line (`systemctl
 start|stop|restart|is-active gg2-duel`) needs root, so that step is the
 operator's. The duel server is on the public lobby only if the router forwards
 its game port as well.
