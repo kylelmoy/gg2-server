@@ -138,23 +138,44 @@ they are small next to the tables. Each room gets its own
 `GameServer.LocalSeed` for its bot population and plugin RNG, which a
 standalone server seeds from its port.
 
-**Measured** (Release, Windows, one 13700K core, `ctf_truefort`, ten scripted
-bots per room, no clients connected):
+**Measured** with `tools/bench` `BENCH_ROOMS` (Release, `ctf_truefort`, ten
+bots a room, no clients connected, 1,800 timed ticks after 300 of warm-up).
+"Policy" is the shipped bundle with every bot fighting every bot through its
+net (`BENCH_ROOMS_ENGAGE=anyone`): a net held the wheel for 30-35% of bot-ticks,
+about one decision per room per tick. **That is an upper bound.** A live room
+engages humans only (`BotEngagesBotsToo` off), so its nets drive only in fights
+with people and its cost lies between the scripted and policy rows.
 
-| | 1 room | 10 rooms | 30 rooms |
-|---|---|---|---|
-| managed heap | 12.3 MB | 19.9 MB | 37.0 MB |
-| process private memory | 47 MB | 56 MB | 65 MB |
-| creating one more room | 197 ms | 5 ms | 3 ms |
-| one host tick, all rooms | | | 4.2 ms |
+| Machine | Bots | Rooms | Host tick mean | p99 | Per room |
+|---|---|---|---|---|---|
+| 13700K, P-cores (`BENCH_AFFINITY=5555`) | scripted | 10 | 1.07 ms | 2.2 ms | 0.11 ms |
+| | policy | 10 | 1.95 ms | 5.8 ms | 0.19 ms |
+| 13700K, E-cores (`FF0000`) | scripted | 10 | 1.80 ms | 5-8 ms | 0.18 ms |
+| | policy | 10 | 3.5 ms | 8-13 ms | 0.32-0.37 ms |
+| `gg2-us-east` (2 vCPU Xeon Gold 6152) | scripted | 10 | 3.4 ms | 8.5 ms | 0.34 ms |
+| | policy | 5 / 10 | 4.6 / 8.2 ms | 14 / 20 ms | 0.92 / 0.82 ms |
+| `gg2-de` (1 vCPU, QEMU) | scripted | 10 | 9.2 ms | 46 ms | 0.92 ms |
+| | policy | 5 / 10 | 9.8 / 11.8 ms | 52 / 40 ms | 2.0 / 1.2 ms |
 
-So a room after the first costs **about 0.85 MB of heap** and about 0.14 ms of
-a tick: roughly 230 rooms per core by CPU, and memory is no longer what runs
-out. Before `SharedNav` each room cost about 12 MB of heap, almost all of it
-its own copy of the tables. The 1- and 10-room tick samples include warm-up and
-are not quoted. **Not measured**: connected clients (serialisation and
-bandwidth per client), maps other than `ctf_truefort`, a VPS core, and policy
-bots' tick cost.
+The VPS runs were at `nice 19` beside the live fleet server (empty at the
+time), so they include its ticks and the provider's steal. `gg2-us-west` (1
+vCPU Ryzen 9 9900X) is **not measured**: it had a player on it.
+
+- **Memory does not limit a host**: about 2 MB of heap a scripted room and 3 MB
+  a policy room after the first, with 18 MB for the first policy room (the nets,
+  loaded once). Before `SharedNav` a room cost about 12 MB.
+- **`gg2-de` is the constraint.** Its p99 passes the 33 ms budget at five
+  all-fighting policy rooms, and its noise (scripted reads as slow as policy)
+  is the host, not the work.
+- **A room host on a 1-vCPU box shares that core with the fleet server**, and
+  the fleet server's slots come first, so the room unit should run at a lower
+  priority (`Nice=10`) than it.
+- **Suggested `--max-rooms`**, from the upper bound: `gg2-us-east` 12,
+  `gg2-de` 4, `gg2-us-west` 4 until measured.
+- **Not measured**: connected clients (serialisation and bandwidth per client),
+  a live room's real policy share with people in it, and maps other than
+  `ctf_truefort` on a VPS (a rotation of 6-7 maps read the same as `ctf_truefort`
+  on the 13700K, within its unpinned run-to-run noise).
 
 **Bots in a room are scripted or policy**, the server's only two modes. What is
 shared and what is not:
@@ -232,8 +253,10 @@ host-full check and before the room is built:
 - State is in memory and starts fresh at a restart.
 
 **A room on a map the host has not loaded yet costs about 190 ms on the tick
-thread**, stalling every live room for about six ticks; a room on a map
-already loaded costs 3-5 ms. Each map is loaded at most once per process, so
+thread** on the 13700K and **0.7-1 s on `gg2-us-east` and `gg2-de`**
+(`BENCH_ROOMS`' build time, which for the first policy room also loads the
+nets), stalling every live room for 6 to 30 ticks; a room on a map already
+loaded costs 3-5 ms. Each map is loaded at most once per process, so
 a host serving all 21 pays it at most 21 times. Building a room off the tick
 thread would remove it.
 
@@ -435,8 +458,8 @@ hitting is unlikely even before the rate limit.
 
 ## Known gaps
 
-- **A policy room's tick cost is unmeasured**; the 0.14 ms per room above is
-  scripted bots.
+- **A live policy room's tick cost with people in it is unmeasured**; the
+  policy rows above are the all-fighting upper bound.
 - **No test makes a room's tick throw**, so the per-room fault budget has never
   run.
 - **No pre-lifetime warning** reaches the players before `--max-lifetime`
