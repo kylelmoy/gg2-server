@@ -23,6 +23,7 @@ Python 3.9+, standard library only.
 import base64
 import concurrent.futures
 import datetime
+import http.client
 import json
 import os
 import socket
@@ -32,7 +33,6 @@ import sys
 import tempfile
 import time
 import urllib.parse
-import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HISTORY_SECONDS = 24 * 3600
@@ -48,14 +48,34 @@ def iso(dt):
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+# One context for every https check. Building one loads the CA bundle, which
+# costs ~70 ms of CPU on the lobby host - per request, if urlopen is left to it.
+TLS = ssl.create_default_context()
+
+
 def http_get_json(url, timeout):
-    start = time.monotonic()
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    """GET url and parse JSON. The time returned is one request round trip on an
+    already-open connection: network latency plus the service's own answer.
+    DNS, TCP and the TLS handshake happen before the clock starts, because they
+    measure the checker's CPU and the handshake's extra round trips rather than
+    the service."""
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme == "https":
+        conn = http.client.HTTPSConnection(parts.hostname, parts.port or 443, timeout=timeout, context=TLS)
+    else:
+        conn = http.client.HTTPConnection(parts.hostname, parts.port or 80, timeout=timeout)
+    try:
+        conn.connect()
+        start = time.monotonic()
+        conn.request("GET", parts.path or "/", headers={"User-Agent": USER_AGENT})
+        resp = conn.getresponse()
         body = resp.read(1 << 20)
-        status = resp.status
-    ms = (time.monotonic() - start) * 1000
-    return status, json.loads(body), ms
+        ms = (time.monotonic() - start) * 1000
+    finally:
+        conn.close()
+    if resp.status != 200:
+        raise RuntimeError(f"HTTP {resp.status}")
+    return resp.status, json.loads(body), ms
 
 
 def tcp_connect(host, port, timeout):
@@ -66,9 +86,8 @@ def tcp_connect(host, port, timeout):
 
 
 def cert_days_left(hostname, timeout):
-    ctx = ssl.create_default_context()
     with socket.create_connection((hostname, 443), timeout=timeout) as raw:
-        with ctx.wrap_socket(raw, server_hostname=hostname) as tls:
+        with TLS.wrap_socket(raw, server_hostname=hostname) as tls:
             cert = tls.getpeercert()
     expires = datetime.datetime.fromtimestamp(
         ssl.cert_time_to_seconds(cert["notAfter"]), datetime.timezone.utc)

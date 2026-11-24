@@ -91,7 +91,7 @@ function renderServices(s) {
       <div class="svc-name"><b>${esc(c.name)}</b><span>${esc(c.sub)}</span></div>
       <div class="svc-bar"><div class="segs">${segs}</div>
         <div class="svc-meta"><span class="detail">${esc(c.detail || "")}</span><span class="num">${pct(c.uptime)} · 24 h</span></div></div>
-      <div class="svc-right"><span class="state ${esc(c.state)}">${STATE_WORD[c.state] || esc(c.state)}</span><span class="ms">${c.ms != null ? Math.round(c.ms) + " ms" : ""}</span></div>
+      <div class="svc-right"><span class="state ${esc(c.state)}">${STATE_WORD[c.state] || esc(c.state)}</span><span class="ms" data-tip="request round trip from the lobby host">${c.ms != null ? Math.round(c.ms) + " ms" : ""}</span></div>
     </div>`;
   }
   $("services").innerHTML = html;
@@ -208,7 +208,7 @@ function tick() {
     $("banner-text").textContent = "Status data is out of date";
     $("banner-sub").textContent = `Last checked ${ago(age)}; the checker itself may be down.`;
   }
-  $("foot").textContent = `Checked ${new Date(last.generated).toLocaleString()} in ${last.elapsedMs} ms · every ${last.intervalSeconds} s from ${last.host.hostname || "the lobby host"}`;
+  $("foot").textContent = `Checked ${new Date(last.generated).toLocaleString()} in ${last.elapsedMs} ms · every ${last.intervalSeconds} s from ${last.host.hostname || "the lobby host"} · times are one request round trip from there, not from you`;
 }
 
 async function load() {

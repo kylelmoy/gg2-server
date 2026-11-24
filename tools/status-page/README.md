@@ -31,7 +31,10 @@ fonts from the same directory, so the page has no copy of either.
 Award holders come from `gg2-auth list`, which never prints a key, so the
 generator never handles one. **Notes are not published** unless
 `auth.publishNotes` is true, because a note is the operator's description of a
-person. History is the last 24 h of samples in `historyFile`, shown as 48
+person. The time beside a check is one request round trip from the lobby host on an
+already-open connection (a TCP connect, for gg2-auth): network latency plus the
+service's answer. DNS and the TLS handshake are left out, because with every
+check running at once on a small VPS they measured the checker's CPU. History is the last 24 h of samples in `historyFile`, shown as 48
 half-hour segments.
 
 The page says so when `status.json` is more than four intervals old, so a
