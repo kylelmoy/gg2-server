@@ -119,7 +119,9 @@ a web page on any origin can read the list.
 
 ### `GET /`
 
-A plain-text list of the routes.
+A plain-text list of the routes. On gg2server.net, Caddy sends only `/servers`
+to the lobby, so `/` there is the status page (`tools/status-page/README.md`),
+which also lists the routes for server operators.
 
 ## The client: `HttpLobbyAnnouncer`
 
