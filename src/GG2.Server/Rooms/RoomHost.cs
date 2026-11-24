@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Security.Cryptography;
 using GG2.Bots;
+using GG2.Protocol.Rooms;
 
 namespace GG2.Server.Rooms;
 
@@ -42,45 +42,6 @@ public sealed record RoomHostOptions
             throw new ArgumentOutOfRangeException(nameof(MaxRooms), MaxRooms, "must be 1..10000");
 
         Limits.Validate();
-    }
-}
-
-/// <summary>Room codes: a host prefix and five characters that are the password.</summary>
-public static class RoomCodes
-{
-    /// <summary>
-    /// No <c>0/O</c> and no <c>1/I/L</c>, so a code read aloud or off a phone
-    /// cannot be mistyped into another one. 31 characters.
-    /// </summary>
-    public const string Alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-
-    /// <summary>The length of a room's secret, which is its password.</summary>
-    public const int SecretLength = 5;
-
-    /// <summary>A fresh secret from a cryptographic source.</summary>
-    public static string NewSecret()
-    {
-        Span<char> chars = stackalloc char[SecretLength];
-
-        for (var i = 0; i < chars.Length; i++)
-            chars[i] = Alphabet[RandomNumberGenerator.GetInt32(Alphabet.Length)];
-
-        return new string(chars);
-    }
-
-    /// <summary>
-    /// The secret a typed password names on a host with <paramref name="prefix"/>,
-    /// or null if it cannot name one. Accepts the five-character secret or the
-    /// whole six-character code, in either case, with surrounding spaces.
-    /// </summary>
-    public static string? Normalise(string typed, char prefix)
-    {
-        var text = typed.Trim().ToUpperInvariant();
-
-        if (text.Length == SecretLength + 1 && text[0] == prefix)
-            text = text[1..];
-
-        return text.Length == SecretLength ? text : null;
     }
 }
 

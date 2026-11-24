@@ -163,6 +163,31 @@ internal static class Program
             }
         }
 
+        // `gg2-server directory ...` makes the room-host directory's signing key
+        // and signs the directory (docs/ROOMS.md, "The directory"). It serves no game.
+        if (args.Length > 0 && args[0] == "directory")
+        {
+            var rest = args[1..];
+
+            if (rest.Length == 0 || rest.Contains("--help") || rest.Contains("-h"))
+            {
+                DirectoryTool.PrintUsage();
+                return rest.Length == 0 ? 2 : 0;
+            }
+
+            try
+            {
+                return DirectoryTool.Run(rest);
+            }
+            catch (Exception e) when (e is ArgumentException or FormatException or IOException or HttpRequestException or System.Security.Cryptography.CryptographicException)
+            {
+                Console.Error.WriteLine(e.Message);
+                Console.Error.WriteLine();
+                DirectoryTool.PrintUsage();
+                return 2;
+            }
+        }
+
         // `gg2-server config ...` edits and renders the configuration that
         // scripts/deploy.sh --config pushes to several servers. It serves no game.
         if (args.Length > 0 && args[0] == "config")

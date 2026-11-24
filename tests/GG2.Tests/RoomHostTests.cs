@@ -1,6 +1,7 @@
 using GG2.Protocol;
 using GG2.Server;
 using GG2.Server.Rooms;
+using GG2.Protocol.Rooms;
 
 namespace GG2.Tests;
 
