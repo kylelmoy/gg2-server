@@ -64,6 +64,68 @@ public sealed class FleetHub : IDisposable
     }
 
     /// <summary>
+    /// Converts a fleet directory written before config files were JSON:
+    /// <c>members.ini</c>, <c>common.ini</c> and <c>hosts/*.ini</c>, each only
+    /// where its <c>.json</c> does not exist yet.
+    /// </summary>
+    /// <returns>One line per file converted or refused, for the log.</returns>
+    /// <remarks>
+    /// <b>The hub does this itself, at startup,</b> because the directory is
+    /// the service user's and <c>members.ini</c> is owner-only: the operator who
+    /// deploys the new build usually cannot read it, so <c>gg2-server config
+    /// convert</c> is not something they can run. Without it the hub starts with
+    /// no members and no fleet settings, silently. The <c>.ini</c> files are
+    /// left where they are, so a rollback still finds them. <c>members.json</c>
+    /// is written owner-only, as the hub always writes it.
+    /// </remarks>
+    public static IReadOnlyList<string> MigrateLegacyFiles(string directory)
+    {
+        var lines = new List<string>();
+
+        if (!Directory.Exists(directory))
+            return lines;
+
+        var hosts = Path.Combine(directory, FleetConfig.HostsDirectoryName);
+        var files = Directory.EnumerateFiles(directory, "*.ini")
+            .Concat(Directory.Exists(hosts) ? Directory.EnumerateFiles(hosts, "*.ini") : []);
+
+        foreach (var from in files)
+        {
+            var to = Path.ChangeExtension(from, ".json");
+            if (File.Exists(to))
+                continue;
+
+            var members = Path.GetFileName(from).Equals("members.ini", StringComparison.OrdinalIgnoreCase);
+            var isConfig = members
+                || Path.GetFileName(from).Equals("common.ini", StringComparison.OrdinalIgnoreCase)
+                || Path.GetDirectoryName(from) == hosts;
+
+            if (!isConfig)
+                continue;
+
+            try
+            {
+                var result = IniConverter.Convert(File.ReadAllText(from), raw: members, to);
+                var bytes = FleetConfig.Encode(result.Json);
+
+                if (members)
+                    WebIdentity.WriteOwnerOnly(to, bytes);
+                else
+                    File.WriteAllBytes(to, bytes);
+
+                lines.Add($"converted {from} to {Path.GetFileName(to)}"
+                    + (result.Dropped.Count > 0 ? $", leaving out {string.Join(", ", result.Dropped)}" : string.Empty));
+            }
+            catch (Exception e) when (e is FormatException or IOException or UnauthorizedAccessException)
+            {
+                lines.Add($"could not convert {from}: {e.Message}");
+            }
+        }
+
+        return lines;
+    }
+
+    /// <summary>
     /// The shared settings and each member's overrides — <c>common.json</c> and
     /// <c>hosts/&lt;member&gt;.json</c> in the fleet directory, the layout
     /// <c>deploy/config</c> uses.

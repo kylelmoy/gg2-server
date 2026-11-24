@@ -146,6 +146,9 @@ public sealed class WebAdminServer : IDisposable
                 ? options.FleetDirectory
                 : Path.Combine(WebIdentity.Directory(server.Options), options.FleetDirectory);
 
+            foreach (var line in FleetHub.MigrateLegacyFiles(directory))
+                _log.Info($"fleet hub: {line}");
+
             _hub = new FleetHub(directory);
         }
     }
