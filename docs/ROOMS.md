@@ -156,10 +156,13 @@ with people and its cost lies between the scripted and policy rows.
 | | policy | 5 / 10 | 4.6 / 8.2 ms | 14 / 20 ms | 0.92 / 0.82 ms |
 | `gg2-de` (1 vCPU, QEMU) | scripted | 10 | 9.2 ms | 46 ms | 0.92 ms |
 | | policy | 5 / 10 | 9.8 / 11.8 ms | 52 / 40 ms | 2.0 / 1.2 ms |
+| `gg2-us-west` (1 vCPU Ryzen 9 9900X) | scripted | 10 | 4.9 ms | 14.7 ms | 0.49 ms |
+| | policy | 5 / 10 / 20 / 30 | 3.0 / 5.1-6.4 / 6.4-7.9 / 9.6 ms | 8.0 / 12-14.5 / 22 / 28.6 ms | 0.61 / 0.5-0.64 / 0.32-0.40 / 0.32 ms |
 
 The VPS runs were at `nice 19` beside the live fleet server (empty at the
-time), so they include its ticks and the provider's steal. `gg2-us-west` (1
-vCPU Ryzen 9 9900X) is **not measured**: it had a player on it.
+time), so they include its ticks and the provider's steal. A range is the
+spread of repeated runs; on `gg2-us-west` a 10-room policy run read 5.1-6.4 ms
+mean over three runs, so differences under about 25% between rows are noise.
 
 - **Memory does not limit a host**: about 2 MB of heap a scripted room and 3 MB
   a policy room after the first, with 18 MB for the first policy room (the nets,
@@ -170,8 +173,12 @@ vCPU Ryzen 9 9900X) is **not measured**: it had a player on it.
 - **A room host on a 1-vCPU box shares that core with the fleet server**, and
   the fleet server's slots come first, so the room unit should run at a lower
   priority (`Nice=10`) than it.
+- **`gg2-us-west` matches `gg2-us-east` on one vCPU.** Its p99 stays under the
+  budget to 30 all-fighting policy rooms (28.6 ms), and per-room cost falls as
+  rooms are added because a host tick's fixed cost is shared.
 - **Suggested `--max-rooms`**, from the upper bound: `gg2-us-east` 12,
-  `gg2-de` 4, `gg2-us-west` 4 until measured.
+  `gg2-us-west` 12 (p99 about 17 ms there, the same margin as `gg2-us-east`'s
+  12, kept low because its one core also runs the fleet server), `gg2-de` 4.
 - **Not measured**: connected clients (serialisation and bandwidth per client),
   a live room's real policy share with people in it, and maps other than
   `ctf_truefort` on a VPS (a rotation of 6-7 maps read the same as `ctf_truefort`
