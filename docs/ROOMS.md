@@ -6,17 +6,17 @@ Nobody hosts from a phone. This is the industry's session-based dedicated
 server pattern (Agones allocation, GameLift game sessions, PlayFab
 multiplayer servers), built so that one process holds many rooms.
 
-**Status: steps 1 to 3 built, and step 6's drain; creates are limited per address, and there is no device check.** The table says which parts exist and what proves
+**Status: steps 1 to 3 built, and step 6 installed on the three VPSes; creates are limited per address, and there is no device check.** The table says which parts exist and what proves
 each. Nothing else in this file exists until its row says so.
 
 | Step | Part | State |
 |---|---|---|
 | 1 | A server stops itself: empty timeout and hard lifetime | **Built.** `EmptyServerExitTests`; the real host exits 0 three seconds after an empty start |
-| 2 | The room host: one process, one port, many rooms | **Built** as a library (`RoomHost`, `RoomFrontDoor`, `SharedNav`, `SharedPolicies`). `RoomHostTests` drive real sockets through the one port. **Live, 2026-11-22**: a stock GM8 client joined a room created over the API (`gg2-server rooms` with the fleet's `common.json`, Windows, loopback) with the code as its password, in lower case with spaces; got the room's map, its policy bots filled to six, chat, a character on blue; a code naming no room showed the stock "Incorrect Password."; the emptied room ended 120 s after the client left and its code went 404. Not yet run on a VPS or from another machine |
+| 2 | The room host: one process, one port, many rooms | **Built** as a library (`RoomHost`, `RoomFrontDoor`, `SharedNav`, `SharedPolicies`). `RoomHostTests` drive real sockets through the one port. **Live, 2026-11-22**: a stock GM8 client joined a room created over the API (`gg2-server rooms` with the fleet's `common.json`, Windows, loopback) with the code as its password, in lower case with spaces; got the room's map, its policy bots filled to six, chat, a character on blue; a code naming no room showed the stock "Incorrect Password."; the emptied room ended 120 s after the client left and its code went 404. **Live on a VPS, 2026-11-24**: from the dev box, a room created over `https://us-east.gg2server.net/rooms` (`ctf_truefort`, normal bots, small) was joined by a stock GM8 client on `198.44.123.219:8300` with the code as its password; it held the client and five policy bots, and `GET /rooms/{code}` reported the player |
 | 3 | The dispatcher API, inside the room host | **Built**: `gg2-server rooms`. `RoomApiTests` create over real HTTP and join with the returned code over the game port. No authentication; a create is limited per address (`RoomCreateLimitTests`) |
 | 4 | Device check and the ban list | **deferred** (no Apple developer key yet); the per-address create limits stand in |
 | 5 | the native client: create, join by code | not started |
-| 6 | Fleet rollout: one unit and one port per VPS | **Drain built**: `--drain-file`, exit 4, `deploy.sh` drains a `<service>-rooms` sibling instead of restarting it, `deploy.sh --print-rooms-unit` (`RoomHostTests`' drain tests, `RoomApiTests.ADrainingHostRefusesCreates`; live on Windows loopback: an old marker ignored at startup, a fresh one refused creates and the host exited 4 when its room ended). Not installed on any VPS; no TLS proxy |
+| 6 | Fleet rollout: one unit and one port per VPS | **Drain built**: `--drain-file`, exit 4, `deploy.sh` drains a `<service>-rooms` sibling instead of restarting it, `deploy.sh --print-rooms-unit` (`RoomHostTests`' drain tests, `RoomApiTests.ADrainingHostRefusesCreates`; live on Windows loopback: an old marker ignored at startup, a fresh one refused creates and the host exited 4 when its room ended). **Installed 2026-11-24** on all three VPSes (table under "Rollout"), each API behind Caddy with TLS |
 
 ## Where rooms run
 
@@ -342,6 +342,20 @@ and one more TCP port open in `ufw` (planned: 8300) plus the HTTPS port.
 fleet server, the fleet's `shared/gg2.json` as the base config,
 `--api-trust-proxy`, and the drain file. Its `--prefix` and `--max-rooms` are
 per host and edited before installing (suggested values under "Measured").
+
+| Host | Prefix | `--max-rooms` | API | Game port |
+|---|---|---|---|---|
+| `gg2-us-west` | W | 4 | `https://us-west.gg2server.net` | `45.59.102.99:8300` |
+| `gg2-us-east` | E | 12 | `https://us-east.gg2server.net` | `198.44.123.219:8300` |
+| `gg2-de` | D | 4 | `https://de.gg2server.net` | `89.58.5.241:8300` |
+
+Each host runs `gg2-rooms.service` from `--print-rooms-unit` with its prefix
+and cap, its API on `127.0.0.1:8301` behind a Caddy site that terminates TLS
+and replaces any client-sent `X-Forwarded-For` with the peer address, and
+`ufw` open on 8300, 80 and 443. The base config is the fleet's
+`shared/gg2.ini`, which holds JSON. What would show this has gone stale:
+`/status` failing on one of the three URLs, or a host's unit or prefix
+changed without this table.
 
 #### Draining for a deploy (built)
 
