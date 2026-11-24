@@ -92,7 +92,19 @@ internal static class UserFile
 
         var full = Path.GetFullPath(path);
         var temp = full + ".tmp";
-        File.WriteAllText(temp, text.ToString(), new UTF8Encoding(false));
+        File.Delete(temp);
+
+        // ⚠️ Owner and group only, set at creation: the move replaces the
+        // original, so its mode is this file's, and a umask of 022 would make
+        // every key world-readable on the first edit. The group is how the
+        // service reads a file the operator's CLI wrote (docs/AUTH.md).
+        var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write };
+        if (!OperatingSystem.IsWindows())
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.GroupWrite;
+
+        using (var writer = new StreamWriter(temp, new UTF8Encoding(false), options))
+            writer.Write(text.ToString());
+
         File.Move(temp, full, overwrite: true);
     }
 
