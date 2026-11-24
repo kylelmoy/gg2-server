@@ -69,33 +69,6 @@ internal static class CommandLine
     };
 
     /// <summary>
-    /// Splits a <c>host:port</c> argument, defaulting the port when it is
-    /// omitted.
-    /// </summary>
-    /// <remarks>
-    /// ⚠️ <b>Rightmost colon</b>, so a bare IPv6 literal is not silently cut in
-    /// half. A host with no colon keeps the reference's port.
-    /// </remarks>
-    private static (string Host, int Port) ParseHostPort(string flag, string text)
-    {
-        var separator = text.LastIndexOf(':');
-
-        if (separator < 0)
-            return (text, GameConstants.AuthServerPort);
-
-        var host = text[..separator];
-        var port = text[(separator + 1)..];
-
-        if (!int.TryParse(port, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
-            || parsed is < 1 or > 65535)
-        {
-            throw new ArgumentException($"{flag}: '{port}' is not a port number");
-        }
-
-        return (host, parsed);
-    }
-
-    /// <summary>
     /// <c>--class-limit</c>: one number for every class, or <c>name=n</c> pairs.
     /// </summary>
     /// <remarks>
@@ -238,6 +211,9 @@ internal static class CommandLine
 
         // The same, for --lobby-url and LobbyUrls.
         var lobbyUrlOnCommandLine = false;
+
+        // And for --auth-server and AuthServerUrls.
+        var authServerOnCommandLine = false;
 
         // ⛔ --config is applied BEFORE the loop, in its own pass, so a flag
         // always beats the file no matter which side of it the flag appears on.
@@ -834,11 +810,15 @@ internal static class CommandLine
                     options.Rewards = true;
                     break;
 
+                // The first one replaces the default list (or a config file's),
+                // later ones append, as --lobby-url does. It does NOT imply
+                // --rewards: naming where to authenticate is not agreeing to
+                // relay player ids, and the tests name one without the other.
                 case "--auth-server":
                 {
-                    var (host, port) = ParseHostPort(name, cursor.Take());
-                    options.AuthServerHost = host;
-                    options.AuthServerPort = port;
+                    var urls = RewardAuthTargets.Parse(name, cursor.Take());
+                    options.AuthServerUrls = authServerOnCommandLine ? [.. options.AuthServerUrls, .. urls] : urls;
+                    authServerOnCommandLine = true;
                     break;
                 }
 
@@ -1364,9 +1344,12 @@ internal static class CommandLine
                             each player's reward id to the auth server, which is
                             a third party; with it off nobody's cosmetics show
                             and nothing else changes.
-          --auth-server <host[:port]>
-                            where --rewards authenticates
-                            (default: ganggarrison.com:45022)
+          --auth-server <url[,url...]>
+                            where --rewards authenticates, highest priority
+                            first; repeatable. tcp://host[:port] or host[:port]
+                            (default: ganggarrison.com:45022, then
+                            gg2server.net:45022). All are asked at once and the
+                            first listed one with rewards wins.
           --version         print the build - version, commit, runtime and
                             architecture - and exit. Running it on a machine you
                             have just copied the binary to is what proves the

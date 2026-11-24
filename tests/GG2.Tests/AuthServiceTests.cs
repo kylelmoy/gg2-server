@@ -269,8 +269,7 @@ public sealed class AuthServiceTests : IDisposable
         using var harness = new ServerHarness(options =>
         {
             options.Rewards = true;
-            options.AuthServerHost = "127.0.0.1";
-            options.AuthServerPort = auth.Port;
+            options.AuthServerUrls = [$"127.0.0.1:{auth.Port}"];
         });
 
         var player = harness.JoinClient("player");

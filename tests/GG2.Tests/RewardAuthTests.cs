@@ -16,7 +16,7 @@ namespace GG2.Tests;
 /// <b>The auth server is a third party and is never contacted from here.</b>
 /// The end-to-end test stands up a loopback listener and points
 /// <c>--auth-server</c> at it, which is also the only way this flow can be
-/// exercised at all — and the reason <c>AuthServerHost</c> is an option rather
+/// exercised at all — and the reason <c>AuthServerUrls</c> is an option rather
 /// than a constant.
 /// </para>
 /// </remarks>
@@ -145,8 +145,7 @@ public sealed class RewardAuthTests
         using var harness = new ServerHarness(options =>
         {
             options.Rewards = true;
-            options.AuthServerHost = "127.0.0.1";
-            options.AuthServerPort = auth.Port;
+            options.AuthServerUrls = [$"127.0.0.1:{auth.Port}"];
         });
 
         var player = harness.JoinClient("player");
@@ -228,8 +227,7 @@ public sealed class RewardAuthTests
         using var harness = new ServerHarness(options =>
         {
             options.Rewards = true;
-            options.AuthServerHost = "127.0.0.1";
-            options.AuthServerPort = auth.Port;
+            options.AuthServerUrls = [$"127.0.0.1:{auth.Port}"];
         });
 
         var player = harness.JoinClient("player");

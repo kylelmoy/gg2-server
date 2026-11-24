@@ -965,8 +965,21 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         // ExecuteRewardRequest.
         if (_options.Rewards)
         {
-            _rewards = new RewardAuthClient(_log, _options.AuthServerHost, _options.AuthServerPort);
-            _log.Info($"reward auth via {_options.AuthServerHost}:{_options.AuthServerPort}");
+            var servers = new List<(string Host, int Port)>();
+            foreach (var url in _options.AuthServerUrls)
+            {
+                if (RewardAuthTargets.TryParse(url, out var host, out var port))
+                    servers.Add((host, port));
+                else
+                    _log.Warn($"AuthServerUrls: '{url}' is not an auth server; not asking it");
+            }
+
+            _rewards = new RewardAuthClient(_log, servers);
+
+            if (servers.Count == 0)
+                _log.Warn("Rewards is on but AuthServerUrls names no auth server; every check fails");
+            else
+                _log.Info($"reward auth via {string.Join(", ", _options.AuthServerUrls.Select(RewardAuthTargets.Describe))}, asked together, first listed wins");
         }
 
         // Loopback only and off unless configured — it executes commands

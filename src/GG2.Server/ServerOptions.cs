@@ -491,17 +491,19 @@ public sealed class ServerOptions
     /// </remarks>
     public bool Rewards { get; set; }
 
-    /// <summary>The auth server's host. <c>AUTH_SERVER_HOST</c>.</summary>
+    /// <summary>
+    /// The auth servers <see cref="Rewards"/> asks, highest priority first:
+    /// <c>tcp://host[:port]</c> or <c>host[:port]</c>.
+    /// </summary>
     /// <remarks>
-    /// Overridable so an operator can point this at their own auth service
-    /// rather than at ganggarrison.com — which is also the only way the flow can
-    /// be exercised end to end, since the real service must not be contacted
-    /// from this repo's tests.
+    /// Defaults to <see cref="RewardAuthTargets.Default"/>: ganggarrison.com
+    /// (<c>AUTH_SERVER_HOST</c>), then gg2server.net. All are asked at once and
+    /// the first in this order with rewards wins (<see cref="RewardAuthTargets"/>).
+    /// <b>The list alone contacts nobody</b>: it is only read when
+    /// <see cref="Rewards"/> is on. The tests point it at a loopback listener,
+    /// since the real services must not be contacted from this repo's tests.
     /// </remarks>
-    public string AuthServerHost { get; set; } = GameConstants.AuthServerHost;
-
-    /// <summary>The auth server's port. <c>AUTH_SERVER_PORT</c>.</summary>
-    public int AuthServerPort { get; set; } = GameConstants.AuthServerPort;
+    public IReadOnlyList<string> AuthServerUrls { get; set; } = RewardAuthTargets.Default;
 
     /// <summary>
     /// Total bandwidth across all in-flight custom-map downloads, bytes/second.

@@ -4,13 +4,18 @@ The Haxxy reward auth server: the service a game server asks whether a player
 really holds the reward id they claimed, and which rewards to show for them.
 The service is `src/GG2.Auth` (binary `gg2-auth`). The game server's half is
 `RewardAuth` and `RewardAuthClient` in `GG2.Server`, turned on by `--rewards`
-and pointed here by `--auth-server <host[:port]>` (`docs/PROTOCOL.md`).
+and pointed at a list of auth servers by `AuthServerUrls` (`--auth-server`).
 
-It is **a replacement for ganggarrison.com:45022, not a copy of it.** Upstream
+It **runs beside ganggarrison.com:45022, not instead of it.** Upstream
 publishes only the web page in front of its service (`GG2RewardsArea`, PHP),
-not the service itself, and its user table is not public. So a key issued
-by ganggarrison.com does not verify here, and players get their credentials
-from whoever runs this.
+not the service itself, and its user table is not public, so a key issued by
+ganggarrison.com does not verify here and players get their credentials from
+whoever runs this. The game server's default list asks both,
+`tcp://ganggarrison.com:45022, tcp://gg2server.net:45022`, at once, and uses
+the first listed one that answers with rewards: a stock player's key still
+works, and a key issued here works too. Every listed server sees every
+player's reward id and HMAC; the HMAC is bound to the game server's address,
+so no listed server can replay it through another game server.
 
 It is **a separate process from gg2-lobby** because it holds every player's
 secret key and the lobby holds nothing private: a fault in the lobby's public
@@ -22,7 +27,8 @@ other.
 ```
 gg2-auth add --note "who this is" Badge_Dev GoldSc   # prints the player's [Haxxy] section
 gg2-auth serve                                       # port 45022, dual-stack
-gg2-server --rewards --auth-server auth.example.net
+gg2-server --rewards                     # asks ganggarrison.com and gg2server.net
+gg2-server --rewards --auth-server auth.example.net   # replaces the list; repeatable
 ```
 
 | Command | What |

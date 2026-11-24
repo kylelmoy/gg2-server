@@ -877,9 +877,11 @@ Not everything in the reference is load-bearing for a private headless server.
   opt-out in stock GG2. Turning it on makes this server open outbound TCP to a
   third party carrying its players' user ids, and a headless binary has no
   hosting menu in which somebody agreed to that.
-  **`--auth-server host[:port]` overrides where it authenticates**, which is
-  the only way the flow can be exercised: `ganggarrison.com:45022` is a third
-  party and is not contacted from this repo. `RewardAuthTests` stands up a
+  **`AuthServerUrls` (`--auth-server`, repeatable) says where it
+  authenticates**: by default ganggarrison.com:45022 then gg2server.net:45022,
+  all asked at once with the first listed answer that has rewards winning
+  (`RewardAuthTargets`). Overriding it is the only way the flow can be
+  exercised: neither default is contacted from this repo's tests. `RewardAuthTests` stands up a
   loopback listener instead. **`gg2-auth` is this repo's own auth server**
   (`docs/AUTH.md`), with keys issued from its CLI; ganggarrison.com keys do not
   verify there.

@@ -367,7 +367,8 @@ text the settings page shows), **integer** and **decimal** are JSON numbers,
 | `PlayerName` | text | `Server` | The name of reserved roster slot 0, a permanent spectator. |
 | `UseLobby` | boolean | `0` | Announce this server to every lobby in `LobbyUrls`. |
 | `LobbyUrls` | text | `udp://ganggarrison.com:29944, http://gg2server.net:29945` | Where `UseLobby` announces, comma-separated. `udp://host[:port]` speaks the ganggarrison.com protocol (the stock client's server list; port defaults to 29944), `http(s)://host[:port]` a gg2-lobby ([LOBBY.md](LOBBY.md)). Announces nothing unless `UseLobby` is on; each lobby gets its own server id. |
-| `Rewards` | boolean | `0` | Answer `REWARD_REQUEST`, relaying each player's reward id to the auth server. |
+| `Rewards` | boolean | `0` | Answer `REWARD_REQUEST`, relaying each player's reward id to the auth servers in `AuthServerUrls`. |
+| `AuthServerUrls` | text | `tcp://ganggarrison.com:45022, tcp://gg2server.net:45022` | Where `Rewards` authenticates, comma-separated, highest priority first: `tcp://host[:port]` or `host[:port]`, port defaulting to 45022. All are asked at once, and the first listed one that answers with rewards wins, so every listed server sees every player's reward id. Contacts nobody unless `Rewards` is on. [AUTH.md](AUTH.md). |
 
 ### `Server`
 
@@ -400,8 +401,6 @@ text the settings page shows), **integer** and **decimal** are JSON numbers,
 | `BanFile` | path | *(empty)* | Where operator bans are kept. Empty means they do not survive a restart. |
 | `MapDirectory` | path | *(resolved from disk)* | Where the map PNGs are read from. |
 | `RecordingDirectory` | path | *(empty)* | Write replayable `.trace` recordings of this server's broadcast stream here. Empty records nothing — recording a game people are playing is a decision. |
-| `AuthServerHost` | text | `ganggarrison.com` | The reward auth service. Only contacted when `Rewards` is on. |
-| `AuthServerPort` | integer | `45022` | That service's port. |
 
 ### `Chat`
 

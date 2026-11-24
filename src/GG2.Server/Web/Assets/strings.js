@@ -696,7 +696,8 @@ const STRINGS = {
       "PlayerName": "Name of reserved roster slot 0 (permanent spectator).",
       "UseLobby": "Announce to every lobby in LobbyUrls (the original lobby is the client's server list).",
       "LobbyUrls": "Comma-separated lobbies UseLobby announces to: udp://host[:port] for the original lobby, http(s)://host[:port] for a gg2-lobby.",
-      "Rewards": "Answer REWARD_REQUEST by relaying each player's reward id to the auth server."
+      "Rewards": "Answer REWARD_REQUEST by relaying each player's reward id to the auth servers in AuthServerUrls.",
+      "AuthServerUrls": "Comma-separated auth servers Rewards asks, highest priority first: tcp://host[:port] or host[:port]. All are asked at once; the first listed one with rewards wins."
     },
     "Chat": {
       "Enabled": "The server's own chat. On also advertises the chat plugin, which is how a stock client gets a chat window. Off: no chat.",
@@ -736,9 +737,7 @@ const STRINGS = {
       "Total bandwidth limit for map downloads in bytes per second": "Total across all concurrent custom-map downloads, not per client.",
       "BanFile": "Operator ban list. Empty: bans do not survive a restart.",
       "MapDirectory": "Map PNG directory.",
-      "RecordingDirectory": "Write replayable .trace recordings of the broadcast stream here. Empty: disabled.",
-      "AuthServerHost": "Reward auth service host. Used only when Rewards is on.",
-      "AuthServerPort": "Reward auth service port."
+      "RecordingDirectory": "Write replayable .trace recordings of the broadcast stream here. Empty: disabled."
     },
     "Analytics": {
       "File": "Persistent player analytics. Empty: disabled. Addresses are stored as salted hashes only.",

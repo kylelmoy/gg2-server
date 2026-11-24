@@ -254,6 +254,14 @@ public static class ServerSettings
             "Settings", "Rewards", nameof(ServerOptions.Rewards),
             o => o.Rewards, (o, v) => o.Rewards = v));
 
+        // This port's own key, like LobbyUrls: where Rewards authenticates,
+        // comma-separated, highest priority first. It contacts nobody on its own.
+        settings.Add(TextRow(
+            "Settings", "AuthServerUrls", nameof(ServerOptions.AuthServerUrls),
+            o => string.Join(", ", o.AuthServerUrls),
+            (o, v) => o.AuthServerUrls = RewardAuthTargets.Parse("Settings.AuthServerUrls", v),
+            "tcp://auth.example:45099"));
+
         // --- [Server] ---------------------------------------------------------
         settings.Add(TextRow(
             "Server", "ServerName", nameof(ServerOptions.ServerName),
@@ -464,14 +472,6 @@ public static class ServerSettings
         settings.Add(PathRow(
             "Server", "RecordingDirectory", nameof(ServerOptions.RecordingDirectory),
             o => o.RecordingDirectory, (o, v) => o.RecordingDirectory = v, "some/traces"));
-
-        settings.Add(TextRow(
-            "Server", "AuthServerHost", nameof(ServerOptions.AuthServerHost),
-            o => o.AuthServerHost, (o, v) => o.AuthServerHost = v, "auth.example"));
-
-        settings.Add(IntRow(
-            "Server", "AuthServerPort", nameof(ServerOptions.AuthServerPort),
-            o => o.AuthServerPort, (o, v) => o.AuthServerPort = v, "45099"));
 
         // --- [Classlimits] ----------------------------------------------------
         //
