@@ -352,7 +352,7 @@ per host and edited before installing (suggested values under "Measured").
 
 | Host | Prefix | `--max-rooms` | API | Game port |
 |---|---|---|---|---|
-| `gg2-us-west` | W | 4 | `https://us-west.gg2server.net` | `45.59.102.99:8300` |
+| `gg2-us-west` | W | 12 | `https://us-west.gg2server.net` | `45.59.102.99:8300` |
 | `gg2-us-east` | E | 12 | `https://us-east.gg2server.net` | `198.44.123.219:8300` |
 | `gg2-de` | D | 4 | `https://de.gg2server.net` | `89.58.5.241:8300` |
 
