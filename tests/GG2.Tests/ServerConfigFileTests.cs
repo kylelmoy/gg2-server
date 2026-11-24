@@ -4,7 +4,8 @@ using GG2.Server;
 namespace GG2.Tests;
 
 /// <summary>
-/// <see cref="ServerConfigFile"/>: a reference-format <c>gg2.ini</c>.
+/// <see cref="ServerConfigFile"/>: a <c>gg2.json</c> carrying the reference's
+/// <c>gg2.ini</c> keys.
 /// </summary>
 /// <remarks>
 /// The keys and their clamps come from <c>Scripts/Game/game_init.gml:66-106</c>
@@ -36,26 +37,29 @@ public sealed class ServerConfigFileTests : IDisposable
     [Fact]
     public void TheServerSectionReachesEveryOptionItNames()
     {
-        var options = Load(Write("gg2.ini",
+        var options = Load(Write("gg2.json",
             """
-            [Settings]
-            HostingPort=8195
-            PlayerLimit=16
-            MultiClientLimit=1
-            PlayerName=Referee
-
-            [Server]
-            ServerName=A Real Server
-            WelcomeMessage=be nice
-            Password=hunter2
-            CapLimit=3
-            Time Limit=20
-            Deathmatch Kill Limit=50
-            Team Deathmatch Invulnerability Seconds=2
-            Respawn Time=8
-            AutoBalance=0
-            ShuffleRotation=2
-            Total bandwidth limit for map downloads in bytes per second=12345
+            {
+              "Settings": {
+                "HostingPort": 8195,
+                "PlayerLimit": 16,
+                "MultiClientLimit": 1,
+                "PlayerName": "Referee"
+              },
+              "Server": {
+                "ServerName": "A Real Server",
+                "WelcomeMessage": "be nice",
+                "Password": "hunter2",
+                "CapLimit": 3,
+                "Time Limit": 20,
+                "Deathmatch Kill Limit": 50,
+                "Team Deathmatch Invulnerability Seconds": 2,
+                "Respawn Time": 8,
+                "AutoBalance": false,
+                "ShuffleRotation": "2",
+                "Total bandwidth limit for map downloads in bytes per second": 12345
+              }
+            }
             """));
 
         Assert.Equal(8195, options.Port);
@@ -87,9 +91,9 @@ public sealed class ServerConfigFileTests : IDisposable
     [Fact]
     public void UseLobbyIsObeyedWhenWrittenAndOffWhenAbsent()
     {
-        Assert.False(Load(Write("a.ini", "[Server]\nServerName=x")).AnnounceToLobby);
-        Assert.True(Load(Write("b.ini", "[Settings]\nUseLobby=1")).AnnounceToLobby);
-        Assert.False(Load(Write("c.ini", "[Settings]\nUseLobby=0")).AnnounceToLobby);
+        Assert.False(Load(Write("a.json", """{"Server": {"ServerName": "x"}}""")).AnnounceToLobby);
+        Assert.True(Load(Write("b.json", """{"Settings": {"UseLobby": true}}""")).AnnounceToLobby);
+        Assert.False(Load(Write("c.json", """{"Settings": {"UseLobby": false}}""")).AnnounceToLobby);
     }
 
     /// <summary>
@@ -106,13 +110,14 @@ public sealed class ServerConfigFileTests : IDisposable
     [Fact]
     public void LimitsAreClampedTheWayTheReferenceClampsThem()
     {
-        var floored = Load(Write("gg2.ini",
+        var floored = Load(Write("gg2.json",
             """
-            [Server]
-            CapLimit=0
-            Time Limit=0
-            Deathmatch Kill Limit=0
-            Team Deathmatch Invulnerability Seconds=0
+            {"Server": {
+              "CapLimit": 0,
+              "Time Limit": 0,
+              "Deathmatch Kill Limit": 0,
+              "Team Deathmatch Invulnerability Seconds": 0
+            }}
             """));
 
         Assert.Equal(1, floored.CapLimit);
@@ -120,12 +125,13 @@ public sealed class ServerConfigFileTests : IDisposable
         Assert.Equal(1, floored.KillLimit);
         Assert.Equal(0, floored.TdmInvulnerabilitySeconds);
 
-        var capped = Load(Write("gg2.ini",
+        var capped = Load(Write("gg2.json",
             """
-            [Server]
-            Time Limit=9999
-            Deathmatch Kill Limit=999999
-            Team Deathmatch Invulnerability Seconds=99999
+            {"Server": {
+              "Time Limit": 9999,
+              "Deathmatch Kill Limit": 999999,
+              "Team Deathmatch Invulnerability Seconds": 99999
+            }}
             """));
 
         Assert.Equal(255, capped.TimeLimitMinutes);
@@ -145,13 +151,8 @@ public sealed class ServerConfigFileTests : IDisposable
     [Fact]
     public void ClassLimitsArePairedByNameNotByPosition()
     {
-        var options = Load(Write("gg2.ini",
-            """
-            [Classlimits]
-            Pyro=1
-            Heavy=2
-            Quote=0
-            """));
+        var options = Load(Write("gg2.json",
+            """{"Classlimits": {"Pyro": 1, "Heavy": 2, "Quote": 0}}"""));
 
         Assert.Equal(1, options.ClassLimits[(int)PlayerClass.Pyro]);
         Assert.Equal(2, options.ClassLimits[(int)PlayerClass.Heavy]);
@@ -175,7 +176,7 @@ public sealed class ServerConfigFileTests : IDisposable
     [Fact]
     public void AnEmptyMapsSectionIsTheStockTwentyMapRotation()
     {
-        var options = Load(Write("gg2.ini", "[Server]\nServerName=x"));
+        var options = Load(Write("gg2.json", """{"Server": {"ServerName": "x"}}"""));
 
         Assert.Equal(20, options.MapRotation.Count);
         Assert.Equal("ctf_truefort", options.MapRotation[0]);
@@ -193,17 +194,18 @@ public sealed class ServerConfigFileTests : IDisposable
     [Fact]
     public void MapsAreOrderedByPriorityAndZeroRemovesThem()
     {
-        var options = Load(Write("gg2.ini",
+        var options = Load(Write("gg2.json",
             """
-            [Maps]
-            ctf_eiger=1
-            ctf_truefort=2
-            ctf_2dfort=0
-            arena_montane=0
-            arena_lumberyard=0
+            {"Maps": {
+              "ctf_2dfort": 0,
+              "ctf_truefort": 2,
+              "ctf_eiger": 1,
+              "arena_montane": 0,
+              "arena_lumberyard": 0
+            }}
             """));
 
-        // Line order is irrelevant; the numbers decide.
+        // Key order is irrelevant; the numbers decide.
         Assert.Equal("ctf_eiger", options.MapRotation[0]);
         Assert.Equal("ctf_truefort", options.MapRotation[1]);
 
@@ -217,7 +219,7 @@ public sealed class ServerConfigFileTests : IDisposable
     [Fact]
     public void ARotationFileWinsAndKeepsItsOrderAndRepeats()
     {
-        var config = Write("gg2.ini", "[Server]\nMapRotation=rotation.txt");
+        var config = Write("gg2.json", """{"Server": {"MapRotation": "rotation.txt"}}""");
 
         File.WriteAllText(
             Path.Combine(Path.GetDirectoryName(config)!, "rotation.txt"),
@@ -248,7 +250,7 @@ public sealed class ServerConfigFileTests : IDisposable
     [Fact]
     public void AMissingRotationFileFallsBackToTheMapsSection()
     {
-        var options = Load(Write("gg2.ini", "[Server]\nMapRotation=no-such-file.txt"));
+        var options = Load(Write("gg2.json", """{"Server": {"MapRotation": "no-such-file.txt"}}"""));
 
         Assert.Equal(20, options.MapRotation.Count);
         Assert.Equal("ctf_truefort", options.MapRotation[0]);
@@ -260,12 +262,8 @@ public sealed class ServerConfigFileTests : IDisposable
     [Fact]
     public void SectionsAndKeysAreCaseInsensitiveAndValuesAreNot()
     {
-        var options = Load(Write("gg2.ini",
-            """
-            [server]
-            servername="Mixed Case Name"
-            caplimit=4
-            """));
+        var options = Load(Write("gg2.json",
+            """{"server": {"servername": "Mixed Case Name", "caplimit": 4}}"""));
 
         Assert.Equal("Mixed Case Name", options.ServerName);
         Assert.Equal(4, options.CapLimit);
@@ -285,7 +283,7 @@ public sealed class ServerConfigFileTests : IDisposable
     public void ANonNumericNumberIsRefusedAndNamesTheKey()
     {
         var thrown = Assert.Throws<FormatException>(
-            () => Load(Write("gg2.ini", "[Server]\nCapLimit=lots")));
+            () => Load(Write("gg2.json", """{"Server": {"CapLimit": "lots"}}""")));
 
         Assert.Contains("CapLimit", thrown.Message, StringComparison.Ordinal);
         Assert.Contains("lots", thrown.Message, StringComparison.Ordinal);
@@ -295,27 +293,22 @@ public sealed class ServerConfigFileTests : IDisposable
     /// An unknown key and an unknown section are ignored, not refused.
     /// </summary>
     /// <remarks>
-    /// A real <c>gg2.ini</c> off a hosted server is mostly client preferences —
-    /// crosshairs, gib level, HUD positions — plus <c>[Haxxy]</c> and the plugin
-    /// keys, none of which this server implements. Refusing them would mean the
-    /// one file an operator already has is the one file that does not work.
+    /// A file written for a newer release has keys an older one has never heard
+    /// of, and a fleet push reaches hosts before they are upgraded. Refusing them
+    /// would be a push that stops a server coming back up.
     /// </remarks>
     [Fact]
-    public void ClientPreferencesAndUnknownSectionsAreIgnored()
+    public void UnknownKeysAndUnknownSectionsAreIgnored()
     {
-        var options = Load(Write("gg2.ini",
+        var options = Load(Write("gg2.json",
             """
-            [Settings]
-            Gib Level=3
-            CrosshairFilename=crosshair.png
-            Kill Cam=1
-            PlayerLimit=12
-
-            [Haxxy]
-            RewardKey=deadbeef
-
-            [SomePlugin]
-            Whatever=1
+            {
+              "//": "a note",
+              "Settings": {"Gib Level": 3, "PlayerLimit": 12},
+              "Haxxy": {"RewardKey": "deadbeef"},
+              "SomePlugin": {"Whatever": [1, {"deep": true}]},
+              "AString": "not a section"
+            }
             """));
 
         Assert.Equal(12, options.PlayerLimit);
@@ -334,12 +327,8 @@ public sealed class ServerConfigFileTests : IDisposable
     [Fact]
     public void UnimplementedServerKeysAreIgnored()
     {
-        var options = Load(Write("gg2.ini",
-            """
-            [Server]
-            ServerName=x
-            Attempt UPnP Forwarding=1
-            """));
+        var options = Load(Write("gg2.json",
+            """{"Server": {"ServerName": "x", "Attempt UPnP Forwarding": 1}}"""));
 
         Assert.Equal("x", options.ServerName);
     }

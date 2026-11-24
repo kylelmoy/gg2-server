@@ -40,7 +40,7 @@ rollout-search bot this server once ran, copied from its `build/scratch/duelnets
 duels, the shipped net's and the fine-tune's. The other four already scored
 0.98-1.00 there and were not fine-tuned. Each is a **terrain-layout** v2 net (the
 Quote one also the Quote layout) and was scored **sampled**, so the duel server
-runs them with `[Bots] PolicySampled=1`; `docs/DUEL.md`, "The duel nets", has
+runs them with `"Bots": {"PolicySampled": true}`; `docs/DUEL.md`, "The duel nets", has
 the full settings. Exported from gg2-sim's `.pt` checkpoints (md5 of the source
 alongside) by a reader equivalent to its `python/export_policy.py`, and
 cross-checked bit-exact against its `ref/PolicyDriver.cs` (`docs/BOTS.md`).

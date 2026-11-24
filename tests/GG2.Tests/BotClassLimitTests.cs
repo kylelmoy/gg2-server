@@ -204,12 +204,7 @@ public sealed class BotClassLimitTests
     [Fact]
     public void AConfigFileReachesTheLimits()
     {
-        var config = CliCoverageTests.WriteConfig(
-            """
-            [BotClasslimits]
-            Spy=2
-            Medic=0
-            """);
+        var config = CliCoverageTests.WriteConfig("""{"BotClasslimits": {"Spy": 2, "Medic": 0}}""");
 
         var limits = CommandLine.Parse(["--config", config]).Bots.EffectiveClassLimits;
 

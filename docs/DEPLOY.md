@@ -278,7 +278,7 @@ release after it. Both scripts were run against real archives served from a
 local HTTP server: `install.sh` under dash with curl and with wget (Linux x64)
 and under macOS's `sh` (arm64), and `install.ps1` under Windows PowerShell 5.1
 through `iex`. Each was run for a fresh install, a reinstall that kept a
-`gg2.ini`, and a missing version.
+`gg2.json`, and a missing version.
 
 The macOS archives are built on a macOS runner, because the SDK signs the
 apphost (ad hoc) only there; an unsigned arm64 binary is killed at launch.
@@ -308,7 +308,7 @@ The `docker` job also starts the image before pushing it and fails unless the ga
 the non-root `app` user from `/app`.
 
 ```bash
-docker run -d --name gg2 --restart on-failure   -p 8190:8190 -p 8191:8191 -v /srv/gg2:/data   ghcr.io/<owner>/<repo>:latest --config /data/gg2.ini --bots 8 --lobby
+docker run -d --name gg2 --restart on-failure   -p 8190:8190 -p 8191:8191 -v /srv/gg2:/data   ghcr.io/<owner>/<repo>:latest --config /data/gg2.json --bots 8 --lobby
 ```
 
 | | |
@@ -335,7 +335,7 @@ port.
 
 `scp -r` over a live install is the thing that stops scaling, and not because of
 the copying. It overwrites in place, so there is nothing to roll back to; it
-carries whatever else is in the directory, including the developer's `gg2.ini`;
+carries whatever else is in the directory, including the developer's `gg2.json`;
 and afterwards nothing on the host says which commit is running.
 
 `scripts/deploy.sh` answers all three. One release directory per commit, a
@@ -348,7 +348,7 @@ touches:
   releases/cba32ad/     the one before it, kept for --rollback
   current  -> releases/17bec29
   previous -> releases/cba32ad
-  shared/               gg2.ini, bans.txt, traces/, logs/, custom maps
+  shared/               gg2.json, bans.txt, traces/, logs/, custom maps
 ```
 
 ```bash
@@ -367,7 +367,7 @@ reach the repository.
 | Step | Why it is that way |
 |---|---|
 | **preflight the host before transferring** | passwordless `sudo`, the unit's existence and write access are all checkable in one round trip, and all three otherwise fail late — `sudo` after the symlink has already been flipped, which leaves a host carrying a release its service was never restarted onto. The failure prints the exact sudoers line to install. |
-| publish into a fresh `deploy/stage/<sha>` | `deploy/linux` accumulates `gg2.ini`, custom maps and generated nav. Staging somewhere disposable keeps the developer's copies of those off every host; the archive also excludes them by name, for `--from`. |
+| publish into a fresh `deploy/stage/<sha>` | `deploy/linux` accumulates `gg2.json`, custom maps and generated nav. Staging somewhere disposable keeps the developer's copies of those off every host; the archive also excludes them by name, for `--from`. |
 | stream a `tar` over ssh, not `scp -r` | tar carries the mode bits, so the executable bit survives a copy from Windows and the `chmod +x` step disappears. Nothing is written to `/tmp` at either end. |
 | unpack to `releases/<sha>.incoming` | the running server never sees a half-written release. |
 | **run `--version` there before flipping** | the only check that executes the binary on the machine it will run on. A missing .NET 10 runtime, a publish for the wrong architecture and a truncated transfer all fail here, while `current` still points at the release that works. |
@@ -424,7 +424,7 @@ in under a second. But it is worth knowing three things about it:
   what tells the two apart — an ordinary `Stopping`/`Deactivated successfully`
   pair is a deliberate stop, and `Restart=on-failure` firing is not.
 - **It applies staged configuration you had not finished with.** Every
-  subsystem reads its options once at `Start`, so an edit to `shared/gg2.ini`
+  subsystem reads its options once at `Start`, so an edit to `shared/gg2.json`
   is inert until a restart — and this restart is one you did not schedule.
   Do not leave a half-made change in that file overnight.
 - **Debian does not do this**, at least not by default: neither
@@ -435,8 +435,8 @@ in under a second. But it is worth knowing three things about it:
 
 ### Configuration, as opposed to builds
 
-`scripts/deploy.sh --config` pushes `shared/gg2.ini` to every host from one
-`deploy/config` directory (a shared `common.ini` and one overlay per host),
+`scripts/deploy.sh --config` pushes `shared/gg2.json` to every host from one
+`deploy/config` directory (a shared `common.json` and one overlay per host),
 written with `gg2-server config edit`. It never touches `releases/`, needs no
 sudo unless `--restart` is given, and refuses a host whose file was edited
 there since the last push. A server built from a commit that includes this
@@ -447,7 +447,7 @@ layout, the rules and what `--status` reports.
 The first push to each host is a `--force`: `--check` shows the diff against the
 hand-maintained file it replaces, and anything worth keeping belongs in
 `deploy/config` first. To start from one host's existing file, copy its
-`shared/gg2.ini` to `deploy/config/common.ini`.
+`shared/gg2.json` to `deploy/config/common.json`.
 
 ### Which build is running
 
@@ -497,7 +497,7 @@ and `--keep-going`, still untested against a real failure.
 
 ⚠️ **A first deploy to a host is a migration, not an install, if anything is
 already there.** One host carried the flat pre-`--version` layout and needed its
-`gg2.ini` lifted into `shared/` and the flat tree removed before `deploy.sh` could
+`gg2.json` lifted into `shared/` and the flat tree removed before `deploy.sh` could
 run at all — the script deliberately does none of that. The preflight catches it
 as "cannot write `<root>`", because the old install is owned by the service user
 rather than the deploy user.
@@ -538,11 +538,11 @@ unit and the sudoers rule are already installed, which makes it look like a
 permissions problem with those instead.
 
 **`chmod 2775` on `shared/` is setgid and it is load-bearing.** The service writes
-there as `gg2` and the deploy account edits `gg2.ini` there as itself; setgid keeps
+there as `gg2` and the deploy account edits `gg2.json` there as itself; setgid keeps
 the group on anything either of them creates. Without it an in-place edit that
 replaces the file — `sed -i` does — silently drops the group to the editor's own,
 and the panel's settings page can no longer save. Nothing announces that: the
-server reads the file fine and only a save fails. Give `gg2.ini` itself `664`
+server reads the file fine and only a save fails. Give `gg2.json` itself `664`
 for the same reason.
 
 The unit is printed rather than installed: writing to `/etc` on somebody's
@@ -664,7 +664,7 @@ with its own config file in `shared/` and its own ports. For example
 
 | | `gg2` | `gg2-duel` |
 |---|---|---|
-| Config | `shared/gg2.ini`, rendered by `deploy.sh --config` | `shared/duel.ini`, hand-written on the host; `deploy.sh --config` never touches it |
+| Config | `shared/gg2.json`, rendered by `deploy.sh --config` | `shared/duel.json`, hand-written on the host; `deploy.sh --config` never touches it |
 | Game port / panel | 8190 / 8191 | 8192 / 8193, panel on loopback |
 | Maps and nav | the shipped rotation | `maps/duel` and `nav/duel`, `duel_01` to `duel_08` |
 | Recording, analytics | `shared/recordings`, `shared/analytics.tsv` | the same recordings directory (segment names carry the map), `shared/analytics-duel.tsv` |
@@ -930,7 +930,7 @@ client's own switch matches the literal string — a server that accepted
 `CTF_Truefort` would be accepting a name the client will not. The error message
 names the full path it looked for, which is enough to diagnose it.
 
-The case to watch is a `gg2.ini` or rotation file **copied off a Windows host**,
+The case to watch is a `gg2.json` or rotation file **copied off a Windows host**,
 where a mis-cased entry has been working by accident.
 
 ---

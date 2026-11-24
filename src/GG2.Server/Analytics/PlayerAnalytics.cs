@@ -421,7 +421,7 @@ public sealed class PlayerAnalytics : IDisposable
             // The one thing an operator needs from an "off" reply is how to
             // turn it on, so the panel does not have to carry the flag's name.
             return text
-                .Append(",\"hint\":\"pass --analytics <path>, or set [Analytics] File in the config file\"")
+                .Append(",\"hint\":\"pass --analytics <path>, or set Analytics.File in the config file\"")
                 .ToString();
         }
 

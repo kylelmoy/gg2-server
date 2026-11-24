@@ -6597,7 +6597,7 @@ traces reading a different gap.
 
 ### Lazy aim between shots (v5): the total turn is conserved
 
-`HumanizeOptions.Lazy`, `[Bots] HumanizePreset = lazy`. While the brain presses
+`HumanizeOptions.Lazy`, `"Bots": {"HumanizePreset": "lazy"}`. While the brain presses
 neither attack nor special, the aim tolerates a 45° error before correcting.
 It was fitted open loop to people who, within 150px, turn about 2°/tick and sit
 35° off between shots.

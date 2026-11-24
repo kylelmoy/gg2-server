@@ -146,13 +146,10 @@ public sealed class BotClassPolicyTests
     [Fact]
     public void AConfigFileReachesTheSetting()
     {
-        var config = CliCoverageTests.WriteConfig(
-            $"""
-             [Bots]
-             Mode=policy
-             Policy={PolicyFixture.Checkpoint}
-             ClassPolicy={PolicyFixture.SoldierAssignment}
-             """);
+        var config = CliCoverageTests.WriteConfig(new
+        {
+            Bots = new { Policy = new[] { PolicyFixture.Checkpoint }, ClassPolicy = new[] { PolicyFixture.SoldierAssignment } },
+        });
 
         var options = CommandLine.Parse(["--config", config]);
 

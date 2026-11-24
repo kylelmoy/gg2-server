@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using GG2.Host;
 using GG2.Protocol;
 using GG2.Server;
@@ -205,7 +205,7 @@ public sealed class CliCoverageTests
         // parsed the file and forgot where it came from would leave every saved
         // change in memory until the process ended. It needs a real file, because
         // Parse reads it.
-        ("ConfigFile", ["--config", WriteConfig("[Server]\nServerName=named\n")],
+        ("ConfigFile", ["--config", WriteConfig("""{"Server": {"ServerName": "named"}}""")],
             o => o.ConfigFile),
         ("Limits", ["--connect-rate", "3"], o => o.Limits.ConnectionBurstPerAddress),
         ("Limits", ["--connect-rate-window", "30"], o => o.Limits.ConnectionBurstWindow),
@@ -441,12 +441,7 @@ public sealed class CliCoverageTests
     [Fact]
     public void AFlagBeatsTheConfigFileInEitherOrder()
     {
-        var config = WriteConfig(
-            """
-            [Server]
-            ServerName=from the file
-            CapLimit=9
-            """);
+        var config = WriteConfig("""{"Server": {"ServerName": "from the file", "CapLimit": 9}}""");
 
         var before = CommandLine.Parse(["--name", "from the flag", "--config", config]);
         var after = CommandLine.Parse(["--config", config, "--name", "from the flag"]);
@@ -504,12 +499,7 @@ public sealed class CliCoverageTests
     [Fact]
     public void OnlyTheFlagsOverrideTheConfigFile()
     {
-        var config = WriteConfig(
-            """
-            [Server]
-            ServerName=from the file
-            CapLimit=9
-            """);
+        var config = WriteConfig("""{"Server": {"ServerName": "from the file", "CapLimit": 9}}""");
 
         Assert.Empty(CommandLine.Parse(["--config", config]).CommandLineOverrides);
 
@@ -527,10 +517,17 @@ public sealed class CliCoverageTests
         Assert.Contains(path, thrown.Message, StringComparison.Ordinal);
     }
 
-    internal static string WriteConfig(string contents)
+    internal static string WriteConfig(string json)
     {
-        var path = Path.Combine(Path.GetTempPath(), $"gg2-test-{Guid.NewGuid():N}.ini");
-        File.WriteAllText(path, contents);
+        var path = Path.Combine(Path.GetTempPath(), $"gg2-test-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, json);
         return path;
     }
+
+    /// <summary>
+    /// A config file serialized from <paramref name="config"/>, sections as
+    /// properties — so a Windows path needs no hand-escaping.
+    /// </summary>
+    internal static string WriteConfig(object config) =>
+        WriteConfig(System.Text.Json.JsonSerializer.Serialize(config));
 }

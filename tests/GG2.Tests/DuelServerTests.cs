@@ -532,15 +532,23 @@ public sealed class DuelServerTests
             if (policy)
             {
                 var nets = Path.Combine(ReferenceTree.RepositoryRoot, "checkpoints");
-                ServerConfigFile.ApplyLines(o, [
+                ServerConfigFile.ApplyText(o, System.Text.Json.JsonSerializer.Serialize(new
+                {
                     // A range past the cell, so the nets drive the whole approach
                     // rather than only inside 150 px.
-                    "[Bots]", "Mode=policy", "HandoverRule=distance", "HandoverRange=5000",
-                    $"Policy={Path.Combine(nets, "ppo-warm-soldier-s1.gg2p")},"
-                        + $"{Path.Combine(nets, "ppo-finetune-scout-s1.gg2p")},"
-                        + $"{Path.Combine(nets, "ppo-finetune2-heavy-s1.gg2p")}",
-                    "ClassPolicy=Soldier=ppo-warm-soldier-s1,Scout=ppo-finetune-scout-s1,Heavy=ppo-finetune2-heavy-s1",
-                ], Path.Combine(nets, "test.ini"));
+                    Bots = new
+                    {
+                        HandoverRule = "distance",
+                        HandoverRange = 5000,
+                        Policy = new[]
+                        {
+                            Path.Combine(nets, "ppo-warm-soldier-s1.gg2p"),
+                            Path.Combine(nets, "ppo-finetune-scout-s1.gg2p"),
+                            Path.Combine(nets, "ppo-finetune2-heavy-s1.gg2p"),
+                        },
+                        ClassPolicy = new[] { "Soldier=ppo-warm-soldier-s1", "Scout=ppo-finetune-scout-s1", "Heavy=ppo-finetune2-heavy-s1" },
+                    },
+                }), Path.Combine(nets, "test.json"));
                 BotBrain.Build(o);
             }
 

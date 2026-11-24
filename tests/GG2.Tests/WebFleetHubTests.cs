@@ -33,7 +33,7 @@ public sealed class WebFleetHubTests : IDisposable
         _member = new ServerHarness(o =>
         {
             o.ServerName = "The Member";
-            o.ConfigFile = Path.Combine(_memberDirectory, "gg2.ini");
+            o.ConfigFile = Path.Combine(_memberDirectory, "gg2.json");
             o.Web = WebAdminOptions.Disabled with
             {
                 Enabled = true,
@@ -47,7 +47,7 @@ public sealed class WebFleetHubTests : IDisposable
         _hub = new ServerHarness(o =>
         {
             o.ServerName = "The Hub";
-            o.ConfigFile = Path.Combine(_hubDirectory, "gg2.ini");
+            o.ConfigFile = Path.Combine(_hubDirectory, "gg2.json");
             o.Web = WebAdminOptions.Disabled with
             {
                 Enabled = true,
@@ -194,8 +194,8 @@ public sealed class WebFleetHubTests : IDisposable
         });
 
         Assert.True(saved.GetProperty("ok").GetBoolean(), saved.ToString());
-        Assert.Contains("PlayerLimit=20", File.ReadAllText(Path.Combine(_hubDirectory, "fleet", "common.ini")), StringComparison.Ordinal);
-        Assert.Contains("Renamed", File.ReadAllText(Path.Combine(_hubDirectory, "fleet", "hosts", "member.ini")), StringComparison.Ordinal);
+        Assert.Contains("\"PlayerLimit\": 20", File.ReadAllText(Path.Combine(_hubDirectory, "fleet", "common.json")), StringComparison.Ordinal);
+        Assert.Contains("Renamed", File.ReadAllText(Path.Combine(_hubDirectory, "fleet", "hosts", "member.json")), StringComparison.Ordinal);
 
         // A host-local setting is refused outright, not quietly dropped.
         var refused = await PostAsync(csrf, "/api/fleet/config/save", new
@@ -215,11 +215,18 @@ public sealed class WebFleetHubTests : IDisposable
     [Fact]
     public async Task APushInstallsTheFleetSettingsAndKeepsTheMembersOwn()
     {
-        var memberFile = Path.Combine(_memberDirectory, "gg2.ini");
+        var memberFile = Path.Combine(_memberDirectory, "gg2.json");
 
         // A hand-written file on the member, with two host-local keys the fleet
         // settings cannot name and one shared key they will change.
-        File.WriteAllText(memberFile, "[Settings]\nPlayerLimit=12\n\n[Web]\nAllowFrom=192.0.2.9\n\n[Server]\nBanFile=my-bans.txt\n");
+        File.WriteAllText(memberFile,
+            """
+            {
+              "Settings": {"PlayerLimit": 12},
+              "Web": {"AllowFrom": "192.0.2.9"},
+              "Server": {"BanFile": "my-bans.txt"}
+            }
+            """);
 
         var csrf = await SignInAsync();
         await PostAsync(csrf, "/api/fleet/add", new { name = "member", url = MemberUrl, pairing = _member.Server.WebPairingCode });
@@ -238,25 +245,25 @@ public sealed class WebFleetHubTests : IDisposable
         Assert.False(check.GetProperty("managed").GetBoolean());
         Assert.False(check.GetProperty("unchanged").GetBoolean());
         Assert.Contains(check.GetProperty("diff").EnumerateArray(), d => d.GetProperty("op").GetString() == "-"
-            && d.GetProperty("text").GetString() == "PlayerLimit=12");
+            && d.GetProperty("text").GetString()!.Contains("\"PlayerLimit\": 12", StringComparison.Ordinal));
 
         var current = check.GetProperty("current").GetString()!;
 
         // Never pushed and hand-written: refused without force, and untouched.
         var refused = await PostAsync(csrf, "/api/fleet/push", new { name = "member", expected = current });
         Assert.False(refused.GetProperty("ok").GetBoolean());
-        Assert.Contains("PlayerLimit=12", File.ReadAllText(memberFile), StringComparison.Ordinal);
+        Assert.Contains("\"PlayerLimit\": 12", File.ReadAllText(memberFile), StringComparison.Ordinal);
 
         var pushed = await PostAsync(csrf, "/api/fleet/push", new { name = "member", expected = current, force = true });
         Assert.True(pushed.GetProperty("ok").GetBoolean(), pushed.ToString());
 
         var installed = File.ReadAllText(memberFile);
-        Assert.Contains("PlayerLimit=20", installed, StringComparison.Ordinal);
+        Assert.Contains("\"PlayerLimit\": 20", installed, StringComparison.Ordinal);
         Assert.Contains("Renamed", installed, StringComparison.Ordinal);
-        Assert.Contains("AllowFrom=192.0.2.9", installed, StringComparison.Ordinal);
-        Assert.Contains("BanFile=my-bans.txt", installed, StringComparison.Ordinal);
-        Assert.DoesNotContain("PlayerLimit=12", installed, StringComparison.Ordinal);
-        Assert.Contains("PlayerLimit=12", File.ReadAllText(memberFile + ".prev"), StringComparison.Ordinal);
+        Assert.Contains("\"AllowFrom\": \"192.0.2.9\"", installed, StringComparison.Ordinal);
+        Assert.Contains("\"BanFile\": \"my-bans.txt\"", installed, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"PlayerLimit\": 12", installed, StringComparison.Ordinal);
+        Assert.Contains("\"PlayerLimit\": 12", File.ReadAllText(memberFile + ".prev"), StringComparison.Ordinal);
 
         // The marker PushedConfigWatcher applies from: the new file's own hash.
         Assert.Equal(
@@ -282,8 +289,8 @@ public sealed class WebFleetHubTests : IDisposable
     public async Task AdoptingIntoTheSharedSettingsStartsAFleetFromAServer()
     {
         File.WriteAllText(
-            Path.Combine(_memberDirectory, "gg2.ini"),
-            "[Settings]\nPlayerLimit=14\n\n[Server]\nWelcomeMessage=hello from the member\n\n[Web]\nAllowFrom=192.0.2.9\n");
+            Path.Combine(_memberDirectory, "gg2.json"),
+            """{"Settings": {"PlayerLimit": 14}, "Server": {"WelcomeMessage": "hello from the member"}, "Web": {"AllowFrom": "192.0.2.9"}}""");
 
         var csrf = await SignInAsync();
         await PostAsync(csrf, "/api/fleet/add", new { name = "member", url = MemberUrl, pairing = _member.Server.WebPairingCode });
@@ -299,8 +306,8 @@ public sealed class WebFleetHubTests : IDisposable
         var adopted = await PostAsync(csrf, "/api/fleet/adopt", new { name = "member", ids, into = "common" });
         Assert.True(adopted.GetProperty("ok").GetBoolean(), adopted.ToString());
 
-        var common = File.ReadAllText(Path.Combine(_hubDirectory, "fleet", "common.ini"));
-        Assert.Contains("PlayerLimit=14", common, StringComparison.Ordinal);
+        var common = File.ReadAllText(Path.Combine(_hubDirectory, "fleet", "common.json"));
+        Assert.Contains("\"PlayerLimit\": 14", common, StringComparison.Ordinal);
         Assert.Contains("hello from the member", common, StringComparison.Ordinal);
         Assert.DoesNotContain("192.0.2.9", common, StringComparison.Ordinal);
 
@@ -423,23 +430,25 @@ public sealed class WebFleetHubTests : IDisposable
     {
         var pairing = WebIdentity.PairingCode(new string('a', 43), new string('b', 64));
 
-        var members = FleetHub.Parse(
-        [
-            "; comment",
-            "[good]",
-            "Url=https://203.0.113.7:8191/",
-            "Pairing=" + pairing,
-            "[plain-http]",
-            "Url=http://203.0.113.8:8191/",
-            "Pairing=" + pairing,
-            "[no/slashes]",
-            "Url=https://203.0.113.9:8191/",
-            "Pairing=" + pairing,
-            "[no-pairing]",
-            "Url=https://203.0.113.10:8191/",
-        ]);
+        var members = FleetHub.Parse(System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["//"] = "a note, not a member",
+            ["good"] = new { Url = "https://203.0.113.7:8191/", Pairing = pairing },
+            ["plain-http"] = new { Url = "http://203.0.113.8:8191/", Pairing = pairing },
+            ["no/slashes"] = new { Url = "https://203.0.113.9:8191/", Pairing = pairing },
+            ["no-pairing"] = new { Url = "https://203.0.113.10:8191/" },
+            ["url-not-text"] = new { Url = new { }, Pairing = pairing },
+        }));
 
         Assert.Equal("good", Assert.Single(members).Name);
+    }
+
+    [Fact]
+    public void AMembersFileThatIsNotJsonIsRefusedRatherThanReadAsEmpty()
+    {
+        // Read as no members, the next member added would save a file holding
+        // only itself, and every other member's token would be gone.
+        Assert.Throws<FormatException>(() => FleetHub.Parse("[good]" + "\n" + "Url=https://203.0.113.7:8191/"));
     }
 
     private static string TempDirectory(string role)

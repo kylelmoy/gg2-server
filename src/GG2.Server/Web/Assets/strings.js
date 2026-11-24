@@ -110,7 +110,7 @@ const STRINGS = {
       "name": "Name",
       "namePlaceholder": "us-east",
       "pair": "Pair",
-      "pairHint": "On the member, set <code>[Web] Certificate=auto</code>, <code>FleetMember=1</code>, <code>Bind=0.0.0.0</code> and <code>AllowFrom=</code>&lt;hub address&gt;, then restart. The pairing code is printed at startup.",
+      "pairHint": "On the member, set <code>Web.Certificate</code> to <code>auto</code>, <code>Web.FleetMember</code> on, <code>Web.Bind</code> to <code>0.0.0.0</code> and <code>Web.AllowFrom</code> to the hub's address, then restart. The pairing code is printed at startup.",
       "pairTitle": "Pair a server",
       "pairingCode": "Pairing code",
       "players": "Players",
@@ -712,7 +712,7 @@ const STRINGS = {
     "Server": {
       "ServerName": "Shown in the server browser and on join.",
       "WelcomeMessage": "Sent to each joining player. Empty: none.",
-      "ChatJoinMessage": "Chat line sent to each player on joining chat. Empty: none. Requires chat ([Chat] Enabled, or chat_v2_pr).",
+      "ChatJoinMessage": "Chat line sent to each player on joining chat. Empty: none. Requires chat (Chat.Enabled, or chat_v2_pr).",
       "Password": "Game password. Empty: none (no PASSWORD_REQUEST).",
       "Map": "Starting map. Empty: first rotation entry.",
       "Rotation": "Map rotation, in order. Duplicates allowed.",
@@ -790,7 +790,7 @@ const STRINGS = {
       "MaxBots": "Hard cap on bots, applied after the fill target.",
       "MinHumans": "Humans required before any bot spawns. Below it the target is 0, so an empty server does not look full in the lobby.",
       "Difficulty": "1..5. 5 is full strength; lower tiers are deliberate handicaps.",
-      "SuspendMinutes": "Duration of the /bots off chat command, 0..1440. 0 disables the command. Requires chat ([Chat] Enabled, or chat_v2_pr).",
+      "SuspendMinutes": "Duration of the /bots off chat command, 0..1440. 0 disables the command. Requires chat (Chat.Enabled, or chat_v2_pr).",
       "NamePrefix": "Bot name prefix.",
       "ClassPolicy": "Class=name pairs choosing each class's driver; name is a checkpoint file name without extension, or 'scripted'. Unlisted classes: the loaded checkpoint that claims them, else scripted.",
       "Occupancy": "Penalise edges teammates already use so squads spread out. Behavioural: off drops match dispersion 0.785 to 0.634.",
@@ -860,8 +860,8 @@ const STRINGS = {
     "overriddenOnly": "overridden only",
     "preview": {
       "note": "Saved file as sent to this server; unsaved edits excluded. Passwords masked.",
-      "open": "Preview gg2.ini",
-      "title": "gg2.ini"
+      "open": "Preview gg2.json",
+      "title": "gg2.json"
     },
     "push": {
       "changes": "What a push changes",
@@ -884,20 +884,20 @@ const STRINGS = {
   "editor": {
     "notRunning": "Editor stopped.",
     "allServers": "All servers",
-    "commonTabTitle": "common.ini: all servers, unless overridden",
+    "commonTabTitle": "common.json: all servers, unless overridden",
     "hostTabTitle": "{name}: {file}",
-    "hostFile": "{name}: {file}, overrides common.ini",
-    "hostFileNotCreated": "{name}: {file} (not created), overrides common.ini",
-    "commonFile": "common.ini: all servers, unless overridden",
+    "hostFile": "{name}: {file}, overrides common.json",
+    "hostFileNotCreated": "{name}: {file} (not created), overrides common.json",
+    "commonFile": "common.json: all servers, unless overridden",
     "thisServerGroup": "This server",
     "noOverridesMatch": "No matching overrides on this server.",
     "noMatch": "No settings match.",
     "hubPageTitle": "Fleet settings — gg2-server",
     "hubBrand": "Fleet settings",
     "notes": {
-      "noFleetSettings": "No fleet settings yet: values below are defaults and Save creates them. To start from an existing server, select it and use Adopt… into all servers. Paths and [Web] are per-server and never pushed.",
-      "noCommonIni": "No common.ini yet: values below are defaults and Save creates it. To start from a server's config, copy its /opt/gg2-server/shared/gg2.ini to {path} and reload.",
-      "commonError": "common.ini: {error}"
+      "noFleetSettings": "No fleet settings yet: values below are defaults and Save creates them. To start from an existing server, select it and use Adopt… into all servers. Paths and the Web section are per-server and never pushed.",
+      "noCommonIni": "No common.json yet: values below are defaults and Save creates it. To start from a server's config, copy its /opt/gg2-server/shared/gg2.json to {path} and reload.",
+      "commonError": "common.json: {error}"
     },
     "placeholder": {
       "secretSet": "set; type to replace",
@@ -919,9 +919,9 @@ const STRINGS = {
       "other": "Overridden on {names}; changes here do not apply there."
     },
     "sharedTag": "shared",
-    "sharedTagTitle": "From common.ini. Enter a value to override on this server.",
+    "sharedTagTitle": "From common.json. Enter a value to override on this server.",
     "useShared": "use shared",
-    "useSharedTitle": "Remove this server's value and fall back to common.ini.",
+    "useSharedTitle": "Remove this server's value and fall back to common.json.",
     "status": {
       "clean": "No unsaved changes.",
       "dirty": {
@@ -946,7 +946,7 @@ const STRINGS = {
       "pushed": "{name}: pushed; applies when next empty"
     },
     "preview": {
-      "title": "{host} — gg2.ini",
+      "title": "{host} — gg2.json",
       "sub": "{host} — sha256 {sha256}"
     },
     "push": {
@@ -993,7 +993,7 @@ const STRINGS = {
     },
     "confirm": {
       "pushRestart": "Push to {name} and restart now? Connected players are dropped.",
-      "overwrite": "Overwrite {name}'s configuration? Check the diff first; the old file survives only as gg2.ini.prev."
+      "overwrite": "Overwrite {name}'s configuration? Check the diff first; the old file survives only as gg2.json.prev."
     }
   }
 };

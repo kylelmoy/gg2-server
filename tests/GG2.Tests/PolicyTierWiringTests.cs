@@ -88,12 +88,10 @@ public sealed class PolicyTierWiringTests
     [Fact]
     public void AConfigFileCanNameSeveralCheckpoints()
     {
-        var config = CliCoverageTests.WriteConfig(
-            $"""
-             [Bots]
-             Mode=policy
-             Policy={PolicyFixture.Checkpoint},{PolicyFixture.Second}
-             """);
+        var config = CliCoverageTests.WriteConfig(new
+        {
+            Bots = new { Policy = new[] { PolicyFixture.Checkpoint, PolicyFixture.Second } },
+        });
 
         var options = CommandLine.Parse(["--config", config]);
         var brain = Assert.IsType<BotBrainSpec>(options.Bots.Brain);
@@ -120,12 +118,10 @@ public sealed class PolicyTierWiringTests
     [Fact]
     public void APolicyFlagReplacesTheFilesEntireList()
     {
-        var config = CliCoverageTests.WriteConfig(
-            $"""
-             [Bots]
-             Mode=policy
-             Policy={PolicyFixture.Checkpoint},{PolicyFixture.Second}
-             """);
+        var config = CliCoverageTests.WriteConfig(new
+        {
+            Bots = new { Policy = new[] { PolicyFixture.Checkpoint, PolicyFixture.Second } },
+        });
 
         foreach (string[] args in new[]
                  {
@@ -147,14 +143,10 @@ public sealed class PolicyTierWiringTests
     [Fact]
     public void TheHandoverRangeReachesTheBrain()
     {
-        var config = CliCoverageTests.WriteConfig(
-            $"""
-             [Bots]
-             Mode=policy
-             Policy={PolicyFixture.Checkpoint}
-             HandoverRule=distance
-             HandoverRange=100000
-             """);
+        var config = CliCoverageTests.WriteConfig(new
+        {
+            Bots = new { Policy = new[] { PolicyFixture.Checkpoint }, HandoverRule = "distance", HandoverRange = 100000 },
+        });
 
         var wide = CommandLine.Parse(["--config", config]);
         Assert.Equal(100000, wide.Bots.Brain!.Range);

@@ -310,7 +310,7 @@ internal static class Program
 
                 log.Info(
                     "web admin: keeping the generated password across this restart, so "
-                    + "whoever asked for it is not locked out. Set [Web] Password or "
+                    + "whoever asked for it is not locked out. Set Web.Password or "
                     + "--web-password to choose one instead.");
             }
 

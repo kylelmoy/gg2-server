@@ -171,7 +171,7 @@ public static class MapDirectory
     /// <summary>
     /// Which class each of <see cref="ShippedCheckpoints"/> drives, as
     /// <c>[Bots] ClassPolicy</c> entries. A <c>.gg2p</c> names no classes, so the
-    /// bundle is not usable without these; the fleet's <c>common.ini</c> carries
+    /// bundle is not usable without these; the fleet's <c>common.json</c> carries
     /// the same nine.
     /// </summary>
     public static readonly IReadOnlyList<string> ShippedClassPolicies =

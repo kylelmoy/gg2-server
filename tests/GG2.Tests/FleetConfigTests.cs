@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -58,31 +58,26 @@ public sealed class FleetConfigTests : IDisposable
     {
         Common(
             """
-            [Settings]
-            PlayerLimit=20
-
-            [Server]
-            ServerName=Shared Name
-            WelcomeMessage=shared message
-            Rotation=koth_valley,cp_dirtbowl
-
-            [Bots]
-            FillToPlayers=11
+            {
+              "Settings": {"PlayerLimit": 20},
+              "Server": {
+                "ServerName": "Shared Name",
+                "WelcomeMessage": "shared message",
+                "Rotation": ["koth_valley", "cp_dirtbowl"]
+              },
+              "Bots": {"FillToPlayers": 11}
+            }
             """);
 
         Overlay("admin@10.0.0.2",
-            """
-            [Server]
-            ServerName=US West
-            WelcomeMessage=hello from the west
-            """);
+            """{"Server": {"ServerName": "US West", "WelcomeMessage": "hello from the west"}}""");
 
         var west = Rendered("admin@10.0.0.2");
 
         Assert.Equal("US West", west.ServerName);
         Assert.Equal("hello from the west", west.WelcomeMessage);
 
-        // Non-default values, so a render that dropped common.ini would not pass
+        // Non-default values, so a render that dropped common.json would not pass
         // by landing on the defaults.
         Assert.Equal(20, west.PlayerLimit);
         Assert.Equal(11, west.Bots.FillToPlayers);
@@ -90,22 +85,17 @@ public sealed class FleetConfigTests : IDisposable
     }
 
     /// <summary>
-    /// ⚠️ The reason a render is a concatenation and not two <c>Apply</c> calls:
+    /// ⚠️ The reason a render is a merge read once and not two <c>Apply</c> calls:
     /// applying an overlay with no <c>Map</c> key to options that have a rotation
     /// empties <c>Map</c>, so the host would open on the rotation instead of the
-    /// map <c>common.ini</c> names.
+    /// map <c>common.json</c> names.
     /// </summary>
     [Fact]
     public void AnOverlayThatDoesNotNameTheMapKeepsCommonsMap()
     {
-        Common(
-            """
-            [Server]
-            Map=ctf_eiger
-            Rotation=koth_valley,cp_dirtbowl
-            """);
+        Common("""{"Server": {"Map": "ctf_eiger", "Rotation": ["koth_valley", "cp_dirtbowl"]}}""");
 
-        Overlay("hub", "[Server]\nServerName=Hub\n");
+        Overlay("hub", """{"Server": {"ServerName": "Hub"}}""");
 
         Assert.Equal("ctf_eiger", Rendered("hub").Map);
 
@@ -120,7 +110,7 @@ public sealed class FleetConfigTests : IDisposable
     [Fact]
     public void AHostWithNoOverlayGetsCommonAndIsWarnedAbout()
     {
-        Common("[Server]\nServerName=Same\n");
+        Common("""{"Server": {"ServerName": "Same"}}""");
 
         Assert.Equal("Same", Rendered("a").ServerName);
 
@@ -142,8 +132,8 @@ public sealed class FleetConfigTests : IDisposable
     [Fact]
     public void AHostThatSetsAChatSettingWithNoChatPluginIsWarnedAboutBeforeThePush()
     {
-        Common("[Server]\nServerName=Solo\nChatJoinMessage=type /bots\n[Chat]\nEnabled=0\n");
-        Overlay("a", "[Bots]\nSuspendMinutes=15\n");
+        Common("""{"Server": {"ServerName": "Solo", "ChatJoinMessage": "type /bots"}, "Chat": {"Enabled": false}}""");
+        Overlay("a", """{"Bots": {"SuspendMinutes": 15}}""");
 
         var warnings = FleetConfig.Warnings(ConfigDir, ["a"]);
 
@@ -153,15 +143,17 @@ public sealed class FleetConfigTests : IDisposable
         // And the half that keeps it from being a line nobody can clear: adding
         // the plugin silences both, so it is the configuration being described
         // and not the feature existing.
-        Common("[Server]\nServerName=Solo\nChatJoinMessage=type /bots\n"
-            + "ServerPluginList=chat_v2_pr\n[Chat]\nEnabled=0\n");
+        Common("""
+            {"Server": {"ServerName": "Solo", "ChatJoinMessage": "type /bots", "ServerPluginList": "chat_v2_pr"},
+             "Chat": {"Enabled": false}}
+            """);
 
         Assert.DoesNotContain(
             FleetConfig.Warnings(ConfigDir, ["a"]),
             w => w.Contains("chat is off", StringComparison.Ordinal));
 
         // And the server's own chat, on by default, silences them too.
-        Common("[Server]\nServerName=Solo\nChatJoinMessage=type /bots\n");
+        Common("""{"Server": {"ServerName": "Solo", "ChatJoinMessage": "type /bots"}}""");
 
         Assert.DoesNotContain(
             FleetConfig.Warnings(ConfigDir, ["a"]),
@@ -171,17 +163,17 @@ public sealed class FleetConfigTests : IDisposable
     [Fact]
     public void ARotationFileIsRefusedBecauseOnlyTheConfigIsPushed()
     {
-        Common("[Server]\nMapRotation=rotation.txt\n");
+        Common("""{"Server": {"MapRotation": "rotation.txt"}}""");
 
         var refusal = Assert.Throws<FormatException>(() => FleetConfig.Render(ConfigDir, "h"));
-        Assert.Contains("[Server] Rotation", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("Server.Rotation", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void AValueTheServerWouldRefuseIsRefusedAtRenderNamingTheHost()
     {
-        Common("[Settings]\nPlayerLimit=16\n");
-        Overlay("us-east", "[Settings]\nPlayerLimit=99\n");
+        Common("""{"Settings": {"PlayerLimit": 16}}""");
+        Overlay("us-east", """{"Settings": {"PlayerLimit": 99}}""");
 
         var refusal = Assert.Throws<FormatException>(() => FleetConfig.Render(ConfigDir, "us-east"));
         Assert.StartsWith("us-east:", refusal.Message, StringComparison.Ordinal);
@@ -190,7 +182,7 @@ public sealed class FleetConfigTests : IDisposable
     [Fact]
     public void TheRenderedBytesAreLfUtf8WithNoBom()
     {
-        Common("[Server]\r\nServerName=Crlf\r\n");
+        Common("{\r\n  \"Server\": {\"ServerName\": \"Crlf\"}\r\n}\r\n");
 
         var bytes = FleetConfig.Encode(FleetConfig.Render(ConfigDir, "h"));
 
@@ -232,7 +224,7 @@ public sealed class FleetConfigTests : IDisposable
         string[] destinations = ["hub", "admin@203.0.113.7", "host:2222", "[::1]", "a b", "Ω"];
 
         foreach (var destination in destinations)
-            Assert.Equal(rule.Replace(destination, "_") + ".ini", FleetConfig.OverlayFileName(destination));
+            Assert.Equal(rule.Replace(destination, "_") + ".json", FleetConfig.OverlayFileName(destination));
 
         // ⚠️ `/scripts/` is GITIGNORED — the operator's fleet tooling, not the
         // project's — so the script is absent from a fresh clone and from any
@@ -262,7 +254,7 @@ public sealed class FleetConfigTests : IDisposable
     [Fact]
     public void ASaveThatWouldBreakOneHostWritesNothingAtAll()
     {
-        Common("[Settings]\nPlayerLimit=16\n");
+        Common("""{"Settings": {"PlayerLimit": 16}}""");
         Hosts("a", "b");
         var before = File.ReadAllText(FleetConfig.CommonPath(ConfigDir));
 
@@ -281,7 +273,7 @@ public sealed class FleetConfigTests : IDisposable
     [Fact]
     public void AnOverrideIsWrittenToTheHostAndClearingItRemovesTheKey()
     {
-        Common("[Server]\nServerName=Shared\n");
+        Common("""{"Server": {"ServerName": "Shared"}}""");
         Hosts("a", "b");
         var editor = new FleetConfigEditor(ConfigDir, HostsFile);
 
@@ -304,8 +296,8 @@ public sealed class FleetConfigTests : IDisposable
     [Fact]
     public void ACommonSaveReachesEveryHostThatDoesNotOverrideIt()
     {
-        Common("[Settings]\nPlayerLimit=16\n");
-        Overlay("b", "[Settings]\nPlayerLimit=10\n");
+        Common("""{"Settings": {"PlayerLimit": 16}}""");
+        Overlay("b", """{"Settings": {"PlayerLimit": 10}}""");
         Hosts("a", "b");
 
         new FleetConfigEditor(ConfigDir, HostsFile).Save("""{"common": {"Settings.PlayerLimit": "24"}}""");
@@ -317,7 +309,7 @@ public sealed class FleetConfigTests : IDisposable
     [Fact]
     public void TheModelNeverCarriesASecretAndAnEmptySecretLeavesItAlone()
     {
-        Common("[Web]\nPassword=correct-horse\n[Server]\nPassword=battery-staple\n");
+        Common("""{"Web": {"Password": "correct-horse"}, "Server": {"Password": "battery-staple"}}""");
         Hosts("a");
         var editor = new FleetConfigEditor(ConfigDir, HostsFile);
 
@@ -330,16 +322,21 @@ public sealed class FleetConfigTests : IDisposable
 
         var preview = editor.Preview("a");
         Assert.DoesNotContain("correct-horse", preview, StringComparison.Ordinal);
-        Assert.Contains("Password=********", preview, StringComparison.Ordinal);
+        Assert.Contains("\"Password\": \"********\"", JsonDocument.Parse(preview).RootElement.GetProperty("text").GetString()!, StringComparison.Ordinal);
     }
 
     [Fact]
     public void MaskingLeavesEverythingButSecretsAlone()
     {
-        const string text = "[Server]\nServerName=Password=looks-like-one\nPassword=\n[Web]\nPassword=\"quoted\"\nPort=8080";
+        const string text = """
+            {
+              "Server": {"ServerName": "\"Password\": \"looks-like-one\"", "Password": ""},
+              "Web": {"Password": "quoted", "Port": 8080}
+            }
+            """;
 
         Assert.Equal(
-            "[Server]\nServerName=Password=looks-like-one\nPassword=\n[Web]\nPassword=********\nPort=8080",
+            text.Replace("\"quoted\"", "\"********\"", StringComparison.Ordinal),
             FleetConfigEditor.MaskSecrets(text));
     }
 
@@ -347,7 +344,7 @@ public sealed class FleetConfigTests : IDisposable
 
     private string ServerConfig(string text)
     {
-        var path = Path.Combine(_root, "gg2.ini");
+        var path = Path.Combine(_root, "gg2.json");
         File.WriteAllText(path, text);
         return path;
     }
@@ -363,11 +360,11 @@ public sealed class FleetConfigTests : IDisposable
     [Fact]
     public void APushIsAppliedOnlyOnceNobodyIsConnected()
     {
-        var path = ServerConfig("[Server]\nServerName=Before\n");
+        var path = ServerConfig("""{"Server": {"ServerName": "Before"}}""");
         var log = new RecordingLog();
         var watcher = new PushedConfigWatcher(path, log, 0);
 
-        Push(path, "[Server]\nServerName=After\n");
+        Push(path, """{"Server": {"ServerName": "After"}}""");
 
         Assert.False(watcher.ShouldRestart(Later, anybodyConnected: true));
         Assert.True(log.Contains("waiting"));
@@ -381,10 +378,10 @@ public sealed class FleetConfigTests : IDisposable
     [Fact]
     public void AServerStartedWithoutAMarkerNeverRestartsItself()
     {
-        var path = ServerConfig("[Server]\nServerName=Before\n");
+        var path = ServerConfig("""{"Server": {"ServerName": "Before"}}""");
         var watcher = new PushedConfigWatcher(path, new RecordingLog(), 0);
 
-        File.WriteAllText(path, "[Server]\nServerName=Saved from the panel\n");
+        File.WriteAllText(path, """{"Server": {"ServerName": "Saved from the panel"}}""");
 
         Assert.False(watcher.ShouldRestart(Later, anybodyConnected: false));
         Assert.False(File.Exists(path + FleetConfig.AppliedSuffix));
@@ -394,11 +391,11 @@ public sealed class FleetConfigTests : IDisposable
     [Fact]
     public void AFileEditedOnTheHostAfterThePushIsNotApplied()
     {
-        var path = ServerConfig("[Server]\nServerName=Before\n");
+        var path = ServerConfig("""{"Server": {"ServerName": "Before"}}""");
         var watcher = new PushedConfigWatcher(path, new RecordingLog(), 0);
 
-        Push(path, "[Server]\nServerName=Pushed\n");
-        File.WriteAllText(path, "[Server]\nServerName=Pushed, then edited in the panel\n");
+        Push(path, """{"Server": {"ServerName": "Pushed"}}""");
+        File.WriteAllText(path, """{"Server": {"ServerName": "Pushed, then edited in the panel"}}""");
 
         Assert.False(watcher.ShouldRestart(Later, anybodyConnected: false));
         Assert.True(watcher.Describe().EditedSincePush);
@@ -407,11 +404,11 @@ public sealed class FleetConfigTests : IDisposable
     [Fact]
     public void APushTheServerCouldNotStartOnIsNotApplied()
     {
-        var path = ServerConfig("[Server]\nServerName=Before\n");
+        var path = ServerConfig("""{"Server": {"ServerName": "Before"}}""");
         var log = new RecordingLog();
         var watcher = new PushedConfigWatcher(path, log, 0);
 
-        Push(path, "[Settings]\nPlayerLimit=not a number\n");
+        Push(path, """{"Settings": {"PlayerLimit": "not a number"}}""");
 
         Assert.False(watcher.ShouldRestart(Later, anybodyConnected: false));
         Assert.Single(log.Warnings);
@@ -421,7 +418,7 @@ public sealed class FleetConfigTests : IDisposable
     public void AServerStartedOnAPushedFileRecordsItAsAppliedAndDoesNotRestartForIt()
     {
         var path = ServerConfig(string.Empty);
-        Push(path, "[Server]\nServerName=Pushed\n");
+        Push(path, """{"Server": {"ServerName": "Pushed"}}""");
 
         var watcher = new PushedConfigWatcher(path, new RecordingLog(), 0);
 
@@ -435,7 +432,7 @@ public sealed class FleetConfigTests : IDisposable
     [Fact]
     public async Task TheEditorRefusesAMissingTokenAndAForeignHost()
     {
-        Common("[Server]\nServerName=x\n");
+        Common("""{"Server": {"ServerName": "x"}}""");
         Hosts("a");
 
         using var server = new ConfigEditorServer(new FleetConfigEditor(ConfigDir, HostsFile), 0);

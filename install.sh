@@ -1,7 +1,7 @@
 #!/bin/sh
 # Downloads a gg2-server release for this machine (Linux x64, macOS Apple
 # Silicon or Intel) and unpacks it into ./gg2-server. Re-running it updates
-# that directory in place and leaves files it did not ship (a gg2.ini, logs)
+# that directory in place and leaves files it did not ship (a gg2.json, logs)
 # alone.
 #
 #   curl -fsSL https://raw.githubusercontent.com/kylelmoy/gg2-server/master/install.sh | sh

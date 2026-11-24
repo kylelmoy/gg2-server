@@ -12,7 +12,7 @@ each. Nothing else in this file exists until its row says so.
 | Step | Part | State |
 |---|---|---|
 | 1 | A server stops itself: empty timeout and hard lifetime | **Built.** `EmptyServerExitTests`; the real host exits 0 three seconds after an empty start |
-| 2 | The room host: one process, one port, many rooms | **Built** as a library (`RoomHost`, `RoomFrontDoor`, `SharedNav`, `SharedPolicies`). `RoomHostTests` drive real sockets through the one port. **Live, 2026-11-22**: a stock GM8 client joined a room created over the API (`gg2-server rooms` with the fleet's `common.ini`, Windows, loopback) with the code as its password, in lower case with spaces; got the room's map, its policy bots filled to six, chat, a character on blue; a code naming no room showed the stock "Incorrect Password."; the emptied room ended 120 s after the client left and its code went 404. Not yet run on a VPS or from another machine |
+| 2 | The room host: one process, one port, many rooms | **Built** as a library (`RoomHost`, `RoomFrontDoor`, `SharedNav`, `SharedPolicies`). `RoomHostTests` drive real sockets through the one port. **Live, 2026-11-22**: a stock GM8 client joined a room created over the API (`gg2-server rooms` with the fleet's `common.json`, Windows, loopback) with the code as its password, in lower case with spaces; got the room's map, its policy bots filled to six, chat, a character on blue; a code naming no room showed the stock "Incorrect Password."; the emptied room ended 120 s after the client left and its code went 404. Not yet run on a VPS or from another machine |
 | 3 | The dispatcher API, inside the room host | **Built**: `gg2-server rooms`. `RoomApiTests` create over real HTTP and join with the returned code over the game port. No authentication; a create is limited per address (`RoomCreateLimitTests`) |
 | 4 | Device check and the ban list | **deferred** (no Apple developer key yet); the per-address create limits stand in |
 | 5 | the native client: create, join by code | not started |
@@ -201,7 +201,7 @@ are not physics on the wire.
 (`src/GG2.Host/RoomsCommand.cs`, `src/GG2.Server/Rooms/RoomApi.cs`):
 
 ```
-gg2-server rooms --config rooms.ini --port 8300 --prefix W --max-rooms 8 \
+gg2-server rooms --config rooms.json --port 8300 --prefix W --max-rooms 8 \
                  --api-port 8301 [--api-bind 127.0.0.1] [--min-free-mb 256] \
                  [--live-per-address 2] [--creates-per-hour 6] [--api-trust-proxy]                  [--drain-file <path>]
 ```
@@ -213,7 +213,7 @@ gg2-server rooms --config rooms.ini --port 8300 --prefix W --max-rooms 8 \
 | `GET /rooms/{code}` | `code`, `gamePort`, `map`, `players`, `playerLimit`, `createdUtc`, `endsUtc`; `404` for a code naming no live room |
 
 **A room is the base config plus the choices.** `--config` is an ordinary
-`gg2.ini` (bots' mode and nets, rules, rotation), read again for every room,
+`gg2.json` (bots' mode and nets, rules, rotation), read again for every room,
 so an edit reaches the next room and never a live one. It is checked once at
 startup with the default choices, and its nets are loaded then. Then
 `RoomTemplate` writes the choices and the fixed values over it, and
@@ -317,7 +317,7 @@ Bold is the default. Fixed for every room:
 | `Time Limit`, `CapLimit`, respawn, `AutoBalance` | stock | One set of rules everybody already knows |
 | `UseLobby` | 0 | Private |
 | `Password` | the code | The code is the invitation |
-| Bot nets | the base `--config`'s, or the shipped bundle | Same bots as the public servers when the base is the fleet's `common.ini` |
+| Bot nets | the base `--config`'s, or the shipped bundle | Same bots as the public servers when the base is the fleet's `common.json` |
 | `ServerName` | the base's, or `Private room` where it names none | |
 | `[Chat] Enabled` | 1 | the native client has native chat |
 | `QuickUpdateInterval` | 7 (stock) | |
@@ -339,7 +339,7 @@ mid-match.
 One `gg2-rooms.service` per VPS, from the same release as the fleet server,
 and one more TCP port open in `ufw` (planned: 8300) plus the HTTPS port.
 `scripts/deploy.sh --print-rooms-unit` prints the unit: `Nice=10` below the
-fleet server, the fleet's `shared/gg2.ini` as the base config,
+fleet server, the fleet's `shared/gg2.json` as the base config,
 `--api-trust-proxy`, and the drain file. Its `--prefix` and `--max-rooms` are
 per host and edited before installing (suggested values under "Measured").
 

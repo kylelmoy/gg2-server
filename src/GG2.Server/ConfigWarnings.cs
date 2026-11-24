@@ -51,7 +51,7 @@ public static class ConfigWarnings
             {
                 warnings.Add(
                     "ChatJoinMessage is set but chat is off, so nobody will see it. "
-                    + "Turn on [Chat] Enabled, or add chat_v2_pr to ServerPluginList");
+                    + "Turn on Chat.Enabled, or add chat_v2_pr to ServerPluginList");
             }
 
             // ⚠️ Says what still works. The control port and the admin panel reach
@@ -61,7 +61,7 @@ public static class ConfigWarnings
             {
                 warnings.Add(
                     $"Bots.SuspendMinutes is {options.BotSuspendMinutes} but chat is off, so no "
-                    + "player can type /bots. Turn on [Chat] Enabled, or add chat_v2_pr to "
+                    + "player can type /bots. Turn on Chat.Enabled, or add chat_v2_pr to "
                     + "ServerPluginList; the control port's bots-suspend still works");
             }
         }

@@ -97,7 +97,7 @@ public sealed class ConfigKeyReferenceTests
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The reference's sections are <c>### `[Section]`</c> headings. Scoped to
+    /// The reference's sections are <c>### `Section`</c> headings. Scoped to
     /// the text between one heading and the next, so a key named under a
     /// different section does not count — that scoping is what
     /// <see cref="TheGateReportsAKeyThatIsNotThere"/> pins.
@@ -113,7 +113,7 @@ public sealed class ConfigKeyReferenceTests
     /// </remarks>
     private static bool HasKey(string text, string section, string key)
     {
-        var heading = $"### `[{section}]`";
+        var heading = $"### `{section}`";
         var start = text.IndexOf(heading, StringComparison.Ordinal);
 
         if (start < 0)

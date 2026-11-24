@@ -21,30 +21,40 @@ internal static class ConfigTool
             usage:
               gg2-server config edit   [--dir <dir>] [--hosts <file>] [--port <n>] [--no-browser]
               gg2-server config render [--dir <dir>] [--hosts <file>] --out <dir> [host ...]
+              gg2-server config convert <file.ini | dir> [--out <file>] [--raw] [--force]
 
-              edit     a local page for writing common.ini and each host's overrides.
+              edit     a local page for writing common.json and each host's overrides.
                        Loopback only; the address it prints carries a one-run token.
-              render   write each host's gg2.ini into --out, validated, and print
+              render   write each host's gg2.json into --out, validated, and print
                        "<host> <sha256> <file>" per host. Hosts default to every
                        line of --hosts.
+              convert  turn a reference-format gg2.ini into gg2.json, written
+                       beside it (or to --out). Keys this server does not read
+                       are left out and listed. Given a directory, converts
+                       common.ini, hosts/*.ini and a fleet hub's members.ini in it.
 
-              --dir    the config directory (default deploy/config): common.ini and
-                       hosts/<ssh destination>.ini
+              --dir    the config directory (default deploy/config): common.json and
+                       hosts/<ssh destination>.json
               --hosts  one ssh destination per line (default deploy/hosts)
               --port   the editor's port (default 0: any free one)
+              --raw    convert every key as text, reading none (members.ini is
+                       always converted this way)
+              --force  convert over a .json that already exists
             """);
     }
 
     public static int Run(string[] args)
     {
         if (args.Length == 0)
-            throw new ArgumentException("config: say edit or render");
+            throw new ArgumentException("config: say edit, render or convert");
 
         var directory = Path.Combine("deploy", "config");
         var hostsFile = Path.Combine("deploy", "hosts");
         var output = string.Empty;
         var port = 0;
         var browser = true;
+        var raw = false;
+        var force = false;
         var named = new List<string>();
 
         for (var i = 1; i < args.Length; i++)
@@ -56,6 +66,8 @@ internal static class ConfigTool
                 case "--out": output = Value(args, ref i); break;
                 case "--port": port = int.Parse(Value(args, ref i), System.Globalization.CultureInfo.InvariantCulture); break;
                 case "--no-browser": browser = false; break;
+                case "--raw": raw = true; break;
+                case "--force": force = true; break;
                 default:
                     if (args[i].StartsWith('-'))
                         throw new ArgumentException($"config: unknown option {args[i]}");
@@ -68,9 +80,92 @@ internal static class ConfigTool
         {
             "render" => Render(directory, hostsFile, output, named),
             "edit" => Edit(directory, hostsFile, port, browser),
+            "convert" => Convert(named, output, raw, force),
             _ => throw new ArgumentException($"config: unknown action {args[0]}"),
         };
     }
+
+    private static int Convert(List<string> named, string output, bool raw, bool force)
+    {
+        if (named.Count != 1)
+            throw new ArgumentException("config convert: name one .ini file or one directory");
+
+        var source = named[0];
+        var jobs = new List<(string From, string To, bool Raw)>();
+
+        if (Directory.Exists(source))
+        {
+            if (output.Length != 0)
+                throw new ArgumentException("config convert: --out names a file, so it cannot go with a directory");
+
+            foreach (var file in Directory.EnumerateFiles(source, "*.ini")
+                .Concat(Directory.Exists(Path.Combine(source, FleetConfig.HostsDirectoryName))
+                    ? Directory.EnumerateFiles(Path.Combine(source, FleetConfig.HostsDirectoryName), "*.ini")
+                    : []))
+            {
+                jobs.Add((file, Path.ChangeExtension(file, ".json"), raw || IsMembers(file)));
+            }
+
+            if (jobs.Count == 0)
+                throw new ArgumentException($"config convert: no .ini files in {Path.GetFullPath(source)}");
+        }
+        else if (File.Exists(source))
+        {
+            jobs.Add((source, output.Length != 0 ? output : Path.ChangeExtension(source, ".json"), raw || IsMembers(source)));
+        }
+        else
+        {
+            throw new FileNotFoundException($"config convert: no file or directory at {source}", source);
+        }
+
+        // Every file converted before any is written, so a refusal for the
+        // third does not leave two fresh files beside a stale one.
+        var converted = new List<(string To, string Json)>();
+        var failed = false;
+
+        foreach (var (from, to, asRaw) in jobs)
+        {
+            if (File.Exists(to) && !force)
+            {
+                Console.Error.WriteLine($"refused: {to} already exists; --force converts over it");
+                failed = true;
+                continue;
+            }
+
+            try
+            {
+                var result = IniConverter.Convert(File.ReadAllText(from), asRaw, to);
+
+                foreach (var dropped in result.Dropped)
+                    Console.Error.WriteLine($"{from}: left out {dropped}, which this server does not read");
+
+                converted.Add((to, result.Json));
+            }
+            catch (FormatException e)
+            {
+                Console.Error.WriteLine($"refused: {from}: {e.Message}");
+                failed = true;
+            }
+        }
+
+        if (failed)
+            return 1;
+
+        foreach (var (to, json) in converted)
+        {
+            var directory = Path.GetDirectoryName(Path.GetFullPath(to));
+            if (directory is not null)
+                Directory.CreateDirectory(directory);
+
+            File.WriteAllBytes(to, FleetConfig.Encode(json));
+            Console.WriteLine(to);
+        }
+
+        return 0;
+    }
+
+    private static bool IsMembers(string path) =>
+        Path.GetFileName(path).Equals("members.ini", StringComparison.OrdinalIgnoreCase);
 
     private static int Render(string directory, string hostsFile, string output, List<string> named)
     {

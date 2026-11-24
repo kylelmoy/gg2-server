@@ -115,7 +115,7 @@ client never receives one.
 ### Why not the other two options
 
 - **(a) Inside the `chat` packet id.** It works only where chat is advertised.
-  `[Chat] Enabled=0` exists and turns that off. It costs PLUGIN_PACKET framing
+  `"Chat": {"Enabled": false}` exists and turns that off. It costs PLUGIN_PACKET framing
   (4 bytes) on every ack. It also overloads the native chat protocol's `0x80` envelope,
   whose contract is "exactly one native chat message". Prediction metadata does
   not belong to a chat protocol, and a client that skipped the plugin download

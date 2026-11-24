@@ -39,7 +39,7 @@ public sealed class WebFleetMemberTests : IDisposable
     {
         // The identity files live beside the config file, so pointing ConfigFile
         // into a fresh directory is what keeps each test's certificate its own.
-        o.ConfigFile = Path.Combine(_directory, "gg2.ini");
+        o.ConfigFile = Path.Combine(_directory, "gg2.json");
         o.Web = WebAdminOptions.Disabled with
         {
             Enabled = true,
@@ -218,7 +218,7 @@ public sealed class WebFleetMemberTests : IDisposable
         var options = WebAdminOptions.Disabled with { Enabled = true, FleetMember = true };
 
         var thrown = Assert.Throws<ArgumentException>(options.Validate);
-        Assert.Contains("Certificate=auto", thrown.Message, StringComparison.Ordinal);
+        Assert.Contains("Web.Certificate to \"auto\"", thrown.Message, StringComparison.Ordinal);
 
         // The control: the same with a certificate is fine.
         (options with { CertificatePath = WebAdminOptions.AutoCertificate }).Validate();

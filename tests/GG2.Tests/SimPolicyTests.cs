@@ -766,10 +766,14 @@ public sealed class SimPolicyTests : IDisposable
             "quote.gg2p", SimPolicyObservation.QuoteSize + SimPolicyObservation.SentryColumns + SimPolicyObservation.TerrainColumns);
         using var harness = new ServerHarness(o =>
         {
-            ServerConfigFile.ApplyLines(o, [
-                "[Bots]", "Mode=policy", "HandoverRule=distance", "HandoverRange=100000", "PolicySampled=1",
-                $"Policy={net}", "ClassPolicy=Quote=quote",
-            ], Path.Combine(_directory, "quote.ini"));
+            ServerConfigFile.ApplyText(o, System.Text.Json.JsonSerializer.Serialize(new
+            {
+                Bots = new
+                {
+                    HandoverRule = "distance", HandoverRange = 100000, PolicySampled = true,
+                    Policy = new[] { net }, ClassPolicy = new[] { "Quote=quote" },
+                },
+            }), Path.Combine(_directory, "quote.json"));
             BotBrain.Build(o);
             o.Map = "duel_01";
             o.MapDirectory = Path.Combine(ReferenceTree.MapsDirectory, "duel");

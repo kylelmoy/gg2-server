@@ -170,7 +170,7 @@ public sealed class ConfigFileCoverageTests : IDisposable
         foreach (var setting in ServerSettings.All)
             setting.Set(written, setting.ProbeFor(written));
 
-        var path = Path("round-trip.ini");
+        var path = Path("round-trip.json");
         ServerConfigFile.Write(written, path);
 
         var read = Fresh();
@@ -204,7 +204,7 @@ public sealed class ConfigFileCoverageTests : IDisposable
         foreach (var setting in ServerSettings.All)
             setting.Set(probed, setting.ProbeFor(probed));
 
-        var path = Path("defaults.ini");
+        var path = Path("defaults.json");
         ServerConfigFile.Write(defaults, path);
 
         var read = Fresh();
@@ -222,31 +222,26 @@ public sealed class ConfigFileCoverageTests : IDisposable
     }
 
     /// <summary>
-    /// Writing preserves comments, blank lines and keys this project has never
-    /// heard of.
+    /// Writing preserves notes and keys this project has never heard of.
     /// </summary>
     /// <remarks>
-    /// The file being edited is an operator's, and it may hold <c>[Haxxy]</c>,
-    /// client preferences, and their own comments about why a limit is what it
-    /// is. A writer that regenerated the file would silently delete all of it.
+    /// The file being edited is an operator's, and it may hold keys for a newer
+    /// release and their own <c>"//"</c> notes about why a limit is what it is. A
+    /// writer that regenerated the file would silently delete all of it.
     /// </remarks>
     [Fact]
-    public void WritingKeepsCommentsAndUnknownKeys()
+    public void WritingKeepsNotesAndUnknownKeys()
     {
-        var path = Path("hand-written.ini");
+        var path = Path("hand-written.json");
 
         File.WriteAllText(path,
             """
-            ; our public server. do not raise PlayerLimit past 24, the VPS falls over.
-            [Settings]
-            HostingPort=8190
-            GibLevel=2
-
-            [Haxxy]
-            RewardKey=something
-
-            [Server]
-            ServerName=Old Name
+            {
+              "//": "our public server. do not raise PlayerLimit past 24, the VPS falls over.",
+              "Settings": {"HostingPort": 8190, "GibLevel": 2},
+              "Haxxy": {"RewardKey": "something"},
+              "Server": {"ServerName": "Old Name"}
+            }
             """);
 
         var options = Fresh();
@@ -256,15 +251,14 @@ public sealed class ConfigFileCoverageTests : IDisposable
 
         var text = File.ReadAllText(path);
 
-        Assert.Contains("; our public server", text, StringComparison.Ordinal);
-        Assert.Contains("GibLevel=2", text, StringComparison.Ordinal);
-        Assert.Contains("RewardKey=something", text, StringComparison.Ordinal);
-        Assert.Contains("ServerName=New Name", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("ServerName=Old Name", text, StringComparison.Ordinal);
+        Assert.Contains("our public server", text, StringComparison.Ordinal);
+        Assert.Contains("\"GibLevel\": 2", text, StringComparison.Ordinal);
+        Assert.Contains("\"RewardKey\": \"something\"", text, StringComparison.Ordinal);
+        Assert.Contains("\"ServerName\": \"New Name\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Old Name", text, StringComparison.Ordinal);
 
-        // The key was replaced in place rather than appended, so the file does
-        // not grow a second ServerName the reader would prefer.
-        Assert.Equal(1, text.Split("ServerName=").Length - 1);
+        // The key was replaced in place rather than appended: one ServerName.
+        Assert.Equal(1, text.Split("\"ServerName\"").Length - 1);
     }
 
     /// <summary>
@@ -289,8 +283,8 @@ public sealed class ConfigFileCoverageTests : IDisposable
     [Fact]
     public void SavingDoesNotStampResolvedDefaultPathsIntoTheFile()
     {
-        var path = Path("minimal.ini");
-        File.WriteAllText(path, "[Server]\nServerName=before\n");
+        var path = Path("minimal.json");
+        File.WriteAllText(path, """{"Server": {"ServerName": "before"}}""");
 
         // ⚠️ CreateDefault, not Fresh: the whole point is the two settings whose
         // default is RESOLVED FROM DISK, and Fresh's hard-coded "maps" is not that
@@ -303,20 +297,20 @@ public sealed class ConfigFileCoverageTests : IDisposable
 
         var text = File.ReadAllText(path);
 
-        Assert.Contains("ServerName=after", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("MapDirectory=", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("Directory=", text, StringComparison.Ordinal);
+        Assert.Contains("\"ServerName\": \"after\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("MapDirectory", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Directory", text, StringComparison.Ordinal);
 
         // A default nobody changed stays unwritten too, so an operator's file
         // does not grow every knob the server has the first time they rename it.
-        Assert.DoesNotContain("CapLimit=", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("CapLimit", text, StringComparison.Ordinal);
 
         // The control: an explicitly CHANGED setting is written even though the
         // file never named it, or the minimal diff would be a save that saves
         // nothing.
         options.CapLimit = 3;
         ServerConfigFile.Write(options, path);
-        Assert.Contains("CapLimit=3", File.ReadAllText(path), StringComparison.Ordinal);
+        Assert.Contains("\"CapLimit\": 3", File.ReadAllText(path), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -331,8 +325,8 @@ public sealed class ConfigFileCoverageTests : IDisposable
     [Fact]
     public void AKeyTheFileAlreadyNamesSurvivesASaveAtItsDefault()
     {
-        var path = Path("explicit.ini");
-        File.WriteAllText(path, "[Settings]\nPlayerLimit=10\n");
+        var path = Path("explicit.json");
+        File.WriteAllText(path, """{"Settings": {"PlayerLimit": 10}}""");
 
         var options = Fresh();
         ServerConfigFile.Apply(options, path);
@@ -340,7 +334,7 @@ public sealed class ConfigFileCoverageTests : IDisposable
 
         ServerConfigFile.Write(options, path);
 
-        Assert.Contains("PlayerLimit=10", File.ReadAllText(path), StringComparison.Ordinal);
+        Assert.Contains("\"PlayerLimit\": 10", File.ReadAllText(path), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -356,14 +350,10 @@ public sealed class ConfigFileCoverageTests : IDisposable
     [Fact]
     public void ASavedRotationBeatsAnInheritedMapsSection()
     {
-        var path = Path("inherited.ini");
+        var path = Path("inherited.json");
 
         File.WriteAllText(path,
-            """
-            [Maps]
-            ctf_truefort=1
-            cp_dirtbowl=2
-            """);
+            """{"Maps": {"ctf_truefort": 1, "cp_dirtbowl": 2}}""");
 
         var options = Fresh();
         ServerConfigFile.Apply(options, path);
@@ -395,12 +385,12 @@ public sealed class ConfigFileCoverageTests : IDisposable
     [Fact]
     public void AnAgreeingRotationFileSurvivesASave()
     {
-        var path = Path("with-file.ini");
+        var path = Path("with-file.json");
         var rotation = System.IO.Path.Combine(
             System.IO.Path.GetDirectoryName(path)!, "rotation.txt");
 
         File.WriteAllText(rotation, "# ours\nkoth_valley\nctf_2dfort\n");
-        File.WriteAllText(path, "[Server]\nMapRotation=rotation.txt\n");
+        File.WriteAllText(path, """{"Server": {"MapRotation": "rotation.txt"}}""");
 
         var options = Fresh();
         ServerConfigFile.Apply(options, path);
@@ -408,7 +398,7 @@ public sealed class ConfigFileCoverageTests : IDisposable
 
         ServerConfigFile.Write(options, path);
 
-        Assert.Contains("MapRotation=rotation.txt", File.ReadAllText(path), StringComparison.Ordinal);
+        Assert.Contains("\"MapRotation\": \"rotation.txt\"", File.ReadAllText(path), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -418,7 +408,7 @@ public sealed class ConfigFileCoverageTests : IDisposable
     /// The case an operator hits the first time they save from the panel on a
     /// server started with <c>--config</c> pointing at a file they have not
     /// written yet — and the case the section-appending branch of
-    /// <c>ServerConfigFile.Put</c> exists for.
+    /// <c>ConfigDocument.Put</c> exists for.
     /// </remarks>
     [Fact]
     public void WritingCreatesAFileThatReadsBack()
@@ -427,7 +417,7 @@ public sealed class ConfigFileCoverageTests : IDisposable
         options.ServerName = "fresh";
         options.PlayerLimit = 12;
 
-        var path = Path("new.ini");
+        var path = Path("new.json");
         ServerConfigFile.Write(options, path);
 
         var read = Fresh();

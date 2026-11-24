@@ -5,9 +5,9 @@
  *
  * Two kinds of thing are edited and they are kept apart on purpose:
  *
- *   - "All servers" is common.ini. A change here reaches every host that does
+ *   - "All servers" is common.json. A change here reaches every host that does
  *     not override that setting.
- *   - A host is its overlay, hosts/<dest>.ini. Typing a value different from the
+ *   - A host is its overlay, hosts/<dest>.json. Typing a value different from the
  *     shared one makes it an override; "use shared" removes the override.
  *
  * The fields, the section rail and the tags are settings.js's, shared with the
@@ -186,7 +186,7 @@ function renderNotes() {
     add(t('editor.notes.noFleetSettings'), 'warn');
   } else if (!model.commonExists) {
     add(t('editor.notes.noCommonIni', {
-      path: `${model.directory}${model.directory.includes('\\') ? '\\' : '/'}common.ini`,
+      path: `${model.directory}${model.directory.includes('\\') ? '\\' : '/'}common.json`,
     }), 'warn');
   }
 

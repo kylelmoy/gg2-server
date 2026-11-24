@@ -1,11 +1,12 @@
-﻿using System.Text;
+using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace GG2.Server;
 
 /// <summary>
 /// What <c>gg2-server config edit</c>'s page reads and writes: the shared
-/// <c>common.ini</c> and each host's overlay, as <see cref="FleetConfig"/> lays
+/// <c>common.json</c> and each host's overlay, as <see cref="FleetConfig"/> lays
 /// them out.
 /// </summary>
 /// <remarks>
@@ -15,7 +16,7 @@ namespace GG2.Server;
 /// </para>
 /// <para>
 /// ⛔ <b>A save is all or nothing.</b> Every file the save would change is built
-/// in memory, every host's rendered <c>gg2.ini</c> is validated against the new
+/// in memory, every host's rendered <c>gg2.json</c> is validated against the new
 /// contents, and only then is anything written. A value that would stop one
 /// host from starting leaves all of the files as they were.
 /// </para>
@@ -28,11 +29,11 @@ namespace GG2.Server;
 /// <para>
 /// ⚠️ <b>A host's override is written as the text typed, not as the value the
 /// server would normalise it to.</b> The overlay is the operator's file and stays
-/// a short list of the keys they chose; <c>common.ini</c> goes through
+/// a short list of the keys they chose; <c>common.json</c> goes through
 /// <see cref="ServerConfigFile.Edit"/> like any panel save.
 /// </para>
 /// </remarks>
-public sealed class FleetConfigEditor
+public sealed partial class FleetConfigEditor
 {
     private readonly string _directory;
     private readonly string _hostsFile;
@@ -83,14 +84,14 @@ public sealed class FleetConfigEditor
     {
         var hosts = Hosts();
         var commonPath = FleetConfig.CommonPath(_directory);
-        var commonLines = File.Exists(commonPath) ? File.ReadAllLines(commonPath) : [];
+        var commonText = File.Exists(commonPath) ? File.ReadAllText(commonPath) : string.Empty;
 
         var common = ServerOptions.CreateDefault();
         string? commonError = null;
 
         try
         {
-            ServerConfigFile.ApplyLines(common, commonLines, commonPath);
+            ServerConfigFile.ApplyText(common, commonText, commonPath);
         }
         catch (FormatException e)
         {
@@ -98,18 +99,20 @@ public sealed class FleetConfigEditor
         }
 
         var effective = new Dictionary<string, ServerOptions>(StringComparer.Ordinal);
-        var overlays = new Dictionary<string, Dictionary<string, Dictionary<string, string>>>(StringComparer.Ordinal);
+        var overlays = new Dictionary<string, ConfigDocument>(StringComparer.Ordinal);
         var errors = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var host in hosts)
         {
-            overlays[host] = FleetConfig.ReadOverlay(_directory, host);
+            overlays[host] = new ConfigDocument();
 
             try
             {
+                overlays[host] = FleetConfig.ReadOverlay(_directory, host);
+
                 var overlayPath = FleetConfig.OverlayPath(_directory, host);
                 var rendered = FleetConfig.Render(
-                    commonLines, File.Exists(overlayPath) ? File.ReadAllLines(overlayPath) : null, host);
+                    commonText, File.Exists(overlayPath) ? File.ReadAllText(overlayPath) : null, host);
                 effective[host] = FleetConfig.Load(rendered, _directory);
             }
             catch (FormatException e)
@@ -227,7 +230,7 @@ public sealed class FleetConfigEditor
         }
     }
 
-    /// <summary>A host's rendered <c>gg2.ini</c>, with every secret's value masked.</summary>
+    /// <summary>A host's rendered <c>gg2.json</c>, with every secret's value masked.</summary>
     public string Preview(string destination)
     {
         if (!Hosts().Contains(destination, StringComparer.Ordinal))
@@ -238,8 +241,8 @@ public sealed class FleetConfigEditor
             var commonPath = FleetConfig.CommonPath(_directory);
             var overlayPath = FleetConfig.OverlayPath(_directory, destination);
             var rendered = FleetConfig.Render(
-                File.Exists(commonPath) ? File.ReadAllLines(commonPath) : [],
-                File.Exists(overlayPath) ? File.ReadAllLines(overlayPath) : null,
+                File.Exists(commonPath) ? File.ReadAllText(commonPath) : string.Empty,
+                File.Exists(overlayPath) ? File.ReadAllText(overlayPath) : null,
                 destination);
 
             using var buffer = new MemoryStream();
@@ -260,45 +263,40 @@ public sealed class FleetConfigEditor
         }
     }
 
-    /// <summary>Replaces the value of every secret setting in an ini's text with asterisks.</summary>
+    /// <summary>Replaces the value of every secret setting in a config file's text with asterisks.</summary>
+    /// <remarks>
+    /// <b>On the text, not on a parsed document</b>, so a diff of two masked
+    /// files is still a diff of the two files, and so a file that is not valid
+    /// JSON is masked too. ⚠️ A secret's key is recognised in any section — a key
+    /// that is a secret in one is a secret everywhere — and its value whether it
+    /// was written as a string or not.
+    /// </remarks>
     public static string MaskSecrets(string text)
     {
-        var lines = text.Split('\n');
-        var section = string.Empty;
+        ArgumentNullException.ThrowIfNull(text);
 
-        for (var i = 0; i < lines.Length; i++)
-        {
-            var trimmed = lines[i].Trim();
-
-            if (trimmed.Length > 1 && trimmed[0] == '[' && trimmed[^1] == ']')
-            {
-                section = trimmed[1..^1].Trim();
-                continue;
-            }
-
-            if (trimmed.Length == 0 || trimmed[0] is ';' or '#')
-                continue;
-
-            var separator = trimmed.IndexOf('=', StringComparison.Ordinal);
-
-            if (separator <= 0)
-                continue;
-
-            var key = trimmed[..separator].Trim();
-
-            if (trimmed[(separator + 1)..].Trim().Length != 0 && IsSecret(section, key))
-                lines[i] = key + "=********";
-        }
-
-        return string.Join('\n', lines);
+        return SecretValue().Replace(text, match =>
+            SecretKeys.Contains(Regex.Unescape(match.Groups["key"].Value))
+            && match.Groups["value"].Value is not ("" or "\"\"" or "null")
+                ? match.Groups["head"].Value + "\"********\""
+                : match.Value);
     }
+
+    private static readonly HashSet<string> SecretKeys = ServerSettings.All
+        .Where(setting => setting.Secret)
+        .Select(setting => setting.Key)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary><c>"key": value</c>, the value a JSON string or a bare token.</summary>
+    [GeneratedRegex(@"(?<head>""(?<key>(?:[^""\\]|\\.)*)""\s*:\s*)(?<value>""(?:[^""\\]|\\.)*""|[^\s,:{}\[\]""]+)")]
+    private static partial Regex SecretValue();
 
     private string SaveCore(JsonElement request)
     {
         var hosts = Hosts();
         var commonPath = FleetConfig.CommonPath(_directory);
-        var commonLines = File.Exists(commonPath) ? File.ReadAllLines(commonPath) : [];
-        var newCommon = commonLines;
+        var commonText = File.Exists(commonPath) ? File.ReadAllText(commonPath) : string.Empty;
+        var newCommon = commonText;
         var commonChanged = false;
 
         if (request.TryGetProperty("common", out var commonChanges)
@@ -307,7 +305,7 @@ public sealed class FleetConfigEditor
         {
             // Built from the FILE, exactly as config-set builds its candidate.
             var candidate = ServerOptions.CreateDefault();
-            ServerConfigFile.ApplyLines(candidate, commonLines, commonPath);
+            ServerConfigFile.ApplyText(candidate, commonText, commonPath);
 
             foreach (var change in commonChanges.EnumerateObject())
             {
@@ -321,16 +319,16 @@ public sealed class FleetConfigEditor
             }
 
             if (commonChanged)
-                newCommon = [.. ServerConfigFile.Edit(candidate, commonLines, commonPath)];
+                newCommon = ServerConfigFile.Edit(candidate, commonText, commonPath);
         }
 
-        var newOverlays = new Dictionary<string, string[]?>(StringComparer.Ordinal);
+        var newOverlays = new Dictionary<string, string?>(StringComparer.Ordinal);
         var changedOverlays = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var host in hosts)
         {
             var path = FleetConfig.OverlayPath(_directory, host);
-            newOverlays[host] = File.Exists(path) ? File.ReadAllLines(path) : null;
+            newOverlays[host] = File.Exists(path) ? File.ReadAllText(path) : null;
         }
 
         if (request.TryGetProperty("hosts", out var hostChanges) && hostChanges.ValueKind == JsonValueKind.Object)
@@ -340,13 +338,10 @@ public sealed class FleetConfigEditor
                 if (!newOverlays.TryGetValue(entry.Name, out var existing))
                     throw new ArgumentException($"no host \"{entry.Name}\" in {_hostsFile}");
 
-                var lines = existing is null
-                    ? new List<string>
-                    {
-                        $"; {entry.Name} only. Every key here wins over {FleetConfig.CommonFileName}.",
-                        string.Empty,
-                    }
-                    : new List<string>(existing);
+                var overlay = existing is null ? new ConfigDocument() : ConfigDocument.Parse(existing);
+
+                if (existing is null)
+                    overlay.SetNote($"{entry.Name} only. Every key here wins over {FleetConfig.CommonFileName}.");
 
                 var changed = false;
 
@@ -363,7 +358,7 @@ public sealed class FleetConfigEditor
                         // integer field names the setting here rather than at render.
                         setting.Set(ServerOptions.CreateDefault(), value);
 
-                        ServerConfigFile.Put(lines, setting.Section, setting.Key, ServerConfigFile.Quote(value));
+                        overlay.Set(setting, value);
                         changed = true;
                     }
                 }
@@ -375,14 +370,14 @@ public sealed class FleetConfigEditor
                         var setting = Offer(ServerSettings.Find(id.GetString() ?? string.Empty)
                             ?? throw new ArgumentException($"unknown setting \"{id.GetString()}\""));
 
-                        ServerConfigFile.Remove(lines, setting.Section, setting.Key);
+                        overlay.Remove(setting.Section, setting.Key);
                         changed = true;
                     }
                 }
 
                 if (changed)
                 {
-                    newOverlays[entry.Name] = [.. lines];
+                    newOverlays[entry.Name] = overlay.ToText();
                     changedOverlays.Add(entry.Name);
                 }
             }
@@ -428,7 +423,7 @@ public sealed class FleetConfigEditor
             ?? throw new ArgumentException($"unknown setting \"{change.Name}\""));
 
         if (change.Value.ValueKind != JsonValueKind.String)
-            throw new ArgumentException($"\"{change.Name}\" must be a string; every value here is ini text");
+            throw new ArgumentException($"\"{change.Name}\" must be a string; every value here is the setting's text");
 
         return (setting, change.Value.GetString()!);
     }
@@ -461,23 +456,8 @@ public sealed class FleetConfigEditor
         }
     }
 
-    private static bool Names(Dictionary<string, Dictionary<string, string>> ini, ServerSetting setting) =>
-        ini.TryGetValue(setting.Section, out var entries) && entries.ContainsKey(setting.Key);
-
-    private static bool IsSecret(string section, string key)
-    {
-        foreach (var setting in ServerSettings.All)
-        {
-            if (setting.Secret
-                && string.Equals(setting.Section, section, StringComparison.OrdinalIgnoreCase)
-                && string.Equals(setting.Key, key, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    private static bool Names(ConfigDocument overlay, ServerSetting setting) =>
+        overlay.Has(setting.Section, setting.Key);
 
     private static void WriteValue(Utf8JsonWriter json, ServerSetting setting, ServerOptions options, ServerOptions pristine)
     {
@@ -501,13 +481,13 @@ public sealed class FleetConfigEditor
         json.WriteEndObject();
     }
 
-    private static void WriteAtomically(string path, string[] lines)
+    private static void WriteAtomically(string path, string text)
     {
         var directory = Path.GetDirectoryName(Path.GetFullPath(path)) ?? ".";
         Directory.CreateDirectory(directory);
 
         var temporary = Path.Combine(directory, Path.GetFileName(path) + ".tmp");
-        File.WriteAllText(temporary, string.Join('\n', lines) + "\n", new UTF8Encoding(false));
+        File.WriteAllText(temporary, text, new UTF8Encoding(false));
         File.Move(temporary, path, overwrite: true);
     }
 

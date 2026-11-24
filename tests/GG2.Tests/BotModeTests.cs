@@ -76,7 +76,7 @@ public sealed class BotModeTests
     [Fact]
     public void AnOldModeKeyInAConfigFileIsIgnored()
     {
-        var config = CliCoverageTests.WriteConfig("[Bots]\nMode=scripted\n");
+        var config = CliCoverageTests.WriteConfig("""{"Bots": {"Mode": "scripted"}}""");
 
         Assert.Equal(9, Tiers(BrainOf("--config", config)).Length);
         Assert.DoesNotContain(ServerSettings.All, s => s.Section == "Bots" && s.Key == "Mode");

@@ -69,7 +69,7 @@ public sealed class LobbyTargetsTests
     public void TheConfigFileReadsAList()
     {
         var options = new ServerOptions();
-        ServerConfigFile.ApplyLines(options, ["[Settings]", "UseLobby=1", "LobbyUrls=udp://a.example:1, http://b.example:2"], "test.ini");
+        ServerConfigFile.ApplyText(options, """{"Settings": {"UseLobby": true, "LobbyUrls": "udp://a.example:1, http://b.example:2"}}""", "test.json");
 
         Assert.True(options.AnnounceToLobby);
         Assert.Equal(["udp://a.example:1", "http://b.example:2"], options.LobbyUrls);

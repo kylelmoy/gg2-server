@@ -60,8 +60,12 @@ public sealed class DuelDefaultsTests
     public void ExplicitFileKeysBeatTheDuelDefaults()
     {
         var config = CliCoverageTests.WriteConfig(
-            "[Server]\nTeam Deathmatch Invulnerability Seconds=5\n"
-            + "[Bots]\nDuel=1\nPolicySampled=0\nHandoverRule=macrotask\n");
+            """
+            {
+              "Server": {"Team Deathmatch Invulnerability Seconds": 5},
+              "Bots": {"Duel": true, "PolicySampled": false, "HandoverRule": "macrotask"}
+            }
+            """);
 
         var options = CommandLine.Parse(["--config", config]);
 

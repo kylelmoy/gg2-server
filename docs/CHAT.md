@@ -1,7 +1,7 @@
 # Chat
 
 The server's own chat: one room, one rate limit, one mute and kick-ban list, one
-command console and one vote engine. **On by default** (`[Chat] Enabled=1`).
+command console and one vote engine. **On by default** (`"Chat": {"Enabled": true}`).
 `ServerChat` (`src/GG2.Server/Chat/`) is built and owned by the server and
 configured from `[Chat]`; nothing about it is a plugin except the packet id it
 travels on.
@@ -25,7 +25,7 @@ packet id with `ServerChat`.
 - **Its position.** Named in `ServerPluginList`, `chat` keeps its place there.
   Not named, it is appended, so every listed plugin keeps its packet id. The id
   is the position on both sides (`docs/PLUGINS.md`).
-- **Off.** `[Chat] Enabled=0` advertises nothing for chat and runs none.
+- **Off.** `"Chat": {"Enabled": false}` advertises nothing for chat and runs none.
 - **Refused at startup**: `chat` in `ServerPluginList` with chat off (a plugin
   nothing answers), and `chat_v2_pr` with chat on (a second chat window on the
   same key). `chat_v2_pr` is still available with chat off; `docs/PLUGINS.md`.

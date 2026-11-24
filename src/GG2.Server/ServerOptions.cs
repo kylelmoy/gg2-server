@@ -1,4 +1,4 @@
-﻿using GG2.Bots;
+using GG2.Bots;
 using GG2.Protocol;
 using GG2.Simulation;
 
@@ -1241,13 +1241,13 @@ public sealed class ServerOptions
         {
             if (!Chat.Enabled && spec.Name == ServerChat.PluginName)
                 throw new ArgumentException(
-                    "ServerPluginList names chat, which is the server's own chat, but [Chat] "
+                    "ServerPluginList names chat, which is the server's own chat, but Chat."
                     + "Enabled is off. Turn chat on, or take chat out of the list");
 
             if (Chat.Enabled && spec.Name == "chat_v2_pr")
                 throw new ArgumentException(
                     "ServerPluginList names chat_v2_pr, a second chat plugin, while the server's "
-                    + "own chat is on. Set [Chat] Enabled=0 to use chat_v2_pr instead");
+                    + "own chat is on. Set Chat.Enabled to false to use chat_v2_pr instead");
         }
 
         // The reference clamps at 48 (game_init.gml:152). Beyond 255 the roster

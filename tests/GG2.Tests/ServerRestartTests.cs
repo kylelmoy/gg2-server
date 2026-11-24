@@ -34,7 +34,7 @@ public sealed class ServerRestartTests : IDisposable
         Directory.CreateDirectory(_directory);
     }
 
-    private string ConfigPath => Path.Combine(_directory, "gg2.ini");
+    private string ConfigPath => Path.Combine(_directory, "gg2.json");
 
     /// <summary>A server on an ephemeral port, reading the config file this test owns.</summary>
     private GameServer Start(string contents)
@@ -68,7 +68,7 @@ public sealed class ServerRestartTests : IDisposable
     [Fact]
     public void ASettingSavedFromThePanelSurvivesARestart()
     {
-        using var server = Start("[Server]\nServerName=before\n");
+        using var server = Start("""{"Server": {"ServerName": "before"}}""");
         Assert.Equal("before", server.Options.ServerName);
 
         var saved = Run(server, """
@@ -105,7 +105,7 @@ public sealed class ServerRestartTests : IDisposable
     [Fact]
     public async Task RestartEndsTheRunLoopAndIsNotAShutdown()
     {
-        using var server = Start("[Server]\nServerName=restart me\n");
+        using var server = Start("""{"Server": {"ServerName": "restart me"}}""");
         Assert.False(server.RestartRequested);
 
         using var stopping = new CancellationTokenSource();
@@ -142,7 +142,7 @@ public sealed class ServerRestartTests : IDisposable
     [Fact]
     public async Task ARestartWorksOnAFrozenServer()
     {
-        using var server = Start("[Server]\nServerName=frozen\n");
+        using var server = Start("""{"Server": {"ServerName": "frozen"}}""");
 
         using var stopping = new CancellationTokenSource();
         // ⛔ NOT Task.Run: GameServer.Run is a blocking tick loop, and on the
@@ -244,7 +244,7 @@ public sealed class ServerRestartTests : IDisposable
     [Fact]
     public void AnInvalidValueIsRefusedAndTheFileIsUntouched()
     {
-        using var server = Start("[Server]\nServerName=safe\n");
+        using var server = Start("""{"Server": {"ServerName": "safe"}}""");
         var before = File.ReadAllText(ConfigPath);
 
         var reply = Run(server, """{"cmd":"config-set","settings":{"Settings.PlayerLimit":"100"}}""");
@@ -258,7 +258,7 @@ public sealed class ServerRestartTests : IDisposable
     [Fact]
     public void AnUnknownSettingIsRefusedByName()
     {
-        using var server = Start("[Server]\nServerName=safe\n");
+        using var server = Start("""{"Server": {"ServerName": "safe"}}""");
 
         var reply = Run(server, """{"cmd":"config-set","settings":{"Server.NoSuchThing":"x"}}""");
 
@@ -280,7 +280,7 @@ public sealed class ServerRestartTests : IDisposable
     [Fact]
     public void SavingDoesNotWriteTheRunningServersCommandLineOverridesIntoTheFile()
     {
-        using var server = Start("[Server]\nServerName=before\n");
+        using var server = Start("""{"Server": {"ServerName": "before"}}""");
 
         // What a flag does: the running options differ from the file.
         server.Options.SpeedMultiplier = 4.0;
@@ -300,7 +300,7 @@ public sealed class ServerRestartTests : IDisposable
     [Fact]
     public void TheConfigVerbReportsEverySetting()
     {
-        using var server = Start("[Server]\nServerName=reported\n");
+        using var server = Start("""{"Server": {"ServerName": "reported"}}""");
 
         var reply = Run(server, """{"cmd":"config"}""");
 
@@ -329,7 +329,7 @@ public sealed class ServerRestartTests : IDisposable
     [Fact]
     public void TheConfigVerbReportsTheFileAndFlagsWhatIsWaitingForARestart()
     {
-        using var server = Start("[Server]\nServerName=before\n");
+        using var server = Start("""{"Server": {"ServerName": "before"}}""");
 
         Run(server, """{"cmd":"config-set","settings":{"Server.ServerName":"after"}}""");
 
@@ -362,7 +362,7 @@ public sealed class ServerRestartTests : IDisposable
     [Fact]
     public void APinnedSettingIsNotAlsoReportedAsWaitingForARestart()
     {
-        using var server = Start("[Server]\nServerName=from the file\n");
+        using var server = Start("""{"Server": {"ServerName": "from the file"}}""");
 
         // What a flag does: the running options differ from the file, and the
         // host records the id so the page can say why.
@@ -407,9 +407,9 @@ public sealed class ServerRestartTests : IDisposable
     public void ARotationWithNoMapKeyEmptiesTheOpeningMap()
     {
         var options = ServerOptions.CreateDefault();
-        var path = Path.Combine(_directory, "rotation.ini");
+        var path = Path.Combine(_directory, "rotation.json");
 
-        File.WriteAllText(path, "[Server]\nRotation=koth_valley,ctf_2dfort\n");
+        File.WriteAllText(path, """{"Server": {"Rotation": "koth_valley,ctf_2dfort"}}""");
         ServerConfigFile.Apply(options, path);
 
         Assert.Equal(string.Empty, options.Map);
@@ -417,9 +417,9 @@ public sealed class ServerRestartTests : IDisposable
         // A file that NAMES a map keeps it, which is the half that makes the rule
         // a rule rather than "rotations delete the map".
         var pinned = ServerOptions.CreateDefault();
-        var pinnedPath = Path.Combine(_directory, "pinned.ini");
+        var pinnedPath = Path.Combine(_directory, "pinned.json");
 
-        File.WriteAllText(pinnedPath, "[Server]\nMap=ctf_orange\nRotation=koth_valley,ctf_2dfort\n");
+        File.WriteAllText(pinnedPath, """{"Server": {"Map": "ctf_orange", "Rotation": "koth_valley,ctf_2dfort"}}""");
         ServerConfigFile.Apply(pinned, pinnedPath);
 
         Assert.Equal("ctf_orange", pinned.Map);
@@ -444,11 +444,10 @@ public sealed class ServerRestartTests : IDisposable
         // covered structurally below instead.
         using var server = Start(
             """
-            [Server]
-            Password=game-secret-4f2a
-            [Web]
-            Port=0
-            Password=admin-secret-9c1b
+            {
+              "Server": {"Password": "game-secret-4f2a"},
+              "Web": {"Port": 0, "Password": "admin-secret-9c1b"}
+            }
             """);
 
         var reply = ControlCommands.Dispatch(server, """{"cmd":"config"}""");
@@ -496,7 +495,7 @@ public sealed class ServerRestartTests : IDisposable
     [Fact]
     public void ASecretCanBeWrittenEvenThoughItCannotBeRead()
     {
-        using var server = Start("[Server]\nServerName=x\n");
+        using var server = Start("""{"Server": {"ServerName": "x"}}""");
 
         var reply = Run(server, """{"cmd":"config-set","settings":{"Server.Password":"new-one"}}""");
         Assert.True(reply.GetProperty("ok").GetBoolean(), reply.ToString());

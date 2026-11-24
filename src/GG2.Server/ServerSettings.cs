@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using GG2.Bots;
 using GG2.Protocol;
 using GG2.Simulation;
@@ -7,9 +7,10 @@ namespace GG2.Server;
 
 /// <summary>How a setting is typed, so an editor can render it.</summary>
 /// <remarks>
-/// ⚠️ <b>The stored form of every setting is a STRING — the ini's own form —
-/// whatever this says.</b> The kind is presentation and validation, not
-/// representation: one representation is what makes
+/// ⚠️ <b>The stored form of every setting is a STRING — its text — whatever
+/// this says.</b> The kind decides how the config file types the value
+/// (<see cref="ConfigDocument.Typed"/>) and how an editor renders it, not how a
+/// setting holds it: one representation is what makes
 /// <see cref="ServerConfigFile.Write"/> the exact inverse of
 /// <see cref="ServerConfigFile.Apply"/>, and a second one is where a
 /// round-trip starts losing values.
@@ -22,19 +23,19 @@ public enum SettingKind
     /// <summary>Text that must never be echoed back to a reader. See <see cref="ServerSetting.Secret"/>.</summary>
     Secret,
 
-    /// <summary>A whole number.</summary>
+    /// <summary>A whole number; a JSON number in the file.</summary>
     Integer,
 
     /// <summary>A number that may have a fraction, or the word <c>max</c>.</summary>
     Decimal,
 
-    /// <summary><c>1</c> or <c>0</c>. ⚠️ Any non-zero reads as true, as every <c>if(global.flag)</c> does.</summary>
+    /// <summary><c>true</c> or <c>false</c> in the file, <c>1</c> or <c>0</c> as text. ⚠️ Any non-zero number reads as true, as every <c>if(global.flag)</c> does.</summary>
     Boolean,
 
     /// <summary>One of <see cref="ServerSetting.Choices"/>.</summary>
     Choice,
 
-    /// <summary>A comma-separated list.</summary>
+    /// <summary>A list: a JSON array in the file, comma-separated as text.</summary>
     List,
 
     /// <summary>A filesystem path.</summary>
@@ -42,15 +43,15 @@ public enum SettingKind
 }
 
 /// <summary>
-/// One configurable server setting: where it lives in the ini, what type it is,
+/// One configurable server setting: where it lives in the config file, what type it is,
 /// and how to move it between text and a <see cref="ServerOptions"/>.
 /// </summary>
 public sealed record ServerSetting
 {
-    /// <summary>The ini section, without brackets.</summary>
+    /// <summary>The config file's section — the top-level object the key is in.</summary>
     public required string Section { get; init; }
 
-    /// <summary>The ini key.</summary>
+    /// <summary>The key inside that section.</summary>
     public required string Key { get; init; }
 
     /// <summary>
@@ -67,10 +68,10 @@ public sealed record ServerSetting
 
     public required SettingKind Kind { get; init; }
 
-    /// <summary>This setting's current value, in the ini's own text form.</summary>
+    /// <summary>This setting's current value, as text.</summary>
     public required Func<ServerOptions, string> Get { get; init; }
 
-    /// <summary>Applies a value in the ini's own text form.</summary>
+    /// <summary>Applies a value given as text.</summary>
     /// <remarks>
     /// ⚠️ <b>Clamps here, not in the caller.</b> The reference's own
     /// <c>game_init.gml</c> clamps as it reads, and a clamp applied by one caller
@@ -148,8 +149,9 @@ public sealed record ServerSetting
 /// <c>[Classlimits]</c> and <c>[Maps]</c> are the REFERENCE's</b>, spelling and
 /// all — <c>Total bandwidth limit for map downloads in bytes per second</c> is a
 /// real key in a real <c>gg2.ini</c>. They are transcribed rather than tidied so
-/// that a config copied off a hosted GG2 server works here unedited. Everything
-/// in the other sections is this port's own, because stock GG2 has no equivalent.
+/// that <see cref="IniConverter"/> carries a config copied off a hosted GG2
+/// server across key for key. Everything in the other sections is this port's
+/// own, because stock GG2 has no equivalent.
 /// </para>
 /// <para>
 /// ⚠️ <b>Order matters in exactly two places</b>, and both are noted where they
@@ -196,7 +198,7 @@ public static class ServerSettings
     /// One setting by its <see cref="ServerSetting.Id"/>, or null.
     /// </summary>
     /// <remarks>
-    /// Case-insensitive, because the ini's own lookups are and an operator who
+    /// Case-insensitive, because the config file's lookups are and an operator who
     /// typed <c>server.servername</c> means the same thing.
     /// </remarks>
     public static ServerSetting? Find(string id) =>

@@ -48,7 +48,7 @@ internal sealed class PushedConfigWatcher
 
     /// <summary>
     /// Captures the hash of the file as this server started from it, and records
-    /// it beside a managed file as <c>gg2.ini.applied</c>.
+    /// it beside a managed file as <c>gg2.json.applied</c>.
     /// </summary>
     public PushedConfigWatcher(string path, IServerLog log, long nowMilliseconds)
     {

@@ -34,7 +34,7 @@ public sealed record FleetMember(string Name, Uri Url, string Token, string Fing
 /// ssh does on a changed host key, for the same reason.
 /// </para>
 /// <para>
-/// ⚠️ <b><c>members.ini</c> holds every member's token</b> and is written
+/// ⚠️ <b><c>members.json</c> holds every member's token</b> and is written
 /// owner-only. It is the hub's to write; an operator may edit it by hand, and it
 /// is re-read on every change the panel makes, never cached across one.
 /// </para>
@@ -42,7 +42,7 @@ public sealed record FleetMember(string Name, Uri Url, string Token, string Fing
 public sealed class FleetHub : IDisposable
 {
     /// <summary>The member list's file name inside the fleet directory.</summary>
-    public const string MembersFile = "members.ini";
+    public const string MembersFile = "members.json";
 
     /// <summary>How long one member gets to answer an ordinary request.</summary>
     public static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
@@ -64,8 +64,8 @@ public sealed class FleetHub : IDisposable
     }
 
     /// <summary>
-    /// The shared settings and each member's overrides — <c>common.ini</c> and
-    /// <c>hosts/&lt;member&gt;.ini</c> in the fleet directory, the layout
+    /// The shared settings and each member's overrides — <c>common.json</c> and
+    /// <c>hosts/&lt;member&gt;.json</c> in the fleet directory, the layout
     /// <c>deploy/config</c> uses.
     /// </summary>
     /// <remarks>
@@ -79,7 +79,7 @@ public sealed class FleetHub : IDisposable
     public Lock ConfigLock { get; } = new();
 
     /// <summary>
-    /// A member's <c>gg2.ini</c> as the fleet settings say it should be — before
+    /// A member's <c>gg2.json</c> as the fleet settings say it should be — before
     /// the member puts its own host-local values back.
     /// </summary>
     /// <remarks>Throws <see cref="FormatException"/> naming the member when it would not start.</remarks>
@@ -95,8 +95,8 @@ public sealed class FleetHub : IDisposable
             var overlayPath = FleetConfig.OverlayPath(_directory, name);
 
             return FleetConfig.Render(
-                File.ReadAllLines(commonPath),
-                File.Exists(overlayPath) ? File.ReadAllLines(overlayPath) : null,
+                File.ReadAllText(commonPath),
+                File.Exists(overlayPath) ? File.ReadAllText(overlayPath) : null,
                 name,
                 "the fleet hub");
         }
@@ -364,7 +364,7 @@ public sealed class FleetHub : IDisposable
             : ControlCommands.Error($"installed, but the restart was refused: {restarted}");
     }
 
-    /// <summary>The fleet directory: <c>members.ini</c>, and later the shared config and overlays.</summary>
+    /// <summary>The fleet directory: <c>members.json</c>, and later the shared config and overlays.</summary>
     public string DirectoryPath => _directory;
 
     /// <summary>Every member, in name order.</summary>
@@ -441,7 +441,7 @@ public sealed class FleetHub : IDisposable
             return "the URL must be https://host:port/ — a member serves its panel over TLS";
 
         if (!WebIdentity.TryParsePairingCode(pairingCode, out var memberToken, out var fingerprint))
-            return "that is not a pairing code; the member prints one at startup when [Web] FleetMember=1";
+            return "that is not a pairing code; the member prints one at startup when Web.FleetMember is true";
 
         uri = new Uri(uri.GetLeftPart(UriPartial.Authority) + "/");
         var member = new FleetMember(name, uri, memberToken, fingerprint);
@@ -573,7 +573,7 @@ public sealed class FleetHub : IDisposable
 
         // A member whose entry did not change keeps its client, so adding one
         // member does not cut the event stream somebody is watching on another.
-        foreach (var member in File.Exists(path) ? Parse(File.ReadAllLines(path)) : [])
+        foreach (var member in File.Exists(path) ? Parse(File.ReadAllText(path)) : [])
         {
             loaded[member.Name] = _members.TryGetValue(member.Name, out var existing) && existing.Member == member
                 ? existing
@@ -590,79 +590,69 @@ public sealed class FleetHub : IDisposable
         }
     }
 
-    /// <summary>Reads <c>members.ini</c>: one section per member, <c>Url</c> and <c>Pairing</c> in each.</summary>
+    /// <summary>
+    /// Reads <c>members.json</c>: one object per member, named for it, with
+    /// <c>Url</c> and <c>Pairing</c> in each.
+    /// </summary>
     /// <remarks>
-    /// A section that is incomplete or malformed is SKIPPED rather than fatal: the
+    /// A member that is incomplete or malformed is SKIPPED rather than fatal: the
     /// file is hand-editable, and one bad member should not take the hub's view
-    /// of the other members down with it.
+    /// of the other members down with it. Keys are case-insensitive, and a
+    /// top-level key that does not hold an object (the <c>"//"</c> note) is not a
+    /// member.
     /// </remarks>
-    internal static List<FleetMember> Parse(IEnumerable<string> lines)
+    /// <exception cref="FormatException">
+    /// ⛔ The file is not JSON at all. Refused rather than read as no members,
+    /// because the next member the panel adds would then save a file holding
+    /// only that one and every other token would be gone.
+    /// </exception>
+    internal static List<FleetMember> Parse(string text)
     {
         var members = new List<FleetMember>();
-        string? name = null;
-        string? url = null;
-        string? pairing = null;
+        var config = ConfigDocument.Parse(text);
 
-        void Flush()
+        foreach (var name in config.Sections)
         {
+            string url, pairing;
+
+            try
+            {
+                url = config.Text(name, "Url");
+                pairing = config.Text(name, "Pairing");
+            }
+            catch (FormatException)
+            {
+                continue;
+            }
+
             if (IsValidName(name)
                 && Uri.TryCreate(url, UriKind.Absolute, out var uri)
                 && uri.Scheme == Uri.UriSchemeHttps
                 && WebIdentity.TryParsePairingCode(pairing, out var memberToken, out var fingerprint))
             {
-                members.Add(new FleetMember(name!, uri, memberToken, fingerprint));
+                members.Add(new FleetMember(name, uri, memberToken, fingerprint));
             }
-
-            name = url = pairing = null;
         }
 
-        foreach (var raw in lines)
-        {
-            var line = raw.Trim();
-
-            if (line.Length == 0 || line[0] is ';' or '#')
-                continue;
-
-            if (line[0] == '[' && line[^1] == ']')
-            {
-                Flush();
-                name = line[1..^1].Trim();
-                continue;
-            }
-
-            var equals = line.IndexOf('=');
-
-            if (equals < 0)
-                continue;
-
-            var key = line[..equals].Trim();
-            var value = line[(equals + 1)..].Trim();
-
-            if (key.Equals("Url", StringComparison.OrdinalIgnoreCase))
-                url = value;
-            else if (key.Equals("Pairing", StringComparison.OrdinalIgnoreCase))
-                pairing = value;
-        }
-
-        Flush();
         return members;
     }
 
     private void Save(IReadOnlyList<FleetMember> members)
     {
-        var text = new StringBuilder();
+        var config = new ConfigDocument();
 
-        text.Append("; The servers this hub manages. Written by the admin panel; each Pairing\n");
-        text.Append("; is that member's token and certificate fingerprint, so keep this private.\n");
+        config.SetNote(
+            "The servers this hub manages. Written by the admin panel; each Pairing "
+            + "is that member's token and certificate fingerprint, so keep this private.");
 
         foreach (var member in members.OrderBy(m => m.Name, StringComparer.Ordinal))
         {
-            text.Append('\n').Append('[').Append(member.Name).Append("]\n");
-            text.Append("Url=").Append(member.Url).Append('\n');
-            text.Append("Pairing=").Append(WebIdentity.PairingCode(member.Token, member.Fingerprint)).Append('\n');
+            config.Put(member.Name, "Url", System.Text.Json.Nodes.JsonValue.Create(member.Url.ToString()));
+            config.Put(member.Name, "Pairing", System.Text.Json.Nodes.JsonValue.Create(
+                WebIdentity.PairingCode(member.Token, member.Fingerprint)));
         }
 
-        WebIdentity.WriteOwnerOnly(Path.Combine(_directory, MembersFile), Encoding.UTF8.GetBytes(text.ToString()), overwrite: true);
+        WebIdentity.WriteOwnerOnly(Path.Combine(_directory, MembersFile), Encoding.UTF8.GetBytes(config.ToText()), overwrite: true);
     }
 
     private static HttpClient CreateClient(FleetMember member)

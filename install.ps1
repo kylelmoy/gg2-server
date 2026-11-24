@@ -1,6 +1,6 @@
 # Downloads the Windows build of gg2-server and unpacks it into .\gg2-server.
 # Re-running it updates that directory in place and leaves files it did not
-# ship (a gg2.ini, logs) alone.
+# ship (a gg2.json, logs) alone.
 #
 #   irm https://raw.githubusercontent.com/kylelmoy/gg2-server/master/install.ps1 | iex
 #

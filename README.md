@@ -50,7 +50,7 @@ In Gang Garrison 2, choose **Join Game**, then **Direct Connect** to
 address; from the internet, forward TCP port 8190 to it.
 
 `gg2-server --help` lists every option. Running the install script again
-updates the server in place and keeps any files you added, such as a `gg2.ini`.
+updates the server in place and keeps any files you added, such as a `gg2.json`.
 
 ### Platforms
 
@@ -93,7 +93,7 @@ install, default `./gg2-server`), `GG2_VERSION` (a release tag such as
 | `--welcome <text>` | | Message sent to each player who joins. |
 | `--plugins <list>` | | Server-sent plugins for clients to load, e.g. `chat`. |
 | `--lobby` | off | List the server publicly at ganggarrison.com and gg2server.net. `--lobby-url` picks other lobbies. |
-| `--config <path>` | | Read settings from a reference-format `gg2.ini`. Every setting can be set there; a command-line flag always overrides the file. See [`docs/CONFIG.md`](docs/CONFIG.md). |
+| `--config <path>` | | Read settings from a `gg2.json` (`gg2-server config convert` turns a stock `gg2.ini` into one). Every setting can be set there; a command-line flag always overrides the file. See [`docs/CONFIG.md`](docs/CONFIG.md). |
 
 `--speed` and `--control-port` are development tools. Never use them on a server
 with players connected: they desynchronise every client.
@@ -161,7 +161,7 @@ server options; in `compose.yaml` they are the `command:` list.
 docker run -d --name gg2 --restart on-failure \
   -p 8190:8190 -p 127.0.0.1:8191:8191 \
   -v /srv/gg2:/data \
-  ghcr.io/kylelmoy/gg2-server:latest --config /data/gg2.ini --bots 8 --lobby
+  ghcr.io/kylelmoy/gg2-server:latest --config /data/gg2.json --bots 8 --lobby
 ```
 
 | | |

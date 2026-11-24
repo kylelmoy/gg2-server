@@ -257,7 +257,7 @@ window, and the server advertises `chat` itself while `[Chat] Enabled` is on (th
 default). The catalogue knows `chat` only as the zip to pin.
 
 `chat_v2_pr` is the one chat that is still a plugin here, available with the
-server's chat off (`[Chat] Enabled=0`); listing it with chat on is refused at
+server's chat off (`"Chat": {"Enabled": false}`); listing it with chat on is refused at
 startup.
 
 | | `chat` | `chat_v2_pr` |
@@ -505,7 +505,7 @@ literal `#`, and on `chat_v2_pr` it is the colour-continuation
 marker its client half looks for and is replaced with a space.
 
 ⛔ **Both settings do nothing at all without chat** — the server's own, on by
-default, or `chat_v2_pr`. With `[Chat] Enabled=0` and no `chat_v2_pr` either is
+default, or `chat_v2_pr`. With `"Chat": {"Enabled": false}` and no `chat_v2_pr` either is
 configured on a server that can never show it to anybody. `ConfigWarnings.For`
 names that combination and three surfaces say it: the server's log at startup, the fleet
 editor's notes, and `config render` before a push. It is a warning, not a

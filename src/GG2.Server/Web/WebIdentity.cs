@@ -12,7 +12,7 @@ namespace GG2.Server;
 /// <remarks>
 /// <para>
 /// <b>Both live beside the config file, never IN it.</b> A fleet hub renders and
-/// pushes every member's <c>gg2.ini</c>; if the certificate or the token were a
+/// pushes every member's <c>gg2.json</c>; if the certificate or the token were a
 /// setting, a push would be able to change the very identity the hub pins, and a
 /// push that dropped the line would unpair the host it was sent to. Kept as their
 /// own files they survive any config push, any panel save and any restart, and a

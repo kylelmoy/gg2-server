@@ -1,7 +1,7 @@
 /*
  * The settings shell both editors draw into: the dashboard's Settings sheet
- * (app.js — one server's own gg2.ini) and the settings page (editor.js — the
- * fleet's common.ini and one overlay per server, served by a hub at
+ * (app.js — one server's own gg2.json) and the settings page (editor.js — the
+ * fleet's common.json and one overlay per server, served by a hub at
  * /fleet/settings and by `config edit`). One control, one field, one grouping
  * and one section rail, so the two cannot drift into two designs.
  *

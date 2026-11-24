@@ -242,7 +242,7 @@ internal static class CommandLine
         // ⛔ --config is applied BEFORE the loop, in its own pass, so a flag
         // always beats the file no matter which side of it the flag appears on.
         // The alternative — handling it in the switch like everything else —
-        // makes `--map koth_valley --config gg2.ini` and `--config gg2.ini --map
+        // makes `--map koth_valley --config gg2.json` and `--config gg2.json --map
         // koth_valley` two different servers, and the one that silently loses
         // the flag is the one somebody will write.
         var configPath = ValueOf(args, "--config");
@@ -736,7 +736,7 @@ internal static class CommandLine
                 // ⛔ REPEATABLE, and the second one APPENDS rather than replacing —
                 // one checkpoint is one tier, and the shipped bundle is nine of them,
                 // one per class. ⚠️ The first --policy on the command line CLEARS
-                // whatever a config file named, so `--config gg2.ini --policy
+                // whatever a config file named, so `--config gg2.json --policy
                 // x.gg2p` runs x.gg2p alone rather than x.gg2p appended
                 // to the file's list: a flag beats the file, and a flag that ADDED to
                 // it would be the one setting here that cannot override.
@@ -1105,7 +1105,7 @@ internal static class CommandLine
           --map-download-limit <n>
                             TOTAL bytes/second across all custom-map downloads
                             in flight, not per client (default 50000)
-          --config <path>   read a reference-format gg2.ini. EVERY setting this
+          --config <path>   read a gg2.json config file. EVERY setting this
                             server has can be set from it — the reference's
                             [Settings], [Server], [Maps] and [Classlimits], plus
                             [Limits], [Log], [Nav], [Bots], [Web] and [Runtime];
@@ -1395,7 +1395,7 @@ internal static class CommandLine
         Without --rotation or a --config carrying one, the rotation is empty and
         the server replays --map for ever. That is NOT what the reference does:
         a stock dedicated server with no -map plays the twenty-map [Maps]
-        rotation, which is what `--config gg2.ini` reproduces here.
+        rotation, which is what `--config gg2.json` reproduces here.
 
         --bots is a FILL target including humans, not a bot count: a server
         filling to 8 with 3 people on it runs 5 bots. The nav graphs are checked

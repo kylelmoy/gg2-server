@@ -29,7 +29,7 @@ internal static class RoomsCommand
             Runs many private rooms behind one game port, and the HTTP API that creates
             them (docs/ROOMS.md). Every room is the base config plus a player's choices.
 
-              --config <path>       base gg2.ini for every room (bots, rules, rotation)
+              --config <path>       base gg2.json for every room (bots, rules, rotation)
               --port <n>            the game port every room shares (default 8300)
               --prefix <letter>     this host's code prefix (default X)
               --max-rooms <n>       rooms held at once (default 8)

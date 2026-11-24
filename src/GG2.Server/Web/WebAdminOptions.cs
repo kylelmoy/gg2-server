@@ -125,7 +125,7 @@ public readonly record struct WebAdminOptions(
             if (!IpRange.TryParse(entry, out var range))
             {
                 throw new ArgumentException(
-                    $"[Web] AllowFrom: '{entry}' is not an address or a CIDR block "
+                    $"Web.AllowFrom: '{entry}' is not an address or a CIDR block "
                     + "(1.2.3.4 or 1.2.3.0/24).",
                     nameof(AllowFrom));
             }
@@ -197,7 +197,7 @@ public readonly record struct WebAdminOptions(
         if (AutoCertificateRequested && CertificatePassword.Length != 0)
         {
             throw new ArgumentException(
-                "[Web] Certificate=auto makes its own certificate, which has no password; "
+                "Web.Certificate \"auto\" makes its own certificate, which has no password; "
                 + "remove CertificatePassword.",
                 nameof(CertificatePassword));
         }
@@ -207,16 +207,16 @@ public readonly record struct WebAdminOptions(
         if (FleetMember && CertificatePath.Length == 0)
         {
             throw new ArgumentException(
-                "[Web] FleetMember needs TLS, or the hub's token crosses the network in the "
-                + "clear. Set [Web] Certificate=auto for a self-signed certificate the hub pins.",
+                "Web.FleetMember needs TLS, or the hub's token crosses the network in the "
+                + "clear. Set Web.Certificate to \"auto\" for a self-signed certificate the hub pins.",
                 nameof(FleetMember));
         }
 
         if (FleetDirectory.Length != 0 && IsRemote && CertificatePath.Length == 0)
         {
             throw new ArgumentException(
-                "[Web] FleetDirectory makes this panel a hub, whose password opens every member, "
-                + "and it is bound beyond loopback with no certificate. Set [Web] Certificate "
+                "Web.FleetDirectory makes this panel a hub, whose password opens every member, "
+                + "and it is bound beyond loopback with no certificate. Set Web.Certificate "
                 + "(auto is fine), or bind 127.0.0.1.",
                 nameof(FleetDirectory));
         }

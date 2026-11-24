@@ -37,13 +37,16 @@ that consults it already follows. `CliCoverageTests` gates this.
 The same settings live in a config file's `[Web]` section (`--config`), which is
 where an admin password belongs rather than in a process listing:
 
-```ini
-[Web]
-Port=8191
-Bind=0.0.0.0
-Password=a long one
-Certificate=cert.pfx
-CertificatePassword=
+```json
+{
+  "Web": {
+    "Port": 8191,
+    "Bind": "0.0.0.0",
+    "Password": "a long one",
+    "Certificate": "cert.pfx",
+    "CertificatePassword": ""
+  }
+}
 ```
 
 **`Port` being present is what enables it**, not `Port` being non-zero: `0`
@@ -172,14 +175,19 @@ ssh -N -L 8191:127.0.0.1:8191 you@your-server   # then open http://127.0.0.1:819
 A fleet hub manages other servers by calling their panels over HTTPS, with no
 ssh in between. A server opts in as a member with three settings:
 
-```ini
-[Web]
-Port=8191
-Bind=0.0.0.0
-Certificate=auto
-AllowFrom=203.0.113.7        ; the hub's address
-FleetMember=1
+```json
+{
+  "Web": {
+    "Port": 8191,
+    "Bind": "0.0.0.0",
+    "Certificate": "auto",
+    "AllowFrom": "203.0.113.7",
+    "FleetMember": true
+  }
+}
 ```
+
+`AllowFrom` is the hub's address.
 
 | Piece | What it is | Where |
 |---|---|---|
@@ -218,9 +226,9 @@ token, the lockout and the allowlist.
 
 ## The fleet hub
 
-`[Web] FleetDirectory=fleet` (or `--web-fleet fleet`) makes a panel a hub. The
-directory, relative to the config file's, holds `members.ini`: one section per
-member with its `Url` and `Pairing` code, written owner-only because it holds
+`"Web": {"FleetDirectory": "fleet"}` (or `--web-fleet fleet`) makes a panel a hub. The
+directory, relative to the config file's, holds `members.json`: one object per
+member, named for it, with its `Url` and `Pairing` code, written owner-only because it holds
 every member's token. The **Fleet** button pairs a member (name, panel URL,
 pairing code) and lists every member with its map, players, tick and build.
 
@@ -264,7 +272,7 @@ pairing code) and lists every member with its map, players, tick and build.
   member.
 
 **Fleet settings** (`/fleet/settings`, linked from the Fleet sheet) is
-`config edit`'s page served by the hub: `common.ini` and `hosts/<member>.ini` in
+`config edit`'s page served by the hub: `common.json` and `hosts/<member>.json` in
 the fleet directory, the same layout as `deploy/config`, through the same
 `FleetConfigEditor` and its all-or-nothing save. It offers only settings that are
 not `ServerSetting.HostLocal` — every path and the whole `[Web]` section stay
@@ -285,13 +293,13 @@ commands instead.
 
 | Piece | Rule |
 |---|---|
-| `config-install {content, expected, force?, dryRun?}` | The member's verb, in `ConfigInstall`, reachable from the control port like every other. Writes `gg2.ini`, `gg2.ini.prev` and the `.pushed` marker — what `deploy.sh --config` writes, so `PushedConfigWatcher` applies it at the first empty moment and `deploy.sh --status` reports it. |
+| `config-install {content, expected, force?, dryRun?}` | The member's verb, in `ConfigInstall`, reachable from the control port like every other. Writes `gg2.json`, `gg2.json.prev` and the `.pushed` marker — what `deploy.sh --config` writes, so `PushedConfigWatcher` applies it at the first empty moment and `deploy.sh --status` reports it. |
 | Host-local keys | Removed from the incoming text and the member's current values put back, so a push never changes a path or `[Web]`. The page never offers them; this is what makes that true for a caller that uses the verb directly. |
 | `expected` | The hash of the member's file that the dry run reported. A file that changed since is refused, forced or not. |
 | `force` | Needed when the file was never pushed or was edited since its last push — `deploy.sh`'s two refusals. The page labels that button *Overwrite*. |
 | Validation | `ServerOptions.Validate`, which includes the bot-brain checks, before anything is written. |
 | The diff | Computed by the member with secrets masked, so no secret leaves it. |
-| Rendering | The hub renders `common.ini` + `hosts/<member>.ini` exactly as `FleetConfig.Render` does for `deploy.sh`. |
+| Rendering | The hub renders `common.json` + `hosts/<member>.json` exactly as `FleetConfig.Render` does for `deploy.sh`. |
 
 **Adopt** (`POST /api/fleet/adopt {name, ids?, into?}`, the *Adopt…* button
 beside each server in the push list) compares a member's own file, read with its
@@ -476,7 +484,7 @@ text reaching the DOM another way (a literal passed to a helper) is not caught.
 The settings pages' descriptions are in the table too, one per row of
 `ServerSettings.All` under `settingHelp.<Section>.<Key>`; the server sends ids
 and never text. What is NOT in the table: messages the server composes (command
-replies, errors), the setting names and choice values (they are the ini's own
+replies, errors), the setting names and choice values (they are the config file's own
 keys and values, and translating them would make the page disagree with the
 file), and the fleet analytics page's own `fleet.js`.
 

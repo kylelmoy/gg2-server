@@ -189,7 +189,7 @@ The setting is kept like a rating: by address and name, in memory, forgotten an
 hour after its human was last on the server, so the reconnect a stock client
 makes at each duel map change keeps it. `DuelDifficultyTests` drives each row
 through a v6 chat client on a loopback socket. **It needs chat on**: a duel
-server with `[Chat] Enabled=0` has no way to type it. Not yet seen with a stock
+server with `"Chat": {"Enabled": false}` has no way to type it. Not yet seen with a stock
 GM8 client.
 
 ## The duel nets

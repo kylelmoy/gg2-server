@@ -66,16 +66,15 @@ public static class ConfigInstall
             : null;
 
         var exists = File.Exists(path);
-        var currentLines = exists ? File.ReadAllLines(path) : [];
+        var currentText = exists ? File.ReadAllText(path) : string.Empty;
         var currentHash = exists ? FleetConfig.Hash(File.ReadAllBytes(path)) : string.Empty;
 
-        var merged = KeepHostLocal(Split(content), currentLines);
-        var text = string.Join('\n', merged) + "\n";
+        // Throws with the setting's name, which Dispatch turns into the reply.
+        var text = KeepHostLocal(content, currentText);
         var newHash = FleetConfig.Hash(FleetConfig.Encode(text));
 
-        // Throws with the setting's name, which Dispatch turns into the reply.
         var candidate = ServerOptions.CreateDefault();
-        ServerConfigFile.ApplyLines(candidate, [.. merged], path);
+        ServerConfigFile.ApplyText(candidate, text, path);
         candidate.Validate();
 
         var marker = ReadMarker(path);
@@ -92,7 +91,7 @@ public static class ConfigInstall
             json.Append(",\"managed\":").Append(managed ? "true" : "false");
             json.Append(",\"editedSincePush\":").Append(edited ? "true" : "false");
             json.Append(",\"diff\":");
-            AppendDiff(json, Mask(currentLines), Mask([.. merged]));
+            AppendDiff(json, Mask(currentText), Mask(text));
             return ControlCommands.Ok(json.ToString());
         }
 
@@ -137,33 +136,45 @@ public static class ConfigInstall
     /// <paramref name="incoming"/> with every host-local key replaced by
     /// <paramref name="current"/>'s, or removed where the current file has none.
     /// </summary>
-    internal static List<string> KeepHostLocal(string[] incoming, string[] current)
+    /// <exception cref="FormatException">
+    /// Either file is not JSON. ⚠️ Including the CURRENT one: its host-local
+    /// keys cannot be kept from a file that cannot be read, and installing over
+    /// it would silently replace them.
+    /// </exception>
+    internal static string KeepHostLocal(string incoming, string current)
     {
-        var merged = new List<string>(incoming);
-        var ini = ServerConfigFile.Parse(current);
+        var merged = ConfigDocument.Parse(incoming);
+
+        ConfigDocument existing;
+
+        try
+        {
+            existing = ConfigDocument.Parse(current);
+        }
+        catch (FormatException e)
+        {
+            throw new FormatException($"this server's own configuration file cannot be read, so its host-local settings cannot be kept: {e.Message}", e);
+        }
 
         foreach (var setting in ServerSettings.All)
         {
             if (!setting.HostLocal)
                 continue;
 
-            ServerConfigFile.Remove(merged, setting.Section, setting.Key);
+            merged.Remove(setting.Section, setting.Key);
 
-            if (ini.TryGetValue(setting.Section, out var section) && section.TryGetValue(setting.Key, out var value))
-                ServerConfigFile.Put(merged, setting.Section, setting.Key, value);
+            if (existing.TryGet(setting.Section, setting.Key, out var value))
+                merged.Set(setting, value);
         }
 
-        return merged;
+        return merged.ToText();
     }
 
-    private static string[] Split(string text)
+    private static string[] Mask(string text)
     {
-        var lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        var lines = FleetConfigEditor.MaskSecrets(text).Split('\n');
         return lines.Length > 0 && lines[^1].Length == 0 ? lines[..^1] : lines;
     }
-
-    private static string[] Mask(string[] lines) =>
-        FleetConfigEditor.MaskSecrets(string.Join('\n', lines)).Split('\n');
 
     private static string ReadMarker(string path)
     {
