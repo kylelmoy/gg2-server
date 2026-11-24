@@ -15,7 +15,7 @@ each. Nothing else in this file exists until its row says so.
 | 2 | The room host: one process, one port, many rooms | **Built** as a library (`RoomHost`, `RoomFrontDoor`, `SharedNav`, `SharedPolicies`). `RoomHostTests` drive real sockets through the one port. **Live, 2026-11-22**: a stock GM8 client joined a room created over the API (`gg2-server rooms` with the fleet's `common.json`, Windows, loopback) with the code as its password, in lower case with spaces; got the room's map, its policy bots filled to six, chat, a character on blue; a code naming no room showed the stock "Incorrect Password."; the emptied room ended 120 s after the client left and its code went 404. **Live on a VPS, 2026-11-24**: from the dev box, a room created over `https://us-east.gg2server.net/rooms` (`ctf_truefort`, normal bots, small) was joined by a stock GM8 client on `198.44.123.219:8300` with the code as its password; it held the client and five policy bots, and `GET /rooms/{code}` reported the player |
 | 3 | The dispatcher API, inside the room host | **Built**: `gg2-server rooms`. `RoomApiTests` create over real HTTP and join with the returned code over the game port. No authentication; a create is limited per address (`RoomCreateLimitTests`) |
 | 4 | Device check and the ban list | **deferred** (no Apple developer key yet); the per-address create limits stand in |
-| 5 | the native client: create, join by code | not started |
+| 5 | the native client: create, join by code | **Built** in gg2-client (its DECISIONS D24): hosts from the signed directory below, create on the fastest with room, join by code through the prefix and `GET /rooms/{code}`. Its `RoomJoinTests` create and join through this repo's `RoomHost` and `RoomApi` in process |
 | 6 | Fleet rollout: one unit and one port per VPS | **Drain built**: `--drain-file`, exit 4, `deploy.sh` drains a `<service>-rooms` sibling instead of restarting it, `deploy.sh --print-rooms-unit` (`RoomHostTests`' drain tests, `RoomApiTests.ADrainingHostRefusesCreates`; live on Windows loopback: an old marker ignored at startup, a fresh one refused creates and the host exited 4 when its room ended). **Installed 2026-11-24** on all three VPSes (table under "Rollout"), each API behind Caddy with TLS |
 
 ## Where rooms run
@@ -388,20 +388,39 @@ host it runs on.
 
 The client learns the room hosts from a **signed directory**: a small JSON
 file at a stable URL, and the only thing about the hosts the app knows.
+**Its URL is `https://gg2server.net/rooms.json`**, signed listing W, E and D.
+Serving it needs the Caddy route below on us-east (`~/gg2-directory-install.sh`,
+run with sudo); until that is in, the URL answers 404 and a client has no hosts.
+
+| Part | What |
+|---|---|
+| Format | `RoomDirectory` and `RoomCodes`, in `GG2.Protocol.Rooms` so the native client uses the same code. `RoomDirectoryTests` |
+| Envelope | `{"payload": base64, "signature": base64}`. The signature is over the payload's bytes as they are, so nothing is re-serialised before checking |
+| Payload | `{"version": 1, "operator", "issued", "hosts": [{"prefix", "region", "url"}]}`. A client refuses any other version |
+| Signature | ECDSA P-256 with SHA-256, 64-byte IEEE P1363 (r then s). In every .NET base library the client runs on, iOS included; .NET has no standalone Ed25519 |
+| Public key | base64 SubjectPublicKeyInfo: `MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEYoRZOIK5TAStd3/fY4ppSTuk9ZJSA6Kdgkynexg6smB15tRIhBwHnvaODxlNuYDTva3GIpyngHohj4HK5xN0Xw==` |
+| Private key | PKCS#8 PEM on the operator's machine, never on a host. Losing it means a client update shipping a new public key |
+| Tool | `gg2-server directory keygen --key <pem>`, `sign --key <pem> --source <hosts.json> --out rooms.json` (stamps `issued`, checks the result before writing), `verify --public-key <b64> <file or URL>` |
+| Serving | us-east's Caddy serves `/rooms.json` from `/srv/gg2-directory/` (`Cache-Control: max-age=300`); publishing is copying the file there. The serving box is not trusted with the host list, which is the point of the signature |
+
+The source `sign` reads is the payload without `version` and `issued`:
 
 ```json
 {
   "operator": "Vindicator's",
-  "issued": "2026-11-21T00:00:00Z",
   "hosts": [
-    {"prefix": "W", "region": "US West", "url": "https://w.rooms.example"},
-    {"prefix": "E", "region": "US East", "url": "https://e.rooms.example"},
-    {"prefix": "D", "region": "Germany", "url": "https://d.rooms.example"}
-  ],
-  "signature": "<Ed25519 over the rest>"
+    {"prefix": "W", "region": "US West", "url": "https://us-west.gg2server.net"},
+    {"prefix": "E", "region": "US East", "url": "https://us-east.gg2server.net"},
+    {"prefix": "D", "region": "Germany", "url": "https://de.gg2server.net"}
+  ]
 }
 ```
 
+`sign` refuses a source with no hosts, a prefix outside the code alphabet or
+owned by two hosts, a URL that is not https, or a host with no region.
+
+- **A client keeps the newest copy it has verified**, by `issued`, so a stale
+  signed copy served later cannot roll it back to a host list since replaced.
 - **The app ships the directory's URL and its public signing key**, and caches
   the last good copy, so a down URL does not stop room creation on hosts that
   are up. A copy that fails the signature check is ignored, so whoever controls
