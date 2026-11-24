@@ -4,7 +4,6 @@
   "outFile": "/srv/gg2-status/status.json",
   "historyFile": "/home/kyle/gg2-status/history.json",
   "directoryFile": "/srv/gg2-directory/rooms.json",
-  "nativeProtocol": "31ad383f-df45-449b-9bb7-63869ac81345",
   "lobby": {
     "local": "http://127.0.0.1:29945/servers",
     "public": "https://gg2server.net/servers",

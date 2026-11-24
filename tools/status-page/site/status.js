@@ -101,7 +101,7 @@ function renderLobby(s) {
   const servers = [...s.lobby.servers].sort((a, b) => (b.players - a.players) || String(a.name).localeCompare(b.name));
   $("lobby-empty").hidden = servers.length > 0;
   $("lobby").innerHTML = servers.map((v) => `<tr>
-    <td class="srv"><b>${esc(v.name)}</b>${v.passworded ? '<span class="tag warn">password</span>' : ""}${v.native ? '<span class="tag accent">native</span>' : ""}
+    <td class="srv"><b>${esc(v.name)}</b>${v.passworded ? '<span class="tag warn">password</span>' : ""}
       <span class="addr">${esc(v.ip)}:${esc(v.port)}</span></td>
     <td class="map">${esc(v.map)}</td>
     <td class="c-num"><span class="${v.players > 0 ? "has-humans" : ""}">${esc(v.players)}</span> / ${esc(v.slots)}</td>

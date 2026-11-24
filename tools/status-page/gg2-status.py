@@ -277,9 +277,7 @@ def main():
                 certs.append({"host": h, "state": "down", "detail": r.get("detail", "")})
 
     listed = lobby.get("servers", lobby_public.get("servers", []))
-    native_uuid = cfg.get("nativeProtocol")
     for s in listed:
-        s["native"] = bool(native_uuid and native_uuid in (s.get("protocols") or []))
         s.pop("protocols", None)
 
     # The game servers this operator runs: healthy when the lobby lists them.
