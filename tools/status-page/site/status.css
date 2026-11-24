@@ -116,7 +116,6 @@ a:hover { text-decoration: underline; }
 .tile-value { display: flex; align-items: baseline; gap: 4px; }
 .tile-value b { font: 600 1.375rem/1.1 var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .tile-value i { font-style: normal; font-size: var(--text-tiny); color: var(--muted); }
-.tile-note { font-size: var(--text-tiny); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .meter { height: 3px; border-radius: var(--radius-pill); background: var(--default); overflow: hidden; margin: 4px 0 2px; }
 .meter > span { display: block; height: 100%; width: 0; border-radius: var(--radius-pill); background: var(--success); transition: width 0.3s var(--ease); }
 .meter > span.mid { background: var(--warning); }

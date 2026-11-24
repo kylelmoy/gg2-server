@@ -2,7 +2,7 @@
 
 The public page at `https://gg2server.net/`: one look at whether the lobby,
 the reward auth server and the private-room hosts are working, with the lobby
-listing, the award holders, room capacity and the lobby host's own load.
+listing, the award holders, private room capacity and the lobby host's own load.
 
 | File | What |
 |---|---|
@@ -23,9 +23,8 @@ fonts from the same directory, so the page has no copy of either.
 | gg2-lobby | `GET /servers` on loopback | 200 with a list |
 | gg2server.net | `GET https://gg2server.net/servers` | the same through Caddy and TLS |
 | gg2-auth | TCP connect, then close | the connect succeeds. A zero-byte connection is dropped without a log line (`AuthServer.cs`) |
-| room directory | reads `/srv/gg2-directory/rooms.json` | its payload decodes. The signature is not checked here |
-| room host API | `GET <url>/status` for each host in the directory | 200; `draining` reports partial |
-| room game port | TCP connect to the host's `gamePort` | the connect succeeds |
+| private room directory | reads `/srv/gg2-directory/rooms.json` | its payload decodes. The signature is not checked here |
+| private room host API | `GET <url>/status` for each host in the directory | 200; `draining` reports partial |
 | game servers | none sent to them | the lobby lists `ip:port` from `config.json` |
 | certificates | TLS handshake to each https name | more than 14 days left is up, under is partial |
 

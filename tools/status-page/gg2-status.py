@@ -13,9 +13,7 @@ Everything here is read-only against the services:
   (AuthServer.cs: a zero-byte read returns without a log line);
 - the award holders come from `gg2-auth list`, which prints ids, rewards and
   notes and never a key, so this script never handles a secret;
-- each room host from the signed directory is asked GET /status and gets a TCP
-  connect on its game port (the front door drops a connection that sends
-  nothing);
+- each private-room host from the signed directory is asked GET /status;
 - game servers are not connected to at all: a server is healthy when it is
   listed in the lobby, which it re-announces to every 30 s.
 
@@ -117,7 +115,6 @@ def room_host_check(entry, timeout):
             "hostname": hostname,
             "rooms": body.get("rooms"), "maxRooms": body.get("maxRooms"),
             "free": body.get("free"), "draining": bool(body.get("draining")),
-            "gamePort": body.get("gamePort"),
         }
         if result["draining"]:
             result["state"] = "degraded"
@@ -142,7 +139,7 @@ def read_directory(path):
             envelope = json.load(f)
         payload = json.loads(base64.b64decode(envelope["payload"]))
         mtime = datetime.datetime.fromtimestamp(os.path.getmtime(path), datetime.timezone.utc)
-        return {"state": "up", "issued": payload.get("issued"), "operator": payload.get("operator"),
+        return {"state": "up", "issued": payload.get("issued"),
                 "hosts": payload.get("hosts", []), "published": iso(mtime),
                 "detail": f"{len(payload.get('hosts', []))} hosts, issued {payload.get('issued', '?')}"}
     return check(run)
@@ -249,10 +246,7 @@ def main():
         f_certs = {h: pool.submit(check, lambda h=h: dict(zip(("expires", "issuer"), cert_days_left(h, timeout))))
                    for h in cert_hosts}
         rooms = [f.result() for f in f_rooms]
-        f_ports = [pool.submit(tcp_check, r["hostname"], r.get("gamePort") or cfg.get("roomGamePort", 8300),
-                               timeout, "accepting connections") for r in rooms]
         lobby, lobby_public, auth, holders = f_lobby.result(), f_lobby_public.result(), f_auth.result(), f_holders.result()
-        ports = [f.result() for f in f_ports]
         certs = []
         for h, f in f_certs.items():
             r = f.result()
@@ -286,13 +280,11 @@ def main():
         {"id": "lobby", "group": "Lobby", "name": "gg2-lobby", "sub": "server list, :29945", **strip(lobby)},
         {"id": "lobby-https", "group": "Lobby", "name": "gg2server.net", "sub": "https route to the list", **strip(lobby_public)},
         {"id": "auth", "group": "Awards", "name": "gg2-auth", "sub": f"reward auth, :{cfg['auth']['port']}", **auth},
-        {"id": "directory", "group": "Rooms", "name": "Room directory", "sub": "signed rooms.json", **strip(directory)},
+        {"id": "directory", "group": "Private rooms", "name": "Private room directory", "sub": "signed rooms.json", **strip(directory)},
     ]
-    for r, p in zip(rooms, ports):
-        checks.append({"id": f"rooms-{r['prefix']}", "group": "Rooms", "name": f"Room host {r['prefix']}",
+    for r in rooms:
+        checks.append({"id": f"rooms-{r['prefix']}", "group": "Private rooms", "name": f"Private room host {r['prefix']}",
                        "sub": f"{r['region']} API", **strip(r)})
-        checks.append({"id": f"roomport-{r['prefix']}", "group": "Rooms", "name": f"Room game port {r['prefix']}",
-                       "sub": f"{r['hostname']}:{r.get('gamePort') or cfg.get('roomGamePort', 8300)}", **p})
     for g in game_servers:
         checks.append({"id": f"game-{g['ip']}-{g['port']}", "group": "Game servers", "name": g["name"],
                        "sub": f"{g['ip']}:{g['port']}", "state": g["state"], "detail": g["detail"]})
@@ -332,7 +324,6 @@ def main():
         "generated": iso(started),
         "intervalSeconds": cfg.get("intervalSeconds", 30),
         "bucketSeconds": BUCKET_SECONDS,
-        "operator": directory.get("operator") or cfg.get("operator", ""),
         "overall": overall,
         "checks": checks,
         "lobby": {"servers": listed, "humans": humans,
@@ -341,7 +332,7 @@ def main():
                   "announce": cfg["lobby"].get("announce", "")},
         "humansHistory": buckets(history.get("humans", []), now_ts, max),
         "rooms": [{k: r.get(k) for k in ("prefix", "region", "url", "hostname", "state", "detail", "ms", "rooms",
-                                         "maxRooms", "free", "draining", "gamePort")} for r in rooms],
+                                         "maxRooms", "free", "draining")} for r in rooms],
         "directory": {k: directory.get(k) for k in ("state", "issued", "published", "detail")},
         "awards": {"state": holders["state"], "holders": holders.get("holders", []),
                    "detail": holders.get("detail", ""), "endpoint": cfg["auth"].get("public", "")},

@@ -1,5 +1,4 @@
 {
-  "operator": "Vindicator's",
   "intervalSeconds": 30,
   "timeoutSeconds": 4,
   "outFile": "/srv/gg2-status/status.json",
@@ -18,7 +17,6 @@
     "listCommand": ["/usr/local/bin/gg2-auth", "list"],
     "publishNotes": false
   },
-  "roomGamePort": 8300,
   "certificates": ["gg2server.net"],
   "units": ["gg2-lobby", "gg2-auth", "gg2-rooms", "gg2", "caddy"],
   "gameServers": [

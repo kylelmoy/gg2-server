@@ -60,11 +60,7 @@ function renderTiles(s) {
   const lobby = s.lobby;
   $("t-humans").textContent = lobby.humans;
   $("t-slots").textContent = `/ ${lobby.slots} slots`;
-  $("t-humans-note").textContent = `${lobby.bots} bots alongside`;
   $("t-servers").textContent = lobby.servers.length;
-  const ours = s.checks.filter((c) => c.group === "Game servers");
-  const oursUp = ours.filter((c) => c.state === "up").length;
-  $("t-servers-note").textContent = ours.length ? `${oursUp} of ${ours.length} fleet servers listed` : "in the gg2server.net lobby";
 
   const live = s.rooms.filter((r) => r.maxRooms != null);
   const used = live.reduce((a, r) => a + (r.rooms || 0), 0);
@@ -75,12 +71,9 @@ function renderTiles(s) {
   const bar = $("t-rooms-bar");
   bar.style.width = `${(f * 100).toFixed(1)}%`;
   bar.className = f >= 0.9 ? "high" : f >= 0.6 ? "mid" : "";
-  $("t-rooms-note").textContent = `${live.length} of ${s.rooms.length} hosts answering`;
 
   const holders = s.awards.holders;
   $("t-awards").textContent = s.awards.state === "up" ? holders.length : "—";
-  const rewards = holders.reduce((a, h) => a + h.rewards.length, 0);
-  $("t-awards-note").textContent = s.awards.state === "up" ? `${rewards} rewards issued by gg2-auth` : "table unreadable";
 }
 
 function renderServices(s) {
@@ -136,11 +129,11 @@ function renderRooms(s) {
     return `<div class="row">
       <span class="avatar">${esc(r.prefix)}</span>
       <div class="row-main"><b>${esc(r.region)}</b>${r.draining ? '<span class="tag warn">draining</span>' : ""}
-        <span class="sub">${esc(r.hostname)}${up ? ` · :${esc(r.gamePort)}` : ""}${r.ms != null ? ` · ${Math.round(r.ms)} ms` : ""}</span>
+        <span class="sub">${esc(r.hostname)}${r.ms != null ? ` · ${Math.round(r.ms)} ms` : ""}</span>
         ${up ? `<div class="meter"><span class="${f >= 0.9 ? "high" : f >= 0.6 ? "mid" : ""}" style="width:${(f * 100).toFixed(1)}%"></span></div>` : ""}</div>
       <div class="row-num">${up ? `${esc(r.rooms)}<i> / ${esc(r.maxRooms)}</i>` : `<span class="state down">Down</span>`}</div>
     </div>`;
-  }).join("") || '<p class="empty">No room hosts in the directory.</p>';
+  }).join("") || '<p class="empty">No private room hosts in the directory.</p>';
 }
 
 function renderAwards(s) {
@@ -187,7 +180,6 @@ function renderHost(s) {
 
 function render(s) {
   last = s;
-  $("operator").textContent = s.operator ? `Service status · ${s.operator}` : "Service status";
   if (s.lobby.announce) $("ep-announce").textContent = s.lobby.announce;
   if (s.awards.endpoint) $("ep-auth").textContent = s.awards.endpoint;
   renderBanner(s);
