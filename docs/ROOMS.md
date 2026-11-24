@@ -388,9 +388,12 @@ host it runs on.
 
 The client learns the room hosts from a **signed directory**: a small JSON
 file at a stable URL, and the only thing about the hosts the app knows.
-**Its URL is `https://gg2server.net/rooms.json`**, signed listing W, E and D.
-Serving it needs the Caddy route below on us-east (`~/gg2-directory-install.sh`,
-run with sudo); until that is in, the URL answers 404 and a client has no hosts.
+**Published at `https://gg2server.net/rooms.json`**, listing W, E and D.
+**Live, 2026-11-24**: `directory verify` accepted the copy fetched from that
+URL, and gg2-client's own code, from the dev box, read it, created a room on
+the fastest host (E), found it again from the code typed in lower case with
+a space, and joined it on the game port with the code as the password. A
+made-up code got "no room has the code" before any connection.
 
 | Part | What |
 |---|---|
