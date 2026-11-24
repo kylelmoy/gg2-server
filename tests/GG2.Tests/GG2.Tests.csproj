@@ -50,6 +50,9 @@
     <!-- The HTTP lobby, standalone. LobbyServiceTests. -->
     <ProjectReference Include="..\..\src\GG2.Lobby\GG2.Lobby.csproj" />
 
+    <!-- The reward auth server, standalone. AuthServiceTests. -->
+    <ProjectReference Include="..\..\src\GG2.Auth\GG2.Auth.csproj" />
+
     <!-- The command line itself. See CliCoverageTests. -->
     <ProjectReference Include="..\..\src\GG2.Host\GG2.Host.csproj" />
   </ItemGroup>

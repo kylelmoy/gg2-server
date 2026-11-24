@@ -286,7 +286,7 @@ public sealed class RewardAuthTests
     /// server of the first.
     /// </para>
     /// </remarks>
-    private static void WaitFor(ServerHarness harness, Func<bool> condition, string what)
+    internal static void WaitFor(ServerHarness harness, Func<bool> condition, string what)
     {
         // The component's deadline plus a margin for the thread that has to
         // notice it expired. Ten milliseconds a turn, so the count is the budget
@@ -341,7 +341,7 @@ public sealed class RewardAuthTests
     /// assert. This keeps polling until the whole of it is there.
     /// </para>
     /// </remarks>
-    private static void TakeUntilSequence(
+    internal static void TakeUntilSequence(
         ServerHarness harness, LoopbackClient client, byte[] needle, string what)
     {
         for (var i = 0; i < 200; i++)
@@ -358,7 +358,7 @@ public sealed class RewardAuthTests
         Assert.Fail($"gave up after 200 ticks waiting for {what}");
     }
 
-    private static void SendRewardRequest(LoopbackClient client, string id) =>
+    internal static void SendRewardRequest(LoopbackClient client, string id) =>
         client.Send([(byte)MessageType.RewardRequest, (byte)id.Length, .. GG2Text.Encode(id)]);
 
     /// <summary>

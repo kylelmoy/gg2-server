@@ -42,6 +42,7 @@ GG2.Parity        trace recorder, trace replayer, drift reporting.
 GG2.Tests         xunit; unit tests plus the parity fixtures.
 GG2.Host          console entry point.
 GG2.Lobby         gg2-lobby, the HTTP/JSON server list. Standalone. docs/LOBBY.md.
+GG2.Auth          gg2-auth, the Haxxy reward auth server. Standalone. docs/AUTH.md.
 ```
 
 `GG2.Simulation` must not reference `GG2.Server`. Enforce it with project

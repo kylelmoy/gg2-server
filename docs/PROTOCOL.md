@@ -880,7 +880,9 @@ Not everything in the reference is load-bearing for a private headless server.
   **`--auth-server host[:port]` overrides where it authenticates**, which is
   the only way the flow can be exercised: `ganggarrison.com:45022` is a third
   party and is not contacted from this repo. `RewardAuthTests` stands up a
-  loopback listener instead.
+  loopback listener instead. **`gg2-auth` is this repo's own auth server**
+  (`docs/AUTH.md`), with keys issued from its CLI; ganggarrison.com keys do not
+  verify there.
   **The HOST self-auth is deliberately NOT ported.**
   `GameServerCreate.gml:79-83` authenticates the host's own player with
   `ipCheck = false` and `hmac_md5(key, challenge)`. This port has no local player

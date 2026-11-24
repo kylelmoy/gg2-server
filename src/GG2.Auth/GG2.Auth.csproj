@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    gg2-auth: the Haxxy reward auth server. docs/AUTH.md.
+
+    Standalone on purpose, like GG2.Lobby - no ProjectReference. It speaks one
+    fixed TCP exchange and reads one text file, so it publishes as a small
+    native-AOT binary with nothing of the game linked in. It is a separate
+    process from the lobby because it holds every player's secret key and the
+    lobby holds nothing private.
+
+    PublishAot is set ONLY while publishing, for the reason GG2.Lobby.csproj
+    gives: unconditionally it makes every restore fetch the ILCompiler package,
+    whose audit warning this repo treats as an error.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>GG2.Auth</RootNamespace>
+    <AssemblyName>gg2-auth</AssemblyName>
+    <PublishAot Condition="'$(_IsPublishing)' == 'true'">true</PublishAot>
+    <IsAotCompatible>true</IsAotCompatible>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <EventSourceSupport>false</EventSourceSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="GG2.Tests" />
+  </ItemGroup>
+
+</Project>
