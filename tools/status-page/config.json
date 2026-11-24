@@ -1,0 +1,31 @@
+{
+  "operator": "Vindicator's",
+  "intervalSeconds": 30,
+  "timeoutSeconds": 4,
+  "outFile": "/srv/gg2-status/status.json",
+  "historyFile": "/home/kyle/gg2-status/history.json",
+  "directoryFile": "/srv/gg2-directory/rooms.json",
+  "nativeProtocol": "31ad383f-df45-449b-9bb7-63869ac81345",
+  "lobby": {
+    "local": "http://127.0.0.1:29945/servers",
+    "public": "https://gg2server.net/servers",
+    "announce": "http://gg2server.net:29945"
+  },
+  "auth": {
+    "host": "127.0.0.1",
+    "port": 45022,
+    "public": "tcp://gg2server.net:45022",
+    "listCommand": ["/usr/local/bin/gg2-auth", "list"],
+    "publishNotes": false
+  },
+  "roomGamePort": 8300,
+  "certificates": ["gg2server.net"],
+  "units": ["gg2-lobby", "gg2-auth", "gg2-rooms", "gg2", "caddy"],
+  "gameServers": [
+    {"name": "V's | US Central", "ip": "162.230.91.165", "port": 8190},
+    {"name": "V's | 1v1 Bot", "ip": "162.230.91.165", "port": 8192},
+    {"name": "V's | US East", "ip": "198.44.123.219", "port": 8190},
+    {"name": "V's | US West", "ip": "45.59.102.99", "port": 8190},
+    {"name": "V's | Germany", "ip": "89.58.5.241", "port": 8190}
+  ]
+}
