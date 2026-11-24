@@ -105,4 +105,4 @@ loadprobe --host <addr> --clients 8 --seconds 90 --warmup 10 --out client.tsv
 ```
 
 ⚠️ **Restore the host's configuration afterwards.** Keep a hashed backup of
-`shared/gg2.ini` and diff against it, rather than reverting from memory.
+`shared/gg2.json` and diff against it, rather than reverting from memory.

@@ -7,33 +7,32 @@ during it — which matters here because the box being measured has one core and
 an HTTP request a second would be part of what the measurement saw.
 
 The panel binds loopback, so this reads the port and password out of the host's
-own gg2.ini exactly as scripts/fleet-state.sh does; no password reaches an
+own gg2.json, as scripts/fleet-state.sh does; no password reaches an
 argument list or this repository.
 
 Prints TSV on stdout: one row per second of server health.
 
-    perf-pull.py <gg2.ini> [after_sequence]
+    perf-pull.py <gg2.json> [after_sequence]
 """
-import configparser
 import http.cookiejar
 import json
 import sys
 import urllib.request
 
-ini_path = sys.argv[1]
+config_path = sys.argv[1]
 after = sys.argv[2] if len(sys.argv) > 2 else "-1"
 
-ini = configparser.ConfigParser(interpolation=None, strict=False, inline_comment_prefixes=None)
-ini.optionxform = str.lower
-with open(ini_path, encoding="utf-8-sig") as f:
-    ini.read_file(f)
+with open(config_path, encoding="utf-8-sig") as f:
+    config = json.load(f)
 
 
 def value(section, key, default=""):
-    for s in ini.sections():
-        if s.lower() == section.lower() and ini.has_option(s, key):
-            v = ini.get(s, key).strip()
-            return v[1:-1] if len(v) >= 2 and v[0] == v[-1] == '"' else v
+    # Section and key names are case-insensitive, as the server reads them.
+    for s, entries in config.items():
+        if s.lower() == section.lower() and isinstance(entries, dict):
+            for k, v in entries.items():
+                if k.lower() == key.lower() and v is not None:
+                    return str(v)
     return default
 
 

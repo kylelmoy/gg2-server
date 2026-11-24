@@ -32,7 +32,7 @@ steps=("$@")
 [ ${#steps[@]} -eq 0 ] && steps=(1 2 4 6 8 10 12 16 20 24)
 
 probe="${LOADPROBE:-loadprobe}"
-ini="${GG2_INI:-/opt/gg2-server/shared/gg2.ini}"
+ini="${GG2_CONFIG:-/opt/gg2-server/shared/gg2.json}"
 seconds="${SWEEP_SECONDS:-90}"
 warmup="${SWEEP_WARMUP:-10}"
 settle="${SWEEP_SETTLE:-10}"
