@@ -183,6 +183,11 @@ public sealed class RoomHost : IDisposable
         var code = _options.Prefix + secret;
 
         options.Password = secret;
+        // The name carries the code so a player in the room can read it off the
+        // scoreboard and share it. It gives nothing away: the greeting that
+        // carries the name is sent only after the password (RoomFrontDoor), so
+        // only somebody who already has the code ever sees it.
+        options.ServerName = RoomName(code);
         options.Port = BoundPort;
         options.AnnounceToLobby = false;
         options.LobbyUrls = [];
@@ -221,6 +226,9 @@ public sealed class RoomHost : IDisposable
             : null;
 
     private GameServer? FindRoom(string password) => Find(password)?.Server;
+
+    /// <summary>A room's server name: <c>Private room</c> and its whole code.</summary>
+    public static string RoomName(string code) => $"Private room {code}";
 
     private string NewUniqueSecret()
     {

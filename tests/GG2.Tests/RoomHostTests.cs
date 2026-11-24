@@ -97,11 +97,11 @@ public sealed class RoomHostTests : IDisposable
 
         var toB = Knock();
         toB.SendPassword(b.Secret);
-        Assert.Equal("room b", Greeting(toB));
+        Assert.Equal($"Private room {b.Code}", Greeting(toB));
 
         var toA = Knock();
         toA.SendPassword(a.Secret);
-        Assert.Equal("room a", Greeting(toA));
+        Assert.Equal($"Private room {a.Code}", Greeting(toA));
     }
 
     /// <summary>A typed code: the whole code, lower case, with spaces.</summary>
@@ -112,7 +112,7 @@ public sealed class RoomHostTests : IDisposable
 
         var client = Knock();
         client.SendPassword($" {room.Code.ToLowerInvariant()} ");
-        Assert.Equal("typed", Greeting(client));
+        Assert.Equal($"Private room {room.Code}", Greeting(client));
     }
 
     [Fact]
@@ -154,7 +154,7 @@ public sealed class RoomHostTests : IDisposable
         both.WriteString1("eager player");
         client.Send(both.WrittenSpan);
 
-        Assert.Equal("eager", Greeting(client));
+        Assert.Equal($"Private room {room.Code}", Greeting(client));
         TickUntil(() => client.Received.Count > 0, "the slot reservation");
         Assert.Equal(MessageType.ReserveSlot, client.TakeMessageType());
     }
@@ -197,6 +197,7 @@ public sealed class RoomHostTests : IDisposable
         Assert.False(options.AnnounceToLobby);
         Assert.Empty(options.LobbyUrls);
         Assert.Equal(room.Secret, options.Password);
+        Assert.Equal($"Private room {room.Code}", options.ServerName);
         Assert.True(room.Server.IsHosted);
     }
 

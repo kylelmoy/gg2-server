@@ -325,7 +325,7 @@ Bold is the default. Fixed for every room:
 | `UseLobby` | 0 | Private |
 | `Password` | the code | The code is the invitation |
 | Bot nets | the base `--config`'s, or the shipped bundle | Same bots as the public servers when the base is the fleet's `common.json` |
-| `ServerName` | the base's, or `Private room` where it names none | |
+| `ServerName` | `Private room <code>`, whatever the base names | Readable off the scoreboard to share. Sent only after the password, so only someone with the code sees it |
 | `[Chat] Enabled` | 1 | the native client has native chat |
 | `QuickUpdateInterval` | 7 (stock) | |
 | `[Analytics]`, recording, `[Web]`, control port | off | A private room records nothing about who played |

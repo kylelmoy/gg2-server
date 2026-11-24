@@ -152,10 +152,5 @@ public static class RoomTemplate
         options.Chat = options.Chat with { Enabled = true };
         options.ExitWhenEmptySeconds = ExitWhenEmptySeconds;
         options.MaxLifetimeMinutes = MaxLifetimeMinutes;
-
-        // A base that names nobody, or keeps the reference's default, gets a
-        // name that says what this is.
-        if (options.ServerName is "" or ServerOptions.DefaultServerName)
-            options.ServerName = "Private room";
     }
 }

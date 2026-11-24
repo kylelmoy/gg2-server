@@ -294,7 +294,7 @@ public sealed class WireProtocolTests
         client.SendPassword(room.Secret);
         TickUntil(() => client.Received.Count > 0, "the greeting");
         Assert.Equal(MessageType.Hello, client.TakeMessageType());
-        Assert.Equal("room", client.TakeString1());
+        Assert.Equal($"Private room {room!.Code}", client.TakeString1());
         client.Take(client.Received.Count);
 
         client.SendReserveSlot("guest");

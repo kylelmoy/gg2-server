@@ -131,7 +131,7 @@ public sealed class RoomApiTests : IDisposable
         client.SendPassword(code);
         await Until(() => client.Received.Count > 0, client);
         Assert.Equal(MessageType.Hello, client.TakeMessageType());
-        Assert.Equal("Private room", client.TakeString1());
+        Assert.Equal($"Private room {code}", client.TakeString1());
         Assert.Equal("ctf_waterway", client.TakeString1());
     }
 
@@ -330,14 +330,12 @@ public sealed class RoomTemplateTests
             o.Chat = o.Chat with { Enabled = false };
             o.ExitWhenEmptySeconds = 0;
             o.MaxLifetimeMinutes = 0;
-            o.ServerName = "the fleet's name";
         });
 
         Assert.Equal(RoomTemplate.PlayerLimit, options.PlayerLimit);
         Assert.True(options.Chat.Enabled);
         Assert.Equal(RoomTemplate.ExitWhenEmptySeconds, options.ExitWhenEmptySeconds);
         Assert.Equal(RoomTemplate.MaxLifetimeMinutes, options.MaxLifetimeMinutes);
-        Assert.Equal("the fleet's name", options.ServerName);
     }
 
     [Fact]
