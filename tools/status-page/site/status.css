@@ -154,7 +154,7 @@ a:hover { text-decoration: underline; }
 /* ---------- services ---------- */
 
 .group-head { padding: 10px 16px 4px; font: var(--label); letter-spacing: var(--label-tracking); text-transform: uppercase; color: var(--muted); font-size: 0.6875rem; }
-.svc { display: grid; grid-template-columns: 8px minmax(150px, 1.1fr) minmax(0, 1.4fr) auto; align-items: center; gap: 6px 12px; padding: 9px 16px; border-bottom: 1px solid var(--separator); }
+.svc { display: grid; grid-template-columns: 8px 200px minmax(0, 1fr) 64px; align-items: center; gap: 6px 12px; padding: 9px 16px; border-bottom: 1px solid var(--separator); }
 .svc:last-child { border-bottom: 0; }
 .svc-name { min-width: 0; }
 .svc-name b { font-weight: 500; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -230,7 +230,7 @@ a:hover { text-decoration: underline; }
 @media (max-width: 720px) {
   .app { padding: 10px 16px 24px; }
   .tiles { grid-template-columns: repeat(2, 1fr); }
-  .svc { grid-template-columns: 8px minmax(0, 1fr) auto; }
+  .svc { grid-template-columns: 8px minmax(0, 1fr) 64px; }
   .svc-bar { grid-column: 2 / -1; grid-row: 2; }
   .c-ver, .roster th.c-ver { display: none; }
   .card-head .card-legend { display: none; }
