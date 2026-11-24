@@ -92,7 +92,7 @@ install, default `./gg2-server`), `GG2_VERSION` (a release tag such as
 | `--no-autobalance` | | Turns autobalance off. |
 | `--welcome <text>` | | Message sent to each player who joins. |
 | `--plugins <list>` | | Server-sent plugins for clients to load, e.g. `chat`. |
-| `--lobby` | off | List the server publicly at ganggarrison.com. |
+| `--lobby` | off | List the server publicly at ganggarrison.com and gg2server.net. `--lobby-url` picks other lobbies. |
 | `--config <path>` | | Read settings from a reference-format `gg2.ini`. Every setting can be set there; a command-line flag always overrides the file. See [`docs/CONFIG.md`](docs/CONFIG.md). |
 
 `--speed` and `--control-port` are development tools. Never use them on a server

@@ -236,6 +236,9 @@ internal static class CommandLine
         // replaces a config file's [Bots] Policy list, and later ones append.
         var policyOnCommandLine = false;
 
+        // The same, for --lobby-url and LobbyUrls.
+        var lobbyUrlOnCommandLine = false;
+
         // ⛔ --config is applied BEFORE the loop, in its own pass, so a flag
         // always beats the file no matter which side of it the flag appears on.
         // The alternative — handling it in the switch like everything else —
@@ -805,19 +808,22 @@ internal static class CommandLine
 
                 // ⚠️ Reaches outside this machine. Opt-in,
                 // never a default: it publishes this server's address, name,
-                // map and player count to ganggarrison.com every 30 seconds.
+                // map and player count to every lobby in LobbyUrls (by default
+                // ganggarrison.com and gg2server.net) every 30 seconds.
                 case "--lobby":
                     options.AnnounceToLobby = true;
                     break;
 
-                // ⚠️ Reaches outside this machine too, to the gg2-lobby named.
-                // Independent of --lobby; pass both to be listed in both.
+                // ⚠️ Reaches outside this machine too: naming a lobby is asking
+                // to be listed there, so it implies --lobby. The first one
+                // replaces the default list (or a config file's), later ones
+                // append, as --policy does.
                 case "--lobby-url":
                 {
-                    var url = cursor.Take();
-                    if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
-                        throw new FormatException($"{name} wants an http(s) URL, not '{url}'");
-                    options.LobbyUrl = url;
+                    var urls = LobbyTargets.Parse(name, cursor.Take());
+                    options.LobbyUrls = lobbyUrlOnCommandLine ? [.. options.LobbyUrls, .. urls] : urls;
+                    options.AnnounceToLobby = true;
+                    lobbyUrlOnCommandLine = true;
                     break;
                 }
 
@@ -1345,12 +1351,14 @@ internal static class CommandLine
                             <dir> holds the member list, relative to the config
           --tick-stats      log a histogram of tick intervals every 30s and at
                             shutdown; safe with clients connected
-          --lobby           list this server publicly at ganggarrison.com, so it
-                            appears in the client's server browser (default: off).
-                            Sends this server's address, name, map and player
-                            count there every 30 seconds until it shuts down.
-          --lobby-url <url> also list this server at the gg2-lobby at <url>
-                            (docs/LOBBY.md), over HTTP; independent of --lobby
+          --lobby           list this server publicly at ganggarrison.com (the
+                            client's server browser) and gg2server.net (default:
+                            off). Sends this server's address, name, map and
+                            player count there every 30 seconds until it shuts down.
+          --lobby-url <url[,url...]>
+                            announce to these lobbies instead; implies --lobby,
+                            repeatable. udp://host[:port] is the ganggarrison.com
+                            protocol, http(s)://host[:port] a gg2-lobby (docs/LOBBY.md)
           --rewards         let players authenticate their Haxxy badges, hats and
                             capes so everyone sees them (default: off). Relays
                             each player's reward id to the auth server, which is

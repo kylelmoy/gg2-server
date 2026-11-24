@@ -92,7 +92,7 @@ rule" in `CONTRIBUTING.md` whichever protocol carries its news.
 **Not protocol-aware yet:** the ganggarrison.com lobby registration advertises
 the legacy UUID alone, so a browser reading that list cannot tell a
 native-capable server from a stock one before connecting; and the match
-recorder keeps only the legacy stream. The gg2-lobby announce (`--lobby-url`,
+recorder keeps only the legacy stream. The gg2-lobby announce (an `http(s)://` entry of `LobbyUrls`,
 `docs/LOBBY.md`) does carry both UUIDs, in its `protocols` array.
 
 ## Transport

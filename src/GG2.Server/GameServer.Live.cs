@@ -72,8 +72,11 @@ public sealed partial class GameServer
             _joining.Clear();
 
             _listener?.Stop();
-            _lobby?.Unregister();
-            _httpLobby?.Unregister();
+            foreach (var lobby in _lobbies ?? [])
+                lobby.Unregister();
+
+            foreach (var lobby in _httpLobbies ?? [])
+                lobby.Unregister();
 
             _log.Info("control: server offline; players disconnected, connections refused");
             return;

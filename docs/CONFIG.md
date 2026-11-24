@@ -311,8 +311,8 @@ and it is described above.
 | `PlayerLimit` | integer | `10` | Seats for network clients, 1..48. Slot 0 and bots do not count against it. |
 | `MultiClientLimit` | integer | `3` | Connections allowed from one address. Loopback is exempt. |
 | `PlayerName` | text | `Server` | The name of reserved roster slot 0, a permanent spectator. |
-| `UseLobby` | boolean | `0` | Announce this server to ganggarrison.com so it appears in the client's server list. |
-| `LobbyUrl` | text | empty | Also announce to the gg2-lobby at this URL over HTTP ([LOBBY.md](LOBBY.md)). Empty is off; independent of `UseLobby`. |
+| `UseLobby` | boolean | `0` | Announce this server to every lobby in `LobbyUrls`. |
+| `LobbyUrls` | text | `udp://ganggarrison.com:29944, http://gg2server.net:29945` | Where `UseLobby` announces, comma-separated. `udp://host[:port]` speaks the ganggarrison.com protocol (the stock client's server list; port defaults to 29944), `http(s)://host[:port]` a gg2-lobby ([LOBBY.md](LOBBY.md)). Announces nothing unless `UseLobby` is on; each lobby gets its own server id. |
 | `Rewards` | boolean | `0` | Answer `REWARD_REQUEST`, relaying each player's reward id to the auth server. |
 
 ### `[Server]`

@@ -2,12 +2,14 @@
 
 An HTTP/JSON server list, and the gg2-server client that announces to it. The
 service is `src/GG2.Lobby` (binary `gg2-lobby`); the client is
-`HttpLobbyAnnouncer`, turned on by `--lobby-url <url>` or `LobbyUrl=` in the
-config file.
+`HttpLobbyAnnouncer`. The public instance is `gg2server.net`.
 
 It is **separate from the ganggarrison.com lobby**, not a replacement for it.
-`--lobby` still announces there over UDP (`LobbyRegistration`). Pass both and the
-server is listed in both, under a different id in each.
+`UseLobby=1` / `--lobby` announces to every entry of `LobbyUrls` (CONFIG.md),
+which by default is both: `udp://ganggarrison.com:29944` (`LobbyRegistration`,
+over UDP) and `http://gg2server.net:29945`. The server is listed in each under a
+different id. `--lobby-url <url[,url...]>` replaces that list and implies
+`--lobby`; repeated, it appends.
 
 ## Why it looks the way it does
 
@@ -167,7 +169,9 @@ audit would fail every ordinary build of the solution. On Windows the native lin
 - **No TLS.** Put it behind a reverse proxy if you want https. It does not read
   `X-Forwarded-For`, so behind a proxy every server would be listed at the
   proxy's address. Trusting that header is a flag's worth of work, left out until
-  something needs it.
+  something needs it. gg2server.net therefore serves `GET` over https through
+  Caddy, which refuses every other method, and servers announce straight to
+  port 29945.
 - **No persistence.** A restart empties the list, and the next 30-second
   re-announce from each server fills it again.
 - **No stock-client compatibility.** A stock GG2 client reads the binary list

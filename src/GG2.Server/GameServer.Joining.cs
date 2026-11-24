@@ -389,14 +389,14 @@ public sealed partial class GameServer
     /// </remarks>
     private void AnnounceToLobby()
     {
-        if ((_lobby is null && _httpLobby is null) || _offline)
+        if ((_lobbies is null && _httpLobbies is null) || _offline)
             return;
 
         var info = new LobbyServerInfo
         {
-            // The UDP lobby's id. The HTTP announcer keeps its own and ignores
-            // this one; see HttpLobbyAnnouncer's remarks.
-            ServerId = _lobby?.ServerId ?? ReadOnlyMemory<byte>.Empty,
+            // Every announcer substitutes its own id, so one server is listed
+            // under a different id in each lobby.
+            ServerId = ReadOnlyMemory<byte>.Empty,
             ServerName = _options.ServerName,
             Map = _match.Map.Name,
             Port = checked((ushort)BoundPort),
@@ -406,8 +406,52 @@ public sealed partial class GameServer
             Passworded = _options.Password.Length > 0,
         };
 
-        _lobby?.Register(info);
-        _httpLobby?.Register(info);
+        foreach (var lobby in _lobbies ?? [])
+            lobby.Register(info);
+
+        foreach (var lobby in _httpLobbies ?? [])
+            lobby.Register(info);
+    }
+
+    /// <summary>
+    /// Builds one announcer per entry of <see cref="ServerOptions.LobbyUrls"/>,
+    /// and logs the list in one line.
+    /// </summary>
+    /// <remarks>
+    /// An entry that does not parse is warned about and skipped rather than
+    /// refused: the config file and the command line already reject one, so this
+    /// only sees options built in code, and a bad lobby is no reason not to
+    /// serve a game.
+    /// </remarks>
+    private void StartLobbyAnnouncers()
+    {
+        var udp = new List<LobbyAnnouncer>();
+        var http = new List<HttpLobbyAnnouncer>();
+        var names = new List<string>();
+
+        foreach (var url in _options.LobbyUrls)
+        {
+            if (!LobbyTargets.TryParse(url, out var uri))
+            {
+                _log.Warn($"LobbyUrls: '{url}' is not a lobby URL; not announcing there");
+                continue;
+            }
+
+            if (uri.Scheme == "udp")
+                udp.Add(new LobbyAnnouncer(_log, uri.DnsSafeHost, uri.Port));
+            else
+                http.Add(new HttpLobbyAnnouncer(uri, _log));
+
+            names.Add(uri.GetLeftPart(UriPartial.Authority));
+        }
+
+        _lobbies = udp.Count > 0 ? [.. udp] : null;
+        _httpLobbies = http.Count > 0 ? [.. http] : null;
+
+        if (names.Count > 0)
+            _log.Info($"announcing to {string.Join(", ", names)}");
+        else
+            _log.Warn("UseLobby is on but LobbyUrls names no lobby; not announcing");
     }
 
     /// <summary>

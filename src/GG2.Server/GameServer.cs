@@ -384,21 +384,21 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     private IReadOnlyList<string> _rotation = [];
 
     /// <summary>
-    /// The public-lobby announcer, or null when <c>--lobby</c> was not passed.
+    /// The <c>udp://</c> lobby announcers, or null when <c>--lobby</c> was not
+    /// passed or no entry of <c>LobbyUrls</c> is a udp one.
     /// </summary>
     /// <remarks>
     /// <b>Null is the default and means "announce nothing".</b> Every call
     /// site below is null-conditional rather than wrapped in an option check, so
     /// a forgotten check cannot accidentally publish this server's address.
     /// </remarks>
-    private LobbyAnnouncer? _lobby;
+    private LobbyAnnouncer[]? _lobbies;
 
     /// <summary>
-    /// The gg2-lobby announcer, or null when <c>LobbyUrl</c> is empty. Beside
-    /// <see cref="_lobby"/>, not instead of it, and null-conditional at every
-    /// call site for the same reason.
+    /// The <c>http(s)://</c> gg2-lobby announcers, null on the same terms as
+    /// <see cref="_lobbies"/> and for the same reason.
     /// </summary>
-    private HttpLobbyAnnouncer? _httpLobby;
+    private HttpLobbyAnnouncer[]? _httpLobbies;
 
     /// <summary>
     /// The reward auth relay, or null when <c>--rewards</c> was not passed.
@@ -954,23 +954,7 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         // party. The first registration goes out here rather than waiting for
         // the 30-second cadence, so a short-lived server still gets listed.
         if (_options.AnnounceToLobby)
-        {
-            _lobby = new LobbyAnnouncer(_log);
-            _log.Info($"announcing to lobby {GameConstants.LobbyServerHost}:{GameConstants.LobbyServerPort}");
-        }
-
-        if (_options.LobbyUrl.Length > 0)
-        {
-            if (Uri.TryCreate(_options.LobbyUrl, UriKind.Absolute, out var lobbyUri) && lobbyUri.Scheme is "http" or "https")
-            {
-                _httpLobby = new HttpLobbyAnnouncer(lobbyUri, _log);
-                _log.Info($"announcing to gg2-lobby {lobbyUri.GetLeftPart(UriPartial.Authority)}");
-            }
-            else
-            {
-                _log.Warn($"LobbyUrl '{_options.LobbyUrl}' is not an http(s) URL; not announcing there");
-            }
-        }
+            StartLobbyAnnouncers();
 
         AnnounceToLobby();
 
@@ -1048,9 +1032,9 @@ public sealed partial class GameServer : IDisposable, IPluginHost
             _lastHousekeepingMs = _nowMs;
             HousekeepingRuns++;
 
-            // Cheap to leave unguarded because _lobby is null unless --lobby
+            // Cheap to leave unguarded because both are null unless --lobby
             // was passed, and the modulo runs either way.
-            if (_lobby is not null || _httpLobby is not null)
+            if (_lobbies is not null || _httpLobbies is not null)
                 AnnounceToLobby();
 
             _aprilFools = ChatBubbles.IsAprilFools(LocalClock());
@@ -1316,13 +1300,19 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         // UdpClient.Send resolves synchronously too, so the same guarantee holds
         // without the sleep loop — but it does mean Dispose can block briefly on
         // a slow resolver.
-        _lobby?.Unregister();
-        _lobby?.Dispose();
-        _lobby = null;
+        foreach (var lobby in _lobbies ?? [])
+        {
+            lobby.Unregister();
+            lobby.Dispose();
+        }
+
+        _lobbies = null;
 
         // Withdraws, and waits a bounded moment for the DELETE to go out.
-        _httpLobby?.Dispose();
-        _httpLobby = null;
+        foreach (var lobby in _httpLobbies ?? [])
+            lobby.Dispose();
+
+        _httpLobbies = null;
 
         // Any auth check still in flight is abandoned. Nothing is lost that
         // matters: the result would have been a hat on a player who is about to

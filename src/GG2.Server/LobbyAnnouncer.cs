@@ -1,12 +1,11 @@
 using System.Net;
 using System.Net.Sockets;
-using GG2.Protocol;
 
 namespace GG2.Server;
 
 /// <summary>
-/// Sends the lobby datagrams. The only thing in this project that contacts a
-/// third party.
+/// Sends the lobby datagrams to one <c>udp://</c> entry of
+/// <see cref="ServerOptions.LobbyUrls"/>.
 /// </summary>
 /// <remarks>
 /// <b>Constructed only when <c>--lobby</c> was passed.</b> The default is off,
@@ -27,6 +26,10 @@ namespace GG2.Server;
 public sealed class LobbyAnnouncer : IDisposable
 {
     private readonly IServerLog _log;
+
+    private readonly string _host;
+
+    private readonly int _port;
 
     private readonly byte[] _serverId = LobbyRegistration.NewServerId();
 
@@ -49,10 +52,13 @@ public sealed class LobbyAnnouncer : IDisposable
     /// </remarks>
     private IPEndPoint? _endpoint;
 
-    public LobbyAnnouncer(IServerLog log)
+    public LobbyAnnouncer(IServerLog log, string host, int port)
     {
         ArgumentNullException.ThrowIfNull(log);
+        ArgumentException.ThrowIfNullOrEmpty(host);
         _log = log;
+        _host = host;
+        _port = port;
     }
 
     /// <summary>
@@ -65,8 +71,9 @@ public sealed class LobbyAnnouncer : IDisposable
     /// </remarks>
     public ReadOnlyMemory<byte> ServerId => _serverId;
 
-    /// <summary>Announces, or re-announces, this server.</summary>
-    public void Register(in LobbyServerInfo info) => Send(LobbyRegistration.BuildRegister(info), "register");
+    /// <summary>Announces, or re-announces, this server under this announcer's own id.</summary>
+    public void Register(in LobbyServerInfo info) =>
+        Send(LobbyRegistration.BuildRegister(info with { ServerId = _serverId }), "register");
 
     /// <summary>Takes the listing down. Best effort, on the way out.</summary>
     public void Unregister() => Send(LobbyRegistration.BuildUnregister(_serverId), "unregister");
@@ -88,19 +95,19 @@ public sealed class LobbyAnnouncer : IDisposable
             // Logged at info rather than warn: an unreachable lobby is an
             // ordinary condition for a server on a private network, and a
             // warning every 30 seconds would train everyone to ignore the log.
-            _log.Warn($"lobby {what} failed: {e.Message}");
+            _log.Warn($"lobby {_host}:{_port} {what} failed: {e.Message}");
         }
     }
 
-    private static IPEndPoint Resolve()
+    private IPEndPoint Resolve()
     {
         // The first address the resolver hands back, which is what
         // UdpClient.Send(hostname) would have used.
-        var addresses = Dns.GetHostAddresses(GameConstants.LobbyServerHost);
+        var addresses = Dns.GetHostAddresses(_host);
         if (addresses.Length == 0)
             throw new SocketException((int)SocketError.HostNotFound);
 
-        return new IPEndPoint(addresses[0], GameConstants.LobbyServerPort);
+        return new IPEndPoint(addresses[0], _port);
     }
 
     public void Dispose()

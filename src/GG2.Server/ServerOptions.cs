@@ -441,8 +441,8 @@ public sealed class ServerOptions
     public int ExplosionUpdateTicks { get; set; }
 
     /// <summary>
-    /// Announce this server to the public lobby at
-    /// <c>ganggarrison.com:29944</c>, so it appears in the client's server list.
+    /// Announce this server to every lobby in <see cref="LobbyUrls"/>, so it
+    /// appears in their server lists.
     /// </summary>
     /// <remarks>
     /// <b>OFF by default, and the default is the point.</b> The reference's
@@ -451,7 +451,7 @@ public sealed class ServerOptions
     /// <c>docs/PROTOCOL.md</c> asks for a flag that defaults off: running
     /// <c>gg2-server</c> must not publish an address to a third party.
     /// <para>
-    /// Turning it on sends a UDP datagram every 30 seconds, plus one on each map change, each
+    /// Turning it on sends an announce to each lobby every 30 seconds, plus one on each map change, each
     /// join, and each leave that un-fills a full server, plus an unregister at
     /// shutdown.
     /// </para>
@@ -459,17 +459,17 @@ public sealed class ServerOptions
     public bool AnnounceToLobby { get; set; }
 
     /// <summary>
-    /// The root of a gg2-lobby to announce to as well, e.g.
-    /// <c>https://lobby.example</c>; empty is off.
+    /// Where <see cref="AnnounceToLobby"/> announces: <c>udp://host[:port]</c>
+    /// for the ganggarrison.com lobby protocol, <c>http(s)://…</c> for a
+    /// gg2-lobby (<c>docs/LOBBY.md</c>).
     /// </summary>
     /// <remarks>
-    /// <b>Independent of <see cref="AnnounceToLobby"/>, and off by default for
-    /// the same reason.</b> Either, both or neither may be set: with both, the
-    /// server is listed at ganggarrison.com over UDP and at this URL over
-    /// HTTP, under different ids. <c>HttpLobbyAnnouncer</c> is the client;
-    /// <c>docs/LOBBY.md</c> is the service and its routes.
+    /// Defaults to <see cref="LobbyTargets.Default"/>, the original lobby and
+    /// gg2server.net. <b>The list alone announces nothing</b>: it is only read
+    /// when <see cref="AnnounceToLobby"/> is on. Each lobby gets its own server
+    /// id. Empty with the switch on announces nowhere, with a warning.
     /// </remarks>
-    public string LobbyUrl { get; set; } = string.Empty;
+    public IReadOnlyList<string> LobbyUrls { get; set; } = LobbyTargets.Default;
 
     /// <summary>
     /// Whether to answer <c>REWARD_REQUEST</c> and relay reward auth.

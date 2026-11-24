@@ -27,8 +27,13 @@ public sealed class LobbyOptInTests
     [Fact]
     public void TheOptionDefaultsToOff() => Assert.False(new ServerOptions().AnnounceToLobby);
 
+    /// <summary>
+    /// The default list names both lobbies; it is the switch above that keeps
+    /// it from being used.
+    /// </summary>
     [Fact]
-    public void TheHttpLobbyDefaultsToOff() => Assert.Empty(new ServerOptions().LobbyUrl);
+    public void TheDefaultListIsBothLobbies() =>
+        Assert.Equal(["udp://ganggarrison.com:29944", "http://gg2server.net:29945"], new ServerOptions().LobbyUrls);
 
     /// <summary>
     /// A server started with default options builds no announcer at all.
@@ -45,7 +50,7 @@ public sealed class LobbyOptInTests
         using var harness = new ServerHarness();
 
         Assert.Null(Announcer(harness.Server));
-        Assert.Null(Announcer(harness.Server, "_httpLobby"));
+        Assert.Null(Announcer(harness.Server, "_httpLobbies"));
     }
 
     /// <summary>
@@ -70,10 +75,10 @@ public sealed class LobbyOptInTests
 
         Assert.False(harness.Options.AnnounceToLobby);
         Assert.Null(Announcer(harness.Server));
-        Assert.Null(Announcer(harness.Server, "_httpLobby"));
+        Assert.Null(Announcer(harness.Server, "_httpLobbies"));
     }
 
-    private static object? Announcer(GameServer server, string field = "_lobby") =>
+    private static object? Announcer(GameServer server, string field = "_lobbies") =>
         typeof(GameServer)
             .GetField(field, BindingFlags.NonPublic | BindingFlags.Instance)!
             .GetValue(server);
