@@ -20,7 +20,7 @@ namespace GG2.Server;
 /// <para>
 /// ⚠️ <b>The commit is HEAD at build time and says nothing about the working
 /// tree.</b> The SDK stamps <see cref="AssemblyInformationalVersionAttribute"/>
-/// as <c>1.0.0+&lt;sha&gt;</c> from git, so a build with uncommitted edits
+/// as <c>&lt;version&gt;+&lt;sha&gt;</c> from git, so a build with uncommitted edits
 /// carries the sha of the commit it is NOT. That is why
 /// <c>scripts/deploy.sh</c> refuses a dirty tree instead of trusting this
 /// string to be self-policing — the check has to happen on the machine that
@@ -43,7 +43,9 @@ public static class BuildInfo
     public static string Commit { get; } = ReadCommit();
 
     /// <summary>
-    /// The assembly's version without the commit — <c>1.0.0</c>.
+    /// The assembly's version without the commit — <c>1.1.1</c>: the nearest
+    /// <c>v</c> tag unless the build passed <c>-p:Version</c>
+    /// (<c>GG2.Server.csproj</c>, <c>VersionFromGitTag</c>).
     /// </summary>
     public static string Version { get; } = ReadVersion();
 

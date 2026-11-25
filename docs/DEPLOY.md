@@ -453,8 +453,13 @@ hand-maintained file it replaces, and anything worth keeping belongs in
 
 ```
 $ gg2-server --version
-gg2-server 1.0.0 (17bec29), .NET 10.0.11, linux-x64
+gg2-server 1.1.1 (17bec29), .NET 10.0.11, linux-x64
 ```
+
+The version is the nearest `v<x.y.z>` tag reachable from the commit, so a
+`scripts/deploy.sh` build of a commit past a release names that release; a
+`-p:Version` (the release workflow, the Dockerfile) overrides it. A build with no
+git history or no tag says `1.0.0`. `GG2.Server.csproj`, `VersionFromGitTag`.
 
 The same line is logged once at startup — once per **process**, not per
 in-process restart, because the control port's `restart` verb and the panel's

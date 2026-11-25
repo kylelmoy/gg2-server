@@ -6,7 +6,32 @@
        and therefore replayable by GG2.Parity. -->
   <PropertyGroup>
     <RootNamespace>GG2.Server</RootNamespace>
+
+    <!-- A -p:Version from the command line (release.yml, the Dockerfile).
+         Read here, before the SDK's targets default Version to 1.0.0. -->
+    <_Gg2ExplicitVersion>$(Version)</_Gg2ExplicitVersion>
   </PropertyGroup>
+
+  <!--
+    BuildInfo.Version, which the version flag prints and the lobby announces, is this
+    assembly's version. With no -p:Version it is the nearest v<x.y.z> tag
+    reachable from HEAD, so a scripts/deploy.sh build of a commit past v1.1.1
+    says 1.1.1 (BuildInfo.Commit says which commit). With no git or no tag it
+    stays at the SDK's 1.0.0.
+  -->
+  <Target Name="VersionFromGitTag" BeforeTargets="GetAssemblyVersion" Condition="'$(_Gg2ExplicitVersion)' == ''">
+    <Exec Command="git describe --tags --match &quot;v[0-9]*&quot; --abbrev=0"
+          WorkingDirectory="$(MSBuildProjectDirectory)"
+          ConsoleToMSBuild="true" IgnoreExitCode="true" EchoOff="true"
+          StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_Gg2Tag" />
+      <Output TaskParameter="ExitCode" PropertyName="_Gg2TagExit" />
+    </Exec>
+    <PropertyGroup Condition="'$(_Gg2TagExit)' == '0' and $([System.Text.RegularExpressions.Regex]::IsMatch('$(_Gg2Tag)', '^v\d+\.\d+\.\d+$'))">
+      <Version>$(_Gg2Tag.Substring(1))</Version>
+      <InformationalVersion>$(Version)</InformationalVersion>
+    </PropertyGroup>
+  </Target>
 
   <ItemGroup>
     <ProjectReference Include="..\GG2.Protocol\GG2.Protocol.csproj" />
